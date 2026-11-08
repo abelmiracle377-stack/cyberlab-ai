@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Bell,
   Bot, Bug, Cable, ChevronRight, CircleHelp, Clock3, Code2, Database,
-  FileSearch, Fingerprint, Globe2, Layers3, LockKeyhole, Network,
+  FileSearch, Fingerprint, Globe2, Layers3, LockKeyhole, Network, FileLock2,
   Radar, Search, Server, Shield, ShieldCheck, Terminal, Workflow,
 } from "lucide-react";
 
@@ -19,6 +19,7 @@ const navigation = [
   { label: "Malware Lab", icon: Shield, group: "research" },
   { label: "Reverse Engineering", icon: Code2, group: "research" },
   { label: "Reports", icon: FileSearch, group: "research" },
+  { label: "Evidence Vault", icon: FileLock2, group: "research" },
   { label: "Kali Connection", icon: Terminal, group: "system" },
   { label: "Settings", icon: Workflow, group: "system" },
 ];
@@ -33,6 +34,7 @@ const modules = [
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Available" },
   { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Available" },
   { name: "Reports", description: "Turn verified evidence into structured technical reports.", icon: FileSearch, status: "Available" },
+  { name: "Evidence Vault", description: "Store investigation notes in a passphrase-encrypted local vault.", icon: FileLock2, status: "Available" },
 ];
 
 const capabilities = [
@@ -56,7 +58,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setQuery("");

@@ -6,7 +6,7 @@ An open-source AI-assisted cybersecurity research workspace for passive OSINT, I
 
 The dashboard and AI agent are implemented. Available workspaces include passive IP intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion.
 
-Persistent project/evidence storage, richer binary analysis and authenticated website synchronisation for the offline companion are future work. The companion intentionally does not expose a remote shell or run active scans.
+The encrypted evidence vault is browser-local and passphrase protected; central multi-user project storage, richer binary analysis and authenticated website synchronisation for the offline companion remain future work. The companion intentionally does not expose a remote shell or run active scans.
 
 ## Run locally
 
@@ -35,6 +35,7 @@ For AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel O
 - PE, ELF and Mach-O header inspection (no execution or disassembly)
 - Authorised assessment scope planner with exclusions and pre-engagement checklist
 - Local Markdown security report builder (no server-side storage)
+- Browser-local evidence vault using AES-256-GCM and PBKDF2-SHA-256, with encrypted backup import/export
 - Offline Kali companion for static file triage and Nmap XML parsing
 - Baseline HTTP security headers and secret-file exclusions
 
