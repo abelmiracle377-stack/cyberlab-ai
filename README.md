@@ -4,7 +4,7 @@ An open-source AI-assisted cybersecurity research workspace for OSINT, IP intell
 
 ## Current status
 
-The dashboard and AI research agent console are implemented. The agent uses the Vercel AI SDK with Vercel AI Gateway and currently exposes passive IP intelligence and DNS resolution tools. Persistent project storage, CVE intelligence, scan-result imports, advanced malware analysis and the Kali companion remain planned work.
+The dashboard and AI research agent console are implemented. The agent uses the Vercel AI SDK with Vercel AI Gateway and currently exposes passive IP intelligence, reverse DNS, DNS resolution and public NVD CVE search tools. Persistent project storage, CVE intelligence, scan-result imports, advanced malware analysis and the Kali companion remain planned work.
 
 ## Run locally
 
@@ -27,6 +27,8 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Server-side streaming AI agent
 - Passive public IP intelligence lookup
 - Passive DNS record resolution (A, AAAA, MX, NS, TXT)
+- Reverse DNS (PTR) lookups
+- Public NIST NVD CVE search and CVSS summaries
 - Server-side credential handling and request validation
 
 ## Roadmap
