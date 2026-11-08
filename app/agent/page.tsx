@@ -4,17 +4,17 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles, Terminal } from "lucide-react";
 import Link from "next/link";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null };
+type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
 type Message = { role: "user" | "assistant"; content: string };
 
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
-  const [model, setModel] = useState("openai/gpt-5.5");
+  const [model, setModel] = useState("openai/gpt-5.5");\n  const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("standard");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);\n  const availableModels = agentMode === "open-weight" ? models.filter((item) => item.openWeight) : models;
 
   useEffect(() => {
     fetch("/api/models")
@@ -44,7 +44,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, model, history: messages.filter((item) => item.content.trim()).slice(-12) }),
+        body: JSON.stringify({ prompt: text, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12) }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -90,25 +90,25 @@ export default function AgentPage() {
         <div className="agent-heading">
           <div className="agent-overline">RESEARCH ORCHESTRATION / 001</div>
           <h1>AI research agent</h1>
-          <p>Ask a security question, investigate public network intelligence, or analyse DNS evidence.</p>
+          <p>Ask a security question, investigate public network intelligence, or analyse DNS evidence. Choose Standard or Open-weight research mode below.</p>
         </div>
         <div className="agent-config">
           <div className="agent-model-label"><span className="agent-live-dot" /> MODEL ROUTING</div>
           <label className="agent-select-wrap">
             <span className="sr-only">Select model</span>
             <select value={model} onChange={(event) => setModel(event.target.value)} disabled={busy}>
-              {models.length ? models.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.provider}</option>) : <option value={model}>{model}</option>}
+              {availableModels.length ? availableModels.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.provider}</option>) : <option value="">{agentMode === "open-weight" ? "No recognised open-weight models available" : model}</option>}
             </select>
             <ChevronDown size={13} />
           </label>
-          <span className="agent-model-count">{models.length ? `${models.length} MODELS AVAILABLE` : "CATALOGUE LOADING"}</span>
+          <span className="agent-model-count">{agentMode === "open-weight" ? `${availableModels.length} OPEN-WEIGHT MODELS` : `${availableModels.length} MODELS AVAILABLE`}</span>
         </div>
         <div className="agent-chat">
           {messages.length === 0 ? (
             <div className="agent-welcome">
               <div className="agent-welcome-icon"><Bot size={25} /></div>
               <h2>What are we investigating?</h2>
-              <p>The agent can use passive IP, reverse-DNS and DNS intelligence tools, search public CVE records, explain findings, and help structure authorised security research.</p>
+              <p>The agent can use passive IP, reverse-DNS and DNS intelligence tools, search public CVE records, explain findings, and help structure authorised security research. Open-weight mode prioritises supported open-weight models and more direct technical depth.</p>
               <div className="agent-prompts">
                 {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for 1.1.1.1", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
               </div>
@@ -126,9 +126,9 @@ export default function AgentPage() {
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Passive IP/DNS/CVE tools only · No active scanning</span><button type="submit" disabled={busy || !prompt.trim()}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Passive IP/DNS/CVE tools only · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim()}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
         </form>
-        <div className="agent-disclaimer"><Sparkles size={12} /> Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
+        <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
     </main>
   );
