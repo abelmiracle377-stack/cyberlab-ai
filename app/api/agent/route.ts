@@ -7,11 +7,23 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const modelSchema = z.string().min(3).max(160).regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:-]+$/);
-const openWeightPrefixes = [
-  "openai/gpt-oss-", "meta-llama/", "qwen/", "deepseek/", "mistralai/",
-  "google/gemma-", "microsoft/phi-", "nousresearch/", "allenai/", "zai-org/",
-];
-const isOpenWeightModel = (id: string) => openWeightPrefixes.some((prefix) => id.startsWith(prefix));
+async function isOpenWeightModel(id: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://ai-gateway.vercel.sh/v1/models", {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return false;
+    const catalogue = await response.json() as {
+      data?: Array<{ id?: string; type?: string; tags?: string[] }>;
+    };
+    return catalogue.data?.some((item) =>
+      item.id === id && item.type === "language" && item.tags?.includes("open-weights")
+    ) ?? false;
+  } catch {
+    return false;
+  }
+}
 
 const agentInstructions = `You are CyberLab AI, an evidence-first cybersecurity research assistant.
 Help with defensive security, authorised testing, OSINT from public sources, network intelligence, vulnerability research, safe malware triage, and technical reporting.
@@ -143,7 +155,7 @@ export async function POST(request: Request) {
     if (!model.success) {
       return Response.json({ error: "Choose a valid provider/model identifier." }, { status: 400 });
     }
-    if (agentMode === "open-weight" && !isOpenWeightModel(model.data)) {
+    if (agentMode === "open-weight" && !(await isOpenWeightModel(model.data))) {
       return Response.json({ error: "Open-weight mode only accepts models identified in CyberLab AI's curated open-weight catalogue. Select an open-weight model first." }, { status: 400 });
     }
     if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
