@@ -3,7 +3,12 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const revalidate = 300;
 
-const openWeightPrefixes = [\n  "openai/gpt-oss-", "meta-llama/", "qwen/", "deepseek/", "mistralai/",\n  "google/gemma-", "microsoft/phi-", "nousresearch/", "allenai/", "zai-org/",\n];\n\ntype GatewayModel = {
+const openWeightPrefixes = [
+  "openai/gpt-oss-", "meta-llama/", "qwen/", "deepseek/", "mistralai/",
+  "google/gemma-", "microsoft/phi-", "nousresearch/", "allenai/", "zai-org/",
+];
+
+type GatewayModel = {
   id?: string;
   name?: string;
   owned_by?: string;
@@ -28,7 +33,8 @@ export async function GET() {
           id,
           name: item.name ?? id,
           provider: id.split("/")[0],
-          contextLength: item.context_length ?? null,\n          openWeight: openWeightPrefixes.some((prefix) => id.startsWith(prefix)),
+          contextLength: item.context_length ?? null,
+          openWeight: openWeightPrefixes.some((prefix) => id.startsWith(prefix)),
         };
       })
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
