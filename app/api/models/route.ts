@@ -32,7 +32,7 @@ export async function GET() {
           name: item.name ?? id,
           provider: id.split("/")[0],
           contextLength: item.context_window ?? item.context_length ?? null,
-          openWeight: item.type === "language" && item.tags?.includes("open-weights") === true,
+          openWeight: item.type === "language" && item.tags?.includes("open-weights") === true && item.tags?.includes("tool-use") === true,
         };
       })
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
