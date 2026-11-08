@@ -32,7 +32,7 @@ const modules = [
   { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Available" },
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Available" },
   { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Planned" },
-  { name: "Reports", description: "Turn verified evidence into structured technical reports.", icon: FileSearch, status: "Planned" },
+  { name: "Reports", description: "Turn verified evidence into structured technical reports.", icon: FileSearch, status: "Available" },
 ];
 
 const capabilities = [
@@ -56,7 +56,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Vulnerability Lab": "/vulnerability-lab" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setQuery("");
