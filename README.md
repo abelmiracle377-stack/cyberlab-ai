@@ -4,7 +4,7 @@ An open-source AI-assisted cybersecurity research workspace for OSINT, IP intell
 
 ## Current status
 
-The dashboard, AI research agent, passive domain OSINT workspace, Nmap XML report analyser, NIST NVD CVE research workspace and static malware triage workspace are implemented. The agent exposes passive IP intelligence, reverse DNS, DNS resolution and public NVD CVE search. The network analyser parses user-supplied XML only; the malware module performs static inspection without executing or storing samples. Persistent project storage, advanced reverse engineering and the Kali companion remain planned work.
+The dashboard, AI research agent, passive domain OSINT workspace, Nmap XML report analyser, NIST NVD CVE research workspace, static malware triage workspace and local PE/ELF/Mach-O header inspector are implemented. The agent exposes passive IP intelligence, reverse DNS, DNS resolution and public NVD CVE search. The network analyser parses user-supplied XML only; the malware module performs static inspection without executing or storing samples. Persistent project storage, advanced reverse engineering and the Kali companion remain planned work.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Reverse DNS (PTR) lookups
 - Public NIST NVD CVE search and CVSS summaries
 - Nmap XML import with host, port and service summaries (report parsing only)
-- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)
+- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)\n- Local reverse-engineering starter: PE, ELF and Mach-O format/header metadata inspection (no execution or disassembly)
 - Server-side credential handling and request validation
 - Local Markdown security report builder with no server-side storage
 - Authorised assessment scope planner with explicit exclusions and pre-engagement checklist
@@ -41,7 +41,7 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Evidence and project persistence
 - CVE and vulnerability intelligence
 - Extended network evidence interpretation
-- Advanced reverse engineering workflows
+- Deeper reverse engineering workflows such as section/import analysis and safe disassembly
 - Authenticated website synchronisation for the offline Kali companion (planned)
 
 ## Security principles
