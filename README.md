@@ -20,12 +20,12 @@ npm run dev
 
 Open http://localhost:3000.
 
-For AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel OIDC is not available in your runtime. Never commit secrets or place keys in browser code. On Vercel, use Project Settings → Environment Variables, mark credentials Sensitive, and scope them only to required environments.
+For AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel OIDC is not available in your runtime. Open-weight mode uses models available through the configured AI Gateway catalogue; it does not guarantee a model is refusal-free or remove CyberLab safety controls. Never commit secrets or place keys in browser code. On Vercel, use Project Settings → Environment Variables, mark credentials Sensitive, and scope them only to required environments.
 
 ## Implemented features
 
 - Responsive security research dashboard and streaming AI agent
-- Dynamic model catalogue via Vercel AI Gateway
+- Dynamic model catalogue via Vercel AI Gateway\n- Open-weight research mode with curated model filtering and deeper technical response style; safety boundaries remain enabled
 - Passive public IP intelligence, ASN/ISP context and reverse DNS
 - Passive DNS resolution for A, AAAA, MX, NS and TXT records
 - Public domain RDAP metadata and certificate-transparency research
