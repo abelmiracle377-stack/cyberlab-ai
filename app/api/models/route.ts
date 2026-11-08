@@ -3,15 +3,13 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const revalidate = 300;
 
-const openWeightPrefixes = [
-  "openai/gpt-oss-", "meta-llama/", "qwen/", "deepseek/", "mistralai/",
-  "google/gemma-", "microsoft/phi-", "nousresearch/", "allenai/", "zai-org/",
-];
-
 type GatewayModel = {
   id?: string;
   name?: string;
   owned_by?: string;
+  type?: string;
+  tags?: string[];
+  context_window?: number;
   context_length?: number;
 };
 
@@ -26,15 +24,15 @@ export async function GET() {
     }
     const payload = (await response.json()) as { data?: GatewayModel[] };
     const models = (payload.data ?? [])
-      .filter((item) => typeof item.id === "string" && item.id.includes("/"))
+      .filter((item) => typeof item.id === "string" && item.id.includes("/") && (item.type === undefined || item.type === "language"))
       .map((item) => {
         const id = item.id ?? "";
         return {
           id,
           name: item.name ?? id,
           provider: id.split("/")[0],
-          contextLength: item.context_length ?? null,
-          openWeight: openWeightPrefixes.some((prefix) => id.startsWith(prefix)),
+          contextLength: item.context_window ?? item.context_length ?? null,
+          openWeight: item.type === "language" && item.tags?.includes("open-weights") === true,
         };
       })
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
