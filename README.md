@@ -33,6 +33,7 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)
 - Server-side credential handling and request validation
 - Local Markdown security report builder with no server-side storage
+- Authorised assessment scope planner with explicit exclusions and pre-engagement checklist
 
 ## Roadmap
 
