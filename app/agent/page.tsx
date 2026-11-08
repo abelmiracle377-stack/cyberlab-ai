@@ -134,7 +134,7 @@ export default function AgentPage() {
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Public web search + passive IP/DNS/CVE tools · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Public web search + passive IP/DNS/CVE tools · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
