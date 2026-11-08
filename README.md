@@ -25,7 +25,9 @@ For AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel O
 ## Implemented features
 
 - Responsive security research dashboard and streaming AI agent
-- Dynamic model catalogue via Vercel AI Gateway\n- Open-weight research mode with curated model filtering and deeper technical response style; safety boundaries remain enabled
+- Dynamic model catalogue via Vercel AI Gateway
+- Open-weight research mode filters on Gateway `open-weights` and `tool-use` tags, with deeper technical response style; safety boundaries remain enabled
+- Public web research through AI Gateway search, with source links for current advisories and technical references
 - Passive public IP intelligence, ASN/ISP context and reverse DNS
 - Passive DNS resolution for A, AAAA, MX, NS and TXT records
 - Public domain RDAP metadata and certificate-transparency research
