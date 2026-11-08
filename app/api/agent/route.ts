@@ -18,7 +18,7 @@ async function isOpenWeightModel(id: string): Promise<boolean> {
       data?: Array<{ id?: string; type?: string; tags?: string[] }>;
     };
     return catalogue.data?.some((item) =>
-      item.id === id && item.type === "language" && item.tags?.includes("open-weights")
+      item.id === id && item.type === "language" && item.tags?.includes("open-weights") && item.tags?.includes("tool-use")
     ) ?? false;
   } catch {
     return false;
