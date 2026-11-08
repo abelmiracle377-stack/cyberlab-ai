@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ShieldCheck } from "lucide-react";
 
-export default function LoginPage() {
+export default function LoginPage() {\n  return <Suspense fallback={<main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0c100e", color: "#e8eee9" }}>Loading sign-in…</main>}><LoginForm /></Suspense>;\n}\n\nfunction LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
