@@ -232,7 +232,19 @@ def save_or_print(result: dict, output: str | None):
     else:
         print(rendered)
 
+def print_banner() -> None:
+    """Show the branded welcome banner in interactive terminals only."""
+    if not sys.stderr.isatty() or "NO_COLOR" in __import__("os").environ:
+        return
+    bold = "\\033[1m"
+    blue = "\\033[94m"
+    red = "\\033[91m"
+    reset = "\\033[0m"
+    print(f"{bold}{blue}WELCOME TO MIRACLE {red}CYBERLAB-AI START HACKING{reset}", file=sys.stderr)
+    print(file=sys.stderr)
+
 def main() -> int:
+    print_banner()
     parser = argparse.ArgumentParser(
         description="CyberLab AI: passive OSINT, vulnerability intelligence and local evidence analysis.",
         epilog="No port scanning, exploitation, sample execution, brute-force enumeration or private-data lookup is performed."
