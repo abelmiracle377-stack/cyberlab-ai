@@ -25,7 +25,7 @@ const navigation = [
 
 const modules = [
   { name: "AI Agent", description: "Coordinate scoped security workflows with tool-assisted analysis.", icon: Bot, status: "Foundation" },
-  { name: "IP Intelligence", description: "Inspect IP, ASN, DNS, hosting and network ownership signals.", icon: Globe2, status: "Planned" },
+  { name: "IP Intelligence", description: "Inspect IP, ASN, DNS, hosting and network ownership signals.", icon: Globe2, status: "Available" },
   { name: "OSINT", description: "Organise public-source findings with provenance and confidence.", icon: Fingerprint, status: "Available" },
   { name: "Network Analysis", description: "Review network evidence and interpret authorised scan results.", icon: Network, status: "Available" },
   { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Planned" },
@@ -56,7 +56,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setQuery("");

@@ -344,3 +344,12 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .report-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:75vh;overflow:auto;color:#c3d0c7;font:10px/1.8 var(--mono);padding-top:10px}
 @media(max-width:850px){.report-layout{grid-template-columns:1fr}.report-preview{position:static}.report-preview pre{max-height:none}}
 @media(max-width:480px){.report-two{grid-template-columns:1fr}}
+
+/* IP intelligence page */
+.ip-result-head{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;margin-top:14px;border:1px solid #2a4633;border-radius:8px;background:#111d15}
+.ip-result-head span{color:#9bd6ae;font:9px var(--mono)}
+.ip-result-head h2{font:20px var(--mono);margin:6px 0 0}
+.ip-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ip-grid .osint-section h2{display:flex;align-items:center;gap:7px}
+.ip-grid .osint-section h2 svg{color:#9bd6ae}
+@media(max-width:760px){.ip-grid{grid-template-columns:1fr}}
