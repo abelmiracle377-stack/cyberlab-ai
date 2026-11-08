@@ -27,7 +27,7 @@ const modules = [
   { name: "AI Agent", description: "Coordinate scoped security workflows with tool-assisted analysis.", icon: Bot, status: "Foundation" },
   { name: "IP Intelligence", description: "Inspect IP, ASN, DNS, hosting and network ownership signals.", icon: Globe2, status: "Planned" },
   { name: "OSINT", description: "Organise public-source findings with provenance and confidence.", icon: Fingerprint, status: "Planned" },
-  { name: "Network Analysis", description: "Review network evidence and interpret authorised scan results.", icon: Network, status: "Planned" },
+  { name: "Network Analysis", description: "Review network evidence and interpret authorised scan results.", icon: Network, status: "Available" },
   { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Planned" },
   { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Planned" },
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Planned" },
