@@ -1,27 +1,22 @@
-/* Passive domain OSINT workspace */
-.osint-search,.osint-section{border:1px solid #202b26;background:#0e1412;border-radius:8px;padding:18px;margin-top:14px}
-.osint-search label{display:block;color:#b8c7bd;font-size:10px;margin-bottom:8px}
-.osint-search>div{display:flex;gap:8px}
-.osint-search input{flex:1;min-width:0;background:#0a100d;border:1px solid #2a3930;border-radius:6px;color:#e0e9e3;padding:10px;font-size:11px;outline:none}
-.osint-search input:focus{border-color:#54755d}
-.osint-search button{display:flex;align-items:center;gap:7px;border:1px solid #477252;border-radius:6px;background:#1b3925;color:#d7ecdd;padding:9px 12px;font-size:10px}
-.osint-search button:disabled{opacity:.4;cursor:not-allowed}
-.osint-search small{display:block;color:#718078;font-size:9px;margin-top:9px}
-.osint-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.osint-section h2{font-size:12px;margin:0 0 12px}
-.osint-section-head h2{margin:0}
-.osint-section-head>span{color:#9bd6ae;font:9px var(--mono);overflow-wrap:anywhere}
-.osint-section h3{font-size:10px;color:#aab8af;margin:17px 0 8px}
-.osint-section p{color:#87958d;font-size:10px;line-height:1.7}
-.osint-kv,.osint-row{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid #18211d;font-size:10px}
-.osint-kv span,.osint-row span{color:#829187;text-transform:capitalize}
-.osint-kv strong,.osint-row time{color:#d0dcd3;font-weight:500;text-align:right;overflow-wrap:anywhere}
-.osint-chips{display:flex;flex-wrap:wrap;gap:7px}
-.osint-chips span{padding:6px 8px;border:1px solid #29392f;border-radius:5px;color:#b9c8be;font:9px var(--mono)}
-.osint-certs{display:grid;gap:8px}
-.osint-cert{border:1px solid #202b26;border-radius:6px;padding:11px;display:grid;gap:5px}
-.osint-cert strong{color:#d2e3d7;font-size:10px;overflow-wrap:anywhere}
-.osint-cert span,.osint-cert small{color:#829187;font-size:9px;overflow-wrap:anywhere}
-.osint-source{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid #18211d;color:#a9b9ae}
-.osint-source span{display:grid;gap:4px}.osint-source strong{font-size:10px}.osint-source small{color:#718078;font-size:9px}
-@media(max-width:620px){.osint-search>div{flex-direction:column}.osint-search button{justify-content:center}.osint-section-head{align-items:flex-start;flex-direction:column}}
+/* Safe static malware triage */
+.malware-warning{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #594633;background:#211a12;border-radius:7px;color:#d6b88f;font-size:10px;line-height:1.7}
+.malware-warning svg{flex:0 0 auto;margin-top:1px}
+.malware-upload,.malware-results{border:1px solid #202b26;background:#0e1412;border-radius:8px;padding:20px;margin-top:14px}
+.malware-upload{text-align:center;padding:28px 18px}
+.malware-upload h2,.malware-results h2{font-size:13px;margin:0 0 8px}
+.malware-upload p,.malware-results p{color:#87958d;font-size:10px;line-height:1.7}
+.malware-result-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.malware-result-head h2{margin:0}
+.malware-result-head span{color:#d7b77b;font:8px var(--mono)}
+.malware-kv{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #18211d;font-size:10px}
+.malware-kv span{color:#829187;flex:0 0 110px}
+.malware-kv strong{color:#d0dcd3;font-weight:500;text-align:right;overflow-wrap:anywhere}
+.malware-hash{font:9px var(--mono)!important}
+.malware-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:13px 0}
+.malware-stats>div{padding:12px;border:1px solid #202b26;border-radius:6px}
+.malware-stats span{display:block;color:#87958d;font-size:9px}
+.malware-stats strong{display:block;margin-top:8px;font:16px var(--mono)}
+.malware-results h3{font-size:10px;color:#aab8af;margin:18px 0 8px}
+.malware-strings{display:grid;gap:6px}
+.malware-strings code{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #202b26;border-radius:5px;padding:8px;color:#b9c8be;font:9px var(--mono)}
+@media(max-width:620px){.malware-stats{grid-template-columns:1fr 1fr}.malware-kv{align-items:flex-start;flex-direction:column}.malware-kv strong{text-align:left}}
