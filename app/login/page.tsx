@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ShieldCheck } from "lucide-react";
 
-export default function LoginPage() {\n  return <Suspense fallback={<main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0c100e", color: "#e8eee9" }}>Loading sign-in…</main>}><LoginForm /></Suspense>;\n}\n\nfunction LoginForm() {
+export default function LoginPage() {
+  return <Suspense fallback={<main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0c100e", color: "#e8eee9" }}>Loading sign-in…</main>}><LoginForm /></Suspense>;
+}
+
+function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
