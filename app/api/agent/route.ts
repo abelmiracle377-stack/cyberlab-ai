@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { resolve4, resolve6, resolveMx, resolveNs, resolveTxt } from "node:dns/promises";
+import { resolve4, resolve6, resolveMx, resolveNs, resolveTxt, reverse } from "node:dns/promises";
 import { stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 
@@ -16,6 +16,50 @@ Do not provide instructions for unauthorised access, credential theft, persisten
 Keep responses clear, technically precise, and include uncertainty and limitations.`;
 
 const tools = {
+  cve_lookup: tool({
+    description: "Search the public NVD vulnerability catalogue by CVE identifier or keyword. Return CVSS severity, summary and references; do not provide exploit instructions.",
+    inputSchema: z.object({ query: z.string().min(3).max(120).describe("CVE identifier such as CVE-2024-3094, or a product/vulnerability keyword") }),
+    execute: async ({ query }) => {
+      const normalized = query.trim();
+      const params = new URLSearchParams({ resultsPerPage: "5" });
+      if (/^CVE-\\d{4}-\\d{4,}$/i.test(normalized)) params.set("cveId", normalized.toUpperCase());
+      else params.set("keywordSearch", normalized);
+      const response = await fetch(`https://services.nvd.nist.gov/rest/json/cves/2.0?${params.toString()}`, {
+        signal: AbortSignal.timeout(10000),
+        headers: { "User-Agent": "CyberLab-AI/0.1 security-research" },
+      });
+      if (!response.ok) return { error: `NVD returned HTTP ${response.status}. Try again later; public API rate limits may apply.` };
+      const data = await response.json();
+      const findings = (data.vulnerabilities ?? []).map((entry: any) => {
+        const cve = entry.cve;
+        const description = cve.descriptions?.find((item: any) => item.lang === "en")?.value ?? "No English summary available.";
+        const metric = cve.metrics?.cvssMetricV40?.[0]?.cvssData ?? cve.metrics?.cvssMetricV31?.[0]?.cvssData ?? cve.metrics?.cvssMetricV30?.[0]?.cvssData ?? cve.metrics?.cvssMetricV2?.[0]?.cvssData;
+        return {
+          id: cve.id,
+          published: cve.published,
+          lastModified: cve.lastModified,
+          status: cve.vulnStatus,
+          description,
+          cvss: metric ? { version: metric.version, score: metric.baseScore, severity: metric.baseSeverity, vector: metric.vectorString } : null,
+          references: (cve.references ?? []).slice(0, 4).map((ref: any) => ref.url),
+        };
+      });
+      return { query: normalized, totalResults: data.totalResults ?? findings.length, results: findings, source: "NIST National Vulnerability Database", note: "Verify applicability against the affected product version and vendor advisories. A CVE match alone does not prove a system is vulnerable." };
+    },
+  }),
+  reverse_dns: tool({
+    description: "Resolve PTR records for a public or private IP address. This is passive DNS resolution and does not identify an individual.",
+    inputSchema: z.object({ ip: z.string().min(3).max(64).describe("IPv4 or IPv6 address") }),
+    execute: async ({ ip }) => {
+      if (!isIP(ip)) return { error: "Enter a valid IPv4 or IPv6 address." };
+      try {
+        return { ip, hostnames: await reverse(ip), source: "System reverse-DNS resolver" };
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        return { ip, hostnames: [], result: code === "ENOTFOUND" || code === "ENODATA" ? "No PTR record found." : "Reverse DNS lookup failed.", code };
+      }
+    },
+  }),
   ip_intelligence: tool({
     description: "Look up public IP intelligence: network owner, ASN, ISP, country and approximate region. This does not identify a person or subscriber.",
     inputSchema: z.object({ ip: z.string().min(3).max(64).describe("IPv4 or IPv6 address") }),
