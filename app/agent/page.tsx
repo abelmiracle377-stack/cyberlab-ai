@@ -94,7 +94,7 @@ export default function AgentPage() {
         <div className="agent-heading">
           <div className="agent-overline">RESEARCH ORCHESTRATION / 001</div>
           <h1>AI research agent</h1>
-          <p>Ask a security question, investigate public network intelligence, or analyse DNS evidence. Choose Standard or Open-weight research mode below.</p>
+          <p>Research security questions, search current public advisories, inspect network intelligence, and analyse DNS evidence. Open-weight research mode is selected by default.</p>
         </div>
         <div className="agent-config agent-config-stack">
           <div className="agent-mode-switch" role="group" aria-label="Agent mode">
@@ -116,7 +116,7 @@ export default function AgentPage() {
             <div className="agent-welcome">
               <div className="agent-welcome-icon"><Bot size={25} /></div>
               <h2>What are we investigating?</h2>
-              <p>The agent can use passive IP, reverse-DNS and DNS intelligence tools, search public CVE records, explain findings, and help structure authorised security research. Open-weight mode prioritises supported open-weight models and more direct technical depth.</p>
+              <p>The agent can search public security advisories and technical references, cite sources, use passive IP, reverse-DNS and DNS intelligence, search public CVE records, explain findings, and help structure authorised security research. Open-weight mode prioritises supported open-weight models and more direct technical depth.</p>
               <div className="agent-prompts">
                 {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for 1.1.1.1", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
               </div>
@@ -134,7 +134,7 @@ export default function AgentPage() {
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Passive IP/DNS/CVE tools only · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Public web search + passive IP/DNS/CVE tools · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
