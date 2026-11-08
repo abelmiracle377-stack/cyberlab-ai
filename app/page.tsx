@@ -56,6 +56,10 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
+    if (name === "AI Agent") {
+      window.location.href = "/agent";
+      return;
+    }
     setActive(name);
     setQuery("");
     setNotice("");
