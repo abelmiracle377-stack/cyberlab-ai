@@ -118,7 +118,7 @@ export default function AgentPage() {
               <h2>What are we investigating?</h2>
               <p>The agent can search public security advisories and technical references, cite sources, use passive IP, reverse-DNS and DNS intelligence, search public CVE records, explain findings, and help structure authorised security research. Open-weight mode prioritises supported open-weight models and more direct technical depth.</p>
               <div className="agent-prompts">
-                {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for 1.1.1.1", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
+                {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for an IP address I provide.", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
               </div>
             </div>
           ) : (
