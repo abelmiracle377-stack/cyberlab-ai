@@ -122,7 +122,7 @@ export default function Home() {
         <header className="topbar">
           <div className="breadcrumb">CyberLab AI <span style={{ color: "#526057", margin: "0 8px" }}>/</span> <strong>{active}</strong></div>
           <div className="top-actions">
-            <div className="environment"><span className="dot" /> RESEARCH WORKSPACE</div>
+            <div className="environment"><span className="dot" /> RESEARCH WORKSPACE</div><a href="/account" className="connection-link">Account</a>
             <button className="icon-button" aria-label="Help" onClick={() => setNotice("Choose an available workspace below. Each tool reports its own live lookup or service status.")}><CircleHelp size={14} /></button>
             <button className="icon-button" aria-label="Notifications" onClick={() => setNotice("No system notifications yet.")}><Bell size={14} /></button>
           </div>
