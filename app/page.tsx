@@ -56,7 +56,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection", "Reverse Engineering": "/reverse-engineering" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setQuery("");

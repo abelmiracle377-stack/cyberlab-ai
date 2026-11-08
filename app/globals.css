@@ -376,3 +376,6 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .kali-panel a{display:inline-flex;align-items:center;gap:7px;color:#9bd6ae;font-size:10px}
 .kali-warning{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #594633;background:#211a12;border-radius:7px;color:#d6b88f;font-size:10px;line-height:1.7;margin-top:13px}
 .kali-warning svg{flex:0 0 auto;margin-top:1px}
+
+/* Static reverse engineering inspector */
+.reverse-binary-note{color:#87958d;font-size:10px;line-height:1.7}
