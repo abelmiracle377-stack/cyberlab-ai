@@ -143,6 +143,9 @@ export async function POST(request: Request) {
     if (!model.success) {
       return Response.json({ error: "Choose a valid provider/model identifier." }, { status: 400 });
     }
+    if (agentMode === "open-weight" && !isOpenWeightModel(model.data)) {
+      return Response.json({ error: "Open-weight mode only accepts models identified in CyberLab AI's curated open-weight catalogue. Select an open-weight model first." }, { status: 400 });
+    }
     if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
       return Response.json({
         error: "AI Gateway authentication is not configured. Enable Vercel OIDC for this project or add AI_GATEWAY_API_KEY as a protected Vercel environment variable.",
