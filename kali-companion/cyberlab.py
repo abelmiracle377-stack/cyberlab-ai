@@ -233,14 +233,24 @@ def save_or_print(result: dict, output: str | None):
         print(rendered)
 
 def print_banner() -> None:
-    """Show the branded welcome banner in interactive terminals only."""
+    """Show the CyberLab welcome art in interactive terminals only."""
     if not sys.stderr.isatty() or "NO_COLOR" in __import__("os").environ:
         return
-    bold = "\\033[1m"
-    blue = "\\033[94m"
-    red = "\\033[91m"
-    reset = "\\033[0m"
-    print(f"{bold}{blue}WELCOME TO MIRACLE {red}CYBERLAB-AI START HACKING{reset}", file=sys.stderr)
+
+    bold = "\033[1m"
+    blue = "\033[94m"
+    red = "\033[91m"
+    reset = "\033[0m"
+    logo = r"""
+   ____ ____  ____  _____ ____  _        _    ____
+  / ___|  _ \|  _ \| ____|  _ \| |      / \  | __ )
+ | |   | |_) | |_) |  _| | |_) | |     / _ \ |  _ \
+ | |___|  _ <|  _ <| |___|  _ <| |___ / ___ \| |_) |
+  \____|_| \_\_| \_\_____|_| \_\_____/_/   \_\____/
+"""
+    print(f"{bold}{blue}{logo}{reset}", file=sys.stderr)
+    print(f'{bold}{red}CYBERLAB SAYS "FUCK HATERS"{reset}', file=sys.stderr)
+    print(f"{bold}{blue}AND HACK FOR ZODIAC M{reset}", file=sys.stderr)
     print(file=sys.stderr)
 
 def main() -> int:
