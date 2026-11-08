@@ -258,3 +258,21 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .osint-source-list{margin-top:12px}
 .osint-source-list p{color:#87958d;font-size:9px;line-height:1.7}
 @media(max-width:620px){.osint-grid{grid-template-columns:1fr}.osint-result-head{align-items:flex-start;gap:8px;flex-direction:column}.osint-search>div{flex-wrap:wrap}.osint-search input{min-width:calc(100% - 30px)}}
+
+/* CVE research workspace */
+.cve-summary{display:flex;align-items:baseline;gap:10px;margin:20px 0 10px;color:#87958d;font-size:10px}
+.cve-summary strong{font:24px var(--mono);color:#e0e9e3}
+.cve-card{border:1px solid #202b26;background:#0e1412;border-radius:8px;padding:17px;margin:10px 0}
+.cve-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cve-card-head h2{font:14px var(--mono);margin:0;color:#dce9df}
+.cve-card>p{font-size:10px;line-height:1.8;color:#aebbb2;margin:13px 0}
+.cve-severity{border:1px solid #39443d;border-radius:20px;padding:5px 8px;font:8px var(--mono);color:#aebbb2}
+.cve-severity.critical,.cve-severity.high{border-color:#67423a;background:#241713;color:#e5a18e}
+.cve-severity.medium{border-color:#66552f;background:#211d12;color:#d7b77b}
+.cve-severity.low{border-color:#345c42;background:#14251a;color:#9bd6ae}
+.cve-meta{display:flex;gap:14px;flex-wrap:wrap;color:#738279;font-size:9px}
+.cve-vector,.cve-weakness{margin-top:10px;color:#8fa095;font:9px var(--mono);overflow-wrap:anywhere}
+.cve-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.cve-links a{display:inline-flex;align-items:center;gap:5px;border:1px solid #26362c;border-radius:5px;padding:6px 8px;color:#9bd6ae;font-size:9px}
+.cve-links a:hover{border-color:#54755d}
+@media(max-width:620px){.cve-card-head{align-items:flex-start;flex-direction:column}}
