@@ -142,3 +142,67 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
   .top-actions { gap: 8px; }
   .environment { font-size: 8px; }
 }
+/* AI agent console */
+.agent-shell { min-height: 100vh; background: #090d0c; color: #e8efeb; }
+.agent-topbar { height: 60px; border-bottom: 1px solid #202b26; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; background: #0b100e; }
+.agent-back { display: flex; align-items: center; gap: 7px; color: #91a097; font-size: 11px; }
+.agent-brand { display: flex; align-items: center; gap: 9px; font: 10px var(--mono); letter-spacing: 1.2px; color: #cbd9d0; }
+.agent-brand-icon { color: #9bd6ae; display: inline-flex; }
+.agent-top-sep { color: #526057; }
+.agent-secure-label { color: #829187; font: 9px var(--mono); letter-spacing: .8px; display: flex; align-items: center; gap: 7px; }
+.agent-secure-label span, .agent-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #73bd8b; display: inline-block; }
+.agent-main { max-width: 960px; margin: 0 auto; padding: 42px 24px 35px; }
+.agent-heading { margin-bottom: 24px; }
+.agent-overline { color: #9bd6ae; font: 9px var(--mono); letter-spacing: 1.5px; }
+.agent-heading h1 { font-size: 28px; margin-top: 8px; }
+.agent-heading p { color: #87958d; font-size: 11px; margin-top: 8px; }
+.agent-config { display: flex; align-items: center; gap: 13px; border: 1px solid #202b26; background: #0e1412; border-radius: 8px 8px 0 0; padding: 11px 14px; }
+.agent-model-label { color: #93a198; font: 9px var(--mono); letter-spacing: .8px; display: flex; align-items: center; gap: 7px; }
+.agent-select-wrap { margin-left: auto; display: flex; align-items: center; position: relative; }
+.agent-select-wrap select { appearance: none; background: #111a15; border: 1px solid #2a3930; color: #d5e2d9; padding: 7px 28px 7px 10px; border-radius: 5px; outline: none; font: 10px var(--mono); max-width: 340px; }
+.agent-select-wrap svg { position: absolute; right: 9px; color: #829187; pointer-events: none; }
+.agent-model-count { color: #66756c; font: 8px var(--mono); white-space: nowrap; }
+.agent-chat { border: 1px solid #202b26; border-top: 0; background: #0c120f; min-height: 390px; max-height: 57vh; overflow-y: auto; }
+.agent-welcome { max-width: 590px; margin: 0 auto; padding: 48px 24px; text-align: center; }
+.agent-welcome-icon { width: 48px; height: 48px; margin: 0 auto 15px; display: grid; place-items: center; color: #9bd6ae; background: #14251a; border: 1px solid #345c42; border-radius: 13px; }
+.agent-welcome h2 { font-size: 16px; margin: 0; }
+.agent-welcome p { max-width: 470px; margin: 9px auto 21px; color: #87958d; font-size: 10px; line-height: 1.7; }
+.agent-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; }
+.agent-prompts button { display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; border: 1px solid #243129; border-radius: 6px; background: #101813; color: #aebbb2; padding: 10px; font-size: 9px; line-height: 1.5; }
+.agent-prompts button:hover { border-color: #4a6d54; color: #e0ece3; }
+.agent-prompts button span { color: #7da88a; }
+.agent-messages { padding: 17px 22px; display: grid; gap: 20px; }
+.agent-message { display: flex; gap: 11px; align-items: flex-start; }
+.agent-message-avatar { width: 27px; height: 27px; border-radius: 7px; display: grid; place-items: center; flex: 0 0 auto; background: #17271c; border: 1px solid #2b4633; color: #9bd6ae; font: 8px var(--mono); }
+.agent-message.user .agent-message-avatar { background: #19201b; color: #aebbb2; border-color: #303c34; }
+.agent-message-body { min-width: 0; flex: 1; }
+.agent-message-role { color: #75847b; font: 8px var(--mono); letter-spacing: 1px; margin: 2px 0 7px; }
+.agent-message-content { color: #d0dcd3; font-size: 11px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-thinking { display: inline-flex; gap: 7px; align-items: center; color: #91a097; }
+.agent-composer { border: 1px solid #26362c; border-top: 0; background: #0e1412; border-radius: 0 0 8px 8px; padding: 13px 14px 11px; }
+.agent-composer textarea { display: block; width: 100%; resize: vertical; min-height: 65px; max-height: 180px; background: transparent; border: 0; outline: none; color: #e0e9e3; font-size: 11px; line-height: 1.6; }
+.agent-composer textarea::placeholder { color: #65736b; }
+.agent-composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.agent-composer-bottom > span { color: #75847b; display: flex; align-items: center; gap: 6px; font-size: 9px; }
+.agent-composer-bottom > span svg { color: #8cbd99; }
+.agent-composer-bottom button { display: flex; align-items: center; gap: 7px; border: 1px solid #477252; border-radius: 6px; background: #1b3925; color: #d7ecdd; padding: 8px 12px; font-size: 10px; }
+.agent-composer-bottom button:disabled { opacity: .45; cursor: not-allowed; }
+.agent-error { margin-top: 10px; padding: 11px 13px; border: 1px solid #62463a; border-radius: 6px; color: #e0b39a; background: #211712; display: flex; gap: 9px; align-items: flex-start; font-size: 10px; line-height: 1.6; }
+.agent-disclaimer { color: #66756c; display: flex; gap: 7px; align-items: center; font-size: 9px; line-height: 1.6; margin-top: 15px; }
+.agent-disclaimer svg { color: #9bc6a5; flex: 0 0 auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 620px) {
+  .agent-topbar { padding: 0 13px; }
+  .agent-brand { font-size: 8px; letter-spacing: .6px; }
+  .agent-secure-label { font-size: 7px; }
+  .agent-main { padding: 28px 13px; }
+  .agent-config { flex-wrap: wrap; }
+  .agent-select-wrap { margin-left: 0; }
+  .agent-select-wrap select { max-width: 230px; }
+  .agent-model-count { margin-left: auto; }
+  .agent-prompts { grid-template-columns: 1fr; }
+  .agent-welcome { padding: 35px 16px; }
+  .agent-chat { min-height: 350px; }
+}
