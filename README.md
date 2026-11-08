@@ -28,16 +28,18 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Passive public IP intelligence lookup
 - Passive DNS record resolution (A, AAAA, MX, NS, TXT)
 - Reverse DNS (PTR) lookups
-- Public NIST NVD CVE search and CVSS summaries\n- Nmap XML import with host, port and service summaries (report parsing only)\n- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)
-- Server-side credential handling and request validation\n- Local Markdown security report builder with no server-side storage
+- Public NIST NVD CVE search and CVSS summaries
+- Nmap XML import with host, port and service summaries (report parsing only)
+- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)
+- Server-side credential handling and request validation
+- Local Markdown security report builder with no server-side storage
 
 ## Roadmap
 
 - Evidence and project persistence
 - CVE and vulnerability intelligence
-- Authorised Nmap result import and analysis
+- Extended network evidence interpretation
 - Advanced reverse engineering workflows
-- Report generation and export
 - Authenticated Kali Linux companion with allowlisted tasks and explicit approvals
 
 ## Security principles
