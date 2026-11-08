@@ -56,10 +56,8 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    if (name === "AI Agent") {
-      window.location.href = "/agent";
-      return;
-    }
+    const routes: Record<string, string> = { "AI Agent": "/agent", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Vulnerability Lab": "/vulnerability-lab" };
+    if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setQuery("");
     setNotice("");
