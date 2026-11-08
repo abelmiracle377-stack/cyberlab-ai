@@ -206,3 +206,32 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
   .agent-welcome { padding: 35px 16px; }
   .agent-chat { min-height: 350px; }
 }
+
+/* Nmap XML report analyser */
+.network-upload,.network-results{border:1px solid #202b26;background:#0e1412;border-radius:8px;padding:20px;margin-top:14px}
+.network-upload{text-align:center;padding:28px 18px}
+.network-upload-icon{width:44px;height:44px;margin:0 auto 12px;display:grid;place-items:center;border:1px solid #345c42;border-radius:12px;background:#14251a;color:#9bd6ae}
+.network-upload h2,.network-results h2{font-size:13px;margin:0 0 8px}
+.network-upload p,.network-results p{font-size:10px;color:#87958d;line-height:1.7}
+.network-file{display:inline-block;margin-top:12px;padding:9px 13px;border:1px solid #385b42;border-radius:6px;background:#15251a;color:#cde6d3;font-size:10px;cursor:pointer}
+.network-file input{display:none}
+.network-filename{margin-top:9px;color:#9bd6ae;font:9px var(--mono)}
+.network-run{display:block;margin:13px auto 0;border:1px solid #477252;border-radius:6px;background:#1b3925;color:#d7ecdd;padding:9px 16px;font-size:10px}
+.network-run:disabled{opacity:.4;cursor:not-allowed}
+.network-limit{margin-top:12px;color:#65736b;font:8px var(--mono)}
+.network-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.network-metrics>div{padding:13px;border:1px solid #202b26;border-radius:7px;background:#0e1412}
+.network-metrics span{display:block;color:#87958d;font-size:9px}
+.network-metrics strong{display:block;margin-top:8px;font:21px var(--mono)}
+.network-table-wrap{overflow-x:auto}
+.network-table{width:100%;border-collapse:collapse;text-align:left;font-size:10px}
+.network-table th,.network-table td{padding:10px 8px;border-bottom:1px solid #202b26;white-space:nowrap}
+.network-table th{color:#87958d;font-weight:500}
+.network-table td{color:#d0dcd3}
+.network-host{border-top:1px solid #202b26;padding:12px 0;font-size:10px;color:#cbd6ce}
+.network-host summary{cursor:pointer}
+.network-host summary span{float:right;color:#9bd6ae;font:8px var(--mono)}
+.network-host>div{padding:8px 12px}
+.network-port{display:grid;grid-template-columns:90px 80px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid #18211d;color:#9eada3}
+.network-note{display:flex;gap:8px;align-items:flex-start;color:#81968a;font-size:9px;line-height:1.6;margin-top:14px}
+@media(max-width:620px){.network-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.network-host summary span{float:none;display:block;margin-top:5px}}
