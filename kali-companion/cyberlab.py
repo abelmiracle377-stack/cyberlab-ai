@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""CyberLab AI offline companion: static file triage and Nmap XML parsing only."""
+"""CyberLab AI Kali companion: passive OSINT and local evidence analysis."""
 from __future__ import annotations
+
 import argparse
 import hashlib
+import ipaddress
 import json
 import math
 import re
+import socket
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_XML_BYTES = 2 * 1024 * 1024
-
+USER_AGENT = "CyberLabAI-Kali-Companion/1.0 (passive-security-research)"
 INDICATORS = {
     "PowerShell": re.compile(r"powershell(?:\.exe)?|pwsh(?:\.exe)?", re.I),
     "Windows script host": re.compile(r"wscript(?:\.exe)?|cscript(?:\.exe)?", re.I),
@@ -101,19 +107,15 @@ def parse_nmap_xml(path: Path) -> dict:
             if not 1 <= port_number <= 65535:
                 continue
             ports.append({
-                "protocol": node.get("protocol", "unknown"),
-                "port": port_number,
+                "protocol": node.get("protocol", "unknown"), "port": port_number,
                 "state": state.get("state", "unknown") if state is not None else "unknown",
                 "service": service.get("name", "unknown") if service is not None else "unknown",
                 "product": service.get("product", "") if service is not None else "",
                 "version": service.get("version", "") if service is not None else "",
             })
         hosts.append({
-            "index": index,
-            "status": status.get("state", "unknown") if status is not None else "unknown",
-            "addresses": addresses,
-            "hostnames": names,
-            "ports": ports,
+            "index": index, "status": status.get("state", "unknown") if status is not None else "unknown",
+            "addresses": addresses, "hostnames": names, "ports": ports,
         })
     open_ports = []
     for host in hosts:
@@ -122,30 +124,163 @@ def parse_nmap_xml(path: Path) -> dict:
             if port["state"] == "open":
                 open_ports.append({"host": address, **port})
     return {
-        "summary": {
-            "hosts": len(hosts),
-            "hosts_up": sum(1 for host in hosts if host["status"] == "up"),
-            "ports_parsed": sum(len(host["ports"]) for host in hosts),
-            "open_ports": len(open_ports),
-        },
-        "hosts": hosts,
-        "open_ports": open_ports,
+        "summary": {"hosts": len(hosts), "hosts_up": sum(1 for host in hosts if host["status"] == "up"),
+                    "ports_parsed": sum(len(host["ports"]) for host in hosts), "open_ports": len(open_ports)},
+        "hosts": hosts, "open_ports": open_ports,
         "note": "Parses an existing Nmap XML report only. It does not launch scans or contact hosts."
     }
 
+def http_json(url: str, timeout: int = 12):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        if response.status != 200:
+            raise ValueError("Remote service returned HTTP " + str(response.status))
+        payload = response.read(2_000_001)
+        if len(payload) > 2_000_000:
+            raise ValueError("Remote response exceeded the 2 MB safety limit.")
+        return json.loads(payload.decode("utf-8"))
+
+def validate_domain(value: str) -> str:
+    domain = value.strip().lower().rstrip(".")
+    if len(domain) > 253 or not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", domain):
+        raise ValueError("Enter a valid public domain name, for example example.com.")
+    return domain
+
+def dns_lookup(domain: str, timeout: int = 12) -> dict:
+    domain = validate_domain(domain)
+    output = {}
+    for record in ("A", "AAAA", "MX", "NS", "TXT"):
+        url = "https://cloudflare-dns.com/dns-query?" + urllib.parse.urlencode({"name": domain, "type": record})
+        try:
+            data = http_json(url, timeout)
+            answers = []
+            for answer in data.get("Answer", []):
+                answers.append({"ttl": answer.get("TTL"), "value": answer.get("data", "")})
+            output[record] = {"status": data.get("Status"), "answers": answers}
+        except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            output[record] = {"error": str(exc)}
+    return {"domain": domain, "records": output, "source": "Cloudflare public DNS-over-HTTPS"}
+
+def domain_osint(value: str, timeout: int = 12) -> dict:
+    domain = validate_domain(value)
+    result = {"domain": domain, "sources": {}, "limitations": [
+        "Passive public-source research only; no brute-force enumeration or active probing.",
+        "Certificate names can include historical, wildcard or unrelated entries; validate ownership and current status."
+    ]}
+    encoded = urllib.parse.quote(domain, safe="")
+    try:
+        result["sources"]["rdap"] = http_json("https://rdap.org/domain/" + encoded, timeout)
+    except Exception as exc:
+        result["sources"]["rdap_error"] = str(exc)
+    try:
+        query = urllib.parse.urlencode({"q": "%." + domain, "output": "json"})
+        certs = http_json("https://crt.sh/?" + query, timeout)
+        names = sorted({name.strip().lower().lstrip("*.") for row in certs if isinstance(row, dict)
+                        for name in str(row.get("name_value", "")).splitlines() if name.strip()})
+        result["sources"]["certificate_transparency"] = {"entries_returned": len(certs), "unique_names": names[:500]}
+    except Exception as exc:
+        result["sources"]["certificate_transparency_error"] = str(exc)
+    result["sources"]["dns"] = dns_lookup(domain, timeout)["records"]
+    return result
+
+def ip_intelligence(value: str, timeout: int = 12) -> dict:
+    try:
+        address = ipaddress.ip_address(value.strip())
+    except ValueError as exc:
+        raise ValueError("Enter a valid IPv4 or IPv6 address.") from exc
+    if not address.is_global:
+        raise ValueError("For privacy and safety, this lookup accepts public global IP addresses only.")
+    try:
+        rdap = http_json("https://rdap.org/ip/" + urllib.parse.quote(str(address), safe=""), timeout)
+    except Exception as exc:
+        rdap = {"lookup_error": str(exc)}
+    return {"ip": str(address), "rdap": rdap,
+            "note": "RDAP provides network registration context, not a person's identity or exact physical location."}
+
+def cve_search(term: str, limit: int = 10, timeout: int = 12) -> dict:
+    term = term.strip()
+    if len(term) < 2 or len(term) > 120:
+        raise ValueError("Enter a product, vendor, version or CVE keyword (2–120 characters).")
+    limit = max(1, min(limit, 20))
+    params = urllib.parse.urlencode({"keywordSearch": term, "resultsPerPage": limit})
+    data = http_json("https://services.nvd.nist.gov/rest/json/cves/2.0?" + params, timeout)
+    items = []
+    for entry in data.get("vulnerabilities", []):
+        cve = entry.get("cve", {})
+        descriptions = cve.get("descriptions", [])
+        english = next((d.get("value", "") for d in descriptions if d.get("lang") == "en"), "")
+        metrics = cve.get("metrics", {})
+        score = None
+        severity = None
+        for key in ("cvssMetricV40", "cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+            if metrics.get(key):
+                cvss = metrics[key][0].get("cvssData", {})
+                score, severity = cvss.get("baseScore"), cvss.get("baseSeverity")
+                break
+        items.append({"id": cve.get("id"), "published": cve.get("published"),
+                      "last_modified": cve.get("lastModified"), "cvss": score,
+                      "severity": severity, "description": english[:1200]})
+    return {"query": term, "total_results": data.get("totalResults", 0), "results": items,
+            "source": "NIST National Vulnerability Database"}
+
+def save_or_print(result: dict, output: str | None):
+    rendered = json.dumps(result, indent=2, ensure_ascii=False)
+    if output:
+        destination = Path(output).expanduser()
+        destination.write_text(rendered + "\n", encoding="utf-8")
+        print("Saved report to " + str(destination.resolve()))
+    else:
+        print(rendered)
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="CyberLab AI offline companion (no scanning or shell execution).")
+    parser = argparse.ArgumentParser(
+        description="CyberLab AI: passive OSINT, vulnerability intelligence and local evidence analysis.",
+        epilog="No port scanning, exploitation, sample execution, brute-force enumeration or private-data lookup is performed."
+    )
+    parser.add_argument("--timeout", type=int, default=12, help="HTTP timeout in seconds (default: 12)")
     sub = parser.add_subparsers(dest="command", required=True)
-    triage = sub.add_parser("triage", help="Static file hash, signature, entropy and string triage")
+    sub.add_parser("doctor", help="Check Python and companion readiness")
+    triage = sub.add_parser("triage", help="Statically inspect a local file (max 10 MB)")
     triage.add_argument("file", type=Path)
-    nmap = sub.add_parser("nmap-xml", help="Parse an existing Nmap XML report")
+    nmap = sub.add_parser("nmap-xml", help="Parse an existing Nmap XML report (max 2 MB)")
     nmap.add_argument("file", type=Path)
+    dns = sub.add_parser("dns", help="Resolve public DNS records for a domain")
+    dns.add_argument("domain")
+    domain = sub.add_parser("domain", help="Passive domain RDAP, certificate and DNS research")
+    domain.add_argument("domain")
+    ip = sub.add_parser("ip", help="Look up public IP network registration context")
+    ip.add_argument("address")
+    cve = sub.add_parser("cve", help="Search the public NIST NVD vulnerability database")
+    cve.add_argument("query", help="Vendor, product, version or CVE keyword")
+    cve.add_argument("--limit", type=int, default=10)
+    for command in (triage, nmap, dns, domain, ip, cve):
+        command.add_argument("-o", "--output", help="Save JSON results to this file")
     args = parser.parse_args()
     try:
-        result = triage_file(args.file) if args.command == "triage" else parse_nmap_xml(args.file)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if args.timeout < 2 or args.timeout > 60:
+            raise ValueError("Timeout must be between 2 and 60 seconds.")
+        if args.command == "doctor":
+            result = {"status": "ready", "python": sys.version.split()[0],
+                      "network_modules": ["domain", "dns", "ip", "cve"],
+                      "offline_modules": ["triage", "nmap-xml"],
+                      "dependencies": "Python standard library only"}
+            save_or_print(result, None)
+            return 0
+        if args.command == "triage":
+            result = triage_file(args.file)
+        elif args.command == "nmap-xml":
+            result = parse_nmap_xml(args.file)
+        elif args.command == "dns":
+            result = dns_lookup(args.domain, args.timeout)
+        elif args.command == "domain":
+            result = domain_osint(args.domain, args.timeout)
+        elif args.command == "ip":
+            result = ip_intelligence(args.address, args.timeout)
+        else:
+            result = cve_search(args.query, args.limit, args.timeout)
+        save_or_print(result, args.output)
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
         return 2
 

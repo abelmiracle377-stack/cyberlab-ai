@@ -1,4 +1,4 @@
-"""Unit tests for the offline CyberLab AI companion."""
+"""Unit tests for the CyberLab AI Kali companion."""
 import hashlib
 import importlib.util
 import tempfile
@@ -30,6 +30,19 @@ class CompanionTests(unittest.TestCase):
             sample.write_bytes(b"")
             with self.assertRaisesRegex(ValueError, "empty"):
                 cyberlab.triage_file(sample)
+
+    def test_domain_validation(self):
+        self.assertEqual(cyberlab.validate_domain("Example.COM."), "example.com")
+        with self.assertRaisesRegex(ValueError, "valid public domain"):
+            cyberlab.validate_domain("not a domain")
+
+    def test_private_ip_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "public global"):
+            cyberlab.ip_intelligence("127.0.0.1")
+
+    def test_invalid_ip_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "valid IPv4 or IPv6"):
+            cyberlab.ip_intelligence("999.999.999.999")
 
     def test_nmap_xml_summary(self):
         xml = b"""<?xml version="1.0"?>

@@ -53,13 +53,18 @@ The GitHub Actions workflow runs those tests and builds the Next.js application 
 
 ## Kali companion
 
+The Kali companion now includes passive domain OSINT (RDAP, certificate transparency and DNS), public IP RDAP context, NIST NVD CVE search, static file triage and existing Nmap XML parsing. It uses Python's standard library and requires no pip packages or API keys.
+
 ```bash
+git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
+cd cyberlab-ai
+python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py --help
-python3 kali-companion/cyberlab.py triage ./sample.bin
-python3 kali-companion/cyberlab.py nmap-xml ./authorised-scan.xml
+python3 kali-companion/cyberlab.py domain example.com
+python3 kali-companion/cyberlab.py cve "OpenSSH"
 ```
 
-No pip packages or API keys are required. See [kali-companion/README.md](./kali-companion/README.md).
+See [kali-companion/README.md](./kali-companion/README.md) for all commands, data sources and limitations.
 
 ## Security principles
 
