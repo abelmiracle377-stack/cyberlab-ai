@@ -1,10 +1,12 @@
 # CyberLab AI
 
-An open-source AI-assisted cybersecurity research workspace for OSINT, IP intelligence, authorised security assessment, vulnerability research, malware triage, reverse engineering and Kali Linux workflows.
+An open-source AI-assisted cybersecurity research workspace for passive OSINT, IP intelligence, authorised assessment planning, vulnerability research, safe malware triage, binary inspection, network evidence analysis and Kali Linux workflows.
 
 ## Current status
 
-The dashboard, AI research agent, passive domain OSINT workspace, Nmap XML report analyser, NIST NVD CVE research workspace, static malware triage workspace and local PE/ELF/Mach-O header inspector are implemented. The agent exposes passive IP intelligence, reverse DNS, DNS resolution and public NVD CVE search. The network analyser parses user-supplied XML only; the malware module performs static inspection without executing or storing samples. Persistent project storage, advanced reverse engineering and the Kali companion remain planned work.
+The dashboard and AI agent are implemented. Available workspaces include passive IP intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion.
+
+Persistent project/evidence storage, richer binary analysis and authenticated website synchronisation for the offline companion are future work. The companion intentionally does not expose a remote shell or run active scans.
 
 ## Run locally
 
@@ -18,41 +20,53 @@ npm run dev
 
 Open http://localhost:3000.
 
-For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API_KEY`. Never commit this file or paste real keys into source files. It is ignored by Git. On Vercel, prefer Vercel OIDC for production authentication; otherwise add the key in Project Settings → Environment Variables, mark it Sensitive, and scope it only to required environments.
+For AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel OIDC is not available in your runtime. Never commit secrets or place keys in browser code. On Vercel, use Project Settings → Environment Variables, mark credentials Sensitive, and scope them only to required environments.
 
-## Implemented
+## Implemented features
 
-- Responsive security research dashboard
-- Dynamic model catalogue from Vercel AI Gateway
-- Server-side streaming AI agent
-- Passive public IP intelligence lookup
-- Passive DNS record resolution (A, AAAA, MX, NS, TXT)
-- Reverse DNS (PTR) lookups
+- Responsive security research dashboard and streaming AI agent
+- Dynamic model catalogue via Vercel AI Gateway
+- Passive public IP intelligence, ASN/ISP context and reverse DNS
+- Passive DNS resolution for A, AAAA, MX, NS and TXT records
+- Public domain RDAP metadata and certificate-transparency research
 - Public NIST NVD CVE search and CVSS summaries
-- Nmap XML import with host, port and service summaries (report parsing only)
-- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)\n- Local reverse-engineering starter: PE, ELF and Mach-O format/header metadata inspection (no execution or disassembly)
-- Server-side credential handling and request validation
-- Local Markdown security report builder with no server-side storage
-- Authorised assessment scope planner with explicit exclusions and pre-engagement checklist
-- Offline Kali companion CLI for static file triage and Nmap XML parsing
+- Nmap XML import with host, port and service summaries (parsing only)
+- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)
+- PE, ELF and Mach-O header inspection (no execution or disassembly)
+- Authorised assessment scope planner with exclusions and pre-engagement checklist
+- Local Markdown security report builder (no server-side storage)
+- Offline Kali companion for static file triage and Nmap XML parsing
+- Baseline HTTP security headers and secret-file exclusions
 
-## Roadmap
+## Test
 
-- Evidence and project persistence
-- CVE and vulnerability intelligence
-- Extended network evidence interpretation
-- Deeper reverse engineering workflows such as section/import analysis and safe disassembly
-- Authenticated website synchronisation for the offline Kali companion (planned)
+Run the offline companion tests with Python's standard library:
+
+```bash
+python -m unittest discover -s kali-companion -p "test_*.py" -v
+```
+
+The GitHub Actions workflow runs those tests and builds the Next.js application on pushes and pull requests to `main`.
+
+## Kali companion
+
+```bash
+python3 kali-companion/cyberlab.py --help
+python3 kali-companion/cyberlab.py triage ./sample.bin
+python3 kali-companion/cyberlab.py nmap-xml ./authorised-scan.xml
+```
+
+No pip packages or API keys are required. See [kali-companion/README.md](./kali-companion/README.md).
 
 ## Security principles
 
 - Use assessment features only on systems you own or are explicitly authorised to test.
-- Sensitive or potentially disruptive actions require clear scope and human approval.
-- The Kali companion will not expose an unauthenticated public shell.
+- Active or potentially disruptive actions require explicit scope and human approval.
+- The Kali companion does not expose an unauthenticated public shell, run scans, exploit hosts or execute samples.
 - Findings should retain source, timestamp, context and confidence.
-- Network registration and geolocation data must not be presented as proof of a private person's identity.
+- IP geolocation and registration data are approximate network context, not proof of a private person's identity or exact location.
 - Deceptive tracking, covert camera capture, private subscriber lookups and private browsing-history collection are out of scope.
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+MIT. See [LICENSE](./LICENSE).
