@@ -9,8 +9,8 @@ type Message = { role: "user" | "assistant"; content: string };
 
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
-  const [model, setModel] = useState("openai/gpt-5.5");
-  const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("standard");
+  const [model, setModel] = useState("");
+  const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
@@ -23,11 +23,13 @@ export default function AgentPage() {
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Model catalogue unavailable.");
-        setModels(data.models || []);
-        if (data.models?.length && !data.models.some((item: Model) => item.id === model)) {
-          const preferred = data.models.find((item: Model) => item.id === "openai/gpt-5.5") || data.models[0];
-          setModel(preferred.id);
-        }
+        const catalogue: Model[] = data.models || [];
+        setModels(catalogue);
+        setModel((current) => {
+          if (catalogue.some((item) => item.id === current && (agentMode === "standard" || item.openWeight))) return current;
+          if (agentMode === "open-weight") return catalogue.find((item) => item.openWeight)?.id || "";
+          return catalogue.find((item) => item.id === "openai/gpt-5.5")?.id || catalogue[0]?.id || "";
+        });
       })
       .catch((cause) => setError(cause.message || "Could not load model catalogue."));
   }, []);
@@ -132,7 +134,7 @@ export default function AgentPage() {
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Passive IP/DNS/CVE tools only · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim()}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Passive IP/DNS/CVE tools only · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Run analysis"}</button></div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
