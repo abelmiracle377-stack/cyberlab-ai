@@ -7,6 +7,11 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const modelSchema = z.string().min(3).max(160).regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:-]+$/);
+const openWeightPrefixes = [
+  "openai/gpt-oss-", "meta-llama/", "qwen/", "deepseek/", "mistralai/",
+  "google/gemma-", "microsoft/phi-", "nousresearch/", "allenai/", "zai-org/",
+];
+const isOpenWeightModel = (id: string) => openWeightPrefixes.some((prefix) => id.startsWith(prefix));
 
 const agentInstructions = `You are CyberLab AI, an evidence-first cybersecurity research assistant.
 Help with defensive security, authorised testing, OSINT from public sources, network intelligence, vulnerability research, safe malware triage, and technical reporting.
@@ -14,6 +19,11 @@ Use available tools when they materially improve accuracy. Explain what a tool c
 Never claim a scan or lookup occurred unless a tool returned its result. Do not identify a private person from an IP address, infer subscriber registration details, retrieve private browsing history, or facilitate covert camera capture or deceptive tracking.
 Do not provide instructions for unauthorised access, credential theft, persistence, evasion, malware deployment, or disruption. For active testing, ask for explicit authorisation and scope; this first version only performs passive IP and DNS lookups.
 Keep responses clear, technically precise, and include uncertainty and limitations.`;
+
+const openWeightInstructions = agentInstructions + `
+
+RESEARCH MODE:
+Give technically detailed, direct answers for legitimate security research. Avoid generic warnings and unnecessary refusals when the request is clearly defensive, educational, or within an authorised scope. Explain concepts, analyse supplied code and logs, discuss vulnerability mechanics at a level appropriate to the stated defensive purpose, and give safe validation and remediation steps. If authorisation or scope is unclear for an active test, ask for it before giving operational steps. The same boundaries against unauthorised access, credential theft, persistence, evasion, malware deployment, covert surveillance and disruption always apply. Open-weight mode changes model selection and response style; it does not disable these boundaries.`;
 
 const tools = {
   cve_lookup: tool({
@@ -116,6 +126,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const model = modelSchema.safeParse(body.model || "openai/gpt-5.5");
+    const agentMode = body.agentMode === "open-weight" ? "open-weight" : "standard";
     const history = Array.isArray(body.history)
       ? body.history.slice(-12).flatMap((entry: unknown) => {
           if (!entry || typeof entry !== "object") return [];
@@ -141,7 +152,7 @@ export async function POST(request: Request) {
 
     const result = streamText({
       model: model.data,
-      system: agentInstructions,
+      system: agentMode === "open-weight" ? openWeightInstructions : agentInstructions,
       messages: [...history, { role: "user" as const, content: prompt }],
       tools,
       stopWhen: stepCountIs(5),
