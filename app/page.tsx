@@ -2,10 +2,8 @@
 
 import { useMemo, useState } from "react";
 import {
-  Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Bell,
-  Bot, Bug, Cable, ChevronRight, CircleHelp, Clock3, Code2, Database,
-  FileSearch, Fingerprint, Globe2, Layers3, LockKeyhole, Network, FileLock2,
-  Radar, Search, Server, Shield, ShieldCheck, Terminal, Workflow,
+  Activity, ArrowLeft, ArrowRight, Bell, Bot, Bug, Cable, CircleHelp, Code2, Database,
+  FileSearch, Fingerprint, Globe2, Layers3, Network, FileLock2, Radar, Shield, ShieldCheck, Terminal, Workflow,
 } from "lucide-react";
 
 const navigation = [
@@ -48,12 +46,7 @@ const capabilities = [
 
 export default function Home() {
   const [active, setActive] = useState("Overview");
-  const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
-  const filteredModules = useMemo(
-    () => modules.filter((module) => (module.name + " " + module.description).toLowerCase().includes(query.toLowerCase())),
-    [query],
-  );
   const selectedModule = modules.find((module) => module.name === active);
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
@@ -61,7 +54,6 @@ export default function Home() {
     const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
-    setQuery("");
     setNotice("");
   }
 
@@ -130,8 +122,8 @@ export default function Home() {
         <header className="topbar">
           <div className="breadcrumb">CyberLab AI <span style={{ color: "#526057", margin: "0 8px" }}>/</span> <strong>{active}</strong></div>
           <div className="top-actions">
-            <div className="environment"><span className="dot" /> INITIAL SETUP</div>
-            <button className="icon-button" aria-label="Help" onClick={() => setNotice("CyberLab AI is in its initial setup stage. Modules will become available as their services are implemented.")}><CircleHelp size={14} /></button>
+            <div className="environment"><span className="dot" /> RESEARCH WORKSPACE</div>
+            <button className="icon-button" aria-label="Help" onClick={() => setNotice("Choose an available workspace below. Each tool reports its own live lookup or service status.")}><CircleHelp size={14} /></button>
             <button className="icon-button" aria-label="Notifications" onClick={() => setNotice("No system notifications yet.")}><Bell size={14} /></button>
           </div>
         </header>
@@ -148,15 +140,15 @@ export default function Home() {
               {notice && <div className="notice"><CircleHelp size={15} className="notice-icon" /><div><div className="notice-title">Workspace message</div><div className="notice-text">{notice}</div></div></div>}
               <div className="notice">
                 <ShieldCheck size={16} className="notice-icon" />
-                <div><div className="notice-title">Workspace initialised — services not yet connected</div><div className="notice-text">This is the first interface build. No scans, lookups or AI actions are running yet. Connect a model and configure data services before using operational features.</div></div>
+                <div><div className="notice-title">Start an investigation</div><div className="notice-text">Choose an operational tool. IP and domain intelligence use passive public sources; the AI agent uses the selected model and reports provider errors when unavailable.</div></div>
               </div>
 
               <div className="section-heading"><h2>Workspace status</h2><span className="section-meta">LIVE CONFIGURATION</span></div>
               <div className="metrics">
-                <div className="metric"><div className="metric-top"><span>AI runtime</span><Bot size={14} className="metric-symbol" /></div><div className="metric-value" style={{ color: "#d7b77b" }}>Offline</div><div className="metric-note">No provider configured</div></div>
-                <div className="metric"><div className="metric-top"><span>Connected tools</span><Cable size={14} className="metric-symbol" /></div><div className="metric-value">00</div><div className="metric-note">Integrations pending</div></div>
-                <div className="metric"><div className="metric-top"><span>Saved projects</span><Database size={14} className="metric-symbol" /></div><div className="metric-value">00</div><div className="metric-note">Storage not configured</div></div>
-                <div className="metric"><div className="metric-top"><span>Security events</span><Activity size={14} className="metric-symbol" /></div><div className="metric-value">—</div><div className="metric-note">No event source connected</div></div>
+                <div className="metric"><div className="metric-top"><span>AI runtime</span><Bot size={14} className="metric-symbol" /></div><div className="metric-value" style={{ color: "#d7b77b" }}>Check in Agent</div><div className="metric-note">Live provider status appears in chat</div></div>
+                <div className="metric"><div className="metric-top"><span>Connected tools</span><Cable size={14} className="metric-symbol" /></div><div className="metric-value">3</div><div className="metric-note">Passive intelligence routes</div></div>
+                <div className="metric"><div className="metric-top"><span>Saved projects</span><Database size={14} className="metric-symbol" /></div><div className="metric-value">Local</div><div className="metric-note">Evidence vault stays in browser</div></div>
+                <div className="metric"><div className="metric-top"><span>Security events</span><Activity size={14} className="metric-symbol" /></div><div className="metric-value">Manual</div><div className="metric-note">No background monitoring</div></div>
               </div>
 
               <div className="dashboard-grid">
@@ -166,9 +158,9 @@ export default function Home() {
                     <div className="panel-header"><span className="panel-title">Agent workspace</span><span className="panel-kicker">AGENT / 00</span></div>
                     <div className="agent-placeholder">
                       <div className="agent-orb"><Bot size={22} /></div>
-                      <div className="agent-title">Your agent workspace is ready</div>
-                      <div className="agent-desc">The orchestration layer will plan tasks, request approval for sensitive actions, call enabled tools and organise evidence. Choose a provider to begin configuration.</div>
-                      <span className="agent-state">WAITING FOR MODEL PROVIDER</span>
+                      <div className="agent-title">Open the AI research agent</div>
+                      <div className="agent-desc">Select a supported model, send a question, and receive a streamed response with public research and passive intelligence tools when available.</div>
+                      <a className="connection-link" href="/agent">Launch AI Agent <ArrowRight size={12} /></a>
                     </div>
                   </div>
                 </section>
@@ -177,16 +169,16 @@ export default function Home() {
                   <div className="panel">
                     <div className="panel-header"><span className="panel-title">Setup log</span><span className="panel-kicker">LOCAL STATUS</span></div>
                     <div className="panel-body activity-list">
-                      <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">Workspace created</div><div className="activity-detail">CyberLab AI project initialised</div></div><span className="activity-time">DONE</span></div>
-                      <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">Dashboard scaffold</div><div className="activity-detail">Navigation and module layout</div></div><span className="activity-time">DONE</span></div>
-                      <div className="activity-row"><span className="activity-bullet" style={{ background: "#b38d54" }} /><div><div className="activity-name">Model provider</div><div className="activity-detail">Credentials and routing not configured</div></div><span className="activity-time">PENDING</span></div>
-                      <div className="activity-row"><span className="activity-bullet" style={{ background: "#b38d54" }} /><div><div className="activity-name">Tool integrations</div><div className="activity-detail">Awaiting backend implementation</div></div><span className="activity-time">PENDING</span></div>
+                      <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">IP Intelligence</div><div className="activity-detail">User-entered public IP lookup</div></div><span className="activity-time">DONE</span></div>
+                      <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">Domain OSINT</div><div className="activity-detail">RDAP and certificate transparency</div></div><span className="activity-time">DONE</span></div>
+                      <div className="activity-row"><span className="activity-bullet" style={{ background: "#b38d54" }} /><div><div className="activity-name">AI model</div><div className="activity-detail">Choose a model in the agent console</div></div><span className="activity-time">CHECK</span></div>
+                      <div className="activity-row"><span className="activity-bullet" style={{ background: "#b38d54" }} /><div><div className="activity-name">Network analysis</div><div className="activity-detail">Import an existing Nmap XML report</div></div><span className="activity-time">READY</span></div>
                     </div>
                   </div>
                 </section>
               </div>
 
-              <div className="section-heading"><h2>Research modules</h2><span className="section-meta">SELECT A MODULE TO EXPLORE</span></div>
+              <div className="section-heading"><h2>Research modules</h2><span className="section-meta">OPEN A WORKSPACE</span></div>
               <div className="modules-grid">
                 {modules.filter((module) => module.name !== "AI Agent").map((module) => {
                   const Icon = module.icon;
@@ -200,19 +192,11 @@ export default function Home() {
           ) : (
             <div className="module-page">
               <button className="back-link" onClick={() => selectModule("Overview")}><ArrowLeft size={12} style={{ verticalAlign: "middle", marginRight: 5 }} /> Back to overview</button>
-              <div className="eyebrow">CYBERLAB MODULE / WORK IN PROGRESS</div>
-              <div className="page-heading"><div><h1>{active}</h1><div className="subtitle">{selectedModule?.description ?? "Configure the CyberLab AI workspace and its connected services."}</div></div></div>
-              {notice && <div className="notice"><CircleHelp size={15} className="notice-icon" /><div><div className="notice-title">Workspace message</div><div className="notice-text">{notice}</div></div></div>}
-              <div className="panel module-page-panel">
-                <div className="module-top"><span className="module-icon"><SelectedIcon size={18} /></span><span className="module-status">NOT YET CONNECTED</span></div>
-                <h2 style={{ fontSize: 16, margin: "18px 0 7px" }}>{active} workspace</h2>
-                <p>This module is part of the CyberLab AI roadmap. Its interface will be connected to real data sources and analysis tools in a later implementation step. No operational activity is being performed from this screen.</p>
-                <div className="capability-list">{capabilities.map((capability) => <div className="capability" key={capability}><ShieldCheck size={13} />{capability}</div>)}</div>
-                <div style={{ marginTop: 20, padding: 12, border: "1px solid #3e392b", background: "#1b1912", borderRadius: 7, color: "#c8b48e", fontSize: 10, lineHeight: 1.7 }}>
-                  <strong>Implementation status:</strong> UI foundation only. Backend, provider credentials and module-specific integrations are not configured yet.
-                </div>
-              </div>
+              <div className="eyebrow">WORKSPACE</div>
+              <div className="page-heading"><div><h1>{active}</h1><div className="subtitle">Open the corresponding tool to run a real lookup or analysis.</div></div></div>
+              <div className="panel module-page-panel"><h2 style={{ fontSize: 16, margin: "18px 0 7px" }}>{active}</h2><p>Use the dedicated workspace to submit your own target or evidence. No target is pre-filled and no investigation runs automatically.</p><div className="capability-list"><a className="connection-link" href={active === "AI Agent" ? "/agent" : active === "IP Intelligence" ? "/ip-intelligence" : active === "OSINT" ? "/osint" : active === "Network Analysis" ? "/network-analysis" : "/reports"}>Open {active} <ArrowRight size={12} /></a></div></div>
             </div>
+
           )}
           <div className="footer-note">CYBERLAB AI · OPEN-SOURCE SECURITY RESEARCH WORKSPACE · USE ONLY ON SYSTEMS YOU OWN OR ARE AUTHORISED TO ASSESS</div>
         </div>
