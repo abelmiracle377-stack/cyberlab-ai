@@ -2,7 +2,7 @@ import { resolve4, resolve6, resolveMx, resolveNs, resolveTxt } from "node:dns/p
 
 export const runtime = "nodejs";
 
-const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/i;
+const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -10,8 +10,8 @@ export async function POST(request: Request) {
   catch { return Response.json({ error: "Invalid JSON request." }, { status: 400 }); }
 
   const raw = body && typeof body === "object" && "domain" in body ? (body as { domain?: unknown }).domain : null;
-  const domain = typeof raw === "string" ? raw.trim().toLowerCase().replace(/\\.$/, "") : "";
-  if (!DOMAIN_PATTERN.test(domain) || /^\\d+(?:\\.\\d+){3}$/.test(domain)) {
+  const domain = typeof raw === "string" ? raw.trim().toLowerCase().replace(/\.$/, "") : "";
+  if (!DOMAIN_PATTERN.test(domain) || /^\d+(?:\.\d+){3}$/.test(domain)) {
     return Response.json({ error: "Enter a valid domain name, such as example.com." }, { status: 400 });
   }
 
