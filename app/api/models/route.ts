@@ -22,12 +22,15 @@ export async function GET() {
     const payload = (await response.json()) as { data?: GatewayModel[] };
     const models = (payload.data ?? [])
       .filter((item) => typeof item.id === "string" && item.id.includes("/"))
-      .map((item) => ({
-        id: item.id as string,
-        name: item.name || item.id,
-        provider: item.id!.split("/")[0],
-        contextLength: item.context_length ?? null,
-      }))
+      .map((item) => {
+        const id = item.id ?? "";
+        return {
+          id,
+          name: item.name ?? id,
+          provider: id.split("/")[0],
+          contextLength: item.context_length ?? null,
+        };
+      })
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
     return NextResponse.json({ models }, {
       headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
