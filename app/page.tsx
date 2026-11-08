@@ -31,7 +31,7 @@ const modules = [
   { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Available" },
   { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Available" },
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Available" },
-  { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Planned" },
+  { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Available" },
   { name: "Reports", description: "Turn verified evidence into structured technical reports.", icon: FileSearch, status: "Available" },
 ];
 
@@ -56,7 +56,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setQuery("");
