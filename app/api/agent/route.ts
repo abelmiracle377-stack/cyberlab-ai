@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { lookup, resolve4, resolve6, resolveMx, resolveNs, resolveTxt } from "node:dns/promises";
+import { resolve4, resolve6, resolveMx, resolveNs, resolveTxt } from "node:dns/promises";
 import { stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 
@@ -72,6 +72,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const model = modelSchema.safeParse(body.model || "openai/gpt-5.5");
+    const history = Array.isArray(body.history)
+      ? body.history.slice(-12).flatMap((entry: unknown) => {
+          if (!entry || typeof entry !== "object") return [];
+          const item = entry as { role?: unknown; content?: unknown };
+          if ((item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.length <= 8000) {
+            return [{ role: item.role, content: item.content }];
+          }
+          return [];
+        })
+      : [];
     if (!prompt || prompt.length > 8000) {
       return Response.json({ error: "Enter a prompt between 1 and 8,000 characters." }, { status: 400 });
     }
@@ -88,7 +98,7 @@ export async function POST(request: Request) {
     const result = streamText({
       model: model.data,
       system: agentInstructions,
-      prompt,
+      messages: [...history, { role: "user" as const, content: prompt }],
       tools,
       stopWhen: stepCountIs(5),
       temperature: 0.2,
