@@ -4,7 +4,7 @@ An open-source AI-assisted cybersecurity research workspace for OSINT, IP intell
 
 ## Current status
 
-The dashboard, AI research agent console and Nmap XML report analyser are implemented. The agent currently exposes passive IP intelligence, reverse DNS, DNS resolution and public NVD CVE search tools. The network analyser parses user-supplied Nmap XML; it does not launch scans. Persistent project storage, advanced reverse-engineering workflows and the Kali companion remain planned work.
+The dashboard, AI research agent, passive domain OSINT workspace, Nmap XML report analyser and static malware triage workspace are implemented. The agent exposes passive IP intelligence, reverse DNS, DNS resolution and public NVD CVE search. The network analyser parses user-supplied XML only; the malware module performs static inspection without executing or storing samples. Persistent project storage, advanced reverse engineering and the Kali companion remain planned work.
 
 ## Run locally
 
@@ -36,7 +36,7 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Evidence and project persistence
 - CVE and vulnerability intelligence
 - Authorised Nmap result import and analysis
-- Safe static malware triage and reverse engineering
+- Advanced reverse engineering workflows
 - Report generation and export
 - Authenticated Kali Linux companion with allowlisted tasks and explicit approvals
 
