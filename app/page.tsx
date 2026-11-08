@@ -29,7 +29,7 @@ const modules = [
   { name: "OSINT", description: "Organise public-source findings with provenance and confidence.", icon: Fingerprint, status: "Available" },
   { name: "Network Analysis", description: "Review network evidence and interpret authorised scan results.", icon: Network, status: "Available" },
   { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Planned" },
-  { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Planned" },
+  { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Available" },
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Planned" },
   { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Planned" },
   { name: "Reports", description: "Turn verified evidence into structured technical reports.", icon: FileSearch, status: "Planned" },
