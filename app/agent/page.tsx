@@ -9,12 +9,14 @@ type Message = { role: "user" | "assistant"; content: string };
 
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
-  const [model, setModel] = useState("openai/gpt-5.5");\n  const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("standard");
+  const [model, setModel] = useState("openai/gpt-5.5");
+  const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("standard");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);\n  const availableModels = agentMode === "open-weight" ? models.filter((item) => item.openWeight) : models;
+  const endRef = useRef<HTMLDivElement>(null);
+  const availableModels = agentMode === "open-weight" ? models.filter((item) => item.openWeight) : models;
 
   useEffect(() => {
     fetch("/api/models")
