@@ -94,8 +94,12 @@ export default function AgentPage() {
           <h1>AI research agent</h1>
           <p>Ask a security question, investigate public network intelligence, or analyse DNS evidence. Choose Standard or Open-weight research mode below.</p>
         </div>
-        <div className="agent-config">
-          <div className="agent-model-label"><span className="agent-live-dot" /> MODEL ROUTING</div>
+        <div className="agent-config agent-config-stack">
+          <div className="agent-mode-switch" role="group" aria-label="Agent mode">
+            <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); if (!models.some((item) => item.id === model)) setModel(models.find((item) => item.id === "openai/gpt-5.5")?.id || models[0]?.id || "openai/gpt-5.5"); }} disabled={busy}>Standard</button>
+            <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight); setAgentMode("open-weight"); if (first) setModel(first.id); }} disabled={busy}>Open-weight research mode</button>
+          </div>
+          <div className="agent-model-label"><span className="agent-live-dot" /> {agentMode === "open-weight" ? "OPEN-WEIGHT MODEL ROUTING" : "MODEL ROUTING"}</div>
           <label className="agent-select-wrap">
             <span className="sr-only">Select model</span>
             <select value={model} onChange={(event) => setModel(event.target.value)} disabled={busy}>
