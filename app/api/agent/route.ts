@@ -41,7 +41,6 @@ const tools = {
   public_web_search: gateway.tools.parallelSearch({
     mode: "fast",
     maxResults: 5,
-    maxTokensPerPage: 1200,
     maxTokens: 6000,
   }),
   cve_lookup: tool({
