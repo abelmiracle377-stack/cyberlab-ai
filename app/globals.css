@@ -363,3 +363,16 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .scope-checks label{display:flex;align-items:flex-start;gap:8px;color:#aebbb2;font-size:9px;line-height:1.5}
 .scope-checks input{accent-color:#6bb582;margin:1px 0 0}
 @media(max-width:850px){.scope-layout{grid-template-columns:1fr}}
+
+/* Kali companion guide */
+.kali-status{display:flex;gap:11px;align-items:flex-start;padding:13px;border:1px solid #345c42;border-radius:7px;background:#111d15;color:#9bd6ae}
+.kali-status strong,.kali-status span{display:block}
+.kali-status strong{font-size:11px;color:#d5e8da}
+.kali-status span{font-size:9px;color:#8fa095;margin-top:4px;line-height:1.6}
+.kali-panel{border:1px solid #202b26;background:#0e1412;border-radius:8px;padding:16px;margin-top:12px}
+.kali-panel h2{font-size:12px;margin:0 0 7px}
+.kali-panel p{font-size:10px;color:#87958d;line-height:1.7}
+.kali-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#080d0a;border:1px solid #202b26;border-radius:6px;padding:12px;color:#c4ddca;font:10px/1.8 var(--mono);margin:10px 0}
+.kali-panel a{display:inline-flex;align-items:center;gap:7px;color:#9bd6ae;font-size:10px}
+.kali-warning{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #594633;background:#211a12;border-radius:7px;color:#d6b88f;font-size:10px;line-height:1.7;margin-top:13px}
+.kali-warning svg{flex:0 0 auto;margin-top:1px}

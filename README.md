@@ -34,6 +34,7 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - Server-side credential handling and request validation
 - Local Markdown security report builder with no server-side storage
 - Authorised assessment scope planner with explicit exclusions and pre-engagement checklist
+- Offline Kali companion CLI for static file triage and Nmap XML parsing
 
 ## Roadmap
 
@@ -41,7 +42,7 @@ For local AI inference, add an AI Gateway key to `.env.local` as `AI_GATEWAY_API
 - CVE and vulnerability intelligence
 - Extended network evidence interpretation
 - Advanced reverse engineering workflows
-- Authenticated Kali Linux companion with allowlisted tasks and explicit approvals
+- Authenticated website synchronisation for the offline Kali companion (planned)
 
 ## Security principles
 
