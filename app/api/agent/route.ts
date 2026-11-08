@@ -41,7 +41,6 @@ const tools = {
   public_web_search: gateway.tools.parallelSearch({
     mode: "fast",
     maxResults: 5,
-    maxTokens: 6000,
   }),
   cve_lookup: tool({
     description: "Search the public NVD vulnerability catalogue by CVE identifier or keyword. Return CVSS severity, summary and references; do not provide exploit instructions.",
