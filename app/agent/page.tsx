@@ -44,7 +44,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, model }),
+        body: JSON.stringify({ prompt: text, model, history: messages.filter((item) => item.content.trim()).slice(-12) }),
       });
       if (!response.ok) {
         const data = await response.json();
