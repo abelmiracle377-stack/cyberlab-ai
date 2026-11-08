@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Activity, ArrowLeft, ArrowRight, Bell, Bot, Bug, Cable, CircleHelp, Code2, Database,
   FileSearch, Fingerprint, Globe2, Layers3, Network, FileLock2, Radar, Shield, ShieldCheck, Terminal, Workflow,
@@ -107,13 +107,13 @@ export default function Home() {
 
         <div className="sidebar-bottom">
           <div className="connection-card">
-            <div className="connection-head"><span>Agent runtime</span><span className="connection-state">NOT CONNECTED</span></div>
-            <div className="connection-copy">Connect a model provider to enable agent planning and tool execution.</div>
+            <div className="connection-head"><span>AI model service</span><span className="connection-state">CHECK IN AGENT</span></div>
+            <div className="connection-copy">Open the agent console to check model availability and send a test message.</div>
             <button className="connection-link" onClick={() => selectModule("Settings")}>Configure providers <ArrowRight size={11} style={{ verticalAlign: "middle", marginLeft: 3 }} /></button>
           </div>
           <div className="profile">
             <div className="avatar">AM</div>
-            <div><div className="profile-name">Workspace owner</div><div className="profile-role">Administrator</div></div>
+            <div><div className="profile-name">Local workspace</div><div className="profile-role">Authentication not configured</div></div>
           </div>
         </div>
       </aside>
@@ -143,7 +143,7 @@ export default function Home() {
                 <div><div className="notice-title">Start an investigation</div><div className="notice-text">Choose an operational tool. IP and domain intelligence use passive public sources; the AI agent uses the selected model and reports provider errors when unavailable.</div></div>
               </div>
 
-              <div className="section-heading"><h2>Workspace status</h2><span className="section-meta">LIVE CONFIGURATION</span></div>
+              <div className="section-heading"><h2>Workspace status</h2><span className="section-meta">CURRENT CAPABILITIES</span></div>
               <div className="metrics">
                 <div className="metric"><div className="metric-top"><span>AI runtime</span><Bot size={14} className="metric-symbol" /></div><div className="metric-value" style={{ color: "#d7b77b" }}>Check in Agent</div><div className="metric-note">Live provider status appears in chat</div></div>
                 <div className="metric"><div className="metric-top"><span>Connected tools</span><Cable size={14} className="metric-symbol" /></div><div className="metric-value">3</div><div className="metric-note">Passive intelligence routes</div></div>
@@ -167,7 +167,7 @@ export default function Home() {
                 <section>
                   <div className="section-heading"><h2>System activity</h2><span className="section-meta">RECENT</span></div>
                   <div className="panel">
-                    <div className="panel-header"><span className="panel-title">Setup log</span><span className="panel-kicker">LOCAL STATUS</span></div>
+                    <div className="panel-header"><span className="panel-title">Available tools</span><span className="panel-kicker">LOCAL STATUS</span></div>
                     <div className="panel-body activity-list">
                       <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">IP Intelligence</div><div className="activity-detail">User-entered public IP lookup</div></div><span className="activity-time">DONE</span></div>
                       <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">Domain OSINT</div><div className="activity-detail">RDAP and certificate transparency</div></div><span className="activity-time">DONE</span></div>
