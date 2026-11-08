@@ -4,9 +4,9 @@ An open-source AI-assisted cybersecurity research workspace for passive OSINT, I
 
 ## Current status
 
-The dashboard and AI agent are implemented. Available workspaces include passive IP intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion.
+The application includes an AI agent interface, passive IP and DNS intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion. Not every navigation item represents a completed operational integration; use the dedicated tool pages and their returned status/errors to determine availability.
 
-The encrypted evidence vault is browser-local and passphrase protected; central multi-user project storage, richer binary analysis and authenticated website synchronisation for the offline companion remain future work. The companion intentionally does not expose a remote shell or run active scans.
+The encrypted evidence vault is browser-local and passphrase protected. Supabase email/password authentication and route protection are implemented as an optional deployment integration; they remain inactive until Supabase environment variables are configured. Central multi-user project storage and authenticated website synchronisation for the offline companion remain future work. The companion intentionally does not expose a remote shell or run active scans.
 
 ## Run locally
 
@@ -20,7 +20,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-For AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel OIDC is not available in your runtime. Open-weight mode uses models available through the configured AI Gateway catalogue; it does not guarantee a model is refusal-free or remove CyberLab safety controls. Never commit secrets or place keys in browser code. On Vercel, use Project Settings → Environment Variables, mark credentials Sensitive, and scope them only to required environments.
+For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `.env.local` and Vercel Project Settings → Environment Variables. Configure the Supabase Auth Site URL and redirect URL as `https://cyberlab-ai.vercel.app/auth/callback` (and your local callback for development). Once both variables are present, `proxy.ts` protects workspace pages and API routes, and `/login` supports email/password sign-in and account creation. Use Supabase Row Level Security for any future user-owned database tables. Do not use a service-role key in the browser.\n\nFor AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel OIDC is not available in your runtime. Open-weight mode uses models available through the configured AI Gateway catalogue; it does not guarantee a model is refusal-free or remove CyberLab safety controls. Never commit secrets or place keys in browser code. On Vercel, use Project Settings → Environment Variables, mark credentials Sensitive, and scope them only to required environments.
 
 ## Implemented features
 
