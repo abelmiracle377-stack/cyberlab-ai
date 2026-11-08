@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 import { resolve4, resolve6, resolveMx, resolveNs, resolveTxt, reverse } from "node:dns/promises";
-import { stepCountIs, streamText, tool } from "ai";
+import { gateway, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -35,9 +35,15 @@ Keep responses clear, technically precise, and include uncertainty and limitatio
 const openWeightInstructions = agentInstructions + `
 
 RESEARCH MODE:
-Give technically detailed, direct answers for legitimate security research. Avoid generic warnings and unnecessary refusals when the request is clearly defensive, educational, or within an authorised scope. Explain concepts, analyse supplied code and logs, discuss vulnerability mechanics at a level appropriate to the stated defensive purpose, and give safe validation and remediation steps. If authorisation or scope is unclear for an active test, ask for it before giving operational steps. The same boundaries against unauthorised access, credential theft, persistence, evasion, malware deployment, covert surveillance and disruption always apply. Open-weight mode changes model selection and response style; it does not disable these boundaries.`;
+Give technically detailed, direct answers for legitimate security research. Avoid generic warnings and unnecessary refusals when the request is clearly defensive, educational, or within an authorised scope. Explain concepts, analyse supplied code and logs, discuss vulnerability mechanics at a level appropriate to the stated defensive purpose, and give safe validation and remediation steps. Use public web research for current advisories, vendor patches, exploit status, and technical references; cite sources clearly. If authorisation or scope is unclear for an active test, ask for it before giving operational steps. The same boundaries against unauthorised access, credential theft, persistence, evasion, malware deployment, covert surveillance and disruption always apply. Open-weight mode changes model selection and response style; it does not disable these boundaries.`;
 
 const tools = {
+  public_web_search: gateway.tools.parallelSearch({
+    mode: "fast",
+    maxResults: 5,
+    maxTokensPerPage: 1200,
+    maxTokens: 6000,
+  }),
   cve_lookup: tool({
     description: "Search the public NVD vulnerability catalogue by CVE identifier or keyword. Return CVSS severity, summary and references; do not provide exploit instructions.",
     inputSchema: z.object({ query: z.string().min(3).max(120).describe("CVE identifier such as CVE-2024-3094, or a product/vulnerability keyword") }),
