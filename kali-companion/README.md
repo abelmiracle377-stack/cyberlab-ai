@@ -128,3 +128,15 @@ This is a public-source and evidence-review workspace, not an account-access too
 - Locally saved evidence notes and investigation reports.
 
 **Important boundary:** CyberLab does not run Hydra, John the Ripper, password spraying, brute-force attacks, credential stuffing, login bypass, hash cracking or password-dictionary generation. It cannot access scammer accounts or use discovered usernames to guess passwords. Use formal legal process and the relevant provider's preservation/disclosure channels for account records. Public indicators are leads, not attribution or proof of criminal activity.
+
+
+## Additional defensive research improvements
+
+- **CVE research:** NVD results now include CVSS vectors, weakness identifiers (CWE), reference links and affected CPE/version-boundary metadata when the API provides them. A keyword match is not proof that an installed asset is vulnerable; verify the exact product build and configuration.
+- **Static file triage:** rejects symbolic links, checks the file-size limit before reading, flags known extension/signature mismatches and adds a cautious entropy interpretation. It remains static-only and does not execute, unpack, activate macros or upload samples.
+- **Nmap XML analysis:** adds open-service counts and a compact inventory of reported product/version banners. Banners can be inaccurate; verify actual installed versions before CVE matching. No scan is launched.
+- **Evidence manager:** can copy an explicitly selected local file (up to 10 MB) into the local evidence folder, label it with a case reference and create a SHA-256 manifest. The new integrity check recomputes hashes and reports missing or changed evidence without modifying it.
+- **Investigation reports:** existing timestamped local JSON report saving remains unchanged. Evidence-integrity results can also be saved as a report.
+- **Password security and scam investigation:** existing defensive review and public-source/local-evidence workflows are retained; no cracking, password guessing, credential collection, account access or attribution claims are introduced.
+
+Evidence files may contain sensitive material. Keep the evidence directory access-controlled, avoid storing passwords/session tokens, and preserve original source files separately when chain-of-custody requirements apply.
