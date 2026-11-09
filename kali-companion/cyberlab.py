@@ -276,6 +276,120 @@ def print_banner() -> None:
     print(file=sys.stderr)
 
 
+
+def analyze_url(value: str) -> dict:
+    """Inspect URL structure without visiting it or contacting its host."""
+    from urllib.parse import urlsplit
+    raw = value.strip()
+    if not raw or len(raw) > 2048:
+        raise ValueError("Enter a URL between 1 and 2048 characters.")
+    candidate = raw if "://" in raw else "https://" + raw
+    try:
+        parsed = urlsplit(candidate)
+        host = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("URL could not be parsed safely: " + str(exc)) from exc
+    if parsed.scheme.lower() not in ("http", "https") or not host:
+        raise ValueError("Only complete HTTP or HTTPS URLs are supported.")
+    if any(ord(ch) < 32 for ch in raw):
+        raise ValueError("Control characters are not allowed in URLs.")
+    flags = []
+    if parsed.scheme.lower() != "https":
+        flags.append("URL does not use HTTPS")
+    if parsed.username is not None or parsed.password is not None:
+        flags.append("URL contains embedded user information")
+    if "@" in parsed.netloc:
+        flags.append("Authority contains @, which can disguise the destination")
+    if host.lower().startswith("xn--") or ".xn--" in host.lower():
+        flags.append("Hostname contains an IDN/punycode label")
+    try:
+        ipaddress.ip_address(host)
+        flags.append("Destination is an IP literal rather than a domain name")
+    except ValueError:
+        pass
+    if len(raw) > 180:
+        flags.append("Unusually long URL")
+    if host.count(".") >= 4:
+        flags.append("Hostname has many subdomain labels")
+    if port not in (None, 80, 443):
+        flags.append("URL specifies a non-standard port")
+    if parsed.scheme.lower() == "http" and parsed.path.lower().endswith((".exe", ".scr", ".msi", ".bat", ".cmd", ".ps1", ".apk")):
+        flags.append("URL path appears to reference an executable or installer")
+    return {
+        "submitted_url": raw,
+        "normalized_host": host.lower(),
+        "scheme": parsed.scheme.lower(),
+        "port": port,
+        "path_length": len(parsed.path),
+        "query_present": bool(parsed.query),
+        "structural_indicators": flags,
+        "risk_note": "Heuristic URL structure review only. The URL was NOT opened, resolved, downloaded or submitted to a reputation service. Indicators are not proof of maliciousness.",
+    }
+
+
+def evidence_directory() -> Path:
+    directory = Path.home() / "CyberLab" / "evidence"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def show_evidence_manager() -> None:
+    directory = evidence_directory()
+    files = sorted((p for p in directory.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
+    print("\\nLOCAL EVIDENCE MANAGER")
+    print(f"Storage: {directory}")
+    if not files:
+        print("No evidence files stored yet.")
+        print("Place an authorised sample in this folder, then use option 7 for static analysis.")
+        return
+    for index, item in enumerate(files[:50], 1):
+        print(f"  [{index}] {item.name} ({item.stat().st_size} bytes)")
+    if len(files) > 50:
+        print(f"  ... and {len(files) - 50} more file(s)")
+
+
+def show_connection_status() -> None:
+    print("\\nDEVICE CONNECTION")
+    print("Remote gateway: NOT CONFIGURED")
+    print("No VPS endpoint or authenticated pairing service is configured.")
+    print("Device pairing and live sessions are not active yet.")
+    print("This menu will become operational after the gateway and device companions are implemented.")
+    print("No fake pairing link or simulated device connection has been created.")
+
+
+def show_session_status() -> None:
+    print("\\nLIVE SESSION MANAGER")
+    print("No remote session backend is configured.")
+    print("Pause, resume and disconnect controls require an authenticated active session.")
+    print("Configure the CyberLab gateway before starting remote sessions.")
+
+
+def content_analysis_menu(timeout: int = 12) -> None:
+    print("\\nMALICIOUS FILE & LINK ANALYSIS")
+    print("  [1] Static file analysis")
+    print("  [2] Image/file signature analysis")
+    print("  [3] URL structure analysis (does not open the URL)")
+    print("  [0] Back")
+    choice = input("analysis> ").strip()
+    try:
+        if choice in ("1", "2"):
+            sample = Path(input("Path to local file: ").strip()).expanduser()
+            result = triage_file(sample)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            destination = save_investigation(result, "file-triage")
+            print(f"Saved locally: {destination}")
+        elif choice == "3":
+            result = analyze_url(input("URL to inspect: ").strip())
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            destination = save_investigation(result, "url-analysis")
+            print(f"Saved locally: {destination}")
+        elif choice != "0":
+            print("Choose one of the listed options.")
+    except (OSError, ValueError) as exc:
+        print(f"Analysis failed: {exc}")
+
+
 def investigation_directory() -> Path:
     """Return the local, user-owned directory for JSON investigation reports."""
     directory = Path.home() / "CyberLab" / "investigations"
@@ -307,8 +421,9 @@ def show_investigation_history() -> None:
         print(f"  ... and {len(reports) - 30} older report(s)")
 
 
+
 def interactive_menu(timeout: int = 12) -> int:
-    """Run the local, menu-driven CyberLab command centre."""
+    """Run the local-first CyberLab operations menu."""
     services = {
         "1": ("Domain OSINT", "domain"),
         "2": ("DNS intelligence", "dns"),
@@ -317,26 +432,43 @@ def interactive_menu(timeout: int = 12) -> int:
         "5": ("Static file triage", "triage"),
         "6": ("Nmap XML analysis", "nmap-xml"),
     }
-    print("\nCYBERLAB AI — KALI COMMAND CENTRE")
-    print("Local-first operations. Reports stay on this machine unless you explicitly share them.")
     while True:
-        print("\n  [1] Domain OSINT")
-        print("  [2] DNS intelligence")
-        print("  [3] IP intelligence")
-        print("  [4] CVE research")
-        print("  [5] File triage")
-        print("  [6] Nmap XML analysis")
-        print("  [7] Investigation history")
+        print("\\nCYBERLAB AI")
+        print("     SECURITY OPERATIONS\\n")
+        print("  [1] Domain OSINT")
+        print("  [2] DNS Intelligence")
+        print("  [3] IP Intelligence")
+        print("  [4] CVE Research")
+        print("  [5] File Triage")
+        print("  [6] Nmap XML Analysis")
+        print("  [7] Malicious File & Link Analysis")
+        print("  [8] Connect Device")
+        print("  [9] Connected Devices")
+        print("  [10] Manage Live Sessions")
+        print("  [11] Evidence Manager")
+        print("  [12] Investigation Reports")
         print("  [0] Exit")
         try:
-            choice = input("\ncyberlab> ").strip()
+            choice = input("\\ncyberlab> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nExiting CyberLab.")
+            print("\\nExiting CyberLab.")
             return 0
         if choice == "0":
             print("CyberLab closed.")
             return 0
         if choice == "7":
+            content_analysis_menu(timeout)
+            continue
+        if choice in ("8", "9"):
+            show_connection_status()
+            continue
+        if choice == "10":
+            show_session_status()
+            continue
+        if choice == "11":
+            show_evidence_manager()
+            continue
+        if choice == "12":
             show_investigation_history()
             continue
         if choice not in services:
@@ -360,14 +492,13 @@ def interactive_menu(timeout: int = 12) -> int:
                 result = triage_file(Path(input("Path to local sample file: ").strip()).expanduser())
             else:
                 result = parse_nmap_xml(Path(input("Path to existing Nmap XML report: ").strip()).expanduser())
-
             print(json.dumps(result, indent=2, ensure_ascii=False))
             destination = save_investigation(result, command)
-            print(f"\nSaved locally: {destination}")
+            print(f"\\nSaved locally: {destination}")
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            print(f"\nOperation failed: {exc}")
+            print(f"\\nOperation failed: {exc}")
         except (EOFError, KeyboardInterrupt):
-            print("\nReturning to the CyberLab menu.")
+            print("\\nReturning to the CyberLab menu.")
 
 def main() -> int:
     print_banner()
@@ -379,6 +510,9 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Check Python and companion readiness")
     sub.add_parser("menu", help="Open the interactive Kali command centre")
+    url_cmd = sub.add_parser("url", help="Inspect URL structure without opening it")
+    url_cmd.add_argument("url")
+    url_cmd.add_argument("-o", "--output", help="Save JSON results to this file")
     triage = sub.add_parser("triage", help="Statically inspect a local file (max 10 MB)")
     triage.add_argument("file", type=Path)
     nmap = sub.add_parser("nmap-xml", help="Parse an existing Nmap XML report (max 2 MB)")
@@ -400,6 +534,10 @@ def main() -> int:
             raise ValueError("Timeout must be between 2 and 60 seconds.")
         if args.command == "menu":
             return interactive_menu(args.timeout)
+        if args.command == "url":
+            result = analyze_url(args.url)
+            save_or_print(result, args.output)
+            return 0
         if args.command == "doctor":
             result = {"status": "ready", "python": sys.version.split()[0],
                       "network_modules": ["domain", "dns", "ip", "cve"],
