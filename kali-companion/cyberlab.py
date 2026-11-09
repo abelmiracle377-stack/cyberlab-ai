@@ -209,6 +209,112 @@ def public_site_profile(domain: str, timeout: int = 12) -> dict:
     except (OSError, ValueError, urllib.error.URLError) as exc:
         return {"status": "unavailable", "error": str(exc), "note": "RDAP, certificate and DNS research continues independently."}
 
+class _NoRedirect(__import__("urllib.request", fromlist=["HTTPRedirectHandler"]).HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _validate_assessment_url(value: str) -> str:
+    """Accept an explicit HTTPS URL only when its resolved addresses are public."""
+    parsed = urllib.parse.urlsplit(value.strip())
+    if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Assessment URLs must be explicit HTTPS URLs without embedded credentials.")
+    host = parsed.hostname.encode("idna").decode("ascii").lower()
+    try:
+        ipaddress.ip_address(host)
+        addresses = [host]
+    except ValueError:
+        try:
+            addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)})
+        except OSError as exc:
+            raise ValueError("Could not resolve the supplied assessment host: " + str(exc)) from exc
+    if not addresses:
+        raise ValueError("The assessment host did not resolve to an address.")
+    for item in addresses:
+        address = ipaddress.ip_address(item.split("%", 1)[0])
+        if not address.is_global:
+            raise ValueError("Assessment URL resolves to a non-public address; local/private targets are not fetched by this passive module.")
+    return urllib.parse.urlunsplit((parsed.scheme.lower(), parsed.netloc, parsed.path or "/", parsed.query, ""))
+
+
+def inspect_assessment_page(value: str, timeout: int = 12, method: str = "GET") -> dict:
+    """Inspect one explicitly supplied public HTTPS page; no redirects or form submissions."""
+    url = _validate_assessment_url(value)
+    if method not in ("GET", "HEAD"):
+        raise ValueError("Only GET and HEAD metadata inspection are supported.")
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(url, method=method, headers={
+        "User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"
+    })
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            headers = response.headers
+            result = {
+                "requested_url": url, "method": method, "status_code": response.status,
+                "final_url": response.geturl(),
+                "security_headers": {name: headers.get(name) for name in (
+                    "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
+                    "X-Content-Type-Options", "Referrer-Policy"
+                ) if headers.get(name)},
+                "security_headers_missing": [name for name in (
+                    "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
+                    "X-Content-Type-Options", "Referrer-Policy"
+                ) if not headers.get(name)],
+                "set_cookie_headers": headers.get_all("Set-Cookie", [])[:30],
+                "redirects_followed": False,
+            }
+            cookies = []
+            for raw_cookie in result["set_cookie_headers"]:
+                first = raw_cookie.split(";", 1)[0]
+                attrs = [part.strip() for part in raw_cookie.split(";")[1:]]
+                attr_names = {part.split("=", 1)[0].strip().lower() for part in attrs}
+                cookies.append({
+                    "name": first.split("=", 1)[0][:100],
+                    "secure": "secure" in attr_names,
+                    "httponly": "httponly" in attr_names,
+                    "samesite": next((part.split("=", 1)[1].strip() for part in attrs if part.lower().startswith("samesite=")), None),
+                    "path": next((part.split("=", 1)[1].strip() for part in attrs if part.lower().startswith("path=")), None),
+                    "max_age": next((part.split("=", 1)[1].strip() for part in attrs if part.lower().startswith("max-age=")), None),
+                })
+            result["cookies"] = cookies
+            result["cookie_note"] = "Only cookies set by this one response are visible; this does not verify session rotation, server-side expiry or logout invalidation."
+            if method == "GET" and "html" in headers.get("Content-Type", "").lower():
+                raw = response.read(500001)
+                parser = _PageMetadata()
+                parser.feed(raw.decode(headers.get_content_charset() or "utf-8", errors="replace"))
+                forms = []
+                for form in parser.forms[:20]:
+                    types = sorted({field["type"] for field in form["fields"]})
+                    names = [field["name"].lower() for field in form["fields"] if field["name"]]
+                    email_field = "email" in types or any("email" in name for name in names)
+                    username_field = any(any(term in name for term in ("user", "login", "account")) for name in names)
+                    password_field = "password" in types
+                    forms.append({
+                        "method": form["method"], "input_types": types, "field_names": names[:20],
+                        "email_password_pattern": bool(email_field and password_field),
+                        "username_password_pattern": bool(username_field and password_field),
+                        "authentication_form_likely": bool(password_field or email_field or username_field),
+                    })
+                result["page_title"] = " ".join(parser.title)[:300]
+                result["visible_forms"] = forms
+                result["login_classification"] = (
+                    "email/password form pattern" if any(f["email_password_pattern"] for f in forms) else
+                    "username/password form pattern" if any(f["username_password_pattern"] for f in forms) else
+                    "no password-based form detected in this page; SSO/passkey/backend auth remains possible"
+                )
+                result["sql_injection_observation"] = "Forms and field names are identified only. SQL injection cannot be confirmed from HTML; review server-side query construction and parameter binding."
+            else:
+                result["body_inspection"] = "Not performed (HEAD request or non-HTML response)."
+            return result
+    except urllib.error.HTTPError as exc:
+        return {"requested_url": url, "method": method, "status_code": exc.code,
+                "response_headers": {name: exc.headers.get(name) for name in ("Location", "WWW-Authenticate", "Set-Cookie") if exc.headers.get(name)},
+                "redirects_followed": False, "note": "Response metadata only; access control was not bypassed or challenged."}
+    except urllib.error.URLError as exc:
+        return {"requested_url": url, "method": method, "error": str(exc.reason),
+                "note": "No redirect or alternative path was attempted."}
+
+
 def _rdap_summary(data: dict) -> dict:
     events = {e.get("eventAction", "").lower(): e.get("eventDate") for e in data.get("events", []) if isinstance(e, dict)}
     return {"registered_on": events.get("registration"), "expires_on": events.get("expiration"),
