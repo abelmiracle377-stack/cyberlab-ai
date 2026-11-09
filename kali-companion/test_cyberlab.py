@@ -228,5 +228,22 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(item["cvss_vector"], "CVSS:3.1/example")
 
 
+    def test_password_audit_flags_predictable_sequences_without_returning_secret(self):
+        secret = "Qwerty123456!!!"
+        result = cyberlab.audit_password_strength(secret)
+        self.assertTrue(result["risk_signals"]["keyboard_or_sequential_pattern"])
+        self.assertNotIn(secret, repr(result))
+        self.assertIn("assessment_limit", result)
+
+    def test_password_audit_recognises_long_unique_candidate(self):
+        result = cyberlab.audit_password_strength("violet-harbour-copper-orbit-74")
+        self.assertEqual(result["quality_band"], "strong_candidate")
+
+    def test_password_storage_review_flags_fast_hashes(self):
+        result = cyberlab.review_password_storage("sha256", "no", "")
+        self.assertEqual(result["status"], "weak_or_inappropriate")
+        self.assertFalse(result["salted"])
+
+
 if __name__ == "__main__":
     unittest.main()
