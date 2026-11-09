@@ -1378,6 +1378,9 @@ def run_john_audit(hash_path: Path, wordlist_path: Path, hash_format: str = "",
     for candidate, label in ((hashes, "hash inventory"), (wordlist, "wordlist")):
         if candidate.is_symlink() or not candidate.is_file():
             raise ValueError(f"Select an existing regular local {label} file (symbolic links are not accepted).")
+    # Resolve before changing cwd to the temporary John session directory.
+    hashes = hashes.resolve()
+    wordlist = wordlist.resolve()
     if hashes.stat().st_size == 0 or hashes.stat().st_size > 5 * 1024 * 1024:
         raise ValueError("Hash inventory must be between 1 byte and 5 MB.")
     if wordlist.stat().st_size == 0 or wordlist.stat().st_size > 250 * 1024 * 1024:
