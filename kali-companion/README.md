@@ -159,6 +159,18 @@ Evidence files may contain sensitive material. Keep the evidence directory acces
 - **Hash inventory:** the existing option identifies likely hash formats in an authorised offline file only. It does not run John the Ripper or perform password guessing. CyberLab does not perform Hydra-style password spraying or dictionary attacks against live login pages; authorised login security can instead be reviewed through owner-provided logs, configuration and controlled staging assessments.
 
 
+### Phone-number intelligence (menu option 16)
+
+Option 16 always parses international numbering metadata. If the optional `phonenumbers` Python package is installed, it also reports possible/valid numbering-plan status, line type, approximate region description, international formatting and original number-range carrier assignment where available. Carrier data can be outdated after number portability. This does not identify a subscriber or reveal private registration dates, last-used timestamps, current activity, linked IP addresses, private social accounts or private fraud records.
+
+Install the optional package in the Python environment used to run CyberLab if you want the extra numbering metadata:
+
+```bash
+python3 -m pip install phonenumbers
+```
+
+Use a virtual environment if Kali's system Python blocks global pip installation.
+
 ### Kali password-audit workflow
 
 Install John the Ripper on Kali if needed:
