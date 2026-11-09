@@ -289,14 +289,14 @@ def save_investigation(result: dict, service: str) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_service = re.sub(r"[^a-z0-9-]+", "-", service.lower()).strip("-") or "report"
     destination = investigation_directory() / f"{stamp}_{safe_service}.json"
-    destination.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    destination.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return destination
 
 
 def show_investigation_history() -> None:
     directory = investigation_directory()
     reports = sorted(directory.glob("*.json"), reverse=True)
-    print("\\nLOCAL INVESTIGATION HISTORY")
+    print("\nLOCAL INVESTIGATION HISTORY")
     print(f"Location: {directory}")
     if not reports:
         print("No reports saved yet.")
@@ -317,10 +317,10 @@ def interactive_menu(timeout: int = 12) -> int:
         "5": ("Static file triage", "triage"),
         "6": ("Nmap XML analysis", "nmap-xml"),
     }
-    print("\\nCYBERLAB AI — KALI COMMAND CENTRE")
+    print("\nCYBERLAB AI — KALI COMMAND CENTRE")
     print("Local-first operations. Reports stay on this machine unless you explicitly share them.")
     while True:
-        print("\\n  [1] Domain OSINT")
+        print("\n  [1] Domain OSINT")
         print("  [2] DNS intelligence")
         print("  [3] IP intelligence")
         print("  [4] CVE research")
@@ -329,9 +329,9 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [7] Investigation history")
         print("  [0] Exit")
         try:
-            choice = input("\\ncyberlab> ").strip()
+            choice = input("\ncyberlab> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\\nExiting CyberLab.")
+            print("\nExiting CyberLab.")
             return 0
         if choice == "0":
             print("CyberLab closed.")
@@ -363,11 +363,11 @@ def interactive_menu(timeout: int = 12) -> int:
 
             print(json.dumps(result, indent=2, ensure_ascii=False))
             destination = save_investigation(result, command)
-            print(f"\\nSaved locally: {destination}")
+            print(f"\nSaved locally: {destination}")
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            print(f"\\nOperation failed: {exc}")
+            print(f"\nOperation failed: {exc}")
         except (EOFError, KeyboardInterrupt):
-            print("\\nReturning to the CyberLab menu.")
+            print("\nReturning to the CyberLab menu.")
 
 def main() -> int:
     print_banner()
