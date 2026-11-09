@@ -170,5 +170,63 @@ class CompanionTests(unittest.TestCase):
             cyberlab.classify_hash_inventory(Path("/definitely/not/a/real/hash-inventory.txt"))
 
 
+    def test_evidence_registration_and_integrity_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "sample.txt"
+            source.write_text("authorised evidence", encoding="utf-8")
+            with patch.object(cyberlab.Path, "home", return_value=root):
+                registered = cyberlab.register_evidence(source, "case-17", "test evidence")
+                verified = cyberlab.verify_evidence_integrity()
+                self.assertEqual(verified["integrity_valid"], 1)
+                evidence_path = Path(registered["evidence_path"])
+                evidence_path.write_text("changed", encoding="utf-8")
+                changed = cyberlab.verify_evidence_integrity()
+                self.assertEqual(len(changed["hash_mismatches_or_invalid_manifests"]), 1)
+
+    def test_evidence_registration_rejects_symbolic_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.txt"
+            source.write_text("evidence", encoding="utf-8")
+            link = root / "link.txt"
+            link.symlink_to(source)
+            with patch.object(cyberlab.Path, "home", return_value=root):
+                with self.assertRaisesRegex(ValueError, "symbolic link"):
+                    cyberlab.register_evidence(link)
+
+    def test_triage_reports_extension_signature_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sample = Path(directory) / "disguised.exe"
+            sample.write_bytes(b"%PDF-1.7\\nnot an executable")
+            result = cyberlab.triage_file(sample)
+        self.assertTrue(result["extension_signature_mismatch"])
+        self.assertIn("PDF", result["file_type"])
+
+    def test_nmap_xml_includes_service_inventory_summary(self):
+        xml = b"<nmaprun><host><status state='up'/><address addr='192.0.2.2' addrtype='ipv4'/><ports><port protocol='tcp' portid='443'><state state='open'/><service name='https' product='Example' version='2.0'/></port></ports></host></nmaprun>"
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "scan.xml"
+            report.write_bytes(xml)
+            result = cyberlab.parse_nmap_xml(report)
+        self.assertEqual(result["summary"]["open_service_counts"]["https"], 1)
+        self.assertEqual(result["versioned_services"][0]["version"], "2.0")
+
+    def test_cve_search_enriches_weakness_and_cpe_metadata(self):
+        payload = {"totalResults": 1, "vulnerabilities": [{"cve": {
+            "id": "CVE-2025-0001", "descriptions": [{"lang": "en", "value": "Example issue"}],
+            "weaknesses": [{"description": [{"lang": "en", "value": "CWE-79"}]}],
+            "references": [{"url": "https://example.test/advisory", "tags": ["Vendor Advisory"]}],
+            "configurations": [{"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:a:vendor:product:1.0:*:*:*:*:*:*:*", "vulnerable": True, "versionEndExcluding": "1.2"}]}]}],
+            "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 8.1, "baseSeverity": "HIGH", "vectorString": "CVSS:3.1/example"}}]}
+        }}]}
+        with patch.object(cyberlab, "http_json", return_value=payload):
+            result = cyberlab.cve_search("Example")
+        item = result["results"][0]
+        self.assertEqual(item["weaknesses"], ["CWE-79"])
+        self.assertEqual(item["affected_product_configurations"][0]["version_end_excluding"], "1.2")
+        self.assertEqual(item["cvss_vector"], "CVSS:3.1/example")
+
+
 if __name__ == "__main__":
     unittest.main()
