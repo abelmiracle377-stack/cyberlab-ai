@@ -349,5 +349,18 @@ class CompanionTests(unittest.TestCase):
         self.assertIn("Not reliably available", result["sources"]["social_profile"]["follower_or_member_count"])
 
 
+    def test_password_storage_review_rejects_unrecognised_answers(self):
+        with self.assertRaisesRegex(ValueError, "enter yes, no, unknown"):
+            cyberlab.review_password_storage("bcrypt", "yes", "1")
+
+    def test_password_storage_review_preserves_unknown_status(self):
+        result = cyberlab.review_password_storage("bcrypt", "unknown", "no")
+        self.assertEqual(result["salt_status"], "unknown")
+        self.assertFalse(result["salted"])
+        self.assertEqual(result["work_factor_status"], "no")
+        self.assertFalse(result["work_factor_or_parameters_documented"])
+
+
+
 if __name__ == "__main__":
     unittest.main()
