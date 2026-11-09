@@ -1113,11 +1113,30 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result = classify_hash_inventory(path)
         result["investigation_type"] = "offline_hash_format_inventory"
     elif choice == "5":
+        from datetime import datetime, timezone
+        case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", input("Case/reference ID: ").strip()).strip("-_")[:48] or "general"
         note = input("Evidence note (no passwords, tokens or unnecessary personal data): ").strip()[:3000]
         source = input("Source URL or local evidence reference: ").strip()[:1000]
-        result = {"investigation_type": "evidence_note", "note": note, "source_reference": source,
-                  "recorded_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
-                  "handling": "Locally recorded; preserve original evidence separately and document chain of custody."}
+        source_metadata = {"reference_type": "local_or_other_reference", "reference": source[:500]}
+        if source.lower().startswith(("http://", "https://")):
+            parsed = urllib.parse.urlsplit(source)
+            if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("Source URL must be a valid HTTP(S) URL without embedded credentials.")
+            host = parsed.hostname.encode("idna").decode("ascii").lower()
+            safe_url = urllib.parse.urlunsplit((parsed.scheme.lower(), host, parsed.path or "/", "", ""))
+            source_metadata = {
+                "reference_type": "public_url_reference",
+                "url_without_query_or_fragment": safe_url,
+                "query_and_fragment_saved": False,
+                "note": "URL is recorded as a reference only; CyberLab did not fetch or verify this source."
+            }
+        recorded = datetime.now(timezone.utc).isoformat()
+        result = {
+            "investigation_type": "evidence_note", "case_id": case_id, "note": note,
+            "source": source_metadata, "recorded_utc": recorded,
+            "note_sha256": hashlib.sha256(note.encode("utf-8")).hexdigest(),
+            "handling": "Local note metadata only. Preserve original evidence separately; this record does not independently establish authenticity, authorship or legal chain of custody."
+        }
     elif choice == "0":
         return {}
     else:
