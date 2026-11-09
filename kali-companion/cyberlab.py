@@ -64,24 +64,38 @@ def calculate_entropy(data: bytes) -> float:
     return round(-sum((count / len(data)) * math.log2(count / len(data)) for count in counts.values()), 3)
 
 def triage_file(path: Path) -> dict:
-    data = path.read_bytes()
-    if not data:
+    """Perform bounded, read-only triage; never execute or unpack the selected file."""
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("Select an existing regular local file (symbolic links are not accepted).")
+    size = path.stat().st_size
+    if size == 0:
         raise ValueError("Selected file is empty.")
-    if len(data) > MAX_FILE_BYTES:
+    if size > MAX_FILE_BYTES:
         raise ValueError("File exceeds the 10 MB limit.")
-    strings = re.findall(rb"[\x20-\x7e]{5,}", data)
+    data = path.read_bytes()
+    signature = identify(data)
+    suffix = path.suffix.lower()
+    expected = {".exe": "Windows PE", ".dll": "Windows PE", ".sys": "Windows PE",
+                ".elf": "ELF", ".so": "ELF", ".pdf": "PDF", ".png": "PNG",
+                ".jpg": "JPEG", ".jpeg": "JPEG", ".zip": "ZIP", ".gz": "GZIP"}.get(suffix)
+    strings = re.findall(rb"[\\x20-\\x7e]{5,}", data)
     decoded = [item.decode("latin-1", errors="replace") for item in strings]
     matches = [(name, value) for name, pattern in INDICATORS.items() for value in decoded if pattern.search(value)]
+    entropy = calculate_entropy(data)
     return {
-        "file_name": path.name,
-        "size_bytes": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "file_type": identify(data),
-        "entropy": calculate_entropy(data),
+        "file_name": path.name, "size_bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(), "file_type": signature,
+        "extension": suffix or None,
+        "extension_signature_mismatch": bool(expected and expected not in signature),
+        "entropy": entropy,
+        "entropy_interpretation": "high; may reflect compression or encryption" if entropy >= 7.2 else ("moderate" if entropy >= 6.0 else "lower"),
         "printable_string_count": len(decoded),
         "indicator_groups": sorted({name for name, _ in matches}),
         "matched_strings": list(dict.fromkeys(value[:240] for _, value in matches))[:50],
-        "note": "Static triage only. The sample was not executed, unpacked, uploaded or stored. Indicators are not a malware verdict."
+        "triage_limits": ["No execution, unpacking, macro activation, archive extraction or network upload.",
+                          "High entropy and string indicators are heuristics, not proof of malware.",
+                          "This lightweight parser does not validate complete PE/ELF structures or digital signatures."],
+        "note": "Static triage only. Indicators are not a malware verdict."
     }
 
 def parse_nmap_xml(path: Path) -> dict:
@@ -403,18 +417,37 @@ def cve_search(term: str, limit: int = 10, timeout: int = 12) -> dict:
         descriptions = cve.get("descriptions", [])
         english = next((d.get("value", "") for d in descriptions if d.get("lang") == "en"), "")
         metrics = cve.get("metrics", {})
-        score = None
-        severity = None
+        score = severity = vector = None
         for key in ("cvssMetricV40", "cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
             if metrics.get(key):
                 cvss = metrics[key][0].get("cvssData", {})
-                score, severity = cvss.get("baseScore"), cvss.get("baseSeverity")
+                score, severity, vector = cvss.get("baseScore"), cvss.get("baseSeverity"), cvss.get("vectorString")
                 break
+        weaknesses = sorted({d.get("value", "") for w in cve.get("weaknesses", [])
+                             for d in w.get("description", []) if d.get("lang") == "en" and d.get("value")})
+        references = [{"url": ref.get("url"), "tags": ref.get("tags", [])}
+                      for ref in cve.get("references", [])[:12] if ref.get("url")]
+        configurations = []
+        for config in cve.get("configurations", [])[:8]:
+            for node in config.get("nodes", [])[:8]:
+                for match in node.get("cpeMatch", [])[:12]:
+                    if match.get("criteria"):
+                        configurations.append({
+                            "criteria": match["criteria"][:300], "vulnerable": bool(match.get("vulnerable")),
+                            "version_start_including": match.get("versionStartIncluding"),
+                            "version_start_excluding": match.get("versionStartExcluding"),
+                            "version_end_including": match.get("versionEndIncluding"),
+                            "version_end_excluding": match.get("versionEndExcluding")})
         items.append({"id": cve.get("id"), "published": cve.get("published"),
-                      "last_modified": cve.get("lastModified"), "cvss": score,
-                      "severity": severity, "description": english[:1200]})
+                      "last_modified": cve.get("lastModified"), "status": cve.get("vulnStatus"),
+                      "cvss": score, "severity": severity, "cvss_vector": vector,
+                      "description": english[:1200], "weaknesses": weaknesses[:20],
+                      "affected_product_configurations": configurations[:40], "references": references,
+                      "assessment_note": "Search match only. Verify exact vendor, product, version, configuration and patch status before treating this CVE as applicable."})
     return {"query": term, "total_results": data.get("totalResults", 0), "results": items,
-            "source": "NIST National Vulnerability Database"}
+            "source": "NIST National Vulnerability Database",
+            "interpretation": "CVSS severity describes a vulnerability, not the risk of a particular asset. Applicability requires exact version/configuration verification."}
+
 
 def save_or_print(result: dict, output: str | None):
     rendered = json.dumps(result, indent=2, ensure_ascii=False)
@@ -525,19 +558,87 @@ def evidence_directory() -> Path:
     return directory
 
 
+def register_evidence(path: Path, case_id: str = "general", notes: str = "") -> dict:
+    """Copy a bounded local evidence file into the evidence vault with a SHA-256 manifest."""
+    from datetime import datetime, timezone
+    source = path.expanduser()
+    if not source.is_file() or source.is_symlink():
+        raise ValueError("Evidence must be an existing regular local file, not a symbolic link.")
+    size = source.stat().st_size
+    if size <= 0 or size > MAX_FILE_BYTES:
+        raise ValueError("Evidence must be between 1 byte and 10 MB.")
+    safe_case = re.sub(r"[^a-zA-Z0-9_-]+", "-", case_id).strip("-_")[:48] or "general"
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "_", source.name)[:100] or "evidence.bin"
+    data = source.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    directory = evidence_directory()
+    destination = directory / f"{stamp}_{safe_case}_{safe_name}"
+    if destination.exists():
+        raise FileExistsError("Evidence destination already exists; retry to generate a new timestamp.")
+    destination.write_bytes(data)
+    manifest = {"case_id": safe_case, "evidence_file": destination.name, "original_name": source.name,
+                "size_bytes": size, "sha256": digest, "registered_at_utc": stamp,
+                "notes": notes[:1000], "storage": "local_only",
+                "handling": "Copied as inert evidence; never executed or uploaded."}
+    manifest_path = destination.with_name(destination.name + ".manifest.json")
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    return {"evidence": manifest, "manifest_path": str(manifest_path), "evidence_path": str(destination)}
+
+
+def verify_evidence_integrity() -> dict:
+    """Verify SHA-256 values in local evidence manifests without modifying evidence."""
+    directory = evidence_directory()
+    checked, valid, missing, mismatched = 0, 0, [], []
+    for manifest_path in sorted(directory.glob("*.manifest.json")):
+        checked += 1
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            evidence_path = directory / manifest["evidence_file"]
+            if not evidence_path.is_file() or evidence_path.is_symlink():
+                missing.append(manifest["evidence_file"])
+                continue
+            digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+            if digest == manifest.get("sha256"):
+                valid += 1
+            else:
+                mismatched.append(manifest["evidence_file"])
+        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            mismatched.append(manifest_path.name)
+    return {"manifests_checked": checked, "integrity_valid": valid,
+            "missing_evidence": missing, "hash_mismatches_or_invalid_manifests": mismatched,
+            "note": "Integrity verification only; files are not modified, executed or uploaded."}
+
+
 def show_evidence_manager() -> None:
     directory = evidence_directory()
-    files = sorted((p for p in directory.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
-    print("\nLOCAL EVIDENCE MANAGER")
+    files = sorted((p for p in directory.iterdir() if p.is_file() and not p.name.endswith(".manifest.json")),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    print("\\nLOCAL EVIDENCE MANAGER")
     print(f"Storage: {directory}")
+    print("Evidence is stored locally; manifests record SHA-256 integrity hashes.")
     if not files:
         print("No evidence files stored yet.")
-        print("Place an authorised sample in this folder, then use option 7 for static analysis.")
-        return
-    for index, item in enumerate(files[:50], 1):
-        print(f"  [{index}] {item.name} ({item.stat().st_size} bytes)")
-    if len(files) > 50:
-        print(f"  ... and {len(files) - 50} more file(s)")
+    else:
+        for index, item in enumerate(files[:50], 1):
+            print(f"  [{index}] {item.name} ({item.stat().st_size} bytes)")
+        if len(files) > 50:
+            print(f"  ... and {len(files) - 50} more file(s)")
+    print("  [A] Add a local evidence file")
+    print("  [V] Verify evidence integrity")
+    choice = input("evidence> ").strip().lower()
+    if choice == "a":
+        source = Path(input("Path to local evidence file: ").strip()).expanduser()
+        case_id = input("Case/reference label: ").strip() or "general"
+        notes = input("Evidence notes (no passwords or access tokens): ").strip()
+        result = register_evidence(source, case_id, notes)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif choice == "v":
+        result = verify_evidence_integrity()
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        save_investigation(result, "evidence-integrity")
+    elif choice:
+        print("Choose A, V or press Enter to return.")
 
 
 def show_connection_status() -> None:
