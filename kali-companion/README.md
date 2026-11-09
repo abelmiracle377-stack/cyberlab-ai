@@ -1,12 +1,13 @@
 # CyberLab AI Kali Companion
 
-A command-line research companion for Kali Linux and other Linux distributions. It adds passive OSINT and public vulnerability intelligence to the original local evidence tools. Python 3.9+; Python standard library only; no pip packages or API keys.
+A command-line research companion for Kali Linux and other Linux distributions. It adds passive OSINT and public vulnerability intelligence to the original local evidence tools. Python 3.9+; Python standard library only; no pip packages or API keys. Optional `figlet` and `chafa` packages provide the large coloured startup lettering and terminal mascot artwork.
 
 ## Install
 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
+sudo apt update && sudo apt install -y figlet chafa
 python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py --help
 ```

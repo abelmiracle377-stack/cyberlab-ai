@@ -10,6 +10,8 @@ import math
 import re
 import socket
 import sys
+import shutil
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -241,16 +243,40 @@ def print_banner() -> None:
     blue = "\033[94m"
     red = "\033[91m"
     reset = "\033[0m"
-    logo = r"""
-   ____ ____  ____  _____ ____  _        _    ____
-  / ___|  _ \|  _ \| ____|  _ \| |      / \  | __ )
- | |   | |_) | |_) |  _| | |_) | |     / _ \ |  _ \
- | |___|  _ <|  _ <| |___|  _ <| |___ / ___ \| |_) |
-  \____|_| \_\_| \_\_____|_| \_\_____/_/   \_\____/
-"""
-    print(f"{bold}{blue}{logo}{reset}", file=sys.stderr)
-    print(f'{bold}{red}CYBERLAB SAYS "FUCK HATERS"{reset}', file=sys.stderr)
-    print(f"{bold}{blue}AND HACK FOR ZODIAC M{reset}", file=sys.stderr)
+    print(f"{bold}{blue}", file=sys.stderr)
+
+    figlet = shutil.which("figlet")
+    if figlet:
+        for phrase, colour in (
+            ("CYBERLAB SAYS", blue),
+            ('"FUCK HATERS"', red),
+            ("AND HACK FOR", blue),
+            ("ZODIAC M BY ABEL", red),
+        ):
+            rendered = subprocess.run(
+                [figlet, "-w", "100", "-f", "big", phrase],
+                check=False, capture_output=True, text=True,
+            )
+            if rendered.returncode == 0:
+                print(f"{bold}{colour}{rendered.stdout.rstrip()}{reset}", file=sys.stderr)
+    else:
+        print(f"{bold}{blue}CYBERLAB AI{reset}", file=sys.stderr)
+        print(f'{bold}{red}CYBERLAB SAYS "FUCK HATERS"{reset}', file=sys.stderr)
+        print(f"{bold}{blue}AND HACK FOR ZODIAC M BY ABEL{reset}", file=sys.stderr)
+        print(f"{bold}{blue}Install figlet for large ASCII lettering: sudo apt install figlet{reset}", file=sys.stderr)
+
+    asset = Path(__file__).resolve().parent / "assets" / "cyberlab-mascot.png"
+    chafa = shutil.which("chafa")
+    if chafa and asset.is_file():
+        rendered_image = subprocess.run(
+            [chafa, "--colors=full", "--symbols=block", "--size=40x18", str(asset)],
+            check=False, capture_output=True, text=True,
+        )
+        if rendered_image.returncode == 0:
+            print(rendered_image.stdout, file=sys.stderr)
+    elif not chafa:
+        print(f"{bold}{blue}Install chafa to display the CyberLab artwork: sudo apt install chafa{reset}", file=sys.stderr)
+    print(reset, file=sys.stderr)
     print(file=sys.stderr)
 
 def main() -> int:
