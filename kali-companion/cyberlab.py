@@ -618,6 +618,102 @@ def verify_evidence_integrity() -> dict:
             "note": "Integrity verification only; files are not modified, executed or uploaded."}
 
 
+def _safe_case_id(value: str) -> str:
+    case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip()).strip("-_")[:48]
+    if not case_id:
+        raise ValueError("A case/reference ID containing letters or numbers is required.")
+    return case_id
+
+
+def case_timeline_path(case_id: str) -> Path:
+    safe_case = _safe_case_id(case_id)
+    return evidence_directory() / (safe_case + ".timeline.jsonl")
+
+
+def append_case_event(case_id: str, event_type: str, description: str,
+                      source_reference: str = "") -> dict:
+    """Append a local case event to a SHA-256 linked JSONL timeline."""
+    from datetime import datetime, timezone
+    path = case_timeline_path(case_id)
+    if len(description.strip()) < 3:
+        raise ValueError("Enter a meaningful event description.")
+    if len(description) > 2000 or len(source_reference) > 1000:
+        raise ValueError("Timeline description or source reference is too long.")
+    if path.exists() and path.stat().st_size > 2 * 1024 * 1024:
+        raise ValueError("Case timeline exceeds the 2 MB limit.")
+    previous_hash = "0" * 64
+    if path.exists() and path.stat().st_size:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if not lines:
+            raise ValueError("Existing timeline is empty or unreadable.")
+        try:
+            previous = json.loads(lines[-1])
+            previous_hash = previous["entry_hash"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError("Existing timeline is invalid; verify it before adding events.") from exc
+    event = {
+        "case_id": _safe_case_id(case_id),
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "event_type": re.sub(r"[^a-zA-Z0-9_-]+", "_", event_type.strip().lower())[:40] or "note",
+        "description": description.strip(),
+        "source_reference": source_reference.strip()[:1000],
+        "previous_entry_hash": previous_hash,
+    }
+    canonical = json.dumps(event, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    event["entry_hash"] = hashlib.sha256(canonical).hexdigest()
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\\n")
+    return {"timeline_file": str(path), "event": event,
+            "note": "Local hash-linked timeline; this is not a trusted timestamp or externally anchored audit log."}
+
+
+def verify_case_timeline(case_id: str) -> dict:
+    """Verify each event hash and previous-hash link in a local case timeline."""
+    path = case_timeline_path(case_id)
+    if not path.exists():
+        return {"case_id": _safe_case_id(case_id), "events_checked": 0, "status": "not_found"}
+    if path.stat().st_size > 2 * 1024 * 1024:
+        raise ValueError("Case timeline exceeds the 2 MB verification limit.")
+    previous_hash = "0" * 64
+    checked = 0
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        checked += 1
+        try:
+            event = json.loads(line)
+            stored_hash = event.pop("entry_hash")
+            if event.get("previous_entry_hash") != previous_hash:
+                return {"case_id": _safe_case_id(case_id), "events_checked": checked,
+                        "status": "chain_mismatch", "line": line_number}
+            canonical = json.dumps(event, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            actual_hash = hashlib.sha256(canonical).hexdigest()
+            if actual_hash != stored_hash:
+                return {"case_id": _safe_case_id(case_id), "events_checked": checked,
+                        "status": "entry_hash_mismatch", "line": line_number}
+            previous_hash = stored_hash
+        except (ValueError, KeyError, TypeError):
+            return {"case_id": _safe_case_id(case_id), "events_checked": checked,
+                    "status": "invalid_entry", "line": line_number}
+    return {"case_id": _safe_case_id(case_id), "events_checked": checked,
+            "status": "valid" if checked else "empty",
+            "final_entry_hash": previous_hash,
+            "note": "Local hash-chain verification only; deletion of the final entries cannot be detected without an external trusted checkpoint."}
+
+
+def read_case_timeline(case_id: str) -> dict:
+    path = case_timeline_path(case_id)
+    if not path.exists():
+        return {"case_id": _safe_case_id(case_id), "events": [], "status": "not_found"}
+    verification = verify_case_timeline(case_id)
+    events = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            break
+    return {"case_id": _safe_case_id(case_id), "events": events[-100:],
+            "verification": verification, "timeline_file": str(path)}
+
+
 def show_evidence_manager() -> None:
     directory = evidence_directory()
     files = sorted((p for p in directory.iterdir() if p.is_file() and not p.name.endswith(".manifest.json")),
@@ -634,6 +730,9 @@ def show_evidence_manager() -> None:
             print(f"  ... and {len(files) - 50} more file(s)")
     print("  [A] Add a local evidence file")
     print("  [V] Verify evidence integrity")
+    print("  [E] Add a case timeline event")
+    print("  [T] View a case timeline")
+    print("  [C] Verify a case timeline hash chain")
     choice = input("evidence> ").strip().lower()
     if choice == "a":
         source = Path(input("Path to local evidence file: ").strip()).expanduser()
@@ -645,8 +744,22 @@ def show_evidence_manager() -> None:
         result = verify_evidence_integrity()
         print(json.dumps(result, indent=2, ensure_ascii=False))
         save_investigation(result, "evidence-integrity")
+    elif choice in ("e", "t", "c"):
+        case_id = input("Case/reference ID: ").strip()
+        if choice == "e":
+            event_type = input("Event type (e.g. observation, collection, review): ").strip() or "note"
+            description = input("Event description (no passwords or access tokens): ").strip()
+            source = input("Source/evidence reference (optional): ").strip()
+            result = append_case_event(case_id, event_type, description, source)
+        elif choice == "t":
+            result = read_case_timeline(case_id)
+        else:
+            result = verify_case_timeline(case_id)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if choice == "e":
+            save_investigation({"case_timeline_event": result}, "case-timeline")
     elif choice:
-        print("Choose A, V or press Enter to return.")
+        print("Choose A, V, E, T, C or press Enter to return.")
 
 
 def show_connection_status() -> None:
