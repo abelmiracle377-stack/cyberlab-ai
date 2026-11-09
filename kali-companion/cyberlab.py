@@ -217,7 +217,7 @@ def public_site_profile(domain: str, timeout: int = 12) -> dict:
             parser.feed(raw.decode(response.headers.get_content_charset() or "utf-8", errors="replace"))
             emails = sorted(set(re.findall(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", raw.decode("utf-8", errors="ignore"))))[:30]
             phones = sorted(set(re.findall(r"(?<!\w)(?:\+\d[\d ().-]{7,}\d)", raw.decode("utf-8", errors="ignore"))))[:20]
-            social_hosts = ("facebook.com", "instagram.com", "linkedin.com", "x.com", "twitter.com", "youtube.com", "tiktok.com", "github.com")
+            social_hosts = ("facebook.com", "instagram.com", "linkedin.com", "x.com", "twitter.com", "youtube.com", "tiktok.com", "github.com", "slack.com", "discord.com")
             socials = []
             for link in parser.links:
                 absolute = urllib.parse.urljoin(response.geturl(), link)
