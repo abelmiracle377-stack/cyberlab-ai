@@ -1407,7 +1407,7 @@ def run_john_audit(hash_path: Path, wordlist_path: Path, hash_format: str = "",
                                    timeout=30, check=False)
             # --show contains plaintext credentials. Parse only aggregate counts and discard it.
             summary = (shown.stdout or "") + "\n" + (shown.stderr or "")
-            match = re.search(r"(\d+)\s+password hashes? cracked,\s*(\d+)\s+left", summary, re.I)
+            match = re.search(r"(\d+)\s+password hash(?:es)? cracked,\s*(\d+)\s+left", summary, re.I)
             return {
                 "feature": "john_the_ripper_offline_audit",
                 "tool": "John the Ripper",
