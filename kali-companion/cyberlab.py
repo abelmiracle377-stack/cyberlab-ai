@@ -853,12 +853,12 @@ def audit_password_strength(password: str) -> dict:
         "symbols": any(not ch.isalnum() for ch in password),
     }
     lowered = password.lower()
-    repeated = bool(re.search(r"(.)\\1{3,}", password))
+    repeated = bool(re.search(r"(.)\1{3,}", password))
     common = bool(re.search(r"(?i)(password|qwerty|letmein|welcome|admin|123456|iloveyou)", password))
     sequential = any(token in lowered for token in (
         "123456", "234567", "abcdef", "qwerty", "asdfgh", "zxcvbn", "987654"
     ))
-    digits_only_or_letters_only = bool(re.fullmatch(r"(?:\\d+|[a-z]+)", password, re.I))
+    digits_only_or_letters_only = bool(re.fullmatch(r"(?:\d+|[a-z]+)", password, re.I))
     risks = {
         "long_repeated_character_run": repeated,
         "common_word_or_sequence": common,
