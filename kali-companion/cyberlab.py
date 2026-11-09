@@ -1445,8 +1445,7 @@ def analyse_phone_number_metadata(value: str) -> dict:
         "61": "Australia", "64": "New Zealand", "65": "Singapore",
         "81": "Japan", "82": "South Korea", "86": "China",
         "91": "India", "234": "Nigeria", "254": "Kenya", "255": "Tanzania",
-        "233": "Ghana", "234": "Nigeria", "254": "Kenya", "255": "Tanzania",
-        "256": "Uganda", "971": "United Arab Emirates",
+        "233": "Ghana", "256": "Uganda", "971": "United Arab Emirates",
         "972": "Israel", "974": "Qatar", "966": "Saudi Arabia",
     }
     country_code = next((code for code in sorted(calling_codes, key=len, reverse=True)
