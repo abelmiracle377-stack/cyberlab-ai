@@ -78,7 +78,7 @@ def discover_lan_cameras(cidr: str, timeout: float = 0.35, max_workers: int = 64
          "possible_services": [
              name for port, name in ((554, "RTSP"), (8554, "RTSP alternate"),
                                      (8000, "vendor service / possible Hikvision"),
-                                     (8899, "possible ONVIF/vendor service"),
+                                     (8899, "possible vendor service"),
                                      (80, "HTTP management"), (443, "HTTPS management"),
                                      (8080, "alternate HTTP management"))
              if port in ports
@@ -129,7 +129,8 @@ def launch_camera_viewer(rtsp_url: str) -> dict:
             "rtsp_port": parsed.port or 554, "stream_path": parsed.path, "viewer": "ffplay",
             "viewer_pid": process.pid,
             "authentication_mode": "configured username/password" if parsed.username is not None else "no authentication (owner-configured)",
-            "credentials_saved_or_logged": False,
+            "credentials_saved_in_reports": False,
+            "process_argument_visibility": "The RTSP URL is passed to ffplay; local users with process-inspection privileges may be able to see it.",
             "note": "The viewer was launched for the one manually entered camera stream. The RTSP URL and credentials are not included in this report."}
 
 def public_webcam_directory(location: str = "") -> dict:
