@@ -1445,7 +1445,8 @@ def analyse_phone_number_metadata(value: str) -> dict:
         "61": "Australia", "64": "New Zealand", "65": "Singapore",
         "81": "Japan", "82": "South Korea", "86": "China",
         "91": "India", "234": "Nigeria", "254": "Kenya", "255": "Tanzania",
-        "256": "Uganda", " Ghana": "Ghana", "971": "United Arab Emirates",
+        "233": "Ghana", "234": "Nigeria", "254": "Kenya", "255": "Tanzania",
+        "256": "Uganda", "971": "United Arab Emirates",
         "972": "Israel", "974": "Qatar", "966": "Saudi Arabia",
     }
     country_code = next((code for code in sorted(calling_codes, key=len, reverse=True)
@@ -1480,13 +1481,13 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
     print("This module does not access accounts, bypass logins or impersonate anyone.")
     print("  [1] Public scam-website intelligence (RDAP, DNS, certificates, homepage)")
     print("  [2] Inspect one explicitly supplied public HTTPS page (read-only)")
-    print("  [3] Analyse an exported website/server authentication log (offline defence review)")
-    print("  [4] Identify hash formats in an authorised offline inventory (no cracking)")
+    print("  [3] Inspect an authorised website login page (read-only; enter a URL)")
+    print("  [4] Run John the Ripper against an authorised offline hash inventory")
     print("  [5] Record an evidence note")
     print("  [6] Investigate a public website, email domain or social link")
-    print("  [7] Review an authorised website login surface (public HTTPS page only)")
-    print("  [8] Run John the Ripper against an authorised offline hash inventory")
-    print("  [9] Inspect an authorised website login page (read-only Hydra-style preflight)")
+    print("  [7] Legacy read-only website login-surface review")
+    print("  [8] Analyse an exported authentication log (optional forensic evidence)")
+    print("  [9] Classify an offline hash inventory (optional metadata review)")
     print("  [0] Back")
     choice = input("scam-investigation> ").strip()
     if choice == "1":
@@ -1500,31 +1501,14 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result = inspect_assessment_page(url, timeout=timeout, method="GET")
         result["investigation_type"] = "read_only_authentication_surface_review"
     elif choice == "3":
-        print("This means a log exported from a website host, web server, reverse proxy, WAF or identity provider that you administer or are authorised to investigate.")
-        print("Download/export that log first, then provide its path on this Kali machine. It does not inspect your personal account automatically.")
-        path = Path(input("Path to exported authentication log (max 5 MB): ").strip()).expanduser()
-        result = analyse_auth_log(path)
-        result["investigation_type"] = "offline_authentication_abuse_detection"
-        result["interpretation"] = "Repeated failures can indicate password spraying or brute-force activity; correlate with provider logs, timestamps and known NAT/VPN infrastructure before attribution."
-    elif choice == "4":
-        print("Use only an authorised offline inventory from your own lab or an approved assessment. This feature identifies formats only; it does not run John the Ripper or attempt passwords.")
-        path = Path(input("Path to authorised local hash inventory (max 5 MB): ").strip()).expanduser()
-        result = classify_hash_inventory(path)
-        result["investigation_type"] = "offline_hash_format_inventory"
-    elif choice == "6":
-        target = input("Domain, website URL, email address or public social profile URL: ").strip()
-        result = dns_intelligence_lookup(target, timeout)
-        result["investigation_type"] = "scam_case_expanded_public_digital_footprint"
-        result["scope_note"] = "Public-source lookup only. No account access, login bypass, private-profile scraping or active attack testing."
-    elif choice == "7" or choice == "9":
-        print("Provide one owner-approved public HTTPS login page. CyberLab performs a read-only inspection only.")
-        print("This is a Hydra-style defensive preflight, not a password-guessing run.")
-        url = input("Owner-approved login page HTTPS URL: ").strip()[:1000]
+        print("Enter a public HTTPS login page you own or are explicitly authorised to assess.")
+        print("CyberLab inspects the page read-only; it does not submit credentials or run online password guesses.")
+        url = input("Authorised website login page HTTPS URL: ").strip()[:1000]
         result = inspect_assessment_page(url, timeout=timeout, method="GET")
-        result["investigation_type"] = "authorised_read_only_website_login_surface_review"
-        result["hydra_execution"] = "Not run; no credentials or authentication requests were submitted."
-    elif choice == "8":
-        print("John the Ripper runs locally against a hash file and wordlist; no website is contacted.")
+        result["investigation_type"] = "website_login_surface_assessment"
+        result["hydra_style_note"] = "Read-only authentication preflight; no login attempts or password guesses are sent."
+    elif choice == "4":
+        print("John the Ripper runs locally against an offline hash file and wordlist; no website is contacted.")
         hashes = Path(input("Path to authorised offline hash file: ").strip()).expanduser()
         default_wordlist = "/usr/share/wordlists/rockyou.txt"
         wordlist_text = input(f"Wordlist path [{default_wordlist}]: ").strip() or default_wordlist
@@ -1533,6 +1517,27 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result = run_john_audit(hashes, Path(wordlist_text), hash_format,
                                 authorised=(confirmation == "YES"))
         result["investigation_type"] = "john_the_ripper_offline_hash_audit"
+    elif choice == "6":
+        target = input("Domain, website URL, email address or public social profile URL: ").strip()
+        result = dns_intelligence_lookup(target, timeout)
+        result["investigation_type"] = "scam_case_expanded_public_digital_footprint"
+        result["scope_note"] = "Public-source lookup only. No account access, login bypass, private-profile scraping or active attack testing."
+    elif choice == "7":
+        print("Provide one owner-approved public HTTPS login page. CyberLab performs a read-only inspection only.")
+        url = input("Owner-approved login page HTTPS URL: ").strip()[:1000]
+        result = inspect_assessment_page(url, timeout=timeout, method="GET")
+        result["investigation_type"] = "authorised_read_only_website_login_surface_review"
+    elif choice == "8":
+        print("This optional forensic path accepts an exported log from a website host, WAF, reverse proxy or identity provider you administer.")
+        path = Path(input("Path to exported authentication log (max 5 MB): ").strip()).expanduser()
+        result = analyse_auth_log(path)
+        result["investigation_type"] = "offline_authentication_abuse_detection"
+        result["interpretation"] = "Repeated failures can indicate password spraying or brute-force activity; correlate with timestamps and known NAT/VPN infrastructure before attribution."
+    elif choice == "9":
+        print("Optional metadata-only classification of an authorised offline hash inventory.")
+        path = Path(input("Path to authorised local hash inventory (max 5 MB): ").strip()).expanduser()
+        result = classify_hash_inventory(path)
+        result["investigation_type"] = "offline_hash_format_inventory"
     elif choice == "5":
         from datetime import datetime, timezone
         case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", input("Case/reference ID: ").strip()).strip("-_")[:48] or "general"
