@@ -51,7 +51,7 @@ class CompanionTests(unittest.TestCase):
             "staging.example.test", "yes",
             "yes", "no", "no", "unknown",
             "yes", "yes", "yes", "yes", "yes",
-            "yes", "yes", "yes", "yes", "unknown",
+            "yes", "yes", "yes", "yes", "unknown", "unknown",
             "https://staging.example.test/login",
             "https://staging.example.test/admin",
             "Reviewed source and cookie configuration."
