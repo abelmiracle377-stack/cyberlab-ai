@@ -1611,6 +1611,127 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         raise ValueError("Choose one of the listed options.")
     return result
 
+def run_credential_guess_lab(username: str, expected_password: str, wordlist_path: Path,
+                            mfa_enabled: bool = False, max_attempts: int = 50000,
+                            progress_callback=None) -> dict:
+    """Compare a local wordlist with a synthetic lab secret; never contacts a login service."""
+    account = username.strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", account):
+        raise ValueError("Use a lab-only username containing 1-64 letters, numbers, dots, underscores, @ or hyphens.")
+    if not isinstance(expected_password, str) or not expected_password:
+        raise ValueError("A non-empty synthetic lab password is required.")
+    wordlist = Path(wordlist_path).expanduser()
+    if wordlist.is_symlink() or not wordlist.is_file():
+        raise ValueError("Select an existing regular local wordlist file (symbolic links are not accepted).")
+    if wordlist.stat().st_size == 0 or wordlist.stat().st_size > 25 * 1024 * 1024:
+        raise ValueError("Wordlist must be between 1 byte and 25 MB.")
+    if not 1 <= int(max_attempts) <= 50000:
+        raise ValueError("The lab is limited to 1-50,000 candidate comparisons.")
+    checked = 0
+    matched_at = None
+    with wordlist.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            candidate = line.rstrip("\r\n")
+            if not candidate:
+                continue
+            checked += 1
+            if candidate == expected_password:
+                matched_at = checked
+                if progress_callback:
+                    progress_callback(checked, "candidate matched in local lab")
+                break
+            if progress_callback and (checked == 1 or checked % 100 == 0):
+                progress_callback(checked, "testing local candidate")
+            if checked >= max_attempts:
+                break
+    password_match = matched_at is not None
+    return {
+        "feature": "isolated_credential_guessing_lab",
+        "username": account,
+        "target": "in-memory synthetic lab credential only",
+        "wordlist_file": wordlist.name,
+        "candidates_checked": checked,
+        "candidate_match": password_match,
+        "match_position": matched_at,
+        "mfa_enabled_in_simulation": bool(mfa_enabled),
+        "simulated_outcome": ("password matched; MFA would still be required" if password_match and mfa_enabled
+                              else "password matched in lab simulation" if password_match
+                              else "no candidate matched within the tested wordlist"),
+        "plaintext_password_returned_or_saved": False,
+        "network_requests_made": 0,
+        "real_accounts_contacted": False,
+        "note": "This is a local deterministic simulation, not Hydra and not a test of any real login endpoint. It cannot establish whether an external account is vulnerable."
+    }
+
+
+def assess_username_quality(username: str) -> dict:
+    """Review a username string locally without checking whether an account exists."""
+    value = username.strip()
+    if not value or len(value) > 64:
+        raise ValueError("Username must contain 1-64 characters.")
+    signals = {
+        "contains_email_address": bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value)),
+        "contains_full_name_like_separator": bool(re.search(r"[._ -]", value)),
+        "contains_birth_year_like_sequence": bool(re.search(r"(?:19|20)\d{2}", value)),
+        "contains_long_digit_suffix": bool(re.search(r"\d{4,}$", value)),
+        "contains_personal_identifier_hint": bool(re.search(r"(?i)(ssn|nin|passport|account|phone)", value)),
+    }
+    return {
+        "feature": "username_privacy_review",
+        "username_length": len(value),
+        "risk_signals": signals,
+        "account_existence_checked": False,
+        "recommendations": [
+            "Avoid embedding phone numbers, government identifiers, birth dates or account numbers.",
+            "Use a service-specific alias rather than reusing a public handle across sensitive services.",
+            "Do not treat username obscurity as an authentication control."
+        ],
+        "note": "Offline string review only; no account enumeration, directory lookup or social-profile matching."
+    }
+
+
+def review_password_policy(minimum_length: int, breached_blocklist: str,
+                           reuse_prevention: str, reset_protection: str) -> dict:
+    if not 8 <= int(minimum_length) <= 128:
+        raise ValueError("Minimum password length must be between 8 and 128.")
+    controls = {
+        "minimum_length": {"configured_value": int(minimum_length), "status": "review" if minimum_length < 14 else "reasonable_baseline"},
+        "breached_password_blocklist": _normalise_yes_no_unknown(breached_blocklist, "Breached-password blocklist"),
+        "password_reuse_prevention": _normalise_yes_no_unknown(reuse_prevention, "Password reuse prevention"),
+        "secure_reset_protection": _normalise_yes_no_unknown(reset_protection, "Secure reset protection"),
+    }
+    return {
+        "feature": "password_policy_assessment",
+        "controls": controls,
+        "note": "Configuration review based on operator-supplied answers; no passwords are collected or tested."
+    }
+
+
+def review_mfa_controls(mfa_required: str, phishing_resistant: str,
+                        recovery_protected: str, suspicious_login_alerts: str) -> dict:
+    fields = {
+        "mfa_required_for_sensitive_accounts": mfa_required,
+        "phishing_resistant_factor_available": phishing_resistant,
+        "recovery_and_reset_protected": recovery_protected,
+        "suspicious_login_alerts_enabled": suspicious_login_alerts,
+    }
+    controls = {key: _normalise_yes_no_unknown(value, key) for key, value in fields.items()}
+    gaps = [key for key, value in controls.items() if value == "no"]
+    unknown = [key for key, value in controls.items() if value == "unknown"]
+    return {
+        "feature": "mfa_2fa_control_assessment",
+        "controls": controls,
+        "reported_gaps": gaps,
+        "unknown_controls": unknown,
+        "recommendations": [
+            "Prefer phishing-resistant FIDO2/passkeys or security keys for high-risk accounts.",
+            "Protect recovery codes and account-recovery workflows as strongly as primary sign-in.",
+            "Alert on unusual sign-in activity and review authentication logs."
+        ],
+        "note": "Operator-reported control review; no sign-in attempt, MFA challenge or account access was performed."
+    }
+
+
 def interactive_menu(timeout: int = 12) -> int:
     """Run the local-first CyberLab operations menu."""
     services = {
@@ -1646,8 +1767,12 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [14] Password & Authentication Security")
         print("  [15] Law Enforcement & Scam Investigation")
         print("  [16] Phone Number Intelligence (numbering metadata only)")
+        print("  [17] Hydra-Style Credential Guessing Lab (local simulation only)")
+        print("  [18] Username Privacy Assessment")
+        print("  [19] Password Policy Assessment")
+        print("  [20] MFA / 2FA Security Assessment")
         print("  [0] Exit")
-        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16"}
+        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"}
         try:
             # Read exactly one selection per menu display. This avoids a tight
             # validation loop consuming buffered blank lines or terminal input.
@@ -1659,7 +1784,7 @@ def interactive_menu(timeout: int = 12) -> int:
             print("No selection entered. The menu will be shown again.")
             continue
         if choice not in valid_choices:
-            print(f"Invalid selection {choice!r}. Enter a number from 0 to 16.")
+            print(f"Invalid selection {choice!r}. Enter a listed option from 0 to 20.")
             continue
         if choice == "0":
             print("CyberLab closed.")
@@ -1673,6 +1798,69 @@ def interactive_menu(timeout: int = 12) -> int:
                     print(f"\\nSaved locally: {destination}")
             except (OSError, ValueError) as exc:
                 print(f"Investigation failed: {exc}")
+            wait_for_menu()
+            continue
+        if choice == "17":
+            try:
+                print("\nISOLATED CREDENTIAL-GUESSING LAB")
+                print("This is a local simulation. It never sends requests to a website or real account.")
+                username = input("Synthetic lab username: ").strip()
+                expected = getpass.getpass("Synthetic lab password to test (hidden; never saved): ")
+                wordlist_text = input("Local wordlist path [/usr/share/wordlists/rockyou.txt]: ").strip()
+                wordlist = Path(wordlist_text or "/usr/share/wordlists/rockyou.txt").expanduser()
+                mfa = _normalise_yes_no_unknown(input("Simulate MFA enabled? (yes/no): "), "MFA")
+                def show_progress(count, status):
+                    print(f"\rCandidates checked: {count} — {status}", end="", flush=True)
+                result = run_credential_guess_lab(username, expected, wordlist, mfa == "yes",
+                                                  progress_callback=show_progress)
+                expected = None
+                print()
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                destination = save_investigation(result, "credential-guessing-lab")
+                print(f"Saved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Lab stopped: {exc}")
+            except (EOFError, KeyboardInterrupt):
+                print("\nReturning to the CyberLab menu.")
+            wait_for_menu()
+            continue
+        if choice == "18":
+            try:
+                result = assess_username_quality(input("Username to review locally: "))
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                destination = save_investigation(result, "username-privacy-review")
+                print(f"Saved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Username review stopped: {exc}")
+            wait_for_menu()
+            continue
+        if choice == "19":
+            try:
+                minimum = int(input("Minimum password length configured [14]: ").strip() or "14")
+                result = review_password_policy(
+                    minimum,
+                    input("Breached-password blocklist enabled? (yes/no/unknown): "),
+                    input("Password reuse prevention? (yes/no/unknown): "),
+                    input("Secure reset protection? (yes/no/unknown): "))
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                destination = save_investigation(result, "password-policy-assessment")
+                print(f"Saved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Password policy review stopped: {exc}")
+            wait_for_menu()
+            continue
+        if choice == "20":
+            try:
+                result = review_mfa_controls(
+                    input("MFA required for sensitive accounts? (yes/no/unknown): "),
+                    input("Phishing-resistant factor available? (yes/no/unknown): "),
+                    input("Recovery/reset protected? (yes/no/unknown): "),
+                    input("Suspicious-login alerts enabled? (yes/no/unknown): "))
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                destination = save_investigation(result, "mfa-security-assessment")
+                print(f"Saved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"MFA review stopped: {exc}")
             wait_for_menu()
             continue
         if choice == "16":
