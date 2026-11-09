@@ -265,7 +265,7 @@ def print_banner() -> None:
         print(f"{bold}{blue}AND HACK FOR ZODIAC M BY ABEL{reset}", file=sys.stderr)
         print(f"{bold}{blue}Install figlet for large ASCII lettering: sudo apt install figlet{reset}", file=sys.stderr)
 
-    asset = Path(__file__).resolve().parent / "assets" / "cyberlab-mascot.png"
+    asset = Path(__file__).resolve().parent / "assets" / "cyberlab-mascot.jpg"
     chafa = shutil.which("chafa")
     if chafa and asset.is_file():
         rendered_image = subprocess.run(
