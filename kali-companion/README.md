@@ -23,7 +23,7 @@ python3 kali-companion/cyberlab.py menu
 
 The menu exposes 21 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
-Device pairing, remote connected-device listing and live capture controls are intentionally shown as not configured until the authenticated gateway and platform-specific companion applications exist. The CLI does not pretend those remote capabilities are already working.
+Device pairing and remote connected-device listing remain unconfigured. The separate Global Camera Intelligence module (option 21) supports owner-authorised RTSP viewing and bounded private-LAN service discovery; it does not search for exposed private cameras on the public internet.
 
 ## Interactive command centre
 
@@ -207,7 +207,7 @@ For a website login page, use option 14 → 6 or option 15 → 3 and enter the a
 The camera module adds three workflows without removing or renumbering existing CyberLab features:
 
 - **Private LAN discovery:** checks common camera-related TCP ports on one explicitly supplied RFC1918 private IPv4 subnet containing at most 256 addresses. It requires the operator to confirm that they administer the network. Port matches are leads, not proof of camera identity or stream availability.
-- **Authorised live camera viewing:** connects to one manually entered camera IP/hostname using its RTSP port and stream path. It supports both configured username/password authentication and cameras deliberately configured without authentication. The operator must confirm ownership or permission. The optional `ffplay` viewer is launched locally; RTSP URLs and credentials are not saved in reports. Install it on Kali with `sudo apt install ffmpeg`.
+- **Authorised live camera viewing:** connects to one manually entered camera IP/hostname using its RTSP port and stream path. It supports both configured username/password authentication and cameras deliberately configured without authentication. The operator must confirm ownership or permission. The optional `ffplay` viewer is launched locally; RTSP URLs and credentials are not saved in reports. The URL is passed to ffplay, so local users with process-inspection privileges may be able to see it. Install it on Kali with `sudo apt install ffmpeg`.
 - **Global public webcam directory:** provides links to services that intentionally publish webcams for public viewing (EarthCam, SkylineWebcams, Explore.org and Windy), where the operator can search by country or city.
 
 The module does **not** search the public internet for exposed CCTV devices, enumerate unauthorised camera feeds, or connect to third-party cameras merely because they have no password. Publicly reachable does not mean consent to view. No camera credentials are guessed or bypassed.
