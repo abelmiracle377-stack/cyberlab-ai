@@ -47,15 +47,18 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(summary["registered_on"], "2020-01-01")
         self.assertEqual(summary["registrar_or_network_name"], "Example Net")
     def test_manual_assessment_records_passive_page_and_admin_checks(self):
-        answers = [
-            "staging.example.test", "yes",
-            "yes", "no", "no", "unknown",
-            "yes", "yes", "yes", "yes", "yes",
-            "yes", "yes", "yes", "yes", "unknown", "unknown",
-            "https://staging.example.test/login",
-            "https://staging.example.test/admin",
-            "Reviewed source and cookie configuration."
-        ]
+        # The assessment currently asks 15 checklist questions. Keep the
+        # mocked input sequence aligned with that count so optional URL and
+        # evidence prompts receive their intended values.
+        answers = (
+            ["staging.example.test", "yes"]
+            + ["yes"] * 15
+            + [
+                "https://staging.example.test/login",
+                "https://staging.example.test/admin",
+                "Reviewed source and cookie configuration.",
+            ]
+        )
         page_result = {"status_code": 200, "login_classification": "email/password form pattern", "cookies": []}
         admin_result = {"status_code": 401, "redirects_followed": False}
         with patch("builtins.input", side_effect=answers), patch.object(
