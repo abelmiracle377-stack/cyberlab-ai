@@ -1371,7 +1371,6 @@ def analyse_phone_number_metadata(value: str) -> dict:
         "256": "Uganda", " Ghana": "Ghana", "971": "United Arab Emirates",
         "972": "Israel", "974": "Qatar", "966": "Saudi Arabia",
     }
-    calling_codes.pop(" Ghana", None)
     country_code = next((code for code in sorted(calling_codes, key=len, reverse=True)
                          if digits.startswith(code)), None)
     if not country_code:
@@ -1404,8 +1403,8 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
     print("This module does not access accounts, bypass logins or impersonate anyone.")
     print("  [1] Public scam-website intelligence (RDAP, DNS, certificates, homepage)")
     print("  [2] Inspect one explicitly supplied public HTTPS page (read-only)")
-    print("  [3] Analyse a local authentication log (Hydra-style defence review)")
-    print("  [4] Classify a local password-hash inventory (John-style metadata only)")
+    print("  [3] Analyse an exported website/server authentication log (offline defence review)")
+    print("  [4] Identify hash formats in an authorised offline inventory (no cracking)")
     print("  [5] Record an evidence note")
     print("  [6] Investigate a public website, email domain or social link")
     print("  [7] Review an authorised website login surface (public HTTPS page only)")
@@ -1422,12 +1421,14 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result = inspect_assessment_page(url, timeout=timeout, method="GET")
         result["investigation_type"] = "read_only_authentication_surface_review"
     elif choice == "3":
-        path = Path(input("Path to locally acquired authentication log (max 5 MB): ").strip()).expanduser()
+        print("This means a log exported from a website host, web server, reverse proxy, WAF or identity provider that you administer or are authorised to investigate.")
+        print("Download/export that log first, then provide its path on this Kali machine. It does not inspect your personal account automatically.")
+        path = Path(input("Path to exported authentication log (max 5 MB): ").strip()).expanduser()
         result = analyse_auth_log(path)
         result["investigation_type"] = "offline_authentication_abuse_detection"
         result["interpretation"] = "Repeated failures can indicate password spraying or brute-force activity; correlate with provider logs, timestamps and known NAT/VPN infrastructure before attribution."
     elif choice == "4":
-        print("Use only an authorised inventory. Do not provide stolen or third-party credential dumps.")
+        print("Use only an authorised offline inventory from your own lab or an approved assessment. This feature identifies formats only; it does not run John the Ripper or attempt passwords.")
         path = Path(input("Path to authorised local hash inventory (max 5 MB): ").strip()).expanduser()
         result = classify_hash_inventory(path)
         result["investigation_type"] = "offline_hash_format_inventory"
