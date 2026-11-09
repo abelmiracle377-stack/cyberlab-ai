@@ -322,5 +322,32 @@ class CompanionTests(unittest.TestCase):
             cyberlab._safe_timeline_source_reference("https://user:pass@example.org/path")
 
 
+    def test_dns_intelligence_accepts_email_address(self):
+        result = cyberlab._normalise_osint_input("security@example.org")
+        self.assertEqual(result["input_type"], "email")
+        self.assertEqual(result["domain"], "example.org")
+        self.assertEqual(result["email_address"], "security@example.org")
+
+    def test_dns_intelligence_accepts_social_profile_as_reference(self):
+        result = cyberlab._normalise_osint_input("https://www.linkedin.com/company/example/")
+        self.assertEqual(result["input_type"], "social_profile_url")
+        self.assertEqual(result["platform_host"], "www.linkedin.com")
+        self.assertIsNone(result["domain"])
+
+    def test_dns_intelligence_resolves_only_public_addresses(self):
+        with patch.object(cyberlab.socket, "getaddrinfo", return_value=[
+            (None, None, None, None, ("93.184.216.34", 0)),
+            (None, None, None, None, ("10.0.0.1", 0)),
+        ]):
+            result = cyberlab.resolve_public_site_ips("example.org")
+        self.assertEqual(result["addresses"], ["93.184.216.34"])
+        self.assertEqual(result["count"], 1)
+
+    def test_dns_intelligence_social_reference_does_not_claim_member_count(self):
+        result = cyberlab.dns_intelligence_lookup("https://facebook.com/example")
+        self.assertEqual(result["sources"]["social_profile"]["status"], "reference_only")
+        self.assertIn("Not reliably available", result["sources"]["social_profile"]["follower_or_member_count"])
+
+
 if __name__ == "__main__":
     unittest.main()
