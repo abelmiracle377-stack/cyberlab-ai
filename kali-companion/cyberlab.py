@@ -842,32 +842,51 @@ def manual_security_assessment() -> dict:
 
 
 def audit_password_strength(password: str) -> dict:
-    """Return password quality signals without retaining or returning the password."""
+    """Return local password quality signals without retaining or returning the secret."""
     if not isinstance(password, str) or not password:
         raise ValueError("A non-empty password is required.")
     length = len(password)
     classes = {
-        "lowercase": any(c.islower() for c in password),
-        "uppercase": any(c.isupper() for c in password),
-        "digits": any(c.isdigit() for c in password),
-        "symbols": any(not c.isalnum() for c in password),
+        "lowercase": any(ch.islower() for ch in password),
+        "uppercase": any(ch.isupper() for ch in password),
+        "digits": any(ch.isdigit() for ch in password),
+        "symbols": any(not ch.isalnum() for ch in password),
     }
-    score = sum(classes.values()) + (1 if length >= 12 else 0) + (1 if length >= 16 else 0)
-    common_patterns = [
-        bool(re.search(r"(.)\1{3,}", password)),
-        bool(re.search(r"(?i)(password|qwerty|letmein|welcome|admin|123456)", password)),
-        bool(re.search(r"^(?:\d+|[a-z]+)$", password, re.I)),
-    ]
+    lowered = password.lower()
+    repeated = bool(re.search(r"(.)\\1{3,}", password))
+    common = bool(re.search(r"(?i)(password|qwerty|letmein|welcome|admin|123456|iloveyou)", password))
+    sequential = any(token in lowered for token in (
+        "123456", "234567", "abcdef", "qwerty", "asdfgh", "zxcvbn", "987654"
+    ))
+    digits_only_or_letters_only = bool(re.fullmatch(r"(?:\\d+|[a-z]+)", password, re.I))
+    risks = {
+        "long_repeated_character_run": repeated,
+        "common_word_or_sequence": common,
+        "keyboard_or_sequential_pattern": sequential,
+        "only_letters_or_digits": digits_only_or_letters_only,
+    }
     recommendations = []
-    if length < 14: recommendations.append("Use at least 14 characters; a longer unique passphrase is better.")
+    if length < 14:
+        recommendations.append("Prefer at least 14 characters; a longer, unique passphrase is generally better.")
+    if length < 20:
+        recommendations.append("Consider a longer passphrase made from several unrelated words.")
+    if any(risks.values()):
+        recommendations.append("Avoid repeated characters, common phrases, keyboard walks and predictable sequences.")
     if not classes["lowercase"] or not classes["uppercase"] or not classes["digits"] or not classes["symbols"]:
-        recommendations.append("Prefer a long, unique password or passphrase; include varied character types if required by policy.")
-    if any(common_patterns): recommendations.append("Avoid common words, predictable sequences and repeated characters.")
+        recommendations.append("Follow the service's password policy; length and uniqueness matter more than forced complexity.")
     recommendations.append("Use a password manager and never reuse passwords across services.")
-    return {"length": length, "character_classes": classes, "quality_band": "stronger" if score >= 6 and not any(common_patterns) else ("moderate" if score >= 4 else "weak"),
-            "risk_signals": {"long_repeated_character_run": common_patterns[0], "common_word_or_sequence": common_patterns[1], "only_letters_or_digits": common_patterns[2]},
-            "recommendations": recommendations,
-            "privacy": "The password value is not included in this result or saved to an investigation report."}
+    if length >= 20 and not any(risks.values()):
+        band = "strong_candidate"
+    elif length >= 14 and not any(risks.values()):
+        band = "reasonable_candidate"
+    else:
+        band = "weak_or_needs_review"
+    return {
+        "length": length, "character_classes": classes, "quality_band": band,
+        "risk_signals": risks, "recommendations": recommendations,
+        "assessment_limit": "Offline heuristic only; no breach-corpus lookup, entropy guarantee or account-policy verification is performed.",
+        "privacy": "The password value is not included in this result or saved to an investigation report."
+    }
 
 
 def review_password_storage(algorithm: str, salt: str, work_factor: str) -> dict:
