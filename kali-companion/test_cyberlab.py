@@ -46,6 +46,21 @@ class CompanionTests(unittest.TestCase):
         summary = cyberlab._rdap_summary(data)
         self.assertEqual(summary["registered_on"], "2020-01-01")
         self.assertEqual(summary["registrar_or_network_name"], "Example Net")
+    def test_manual_assessment_is_guided_and_does_not_send_requests(self):
+        answers = [
+            "staging.example.test", "yes",
+            "yes", "no", "no", "unknown",
+            "yes", "yes", "yes", "yes", "yes", "yes", "yes", "yes",
+            "yes", "unknown", "email/password", "", "Reviewed source and cookie configuration."
+        ]
+        with patch("builtins.input", side_effect=answers):
+            result = cyberlab.manual_security_assessment()
+        self.assertTrue(result["authorisation_confirmed_by_operator"])
+        self.assertEqual(result["login_method"], "email/password")
+        self.assertEqual(result["findings"][0]["status"], "not_detected")
+        self.assertIn("No requests", result["method"])
+        self.assertIn("Potential authentication bypass", result["sql_injection_explanation"]["impact"])
+
     def test_static_triage_hash_and_signature(self):
         payload = b"MZ" + b"sample executable content"
         with tempfile.TemporaryDirectory() as directory:
