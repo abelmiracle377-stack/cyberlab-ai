@@ -39,7 +39,7 @@ Choose Domain OSINT, DNS, public IP intelligence, CVE research, static file tria
 
 | Command | Input | What it does |
 |---|---|---|
-| `domain example.com` | Public domain | RDAP registration data, certificate-transparency names and DNS records |
+| `domain example.com` | Public domain | RDAP registration dates, certificate-transparency names, DNS A/AAAA/MX/NS/TXT records, and a bounded public HTTPS landing-page profile (title, description, public business contact details, social links, visible login-form fields and security headers) |
 | `dns example.com` | Public domain | A, AAAA, MX, NS and TXT lookups using public DNS-over-HTTPS |
 | `ip 8.8.8.8` | Public global IP | RDAP network registration context |
 | `cve "OpenSSH"` | Product/vendor/version/CVE keyword | Searches NIST NVD and returns CVE descriptions and available CVSS severity |
@@ -75,7 +75,7 @@ python3 kali-companion/cyberlab.py nmap-xml ./authorised-scan.xml
 
 - Domain registration: RDAP via rdap.org.
 - Certificate transparency: crt.sh public search.
-- DNS: Cloudflare public DNS-over-HTTPS.
+- DNS: Cloudflare public DNS-over-HTTPS (DNS JSON response negotiation).
 - IP registration: RDAP via rdap.org.
 - Vulnerabilities: NIST National Vulnerability Database API.
 - File triage and Nmap XML parsing run locally.
@@ -89,3 +89,10 @@ RDAP identifies the organisation/network associated with an address range, not a
 ## Limits
 
 HTTP timeout defaults to 12 seconds and can be changed with `--timeout 20`. JSON output can be saved with `-o report.json` or `--output report.json`. Public data providers can rate-limit or be temporarily unavailable. No API keys are required.
+
+
+### Domain and IP intelligence scope
+
+Domain research fetches only the supplied domain's public HTTPS home page (up to 1 MB) after passive RDAP, certificate-transparency and DNS lookups. It does not crawl pages, enumerate admin paths, submit login forms, test SQL injection, attempt passwords, or exploit session handling. A visible password field is only a form observation, not a vulnerability result. Missing security headers are review signals, not proof of exploitability. Public page metadata cannot reliably prove that a website was built with AI.
+
+IP research summarises public RDAP network registration, registry dates, country and published network/abuse contacts where available. Public IP records cannot reveal the last time a device connected, websites a subscriber visited, or the identity of a person behind a shared/dynamic IP. Those facts require authorised logs held by the relevant service or network operator.
