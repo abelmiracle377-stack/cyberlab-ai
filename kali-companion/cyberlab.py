@@ -662,7 +662,7 @@ def append_case_event(case_id: str, event_type: str, description: str,
     canonical = json.dumps(event, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     event["entry_hash"] = hashlib.sha256(canonical).hexdigest()
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, ensure_ascii=False) + "\\n")
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
     return {"timeline_file": str(path), "event": event,
             "note": "Local hash-linked timeline; this is not a trusted timestamp or externally anchored audit log."}
 
