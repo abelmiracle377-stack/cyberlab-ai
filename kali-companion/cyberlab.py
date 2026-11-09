@@ -504,31 +504,135 @@ def show_investigation_history() -> None:
 
 
 
+def manual_security_assessment() -> dict:
+    """Guide an authorised, evidence-based review without sending attack traffic."""
+    print("\nMANUAL SECURITY ASSESSMENT & VERIFICATION")
+    print("Use only on a system you own or are explicitly authorised to assess.")
+    target = input("Application/domain or approved test environment: ").strip()[:253]
+    if not target:
+        raise ValueError("A target label is required.")
+    authorised = input("Confirm you have permission to assess this system (yes/no): ").strip().lower()
+    if authorised not in ("yes", "y"):
+        raise ValueError("Assessment stopped: explicit authorisation was not confirmed.")
+
+    print("\nSQL INJECTION — WHAT IT IS")
+    print("SQL injection occurs when an application mixes untrusted input into SQL text")
+    print("instead of binding that input as data. A crafted value can change query logic.")
+    print("Depending on the query and database permissions, impact can include unauthorised")
+    print("data access, data changes, authentication bypass or, in severe cases, server impact.")
+    print("The safe fix is parameterised queries/prepared statements or correctly bound ORM inputs.")
+    print("CyberLab will not submit SQL payloads, bypass a login, extract records or alter data.")
+
+    checks = [
+        ("sql_parameter_binding", "Can the relevant source code/configuration be reviewed for parameterised queries or bound ORM parameters?"),
+        ("sql_string_concatenation", "Does reviewed code concatenate user-controlled input into SQL statements?"),
+        ("sql_error_disclosure", "Do existing, safely collected application logs show database errors exposed to end users?"),
+        ("sql_test_environment", "Has a qualified tester verified input handling in an isolated staging environment using non-destructive methods?"),
+        ("rate_limit", "Is there documented and verified rate limiting or throttling on authentication?"),
+        ("lockout", "Are progressive delays or account-protection controls applied after repeated failed logins?"),
+        ("captcha", "Is an appropriate bot challenge applied when suspicious authentication activity is detected?"),
+        ("session_secure", "Are session cookies marked Secure and served only over HTTPS?"),
+        ("session_httponly", "Are session cookies marked HttpOnly?"),
+        ("session_samesite", "Are session cookies configured with an appropriate SameSite policy?"),
+        ("session_rotation", "Are session identifiers rotated after login and privilege changes?"),
+        ("session_expiry", "Are idle and absolute session expiry enforced, with logout invalidating the session?"),
+        ("admin_access", "Has the owner supplied the admin URL, and are access controls/MFA/role restrictions verified there?"),
+        ("login_method", "What login method is visibly documented or confirmed by the application owner?"),
+        ("breach_response", "Has the organisation checked its own addresses through an approved breach-notification service without retrieving passwords?"),
+    ]
+    answers = {}
+    print("\nFor each check enter: yes / no / unknown / not-applicable.")
+    print("Answer from code review, owner documentation or evidence you already have;")
+    print("do not probe a live login or submit attack strings.")
+    for key, prompt in checks:
+        while True:
+            answer = input(f"\n{prompt}\n  Result: ").strip().lower()
+            if answer in ("yes", "y", "no", "n", "unknown", "u", "not-applicable", "na"):
+                answers[key] = {"yes": "yes", "y": "yes", "no": "no", "n": "no",
+                                "unknown": "unknown", "u": "unknown",
+                                "not-applicable": "not_applicable", "na": "not_applicable"}[answer]
+                break
+            print("Enter yes, no, unknown or not-applicable.")
+
+    login_method = input("\nLogin method (email/password, username/password, SSO, passkey, mixed, unknown): ").strip()[:100] or "unknown"
+    admin_url = input("Owner-provided admin URL (optional; leave blank if none): ").strip()[:500]
+    evidence = input("Evidence notes (no passwords, tokens or personal records): ").strip()[:2000]
+    findings = []
+    if answers["sql_string_concatenation"] == "yes":
+        findings.append({"area": "SQL injection", "status": "potential",
+                         "severity": "high",
+                         "detail": "Reviewed code appears to concatenate user-controlled input into SQL. Confirm the data flow and query construction in an isolated authorised review; do not infer exploitability from this indicator alone.",
+                         "remediation": "Replace dynamic concatenation with parameterised queries/prepared statements or safely bound ORM parameters; use least-privilege database accounts and generic client-facing errors."})
+    elif answers["sql_parameter_binding"] == "yes" and answers["sql_string_concatenation"] == "no":
+        findings.append({"area": "SQL injection", "status": "not_detected",
+                         "severity": "informational",
+                         "detail": "The reviewed code indicates parameter binding and no concatenation in the reviewed path. This does not prove every query path is safe.",
+                         "remediation": "Extend code review to all input-to-query paths and retain regression tests."})
+    else:
+        findings.append({"area": "SQL injection", "status": "inconclusive",
+                         "severity": "unknown",
+                         "detail": "There is not enough source or staging evidence to determine whether SQL injection is present.",
+                         "remediation": "Review query construction and verify parameter binding in an isolated staging environment."})
+    mapping = [
+        ("rate_limit", "Authentication rate limiting"),
+        ("lockout", "Account lockout / progressive delay"),
+        ("captcha", "Adaptive bot protection"),
+        ("session_secure", "Secure session cookie"),
+        ("session_httponly", "HttpOnly session cookie"),
+        ("session_samesite", "SameSite session cookie"),
+        ("session_rotation", "Session rotation"),
+        ("session_expiry", "Session expiry and invalidation"),
+        ("admin_access", "Owner-provided admin access controls"),
+        ("breach_response", "Organisation-owned email exposure review"),
+    ]
+    for key, label in mapping:
+        status = "confirmed" if answers[key] == "yes" else ("potential" if answers[key] == "no" else ("not_applicable" if answers[key] == "not_applicable" else "inconclusive"))
+        findings.append({"area": label, "status": status, "detail": "Self-reported/manual evidence; not independently tested."})
+    return {
+        "assessment": "Manual Security Assessment & Verification",
+        "target": target,
+        "authorisation_confirmed_by_operator": True,
+        "login_method": login_method,
+        "owner_provided_admin_url": admin_url or None,
+        "checks": answers,
+        "findings": findings,
+        "evidence_notes": evidence,
+        "method": "Guided checklist based on operator-provided code review, documentation and existing evidence. No requests, payloads, login attempts, endpoint discovery or account lookups were performed.",
+        "sql_injection_explanation": {
+            "cause": "Untrusted input is concatenated into SQL text instead of being passed separately as a bound parameter.",
+            "impact": ["Potential unauthorised data access", "Potential data modification or deletion", "Potential authentication bypass", "In severe configurations, broader server impact"],
+            "safe_remediation": ["Use parameterised queries/prepared statements", "Use correctly bound ORM parameters", "Apply least-privilege database permissions", "Avoid exposing database errors to users", "Add regression tests for every query path"]
+        },
+        "limitations": ["A checklist is not a penetration test.", "No automated brute-force, SQL injection, session hijacking, hidden-path enumeration or credential harvesting is performed.", "Unknown and inconclusive results must not be represented as secure or vulnerable."]
+    }
+
+
 def interactive_menu(timeout: int = 12) -> int:
     """Run the local-first CyberLab operations menu."""
     services = {
         "1": ("Domain OSINT", "domain"),
         "2": ("DNS intelligence", "dns"),
-        "3": ("Public IP intelligence", "ip"),
-        "4": ("CVE research", "cve"),
-        "5": ("Static file triage", "triage"),
-        "6": ("Nmap XML analysis", "nmap-xml"),
+        "4": ("Public IP intelligence", "ip"),
+        "5": ("CVE research", "cve"),
+        "6": ("Static file triage", "triage"),
+        "7": ("Nmap XML analysis", "nmap-xml"),
     }
     while True:
         print("\nCYBERLAB AI")
         print("     SECURITY OPERATIONS\n")
         print("  [1] Domain OSINT")
         print("  [2] DNS Intelligence")
-        print("  [3] IP Intelligence")
-        print("  [4] CVE Research")
-        print("  [5] File Triage")
-        print("  [6] Nmap XML Analysis")
-        print("  [7] Malicious File & Link Analysis")
-        print("  [8] Connect Device")
-        print("  [9] Connected Devices")
-        print("  [10] Manage Live Sessions")
-        print("  [11] Evidence Manager")
-        print("  [12] Investigation Reports")
+        print("  [3] Manual Security Assessment & Verification")
+        print("  [4] IP Intelligence")
+        print("  [5] CVE Research")
+        print("  [6] File Triage")
+        print("  [7] Nmap XML Analysis")
+        print("  [8] Malicious File & Link Analysis")
+        print("  [9] Connect Device")
+        print("  [10] Connected Devices")
+        print("  [11] Manage Live Sessions")
+        print("  [12] Evidence Manager")
+        print("  [13] Investigation Reports")
         print("  [0] Exit")
         try:
             choice = input("\ncyberlab> ").strip()
@@ -538,19 +642,28 @@ def interactive_menu(timeout: int = 12) -> int:
         if choice == "0":
             print("CyberLab closed.")
             return 0
-        if choice == "7":
+        if choice == "3":
+            try:
+                result = manual_security_assessment()
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                destination = save_investigation(result, "manual-security-assessment")
+                print(f"\nSaved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Assessment stopped: {exc}")
+            continue
+        if choice == "8":
             content_analysis_menu(timeout)
             continue
-        if choice in ("8", "9"):
+        if choice in ("9", "10"):
             show_connection_status()
             continue
-        if choice == "10":
+        if choice == "11":
             show_session_status()
             continue
-        if choice == "11":
+        if choice == "12":
             show_evidence_manager()
             continue
-        if choice == "12":
+        if choice == "13":
             show_investigation_history()
             continue
         if choice not in services:
