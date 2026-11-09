@@ -1288,6 +1288,12 @@ def interactive_menu(timeout: int = 12) -> int:
         "6": ("Static file triage", "triage"),
         "7": ("Nmap XML analysis", "nmap-xml"),
     }
+    def wait_for_menu() -> None:
+        try:
+            input("\nPress Enter to return to the menu (results remain above)...")
+        except (EOFError, KeyboardInterrupt):
+            print("\nReturning to the menu.")
+
     while True:
         print("\nCYBERLAB AI")
         print("     SECURITY OPERATIONS\n")
@@ -1312,6 +1318,9 @@ def interactive_menu(timeout: int = 12) -> int:
         except (EOFError, KeyboardInterrupt):
             print("\nExiting CyberLab.")
             return 0
+        if not choice:
+            print("No selection entered. Choose a menu number (0-15).")
+            continue
         if choice == "0":
             print("CyberLab closed.")
             return 0
@@ -1324,6 +1333,7 @@ def interactive_menu(timeout: int = 12) -> int:
                     print(f"\\nSaved locally: {destination}")
             except (OSError, ValueError) as exc:
                 print(f"Investigation failed: {exc}")
+            wait_for_menu()
             continue
         if choice == "3":
             try:
@@ -1333,21 +1343,27 @@ def interactive_menu(timeout: int = 12) -> int:
                 print(f"\nSaved locally: {destination}")
             except (OSError, ValueError) as exc:
                 print(f"Assessment stopped: {exc}")
+            wait_for_menu()
             continue
         if choice == "8":
             content_analysis_menu(timeout)
+            wait_for_menu()
             continue
         if choice in ("9", "10"):
             show_connection_status()
+            wait_for_menu()
             continue
         if choice == "11":
             show_session_status()
+            wait_for_menu()
             continue
         if choice == "12":
             show_evidence_manager()
+            wait_for_menu()
             continue
         if choice == "13":
             show_investigation_history()
+            wait_for_menu()
             continue
         if choice == "14":
             try:
@@ -1361,6 +1377,7 @@ def interactive_menu(timeout: int = 12) -> int:
                 print(f"Password audit stopped: {exc}")
             except (EOFError, KeyboardInterrupt):
                 print("\nReturning to the CyberLab menu.")
+            wait_for_menu()
             continue
         if choice not in services:
             print("Choose one of the listed options.")
@@ -1392,6 +1409,7 @@ def interactive_menu(timeout: int = 12) -> int:
             print(f"\nOperation failed: {exc}")
         except (EOFError, KeyboardInterrupt):
             print("\nReturning to the CyberLab menu.")
+        wait_for_menu()
 
 def main() -> int:
     print_banner()
