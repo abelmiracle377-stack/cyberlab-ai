@@ -415,5 +415,62 @@ class CompanionTests(unittest.TestCase):
 
 
 
+    def test_credential_guess_lab_matches_only_local_synthetic_secret(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wordlist = Path(directory) / "candidates.txt"
+            wordlist.write_text("incorrect\\nsecond-guess\\nLabOnly-Password-42!\\n", encoding="utf-8")
+            progress = []
+            result = cyberlab.run_credential_guess_lab(
+                "demo-user", "LabOnly-Password-42!", wordlist,
+                progress_callback=lambda count, status: progress.append((count, status)))
+        self.assertTrue(result["candidate_match"])
+        self.assertEqual(result["match_position"], 3)
+        self.assertEqual(result["candidates_checked"], 3)
+        self.assertEqual(result["network_requests_made"], 0)
+        self.assertFalse(result["real_accounts_contacted"])
+        self.assertNotIn("LabOnly-Password-42!", json.dumps(result))
+        self.assertTrue(progress)
+
+    def test_credential_guess_lab_mfa_still_required_after_password_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wordlist = Path(directory) / "candidates.txt"
+            wordlist.write_text("Synthetic-Secret-77!\\n", encoding="utf-8")
+            result = cyberlab.run_credential_guess_lab(
+                "demo-user", "Synthetic-Secret-77!", wordlist, mfa_enabled=True)
+        self.assertEqual(result["simulated_outcome"], "password matched; MFA would still be required")
+
+    def test_credential_guess_lab_rejects_symlink_wordlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            actual = root / "actual.txt"
+            actual.write_text("secret\\n", encoding="utf-8")
+            link = root / "link.txt"
+            link.symlink_to(actual)
+            with self.assertRaisesRegex(ValueError, "symbolic links"):
+                cyberlab.run_credential_guess_lab("demo", "secret", link)
+
+    def test_credential_guess_lab_enforces_attempt_cap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wordlist = Path(directory) / "candidates.txt"
+            wordlist.write_text("a\\nb\\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "1-50,000"):
+                cyberlab.run_credential_guess_lab("demo", "secret", wordlist, max_attempts=50001)
+
+    def test_username_privacy_review_does_not_enumerate_accounts(self):
+        result = cyberlab.assess_username_quality("abel1998_234801234567")
+        self.assertTrue(result["risk_signals"]["contains_birth_year_like_sequence"])
+        self.assertFalse(result["account_existence_checked"])
+
+    def test_password_policy_review_reports_short_minimum(self):
+        result = cyberlab.review_password_policy(8, "no", "unknown", "yes")
+        self.assertEqual(result["controls"]["minimum_length"]["status"], "review")
+        self.assertEqual(result["controls"]["breached_password_blocklist"], "no")
+
+    def test_mfa_review_reports_missing_controls(self):
+        result = cyberlab.review_mfa_controls("yes", "no", "unknown", "no")
+        self.assertIn("phishing_resistant_factor_available", result["reported_gaps"])
+        self.assertIn("recovery_and_reset_protected", result["unknown_controls"])
+
+
 if __name__ == "__main__":
     unittest.main()
