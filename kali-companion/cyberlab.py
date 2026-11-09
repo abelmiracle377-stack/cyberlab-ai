@@ -1001,17 +1001,26 @@ def show_investigation_history() -> None:
     print(f"Location: {directory}")
     print(f"Reports: {len(reports)}")
     if reports:
-        for report in reports[:30]:
-            print(f"  {report.name} ({report.stat().st_size} bytes)")
+        for index, report in enumerate(reports[:30], 1):
+            print(f"  [{index}] {report.name} ({report.stat().st_size} bytes)")
         if len(reports) > 30:
             print(f"  ... and {len(reports) - 30} older report(s)")
+    print("  [number] Open a report")
     print("  [V] Verify report integrity")
     choice = input("reports> ").strip().lower()
     if choice == "v":
         result = verify_investigation_reports()
         print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif choice.isdigit() and 1 <= int(choice) <= min(len(reports), 30):
+        selected = reports[int(choice) - 1]
+        try:
+            data = json.loads(selected.read_text(encoding="utf-8"))
+            print(f"\\nREPORT: {selected.name}")
+            print(json.dumps(data, indent=2, ensure_ascii=False)[:20000])
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"Could not read report: {exc}")
     elif choice:
-        print("Choose V or press Enter to return.")
+        print("Choose a displayed report number, V or press Enter to return.")
 
 
 
@@ -1327,6 +1336,7 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
     print("  [3] Analyse a local authentication log (Hydra-style defence review)")
     print("  [4] Classify a local password-hash inventory (John-style metadata only)")
     print("  [5] Record an evidence note")
+    print("  [6] Investigate a public website, email domain or social link")
     print("  [0] Back")
     choice = input("scam-investigation> ").strip()
     if choice == "1":
@@ -1349,6 +1359,11 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         path = Path(input("Path to authorised local hash inventory (max 5 MB): ").strip()).expanduser()
         result = classify_hash_inventory(path)
         result["investigation_type"] = "offline_hash_format_inventory"
+    elif choice == "6":
+        target = input("Domain, website URL, email address or public social profile URL: ").strip()
+        result = dns_intelligence_lookup(target, timeout)
+        result["investigation_type"] = "scam_case_expanded_public_digital_footprint"
+        result["scope_note"] = "Public-source lookup only. No account access, login bypass, private-profile scraping or active attack testing."
     elif choice == "5":
         from datetime import datetime, timezone
         case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", input("Case/reference ID: ").strip()).strip("-_")[:48] or "general"
