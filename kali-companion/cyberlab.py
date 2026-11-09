@@ -209,6 +209,14 @@ def public_site_profile(domain: str, timeout: int = 12) -> dict:
     except (OSError, ValueError, urllib.error.URLError) as exc:
         return {"status": "unavailable", "error": str(exc), "note": "RDAP, certificate and DNS research continues independently."}
 
+def _rdap_summary(data: dict) -> dict:
+    events = {e.get("eventAction", "").lower(): e.get("eventDate") for e in data.get("events", []) if isinstance(e, dict)}
+    return {"registered_on": events.get("registration"), "expires_on": events.get("expiration"),
+            "last_registry_change": events.get("last changed"),
+            "last_registry_database_update": events.get("last update of rdap database"),
+            "registrar_or_network_name": data.get("name"), "country": data.get("country"),
+            "nameservers": [n.get("ldhName") for n in data.get("nameservers", []) if isinstance(n, dict) and n.get("ldhName")]}
+
 def dns_lookup(domain: str, timeout: int = 12) -> dict:
     domain = validate_domain(domain)
     output = {}
