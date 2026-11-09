@@ -38,7 +38,7 @@ For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPA
 - Authorised assessment scope planner with exclusions and pre-engagement checklist
 - Local Markdown security report builder (no server-side storage)
 - Browser-local evidence vault using AES-256-GCM and PBKDF2-SHA-256, with encrypted backup import/export
-- Offline Kali companion for static file triage and Nmap XML parsing
+- Offline Kali companion for passive OSINT, static file triage, Nmap XML parsing and defensive password/authentication auditing
 - Baseline HTTP security headers and secret-file exclusions
 
 ## Test
@@ -78,3 +78,8 @@ See [kali-companion/README.md](./kali-companion/README.md) for all commands, dat
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+
+### Password & Authentication Security
+
+The Kali companion includes a defensive password and authentication menu (option 14): local password-strength review with hidden input, strong password generation for new/reset credentials, labelled usernames for owned lab test accounts, password-storage metadata review, authentication-control checklist and local authentication-log analysis. It does not generate password guesses for existing accounts, crack hashes, enumerate real users or attempt logins. See [kali-companion/README.md](./kali-companion/README.md).
