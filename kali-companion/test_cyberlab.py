@@ -23,6 +23,17 @@ class CompanionTests(unittest.TestCase):
                 self.assertIn("dns-intelligence", report.name)
                 self.assertIn('"status": "ok"', report.read_text(encoding="utf-8"))
 
+
+    def test_url_analysis_flags_http_without_visiting_url(self):
+        result = cyberlab.analyze_url("http://example.test/login")
+        self.assertEqual(result["normalized_host"], "example.test")
+        self.assertIn("URL does not use HTTPS", result["structural_indicators"])
+        self.assertIn("NOT opened", result["risk_note"])
+
+    def test_url_analysis_rejects_non_http_scheme(self):
+        with self.assertRaisesRegex(ValueError, "HTTP or HTTPS"):
+            cyberlab.analyze_url("file:///etc/passwd")
+
     def test_static_triage_hash_and_signature(self):
         payload = b"MZ" + b"sample executable content"
         with tempfile.TemporaryDirectory() as directory:
