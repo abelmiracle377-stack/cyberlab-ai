@@ -240,17 +240,17 @@ def print_banner() -> None:
         return
 
     bold = "\033[1m"
+    red = "\033[91m"
     green = "\033[92m"
+    blue = "\033[94m"
     reset = "\033[0m"
-    print(f"{bold}{green}", file=sys.stderr)
-
     figlet = shutil.which("figlet")
     if figlet:
         for phrase, colour in (
-            ("CYBERLAB SAYS", green),
+            ("CYBERLAB SAYS", red),
             ('"FUCK HATERS"', green),
             ("AND HACK FOR", green),
-            ("ZODIAC M BY ABEL", green),
+            ("ZODIAC M BY ABEL", blue),
         ):
             rendered = subprocess.run(
                 [figlet, "-w", "100", "-f", "big", phrase],
@@ -259,10 +259,10 @@ def print_banner() -> None:
             if rendered.returncode == 0:
                 print(f"{bold}{colour}{rendered.stdout.rstrip()}{reset}", file=sys.stderr)
     else:
-        print(f"{bold}{green}CYBERLAB AI{reset}", file=sys.stderr)
-        print(f'{bold}{green}CYBERLAB SAYS "FUCK HATERS"{reset}', file=sys.stderr)
-        print(f"{bold}{green}AND HACK FOR ZODIAC M BY ABEL{reset}", file=sys.stderr)
-        print(f"{bold}{green}Install figlet for large ASCII lettering: sudo apt install figlet{reset}", file=sys.stderr)
+        print(f"{bold}{red}CYBERLAB SAYS{reset}", file=sys.stderr)
+        print(f'{bold}{green}"FUCK HATERS"{reset}', file=sys.stderr)
+        print(f"{bold}{green}AND HACK FOR{reset}", file=sys.stderr)
+        print(f"{bold}{blue}ZODIAC M BY ABEL{reset}", file=sys.stderr)
 
     asset = Path(__file__).resolve().parent / "assets" / "cyberlab-mascot.jpg"
     chafa = shutil.which("chafa")
@@ -273,8 +273,6 @@ def print_banner() -> None:
         )
         if rendered_image.returncode == 0:
             print(rendered_image.stdout, file=sys.stderr)
-    elif not chafa:
-        print(f"{bold}{green}Install chafa to display the CyberLab artwork: sudo apt install chafa{reset}", file=sys.stderr)
     print(reset, file=sys.stderr)
     print(file=sys.stderr)
 
