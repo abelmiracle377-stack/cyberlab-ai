@@ -34,6 +34,18 @@ class CompanionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "HTTP or HTTPS"):
             cyberlab.analyze_url("file:///etc/passwd")
 
+    def test_public_page_parser_detects_login_form_without_submitting(self):
+        parser = cyberlab._PageMetadata()
+        parser.feed("<title>Example Portal</title><meta name=\"description\" content=\"Example service\"><form><input name=\"email\" type=\"email\"><input name=\"password\" type=\"password\"></form>")
+        self.assertEqual(" ".join(parser.title), "Example Portal")
+        self.assertEqual(parser.meta["description"], "Example service")
+        self.assertEqual(parser.forms[0]["fields"][1]["type"], "password")
+
+    def test_rdap_summary_extracts_registry_dates(self):
+        data = {"events": [{"eventAction": "registration", "eventDate": "2020-01-01"}], "name": "Example Net", "country": "NG"}
+        summary = cyberlab._rdap_summary(data)
+        self.assertEqual(summary["registered_on"], "2020-01-01")
+        self.assertEqual(summary["registrar_or_network_name"], "Example Net")
     def test_static_triage_hash_and_signature(self):
         payload = b"MZ" + b"sample executable content"
         with tempfile.TemporaryDirectory() as directory:
