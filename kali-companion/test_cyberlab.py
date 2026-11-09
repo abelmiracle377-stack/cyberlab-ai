@@ -1,5 +1,6 @@
 """Unit tests for the CyberLab AI Kali companion."""
 import hashlib
+import json
 import importlib.util
 import tempfile
 import unittest
