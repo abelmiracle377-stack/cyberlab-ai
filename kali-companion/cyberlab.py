@@ -78,7 +78,7 @@ def triage_file(path: Path) -> dict:
     expected = {".exe": "Windows PE", ".dll": "Windows PE", ".sys": "Windows PE",
                 ".elf": "ELF", ".so": "ELF", ".pdf": "PDF", ".png": "PNG",
                 ".jpg": "JPEG", ".jpeg": "JPEG", ".zip": "ZIP", ".gz": "GZIP"}.get(suffix)
-    strings = re.findall(rb"[\\x20-\\x7e]{5,}", data)
+    strings = re.findall(rb"[\x20-\x7e]{5,}", data)
     decoded = [item.decode("latin-1", errors="replace") for item in strings]
     matches = [(name, value) for name, pattern in INDICATORS.items() for value in decoded if pattern.search(value)]
     entropy = calculate_entropy(data)
