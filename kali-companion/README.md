@@ -13,7 +13,7 @@ python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
 
-## 13-option Kali command centre
+## 14-option Kali command centre
 
 Launch the full local-first menu:
 
@@ -103,3 +103,16 @@ IP research summarises public RDAP network registration, registry dates, country
 This guided assessment is for systems you own or are explicitly authorised to review. It can optionally make one read-only HTTPS GET to an explicitly supplied, owner-approved page to inspect visible form fields, classify common email/password or username/password form patterns, and record response security headers and cookies (Secure, HttpOnly, SameSite). It can make one HEAD request to an explicitly supplied admin URL to record response status and selected metadata; it never follows redirects or guesses paths.
 
 These observations do not prove backend authentication or authorization. Rate limiting, account lockout, session rotation/expiry, SQL query safety and role enforcement still require source/configuration review or owner-provided evidence. SQL injection guidance explains the flaw, impact and parameterized-query remediation. No login, form submission, attack payload, brute-force attempt, credential collection or session manipulation is performed. Reports are saved locally under `~/CyberLab/investigations/`.
+
+
+## Password & Authentication Security (menu option 14)
+
+The defensive password module provides:
+- Local password-strength signals using hidden terminal input; the password itself is not returned or saved.
+- Strong random password generation for setting a NEW account password or completing a reset. The generated plaintext is displayed once and deliberately excluded from saved reports.
+- Clearly labelled `<lab>-test-01` style usernames for provisioning accounts in your own isolated lab; these are not candidate usernames for guessing existing accounts.
+- Password-storage metadata review (algorithm family, salt usage and documented work-factor/parameters). Do not paste plaintext passwords or password hashes into the tool.
+- Operator-led review of rate limiting, progressive delay/lockout, MFA, breached-password blocklists and password-reset controls.
+- Local authentication-log pattern summaries (up to 5 MB), without network activity.
+
+This is not John the Ripper or Hydra: it does not crack password hashes, generate target password dictionaries, enumerate real users, attempt logins, or send authentication traffic. Results are local review signals, not proof that a system is secure.
