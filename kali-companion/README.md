@@ -13,6 +13,18 @@ python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
 
+## 12-option Kali command centre
+
+Launch the full local-first menu:
+
+```bash
+python3 kali-companion/cyberlab.py menu
+```
+
+The menu exposes the six existing research tools, static file and URL analysis, device connection status, connected-device status, live-session status, local evidence listing and investigation history. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
+
+Device pairing, remote connected-device listing and live capture controls are intentionally shown as not configured until the authenticated gateway and platform-specific companion applications exist. The CLI does not pretend those remote capabilities are already working.
+
 ## Interactive command centre
 
 Launch the local menu-driven interface:
