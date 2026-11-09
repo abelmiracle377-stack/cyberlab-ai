@@ -1346,6 +1346,57 @@ def classify_hash_inventory(path: Path) -> dict:
     }
 
 
+def analyse_phone_number_metadata(value: str) -> dict:
+    """Parse a supplied phone number into conservative numbering-plan metadata only."""
+    raw = value.strip()
+    if not raw:
+        raise ValueError("Enter a phone number including its country code, e.g. +2348012345678.")
+    cleaned = re.sub(r"[\\s().-]", "", raw)
+    if not re.fullmatch(r"\\+?[0-9]{7,15}", cleaned):
+        raise ValueError("Use 7-15 digits and an optional leading + country code.")
+    if not cleaned.startswith("+"):
+        raise ValueError("Include the international country code, for example +234.")
+    digits = cleaned[1:]
+    # Longest-prefix-first subset of common calling codes; this is not a full numbering-plan database.
+    calling_codes = {
+        "1": "North America", "7": "Russia/Kazakhstan", "20": "Egypt",
+        "27": "South Africa", "30": "Greece", "31": "Netherlands",
+        "32": "Belgium", "33": "France", "34": "Spain", "36": "Hungary",
+        "39": "Italy", "40": "Romania", "41": "Switzerland", "43": "Austria",
+        "44": "United Kingdom", "45": "Denmark", "46": "Sweden", "47": "Norway",
+        "48": "Poland", "49": "Germany", "52": "Mexico", "55": "Brazil",
+        "61": "Australia", "64": "New Zealand", "65": "Singapore",
+        "81": "Japan", "82": "South Korea", "86": "China",
+        "91": "India", "234": "Nigeria", "254": "Kenya", "255": "Tanzania",
+        "256": "Uganda", " Ghana": "Ghana", "971": "United Arab Emirates",
+        "972": "Israel", "974": "Qatar", "966": "Saudi Arabia",
+    }
+    calling_codes.pop(" Ghana", None)
+    country_code = next((code for code in sorted(calling_codes, key=len, reverse=True)
+                         if digits.startswith(code)), None)
+    if not country_code:
+        raise ValueError("Country calling code is not in CyberLab's built-in reference list.")
+    return {
+        "investigation_type": "phone_number_numbering_metadata",
+        "submitted_number": cleaned,
+        "country_calling_code": "+" + country_code,
+        "numbering_region_reference": calling_codes[country_code],
+        "national_number_digits": digits[len(country_code):],
+        "number_length_digits": len(digits),
+        "carrier": "Not determined; number portability and country-specific numbering data require an authoritative provider.",
+        "registration_date": "Not publicly discoverable from a phone number alone; requires carrier records and lawful authority.",
+        "last_used_or_active_status": "Not available from public numbering metadata; requires carrier/account-holder records.",
+        "linked_ip_addresses_or_dns": "A phone number does not have a stable public IP address or DNS record. IPs are assigned to network sessions and are not publicly mapped to subscriber numbers.",
+        "social_media_accounts": "No account matching or private-profile discovery is performed. Only links explicitly supplied by the user can be reviewed separately.",
+        "fraud_reports": "No private fraud database or subscriber lookup is queried. Check reports with the relevant telecom regulator or official fraud-reporting channel.",
+        "limitations": [
+            "This is a format and country-calling-code reference, not subscriber identification or proof that a number is assigned, active or reachable.",
+            "No SMS/call is sent; no carrier, location, owner, registration date, last-used time or linked IP is inferred.",
+            "The built-in calling-code list is partial. Verify country and numbering details with the national telecom regulator or carrier."
+        ]
+    }
+
+
 def scam_investigation_menu(timeout: int = 12) -> dict:
     """Collect public scam-site intelligence and locally supplied evidence."""
     print("\\nLAW ENFORCEMENT & SCAM INVESTIGATION")
@@ -1357,6 +1408,7 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
     print("  [4] Classify a local password-hash inventory (John-style metadata only)")
     print("  [5] Record an evidence note")
     print("  [6] Investigate a public website, email domain or social link")
+    print("  [7] Review an authorised website login surface (public HTTPS page only)")
     print("  [0] Back")
     choice = input("scam-investigation> ").strip()
     if choice == "1":
@@ -1384,6 +1436,12 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result = dns_intelligence_lookup(target, timeout)
         result["investigation_type"] = "scam_case_expanded_public_digital_footprint"
         result["scope_note"] = "Public-source lookup only. No account access, login bypass, private-profile scraping or active attack testing."
+    elif choice == "7":
+        print("Provide one owner-approved public HTTPS login page. CyberLab performs a read-only inspection only.")
+        print("No password guessing, Hydra requests, form submission or authentication bypass is performed.")
+        url = input("Owner-approved login page HTTPS URL: ").strip()[:1000]
+        result = inspect_assessment_page(url, timeout=timeout, method="GET")
+        result["investigation_type"] = "authorised_read_only_website_login_surface_review"
     elif choice == "5":
         from datetime import datetime, timezone
         case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", input("Case/reference ID: ").strip()).strip("-_")[:48] or "general"
@@ -1449,8 +1507,9 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [13] Investigation Reports")
         print("  [14] Password & Authentication Security")
         print("  [15] Law Enforcement & Scam Investigation")
+        print("  [16] Phone Number Intelligence (numbering metadata only)")
         print("  [0] Exit")
-        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15"}
+        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16"}
         try:
             # Read exactly one selection per menu display. This avoids a tight
             # validation loop consuming buffered blank lines or terminal input.
@@ -1476,6 +1535,17 @@ def interactive_menu(timeout: int = 12) -> int:
                     print(f"\\nSaved locally: {destination}")
             except (OSError, ValueError) as exc:
                 print(f"Investigation failed: {exc}")
+            wait_for_menu()
+            continue
+        if choice == "16":
+            try:
+                number = input("Phone number in international format (e.g. +2348012345678): ")
+                result = analyse_phone_number_metadata(number)
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                destination = save_investigation(result, "phone-number-intelligence")
+                print(f"\\nSaved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Phone number review stopped: {exc}")
             wait_for_menu()
             continue
         if choice == "3":
