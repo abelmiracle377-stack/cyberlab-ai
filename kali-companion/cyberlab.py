@@ -621,7 +621,7 @@ def verify_evidence_integrity() -> dict:
 def _safe_case_id(value: str) -> str:
     case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip()).strip("-_")[:48]
     if not case_id:
-        raise ValueError("A case/reference ID containing letters or numbers is required.")
+        raise ValueError("Case/reference ID must contain letters or numbers.")
     return case_id
 
 
