@@ -9,8 +9,19 @@ git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
 sudo apt update && sudo apt install -y figlet chafa
 python3 kali-companion/cyberlab.py doctor
+python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
+
+## Interactive command centre
+
+Launch the local menu-driven interface:
+
+```bash
+python3 kali-companion/cyberlab.py menu
+```
+
+Choose Domain OSINT, DNS, public IP intelligence, CVE research, static file triage, Nmap XML analysis, or local investigation history. Successful results are saved as timestamped JSON files under `~/CyberLab/investigations/`. Reports remain on the Kali machine and are not uploaded automatically. The menu does not execute arbitrary shell commands or start network scans.
 
 ## Commands
 
