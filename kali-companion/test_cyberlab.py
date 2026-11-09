@@ -370,7 +370,7 @@ class CompanionTests(unittest.TestCase):
             wordlist.write_text("candidate-password", encoding="utf-8")
             completed = [
                 __import__("subprocess").CompletedProcess([], 0, "Loaded 1 password hash", ""),
-                __import__("subprocess").CompletedProcess([], 0, "labuser:RecoveredSecret:1000:1000:::\\n1 password hash cracked, 0 left\\n", ""),
+                __import__("subprocess").CompletedProcess([], 0, "labuser:RecoveredSecret:1000:1000:::" + chr(10) + "1 password hash cracked, 0 left" + chr(10), ""),
             ]
             with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/john"):
                 with patch.object(cyberlab.subprocess, "run", side_effect=completed) as run:
