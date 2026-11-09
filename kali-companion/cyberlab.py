@@ -23,6 +23,8 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
 
+from camera_intelligence import camera_intelligence_menu
+
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_XML_BYTES = 2 * 1024 * 1024
 USER_AGENT = "CyberLabAI-Kali-Companion/1.0 (passive-security-research)"
@@ -1771,8 +1773,9 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [18] Username Privacy Assessment")
         print("  [19] Password Policy Assessment")
         print("  [20] MFA / 2FA Security Assessment")
+        print("  [21] Global Camera Intelligence (authorised cameras and public webcams)")
         print("  [0] Exit")
-        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"}
+        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"}
         try:
             # Read exactly one selection per menu display. This avoids a tight
             # validation loop consuming buffered blank lines or terminal input.
@@ -1784,7 +1787,7 @@ def interactive_menu(timeout: int = 12) -> int:
             print("No selection entered. The menu will be shown again.")
             continue
         if choice not in valid_choices:
-            print(f"Invalid selection {choice!r}. Enter a listed option from 0 to 20.")
+            print(f"Invalid selection {choice!r}. Enter a listed option from 0 to 21.")
             continue
         if choice == "0":
             print("CyberLab closed.")
@@ -1847,6 +1850,19 @@ def interactive_menu(timeout: int = 12) -> int:
                 print(f"Saved locally: {destination}")
             except (OSError, ValueError) as exc:
                 print(f"Password policy review stopped: {exc}")
+            wait_for_menu()
+            continue
+        if choice == "21":
+            try:
+                result = camera_intelligence_menu()
+                if result:
+                    print(json.dumps(result, indent=2, ensure_ascii=False))
+                    destination = save_investigation(result, "camera-intelligence")
+                    print(f"\\nSaved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Camera operation stopped: {exc}")
+            except (EOFError, KeyboardInterrupt):
+                print("\\nReturning to the CyberLab menu.")
             wait_for_menu()
             continue
         if choice == "20":
