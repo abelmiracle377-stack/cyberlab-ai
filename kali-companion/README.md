@@ -113,9 +113,11 @@ The defensive password module provides:
 - Clearly labelled `<lab>-test-01` style usernames for provisioning accounts in your own isolated lab; these are not candidate usernames for guessing existing accounts.
 - Password-storage metadata review (algorithm family, salt usage and documented work-factor/parameters). Do not paste plaintext passwords or password hashes into the tool.
 - Operator-led review of rate limiting, progressive delay/lockout, MFA, breached-password blocklists and password-reset controls.
-- Local authentication-log pattern summaries (up to 5 MB), without network activity.
+- Read-only website login-surface inspection: enter an explicitly authorised public HTTPS login URL; CyberLab checks the page response, visible form structure, cookies and security headers without submitting credentials.
+- John the Ripper integration for authorised offline hash audits using a local hash file and a chosen wordlist (RockYou can be selected). John runs locally; the temporary pot file is deleted and recovered plaintext passwords are never included in reports.
+- Optional local authentication-log analysis remains available for exported server/WAF/identity-provider evidence; it is not required for website investigations.
 
-This is not John the Ripper or Hydra: it does not crack password hashes, generate target password dictionaries, enumerate real users, attempt logins, or send authentication traffic. Results are local review signals, not proof that a system is secure.
+Hydra is not launched against public/live login pages and CyberLab does not automate online password guessing. The website workflow is a read-only authentication-surface preflight that helps an operator decide what to review in an explicitly authorised staging assessment. It does not prove rate limiting, lockout or MFA behaviour.
 
 
 ## Law Enforcement & Scam Investigation (menu option 15)
@@ -123,11 +125,12 @@ This is not John the Ripper or Hydra: it does not crack password hashes, generat
 This is a public-source and evidence-review workspace, not an account-access tool. It provides:
 - Public scam-site intelligence using RDAP, DNS, certificate-transparency records and the supplied domain's public homepage.
 - One explicitly supplied HTTPS page inspection using a read-only GET; redirects are not followed and forms are never submitted.
-- Offline authentication-log analysis to identify failed/successful login indicators and recurring source addresses. This is the defensive, Hydra-style side: detect and investigate authentication abuse from logs, not generate login attempts.
-- Local password-hash inventory classification by format counts (Argon2, bcrypt, PBKDF2 and ambiguous hex lengths). This is the safe, John-style side: identify storage-format risks without cracking, wordlists or returning hash values.
-- Locally saved evidence notes and investigation reports.
+- Website-first login assessment: option 3 accepts an authorised public HTTPS login URL and performs a read-only inspection. It does not ask for a local log file.
+- John the Ripper offline auditing: option 4 accepts an authorised local hash inventory and wordlist, with automatic hash-format detection or an optional John format override. Only aggregate cracked/remaining counts are retained; plaintext results and the temporary pot file are discarded.
+- Optional forensic tools remain available under options 8 and 9: exported authentication-log analysis and hash-format inventory classification.
+- Public digital-footprint research, page inspection, and locally saved evidence notes remain available.
 
-**Important boundary:** CyberLab does not run Hydra, John the Ripper, password spraying, brute-force attacks, credential stuffing, login bypass, hash cracking or password-dictionary generation. It cannot access scammer accounts or use discovered usernames to guess passwords. Use formal legal process and the relevant provider's preservation/disclosure channels for account records. Public indicators are leads, not attribution or proof of criminal activity.
+**Important boundary:** Hydra is not used to guess passwords against public/live login pages, bypass authentication or access accounts. The read-only website preflight is not a Hydra attack and does not independently verify backend controls. John is restricted to offline hashes the operator owns or is explicitly authorised to audit. Public indicators are leads, not attribution or proof of criminal activity.
 
 
 ## Additional defensive research improvements
@@ -154,3 +157,23 @@ Evidence files may contain sensitive material. Keep the evidence directory acces
 - **Scam investigation menu option 7:** accepts one explicitly supplied, owner-approved public HTTPS login page for read-only page/header/form inspection. No credentials are submitted and no authentication is attempted.
 - **Authentication log input:** the requested local file is an exported log from a website host, web server, reverse proxy, WAF or identity provider. Download/export it from a system the operator administers or is authorised to investigate, then provide its path on the Kali machine. CyberLab does not automatically access a website's private logs.
 - **Hash inventory:** the existing option identifies likely hash formats in an authorised offline file only. It does not run John the Ripper or perform password guessing. CyberLab does not perform Hydra-style password spraying or dictionary attacks against live login pages; authorised login security can instead be reviewed through owner-provided logs, configuration and controlled staging assessments.
+
+
+### Kali password-audit workflow
+
+Install John the Ripper on Kali if needed:
+
+```bash
+sudo apt update
+sudo apt install john
+```
+
+Kali commonly provides RockYou as a compressed wordlist. If it is present, decompress a working copy:
+
+```bash
+sudo gzip -dk /usr/share/wordlists/rockyou.txt.gz
+```
+
+Then use CyberLab menu option 14 → 8 or option 15 → 4. Supply a local hash file you are authorised to audit and the wordlist path (default: `/usr/share/wordlists/rockyou.txt`). This is the normal offline John workflow; no website is contacted.
+
+For a website login page, use option 14 → 6 or option 15 → 3 and enter the authorised HTTPS URL. That is a read-only preflight, not an online Hydra password-guessing run. CyberLab intentionally does not automate Hydra dictionary attacks against live websites.
