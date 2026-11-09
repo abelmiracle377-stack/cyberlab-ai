@@ -13,7 +13,7 @@ python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
 
-## 20-option Kali command centre
+## 21-option Kali command centre
 
 Launch the full local-first menu:
 
@@ -21,7 +21,7 @@ Launch the full local-first menu:
 python3 kali-companion/cyberlab.py menu
 ```
 
-The menu exposes 20 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
+The menu exposes 21 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
 Device pairing, remote connected-device listing and live capture controls are intentionally shown as not configured until the authenticated gateway and platform-specific companion applications exist. The CLI does not pretend those remote capabilities are already working.
 
@@ -200,3 +200,22 @@ sudo gzip -dk /usr/share/wordlists/rockyou.txt.gz
 Then use CyberLab menu option 14 → 8 or option 15 → 4. Supply a local hash file you are authorised to audit and the wordlist path (default: `/usr/share/wordlists/rockyou.txt`). This is the normal offline John workflow; no website is contacted.
 
 For a website login page, use option 14 → 6 or option 15 → 3 and enter the authorised HTTPS URL. That is a read-only preflight, not an online Hydra password-guessing run. CyberLab intentionally does not automate Hydra dictionary attacks against live websites.
+
+
+## Global Camera Intelligence (menu option 21)
+
+The camera module adds three workflows without removing or renumbering existing CyberLab features:
+
+- **Private LAN discovery:** checks common camera-related TCP ports on one explicitly supplied RFC1918 private IPv4 subnet containing at most 256 addresses. It requires the operator to confirm that they administer the network. Port matches are leads, not proof of camera identity or stream availability.
+- **Authorised live camera viewing:** connects to one manually entered camera IP/hostname using its RTSP port and stream path. It supports both configured username/password authentication and cameras deliberately configured without authentication. The operator must confirm ownership or permission. The optional `ffplay` viewer is launched locally; RTSP URLs and credentials are not saved in reports. Install it on Kali with `sudo apt install ffmpeg`.
+- **Global public webcam directory:** provides links to services that intentionally publish webcams for public viewing (EarthCam, SkylineWebcams, Explore.org and Windy), where the operator can search by country or city.
+
+The module does **not** search the public internet for exposed CCTV devices, enumerate unauthorised camera feeds, or connect to third-party cameras merely because they have no password. Publicly reachable does not mean consent to view. No camera credentials are guessed or bypassed.
+
+Example installation for live viewing:
+
+```bash
+sudo apt update
+sudo apt install -y ffmpeg
+python3 kali-companion/cyberlab.py menu
+```
