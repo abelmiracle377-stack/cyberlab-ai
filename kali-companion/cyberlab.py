@@ -590,7 +590,7 @@ def register_evidence(path: Path, case_id: str = "general", notes: str = "") -> 
                 "notes": notes[:1000], "storage": "local_only",
                 "handling": "Copied as inert evidence; never executed or uploaded."}
     manifest_path = destination.with_name(destination.name + ".manifest.json")
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return {"evidence": manifest, "manifest_path": str(manifest_path), "evidence_path": str(destination)}
 
 
