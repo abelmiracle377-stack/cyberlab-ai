@@ -13,7 +13,7 @@ python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
 
-## 12-option Kali command centre
+## 13-option Kali command centre
 
 Launch the full local-first menu:
 
@@ -21,7 +21,7 @@ Launch the full local-first menu:
 python3 kali-companion/cyberlab.py menu
 ```
 
-The menu exposes the six existing research tools, static file and URL analysis, device connection status, connected-device status, live-session status, local evidence listing and investigation history. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
+The menu exposes the six existing research tools, a guided Manual Security Assessment & Verification at option 3, static file and URL analysis, device connection status, connected-device status, live-session status, local evidence listing and investigation history. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
 Device pairing, remote connected-device listing and live capture controls are intentionally shown as not configured until the authenticated gateway and platform-specific companion applications exist. The CLI does not pretend those remote capabilities are already working.
 
@@ -33,7 +33,7 @@ Launch the local menu-driven interface:
 python3 kali-companion/cyberlab.py menu
 ```
 
-Choose Domain OSINT, DNS, public IP intelligence, CVE research, static file triage, Nmap XML analysis, or local investigation history. Successful results are saved as timestamped JSON files under `~/CyberLab/investigations/`. Reports remain on the Kali machine and are not uploaded automatically. The menu does not execute arbitrary shell commands or start network scans.
+Choose Domain OSINT, DNS, Manual Security Assessment & Verification, public IP intelligence, CVE research, static file triage, Nmap XML analysis, or local investigation history. Successful results are saved as timestamped JSON files under `~/CyberLab/investigations/`. Reports remain on the Kali machine and are not uploaded automatically. The menu does not execute arbitrary shell commands or start network scans.
 
 ## Commands
 
