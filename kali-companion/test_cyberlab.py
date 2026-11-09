@@ -372,9 +372,9 @@ class CompanionTests(unittest.TestCase):
                 __import__("subprocess").CompletedProcess([], 0, "Loaded 1 password hash", ""),
                 __import__("subprocess").CompletedProcess([], 0, "labuser:RecoveredSecret:1000:1000:::\\n1 password hash cracked, 0 left\\n", ""),
             ]
-            with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/john"), \\
-                 patch.object(cyberlab.subprocess, "run", side_effect=completed) as run:
-                result = cyberlab.run_john_audit(hashes, wordlist, authorised=True)
+            with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/john"):
+                with patch.object(cyberlab.subprocess, "run", side_effect=completed) as run:
+                    result = cyberlab.run_john_audit(hashes, wordlist, authorised=True)
             self.assertEqual(result["cracked_hash_count"], 1)
             self.assertEqual(result["remaining_hash_count"], 0)
             self.assertFalse(result["plaintext_passwords_returned_or_saved"])
