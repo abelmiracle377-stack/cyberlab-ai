@@ -13,7 +13,7 @@ python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
 
-## 14-option Kali command centre
+## 20-option Kali command centre
 
 Launch the full local-first menu:
 
@@ -21,7 +21,7 @@ Launch the full local-first menu:
 python3 kali-companion/cyberlab.py menu
 ```
 
-The menu exposes the six existing research tools, a guided Manual Security Assessment & Verification at option 3, static file and URL analysis, device connection status, connected-device status, live-session status, local evidence listing and investigation history. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
+The menu exposes 20 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
 Device pairing, remote connected-device listing and live capture controls are intentionally shown as not configured until the authenticated gateway and platform-specific companion applications exist. The CLI does not pretend those remote capabilities are already working.
 
@@ -117,7 +117,7 @@ The defensive password module provides:
 - John the Ripper integration for authorised offline hash audits using a local hash file and a chosen wordlist (RockYou can be selected). John runs locally; the temporary pot file is deleted and recovered plaintext passwords are never included in reports.
 - Optional local authentication-log analysis remains available for exported server/WAF/identity-provider evidence; it is not required for website investigations.
 
-Hydra is not launched against public/live login pages and CyberLab does not automate online password guessing. The website workflow is a read-only authentication-surface preflight that helps an operator decide what to review in an explicitly authorised staging assessment. It does not prove rate limiting, lockout or MFA behaviour.
+CyberLab includes a Hydra-style local credential-guessing simulation at top-level option 17. It reads a local wordlist and compares candidates against a synthetic password entered by the operator, displays candidate progress, and can model an MFA-required outcome. It does not invoke Hydra, send HTTP requests, contact a real account, or establish whether an external service is vulnerable. The website workflow remains a read-only authentication-surface preflight.
 
 
 ## Law Enforcement & Scam Investigation (menu option 15)
@@ -130,8 +130,19 @@ This is a public-source and evidence-review workspace, not an account-access too
 - Optional forensic tools remain available under options 8 and 9: exported authentication-log analysis and hash-format inventory classification.
 - Public digital-footprint research, page inspection, and locally saved evidence notes remain available.
 
-**Important boundary:** Hydra is not used to guess passwords against public/live login pages, bypass authentication or access accounts. The read-only website preflight is not a Hydra attack and does not independently verify backend controls. John is restricted to offline hashes the operator owns or is explicitly authorised to audit. Public indicators are leads, not attribution or proof of criminal activity.
+**Important boundary:** the credential-guessing lab at option 17 is an offline simulation only; it does not attack live websites, bypass authentication or access accounts. The read-only website preflight does not independently verify backend controls. John is restricted to offline hashes the operator owns or is explicitly authorised to audit. Public indicators are leads, not attribution or proof of criminal activity.
 
+
+## Dedicated authentication security options (menu options 17-20)
+
+These features are separate top-level menu entries rather than being hidden inside the password or investigation submenus:
+
+- **17 — Hydra-Style Credential Guessing Lab:** reads a local wordlist and compares each candidate with a synthetic lab password entered through hidden terminal input. Progress is displayed as candidates are checked. The operator can simulate MFA so a password match does not imply completed authentication. The lab accepts a maximum of 50,000 candidate comparisons and a 25 MB wordlist. It never invokes Hydra, sends network requests, contacts a real account or saves the supplied password.
+- **18 — Username Privacy Assessment:** checks a supplied username string for privacy-risk patterns such as birth-year-like sequences or personal-identifier hints. It does not check account existence or enumerate users.
+- **19 — Password Policy Assessment:** records operator-reported minimum length, breached-password blocklist, reuse-prevention and reset-protection settings.
+- **20 — MFA / 2FA Security Assessment:** records whether MFA is required, phishing-resistant factors are available, recovery is protected and suspicious-login alerts are enabled.
+
+Options 14 and 15 remain available with their existing password/authentication and scam-investigation workflows. These new options are additive; they do not renumber or remove existing menu items.
 
 ## Additional defensive research improvements
 
