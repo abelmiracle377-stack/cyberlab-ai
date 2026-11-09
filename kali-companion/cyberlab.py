@@ -698,13 +698,62 @@ def investigation_directory() -> Path:
 
 
 def save_investigation(result: dict, service: str) -> Path:
-    """Save a timestamped JSON report locally; never upload it automatically."""
+    """Save a timestamped local JSON report and a SHA-256 integrity sidecar."""
     from datetime import datetime, timezone
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     safe_service = re.sub(r"[^a-z0-9-]+", "-", service.lower()).strip("-") or "report"
-    destination = investigation_directory() / f"{stamp}_{safe_service}.json"
-    destination.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    directory = investigation_directory()
+    destination = directory / f"{stamp}_{safe_service}.json"
+    rendered = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
+    payload = rendered.encode("utf-8")
+    digest = hashlib.sha256(payload).hexdigest()
+    # Exclusive creation prevents a same-name report from silently overwriting an earlier record.
+    with destination.open("xb") as handle:
+        handle.write(payload)
+    manifest = {
+        "report_file": destination.name,
+        "sha256": digest,
+        "size_bytes": len(payload),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "integrity": "sha256",
+        "storage": "local_only",
+    }
+    sidecar = destination.with_name(destination.name + ".manifest.json")
+    with sidecar.open("x", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, ensure_ascii=False)
+        handle.write("\n")
     return destination
+
+
+def verify_investigation_reports() -> dict:
+    """Verify local JSON report hashes against their SHA-256 sidecars."""
+    directory = investigation_directory()
+    checked, valid, missing, mismatched = 0, 0, [], []
+    for sidecar in sorted(directory.glob("*.json.manifest.json")):
+        checked += 1
+        try:
+            manifest = json.loads(sidecar.read_text(encoding="utf-8"))
+            filename = manifest["report_file"]
+            if Path(filename).name != filename:
+                mismatched.append(sidecar.name)
+                continue
+            report = directory / filename
+            if not report.is_file() or report.is_symlink():
+                missing.append(filename)
+                continue
+            data = report.read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            if digest == manifest.get("sha256") and len(data) == manifest.get("size_bytes"):
+                valid += 1
+            else:
+                mismatched.append(filename)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            mismatched.append(sidecar.name)
+    return {
+        "manifests_checked": checked, "integrity_valid": valid,
+        "missing_reports": missing, "hash_mismatches_or_invalid_manifests": mismatched,
+        "note": "Local integrity check only; reports are not modified or uploaded."
+    }
 
 
 def show_investigation_history() -> None:
