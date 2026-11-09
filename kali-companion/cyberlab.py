@@ -230,7 +230,12 @@ def public_site_profile(domain: str, timeout: int = 12) -> dict:
                 forms.append({"method": form["method"], "input_types": types, "field_names": names[:20], "appears_auth_related": "password" in types or any(any(x in n.lower() for x in ("user", "email", "login")) for n in names)})
             headers = response.headers
             sec = {n: headers.get(n) for n in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy") if headers.get(n)}
-            return {"status": "ok", "page_title": " ".join(parser.title)[:300], "description": parser.meta.get("description") or parser.meta.get("og:description", ""), "generator": parser.meta.get("generator", ""), "public_contact_emails": emails, "public_contact_phone_numbers": phones, "social_media_links": sorted(set(socials))[:30], "visible_forms": forms, "security_headers_present": sec, "security_headers_missing": [n for n in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy") if n not in sec], "ai_build_assessment": "Inconclusive; public HTML alone cannot reliably establish AI authorship.", "limitations": ["Only the HTTPS home page was fetched.", "No hidden-path enumeration, login attempts, form submissions or exploit tests were performed.", "Visible form fields do not prove the authentication backend or its security."]}
+            availability_headers = {n: headers.get(n) for n in ("Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "X-RateLimit-Limit", "X-RateLimit-Remaining", "Server", "Via", "CF-Ray", "X-CDN") if headers.get(n)}
+            cdn_indicators = [name for name, value in (("Cloudflare", headers.get("CF-Ray") or headers.get("Server", "").lower().startswith("cloudflare")), ("Via proxy", headers.get("Via")), ("CDN header", headers.get("X-CDN"))) if value]
+            organisation = parser.meta.get("og:site_name", "")
+            address_values = sorted(set(re.findall(r"(?i)\b\d{1,6}\s+[\w .'-]{2,60}\b(?:street|st|road|rd|avenue|ave|drive|dr|lane|ln|boulevard|blvd|suite|way)\b[^<\n]{0,80}", raw.decode("utf-8", errors="ignore"))))[:10]
+            location_values = sorted(set(re.findall(r"(?i)\b(?:location|address|headquarters|based in)\b\s*[:\-]?\s*([^<\n]{3,100})", raw.decode("utf-8", errors="ignore"))))[:10]
+            return {"status": "ok", "page_title": " ".join(parser.title)[:300], "description": parser.meta.get("description") or parser.meta.get("og:description", ""), "generator": parser.meta.get("generator", ""), "site_name": organisation, "organisation_name": organisation, "public_address": address_values, "public_location": location_values, "public_contact_emails": emails, "public_contact_phone_numbers": phones, "social_media_links": sorted(set(socials))[:50], "visible_forms": forms, "security_headers_present": sec, "security_headers_missing": [n for n in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy") if n not in sec], "availability_headers": availability_headers, "cdn_indicators": cdn_indicators, "ai_build_assessment": "Inconclusive; public HTML alone cannot reliably establish AI authorship.", "limitations": ["Only the HTTPS home page was fetched.", "No hidden-path enumeration, login attempts, form submissions or exploit tests were performed.", "Visible form fields do not prove the authentication backend or its security.", "Company, address and location extraction is heuristic and may be incomplete or incorrect; verify against authoritative sources."]}
     except (OSError, ValueError, urllib.error.URLError) as exc:
         return {"status": "unavailable", "error": str(exc), "note": "RDAP, certificate and DNS research continues independently."}
 
@@ -362,6 +367,103 @@ def dns_lookup(domain: str, timeout: int = 12) -> dict:
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
             output[record] = {"error": str(exc)}
     return {"domain": domain, "records": output, "source": "Cloudflare public DNS-over-HTTPS"}
+
+def _normalise_osint_input(value: str) -> dict:
+    """Accept a domain, website URL, email address or public social profile URL."""
+    raw = value.strip()
+    if not raw:
+        raise ValueError("Enter a domain, website URL, email address or public social profile URL.")
+    if "@" in raw and "://" not in raw:
+        if raw.count("@") != 1:
+            raise ValueError("Email address format is invalid.")
+        local, host = raw.rsplit("@", 1)
+        if not local or not host:
+            raise ValueError("Email address format is invalid.")
+        return {"input_type": "email", "input": raw[:320], "domain": validate_domain(host),
+                "email_address": raw[:320]}
+    candidate = raw if "://" in raw else "https://" + raw
+    parsed = urllib.parse.urlsplit(candidate)
+    if not parsed.hostname:
+        raise ValueError("Could not identify a domain in the supplied input.")
+    host = parsed.hostname.encode("idna").decode("ascii").lower()
+    social_hosts = ("facebook.com", "linkedin.com", "instagram.com", "x.com",
+                    "twitter.com", "tiktok.com", "youtube.com", "slack.com",
+                    "github.com", "discord.com")
+    is_social = any(host == item or host.endswith("." + item) for item in social_hosts)
+    if is_social:
+        return {"input_type": "social_profile_url", "input": raw[:1000],
+                "platform_host": host, "social_profile_reference": candidate[:1000],
+                "domain": None,
+                "limitations": ["The supplied social profile is recorded as a public reference only; platform login walls, privacy settings and anti-automation controls prevent reliable profile or follower extraction."]}
+    domain = validate_domain(host)
+    return {"input_type": "website_url" if "://" in raw else "domain",
+            "input": raw[:1000], "domain": domain,
+            "website_url": candidate[:1000]}
+
+
+def resolve_public_site_ips(domain: str) -> dict:
+    """Resolve the site's public A/AAAA addresses without scanning them."""
+    try:
+        rows = socket.getaddrinfo(domain, None, type=socket.SOCK_STREAM)
+        addresses = sorted({row[4][0] for row in rows})
+        public = [address for address in addresses if ipaddress.ip_address(address.split("%")[0]).is_global]
+        return {"addresses": public, "count": len(public),
+                "note": "DNS resolution only; no port scan, service probe or owner identity inference."}
+    except (OSError, ValueError) as exc:
+        return {"addresses": [], "count": 0, "error": str(exc)}
+
+
+def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
+    """Expanded passive DNS and public digital-footprint lookup."""
+    identity = _normalise_osint_input(value)
+    result = {"investigation_type": "expanded_passive_dns_and_digital_footprint",
+              "submitted_input": identity, "sources": {},
+              "limitations": [
+                  "Only publicly accessible DNS and the supplied website homepage are inspected.",
+                  "Social profile URLs are recorded as references; private profile data and follower/member counts are not collected.",
+                  "Website visitor counts, connected-user counts and real-time traffic volumes are not exposed by ordinary public DNS or homepage data.",
+                  "DDoS assessment is limited to passive exposure indicators; no traffic is generated and no availability stress test is performed."
+              ]}
+    domain = identity.get("domain")
+    if not domain:
+        result["sources"]["social_profile"] = {
+            "platform": identity.get("platform_host"),
+            "reference": identity.get("social_profile_reference"),
+            "status": "reference_only",
+            "follower_or_member_count": "Not reliably available from public unauthenticated profile metadata."
+        }
+        return result
+    result["domain"] = domain
+    result["dns_records"] = dns_lookup(domain, timeout)["records"]
+    result["site_ip_resolution"] = resolve_public_site_ips(domain)
+    result["email_domain"] = {
+        "domain": domain,
+        "mx_records": result["dns_records"].get("MX", {}).get("answers", []),
+        "spf_txt_records": [item for item in result["dns_records"].get("TXT", {}).get("answers", [])
+                            if "v=spf1" in str(item.get("value", "")).lower()],
+        "dmarc_record": "Not queried in this initial passive lookup; use a dedicated DNS record review for _dmarc." if not identity.get("email_address") else "Email address supplied; mailbox existence and ownership are not tested."
+    }
+    result["sources"]["website_profile"] = public_site_profile(domain, timeout)
+    profile = result["sources"]["website_profile"]
+    result["company_and_location"] = {
+        "organisation_or_site_name": profile.get("organisation_name") or profile.get("site_name") or profile.get("page_title"),
+        "public_address": profile.get("public_address"),
+        "public_location": profile.get("public_location"),
+        "public_contact_emails": profile.get("public_contact_emails", []),
+        "public_contact_phone_numbers": profile.get("public_contact_phone_numbers", []),
+        "source_note": "Only details explicitly published in the inspected homepage metadata or visible text are reported."
+    }
+    result["social_media_and_community_links"] = profile.get("social_media_links", [])
+    result["passive_ddos_and_availability_indicators"] = {
+        "cdn_or_reverse_proxy_indicators": profile.get("cdn_indicators", []),
+        "rate_limit_or_waf_headers_observed": profile.get("availability_headers", {}),
+        "assessment": "Informational only; these observations do not establish DDoS protection, capacity or resilience.",
+        "not_tested": ["traffic capacity", "request-rate limits", "origin exposure", "DDoS mitigation effectiveness", "real-time attack traffic"]
+    }
+    if identity.get("email_address"):
+        result["submitted_email_address"] = identity["email_address"]
+    return result
+
 
 def domain_osint(value: str, timeout: int = 12) -> dict:
     domain = validate_domain(value)
@@ -1394,9 +1496,8 @@ def interactive_menu(timeout: int = 12) -> int:
             if command == "domain":
                 result = domain_osint(input("Public domain: ").strip(), timeout)
             elif command == "dns":
-                domain = input("Public domain: ").strip()
-                result = dns_lookup(domain, timeout)
-                result["public_website_profile"] = public_site_profile(validate_domain(domain), timeout)
+                identifier = input("Domain, website URL, email address or public social profile URL: ").strip()
+                result = dns_intelligence_lookup(identifier, timeout)
             elif command == "ip":
                 result = ip_intelligence(input("Public global IP: ").strip(), timeout)
             elif command == "cve":
