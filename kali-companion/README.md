@@ -116,3 +116,15 @@ The defensive password module provides:
 - Local authentication-log pattern summaries (up to 5 MB), without network activity.
 
 This is not John the Ripper or Hydra: it does not crack password hashes, generate target password dictionaries, enumerate real users, attempt logins, or send authentication traffic. Results are local review signals, not proof that a system is secure.
+
+
+## Law Enforcement & Scam Investigation (menu option 15)
+
+This is a public-source and evidence-review workspace, not an account-access tool. It provides:
+- Public scam-site intelligence using RDAP, DNS, certificate-transparency records and the supplied domain's public homepage.
+- One explicitly supplied HTTPS page inspection using a read-only GET; redirects are not followed and forms are never submitted.
+- Offline authentication-log analysis to identify failed/successful login indicators and recurring source addresses. This is the defensive, Hydra-style side: detect and investigate authentication abuse from logs, not generate login attempts.
+- Local password-hash inventory classification by format counts (Argon2, bcrypt, PBKDF2 and ambiguous hex lengths). This is the safe, John-style side: identify storage-format risks without cracking, wordlists or returning hash values.
+- Locally saved evidence notes and investigation reports.
+
+**Important boundary:** CyberLab does not run Hydra, John the Ripper, password spraying, brute-force attacks, credential stuffing, login bypass, hash cracking or password-dictionary generation. It cannot access scammer accounts or use discovered usernames to guess passwords. Use formal legal process and the relevant provider's preservation/disclosure channels for account records. Public indicators are leads, not attribution or proof of criminal activity.
