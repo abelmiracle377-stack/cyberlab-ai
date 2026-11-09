@@ -261,8 +261,17 @@ def ip_intelligence(value: str, timeout: int = 12) -> dict:
         rdap = http_json("https://rdap.org/ip/" + urllib.parse.quote(str(address), safe=""), timeout)
     except Exception as exc:
         rdap = {"lookup_error": str(exc)}
-    return {"ip": str(address), "rdap": rdap,
-            "note": "RDAP provides network registration context, not a person's identity or exact physical location."}
+    events = {e.get("eventAction", "").lower(): e.get("eventDate") for e in rdap.get("events", []) if isinstance(e, dict)} if isinstance(rdap, dict) else {}
+    entities = rdap.get("entities", []) if isinstance(rdap, dict) else []
+    network_contacts = []
+    for entity in entities:
+        if not isinstance(entity, dict): continue
+        vcard = entity.get("vcardArray", [])
+        if len(vcard) > 1 and isinstance(vcard[1], list):
+            fields = {item[0]: item[3] for item in vcard[1] if isinstance(item, list) and len(item) > 3 and item[0] in ("fn", "org", "email", "tel")}
+            if fields: network_contacts.append({"roles": entity.get("roles", []), "public_registry_contact": fields})
+    summary = {"network_name": rdap.get("name") if isinstance(rdap, dict) else None, "country": rdap.get("country") if isinstance(rdap, dict) else None, "registration_date": events.get("registration"), "last_registry_change": events.get("last changed"), "network_contacts": network_contacts[:10]}
+    return {"ip": str(address), "rdap_summary": summary, "rdap": rdap, "activity_visibility": {"last_connected": "Not available from public IP registration data.", "websites_visited_or_interacted_with": "Not available from RDAP or public IP ownership records.", "individual_identity": "An IP address does not reliably identify an individual; shared, dynamic and carrier-grade NAT addresses are common."}, "note": "Public network-registration intelligence, not device tracking or a person identity/location lookup."}
 
 def cve_search(term: str, limit: int = 10, timeout: int = 12) -> dict:
     term = term.strip()
