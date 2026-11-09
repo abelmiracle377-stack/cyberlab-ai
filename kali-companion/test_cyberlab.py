@@ -51,7 +51,7 @@ class CompanionTests(unittest.TestCase):
             "staging.example.test", "yes",
             "yes", "no", "no", "unknown",
             "yes", "yes", "yes", "yes", "yes", "yes", "yes", "yes",
-            "yes", "unknown", "email/password", "", "Reviewed source and cookie configuration."
+            "yes", "yes", "unknown", "email/password", "", "Reviewed source and cookie configuration."
         ]
         with patch("builtins.input", side_effect=answers):
             result = cyberlab.manual_security_assessment()
