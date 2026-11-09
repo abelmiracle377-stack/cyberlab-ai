@@ -362,5 +362,21 @@ class CompanionTests(unittest.TestCase):
 
 
 
+    def test_phone_number_metadata_parses_nigerian_country_code(self):
+        result = cyberlab.analyse_phone_number_metadata("+234 801-234-5678")
+        self.assertEqual(result["country_calling_code"], "+234")
+        self.assertEqual(result["numbering_region_reference"], "Nigeria")
+        self.assertIn("not publicly discoverable", result["registration_date"])
+
+    def test_phone_number_metadata_requires_international_prefix(self):
+        with self.assertRaisesRegex(ValueError, "Include the international country code"):
+            cyberlab.analyse_phone_number_metadata("08012345678")
+
+    def test_phone_number_metadata_rejects_unrecognised_country_code(self):
+        with self.assertRaisesRegex(ValueError, "not in CyberLab's built-in reference list"):
+            cyberlab.analyse_phone_number_metadata("+999123456789")
+
+
+
 if __name__ == "__main__":
     unittest.main()
