@@ -133,7 +133,7 @@ def parse_nmap_xml(path: Path) -> dict:
     }
 
 def http_json(url: str, timeout: int = 12):
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/dns-json, application/json"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         if response.status != 200:
             raise ValueError("Remote service returned HTTP " + str(response.status))
@@ -147,6 +147,67 @@ def validate_domain(value: str) -> str:
     if len(domain) > 253 or not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", domain):
         raise ValueError("Enter a valid public domain name, for example example.com.")
     return domain
+
+class _PageMetadata(__import__("html.parser", fromlist=["HTMLParser"]).HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.title = []
+        self.in_title = False
+        self.meta = {}
+        self.links = []
+        self.forms = []
+        self.form = None
+    def handle_starttag(self, tag, attrs):
+        a = {k.lower(): (v or "") for k, v in attrs}
+        if tag == "title": self.in_title = True
+        if tag == "meta":
+            key = (a.get("name") or a.get("property") or "").lower()
+            if key in ("description", "og:description", "og:site_name", "generator"): self.meta[key] = a.get("content", "")[:500]
+        if tag == "a" and a.get("href"): self.links.append(a["href"][:1000])
+        if tag == "form":
+            self.form = {"method": a.get("method", "get").lower(), "fields": []}
+            self.forms.append(self.form)
+        if tag == "input" and self.form is not None:
+            self.form["fields"].append({"type": a.get("type", "text").lower(), "name": a.get("name", "")[:100]})
+    def handle_endtag(self, tag):
+        if tag == "title": self.in_title = False
+        if tag == "form": self.form = None
+    def handle_data(self, data):
+        if self.in_title and data.strip(): self.title.append(data.strip())
+
+def public_site_profile(domain: str, timeout: int = 12) -> dict:
+    """Fetch only the public HTTPS home page; never crawl or submit forms."""
+    from html.parser import HTMLParser
+    request = urllib.request.Request("https://" + domain + "/", headers={"User-Agent": USER_AGENT, "Accept": "text/html"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            final_host = urllib.parse.urlsplit(response.geturl()).hostname
+            if final_host and final_host.lower() != domain.lower():
+                return {"status": "cross_domain_redirect", "note": "Not followed for profile extraction."}
+            if "html" not in response.headers.get("Content-Type", "").lower():
+                return {"status": "non_html", "content_type": response.headers.get("Content-Type", "")}
+            raw = response.read(1000001)
+            if len(raw) > 1000000: raw = raw[:1000000]
+            parser = _PageMetadata()
+            parser.feed(raw.decode(response.headers.get_content_charset() or "utf-8", errors="replace"))
+            emails = sorted(set(re.findall(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", raw.decode("utf-8", errors="ignore"))))[:30]
+            phones = sorted(set(re.findall(r"(?<!\w)(?:\+\d[\d ().-]{7,}\d)", raw.decode("utf-8", errors="ignore"))))[:20]
+            social_hosts = ("facebook.com", "instagram.com", "linkedin.com", "x.com", "twitter.com", "youtube.com", "tiktok.com", "github.com")
+            socials = []
+            for link in parser.links:
+                absolute = urllib.parse.urljoin(response.geturl(), link)
+                host = (urllib.parse.urlsplit(absolute).hostname or "").lower()
+                if any(host == item or host.endswith("." + item) for item in social_hosts): socials.append(absolute.split("?")[0][:300])
+            forms = []
+            for form in parser.forms[:20]:
+                types = sorted({field["type"] for field in form["fields"]})
+                names = [field["name"] for field in form["fields"] if field["name"]]
+                forms.append({"method": form["method"], "input_types": types, "field_names": names[:20], "appears_auth_related": "password" in types or any(any(x in n.lower() for x in ("user", "email", "login")) for n in names)})
+            headers = response.headers
+            sec = {n: headers.get(n) for n in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy") if headers.get(n)}
+            return {"status": "ok", "page_title": " ".join(parser.title)[:300], "description": parser.meta.get("description") or parser.meta.get("og:description", ""), "generator": parser.meta.get("generator", ""), "public_contact_emails": emails, "public_contact_phone_numbers": phones, "social_media_links": sorted(set(socials))[:30], "visible_forms": forms, "security_headers_present": sec, "security_headers_missing": [n for n in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy") if n not in sec], "ai_build_assessment": "Inconclusive; public HTML alone cannot reliably establish AI authorship.", "limitations": ["Only the HTTPS home page was fetched.", "No hidden-path enumeration, login attempts, form submissions or exploit tests were performed.", "Visible form fields do not prove the authentication backend or its security."]}
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        return {"status": "unavailable", "error": str(exc), "note": "RDAP, certificate and DNS research continues independently."}
 
 def dns_lookup(domain: str, timeout: int = 12) -> dict:
     domain = validate_domain(domain)
@@ -171,7 +232,10 @@ def domain_osint(value: str, timeout: int = 12) -> dict:
     ]}
     encoded = urllib.parse.quote(domain, safe="")
     try:
-        result["sources"]["rdap"] = http_json("https://rdap.org/domain/" + encoded, timeout)
+        rdap_data = http_json("https://rdap.org/domain/" + encoded, timeout)
+        result["sources"]["rdap"] = rdap_data
+        events = {e.get("eventAction", "").lower(): e.get("eventDate") for e in rdap_data.get("events", []) if isinstance(e, dict)}
+        result["registration_summary"] = {"registered_on": events.get("registration"), "expires_on": events.get("expiration"), "last_registry_change": events.get("last changed"), "registrar": next((e.get("vcardArray", [None, []])[1][0][3] for e in rdap_data.get("entities", []) if "registrar" in e.get("roles", []) and e.get("vcardArray") and e["vcardArray"][1]), None)}
     except Exception as exc:
         result["sources"]["rdap_error"] = str(exc)
     try:
@@ -183,6 +247,7 @@ def domain_osint(value: str, timeout: int = 12) -> dict:
     except Exception as exc:
         result["sources"]["certificate_transparency_error"] = str(exc)
     result["sources"]["dns"] = dns_lookup(domain, timeout)["records"]
+    result["sources"]["public_website_profile"] = public_site_profile(domain, timeout)
     return result
 
 def ip_intelligence(value: str, timeout: int = 12) -> dict:
@@ -480,7 +545,9 @@ def interactive_menu(timeout: int = 12) -> int:
             if command == "domain":
                 result = domain_osint(input("Public domain: ").strip(), timeout)
             elif command == "dns":
-                result = dns_lookup(input("Public domain: ").strip(), timeout)
+                domain = input("Public domain: ").strip()
+                result = dns_lookup(domain, timeout)
+                result["public_website_profile"] = public_site_profile(validate_domain(domain), timeout)
             elif command == "ip":
                 result = ip_intelligence(input("Public global IP: ").strip(), timeout)
             elif command == "cve":
