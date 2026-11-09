@@ -1351,8 +1351,8 @@ def analyse_phone_number_metadata(value: str) -> dict:
     raw = value.strip()
     if not raw:
         raise ValueError("Enter a phone number including its country code, e.g. +2348012345678.")
-    cleaned = re.sub(r"[\\s().-]", "", raw)
-    if not re.fullmatch(r"\\+?[0-9]{7,15}", cleaned):
+    cleaned = re.sub(r"[\s().-]", "", raw)
+    if not re.fullmatch(r"\+?[0-9]{7,15}", cleaned):
         raise ValueError("Use 7-15 digits and an optional leading + country code.")
     if not cleaned.startswith("+"):
         raise ValueError("Include the international country code, for example +234.")
