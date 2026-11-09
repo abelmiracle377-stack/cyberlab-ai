@@ -1455,8 +1455,48 @@ def analyse_phone_number_metadata(value: str) -> dict:
                          if digits.startswith(code)), None)
     if not country_code:
         raise ValueError("Country calling code is not in CyberLab's built-in reference list.")
+    enrichment = {}
+    try:
+        import phonenumbers
+        from phonenumbers import carrier, geocoder
+        parsed = phonenumbers.parse(cleaned, None)
+        number_types = {
+            phonenumbers.PhoneNumberType.MOBILE: "mobile",
+            phonenumbers.PhoneNumberType.FIXED_LINE: "fixed_line",
+            phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE: "fixed_line_or_mobile",
+            phonenumbers.PhoneNumberType.TOLL_FREE: "toll_free",
+            phonenumbers.PhoneNumberType.PREMIUM_RATE: "premium_rate",
+            phonenumbers.PhoneNumberType.VOIP: "VoIP",
+            phonenumbers.PhoneNumberType.PERSONAL_NUMBER: "personal_number",
+            phonenumbers.PhoneNumberType.PAGER: "pager",
+            phonenumbers.PhoneNumberType.UAN: "universal_access_number",
+            phonenumbers.PhoneNumberType.VOICEMAIL: "voicemail",
+            phonenumbers.PhoneNumberType.UNKNOWN: "unknown",
+        }
+        assigned_carrier = carrier.name_for_number(parsed, "en")
+        enrichment = {
+            "library_validation": "phonenumbers",
+            "is_possible_number": phonenumbers.is_possible_number(parsed),
+            "is_valid_number": phonenumbers.is_valid_number(parsed),
+            "line_type": number_types.get(phonenumbers.number_type(parsed), "unknown"),
+            "original_carrier_assignment": assigned_carrier or "Not available in numbering metadata",
+            "approximate_region_description": geocoder.description_for_number(parsed, "en") or "Not available",
+            "formatted_international": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL),
+            "carrier_caveat": "Carrier data describes the original number-range assignment where available; number portability means it may not identify the current carrier."
+        }
+    except ImportError:
+        enrichment = {
+            "library_validation": "basic built-in calling-code reference only",
+            "optional_enrichment": "Install the phonenumbers package to add number validity, line type, original carrier-range and approximate region metadata."
+        }
+    except Exception:
+        enrichment = {
+            "library_validation": "phonenumbers could not validate this number",
+            "optional_enrichment": "Check the international number format and verify with the national numbering authority."
+        }
     return {
         "investigation_type": "phone_number_numbering_metadata",
+        **enrichment,
         "submitted_number": cleaned,
         "country_calling_code": "+" + country_code,
         "numbering_region_reference": calling_codes[country_code],
