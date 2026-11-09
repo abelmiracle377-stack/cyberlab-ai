@@ -294,5 +294,33 @@ class CompanionTests(unittest.TestCase):
             cyberlab.case_timeline_path(" !!! ")
 
 
+    def test_case_timeline_strips_url_query_and_fragment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                result = cyberlab.append_case_event(
+                    "CASE-44", "reference", "Recorded public reference.",
+                    "https://example.org/report?id=private-token#section"
+                )
+        self.assertEqual(
+            result["event"]["source_reference"],
+            "https://example.org/report"
+        )
+
+    def test_case_timeline_refuses_append_after_tampering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                cyberlab.append_case_event("CASE-45", "note", "Original event.")
+                path = cyberlab.case_timeline_path("CASE-45")
+                event = json.loads(path.read_text(encoding="utf-8"))
+                event["description"] = "Tampered event."
+                path.write_text(json.dumps(event) + "\\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "failed integrity verification"):
+                    cyberlab.append_case_event("CASE-45", "note", "Do not extend a broken chain.")
+
+    def test_case_timeline_rejects_url_with_embedded_credentials(self):
+        with self.assertRaisesRegex(ValueError, "without embedded credentials"):
+            cyberlab._safe_timeline_source_reference("https://user:pass@example.org/path")
+
+
 if __name__ == "__main__":
     unittest.main()
