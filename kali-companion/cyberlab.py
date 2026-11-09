@@ -660,8 +660,21 @@ def manual_security_assessment() -> dict:
                 break
             print("Enter yes, no, unknown or not-applicable.")
 
-    login_method = input("\nLogin method (email/password, username/password, SSO, passkey, mixed, unknown): ").strip()[:100] or "unknown"
-    admin_url = input("Owner-provided admin URL (optional; leave blank if none): ").strip()[:500]
+    page_url = input("\nOwner-approved public login/home page HTTPS URL (optional): ").strip()[:1000]
+    page_inspection = None
+    if page_url:
+        page_inspection = inspect_assessment_page(page_url, method="GET")
+        print("\nPASSIVE PAGE INSPECTION")
+        print(json.dumps(page_inspection, indent=2, ensure_ascii=False))
+    admin_url = input("\nOwner-provided admin panel HTTPS URL (optional; HEAD metadata only): ").strip()[:1000]
+    admin_inspection = inspect_assessment_page(admin_url, method="HEAD") if admin_url else None
+    if admin_inspection:
+        print("\nADMIN URL RESPONSE METADATA")
+        print(json.dumps(admin_inspection, indent=2, ensure_ascii=False))
+    login_method = (
+        page_inspection.get("login_classification", "unknown") if page_inspection else
+        input("Login method (email/password, username/password, SSO, passkey, mixed, unknown): ").strip()[:100] or "unknown"
+    )
     evidence = input("Evidence notes (no passwords, tokens or personal records): ").strip()[:2000]
     findings = []
     if answers["sql_string_concatenation"] == "yes":
@@ -699,17 +712,19 @@ def manual_security_assessment() -> dict:
         "target": target,
         "authorisation_confirmed_by_operator": True,
         "login_method": login_method,
+        "page_inspection": page_inspection,
         "owner_provided_admin_url": admin_url or None,
+        "admin_response_inspection": admin_inspection,
         "checks": answers,
         "findings": findings,
         "evidence_notes": evidence,
-        "method": "Guided checklist based on operator-provided code review, documentation and existing evidence. No requests, payloads, login attempts, endpoint discovery or account lookups were performed.",
+        "method": "One GET to the explicitly supplied HTTPS page and one HEAD to the owner-provided admin URL when supplied, plus operator-led checklist. No redirects followed, forms submitted, payloads sent, login attempts, endpoint discovery or account lookups were performed.",
         "sql_injection_explanation": {
             "cause": "Untrusted input is concatenated into SQL text instead of being passed separately as a bound parameter.",
             "impact": ["Potential unauthorised data access", "Potential data modification or deletion", "Potential authentication bypass", "In severe configurations, broader server impact"],
             "safe_remediation": ["Use parameterised queries/prepared statements", "Use correctly bound ORM parameters", "Apply least-privilege database permissions", "Avoid exposing database errors to users", "Add regression tests for every query path"]
         },
-        "limitations": ["A checklist is not a penetration test.", "No automated brute-force, SQL injection, session hijacking, hidden-path enumeration or credential harvesting is performed.", "Unknown and inconclusive results must not be represented as secure or vulnerable."]
+        "limitations": ["A checklist is not a penetration test.", "No automated brute-force, SQL injection payloads, session hijacking, hidden-path enumeration or credential harvesting is performed. Rate-limit/lockout protections, session rotation/expiry and server-side admin authorization still require source/configuration review or owner-provided evidence; a single page response cannot prove them.", "Unknown and inconclusive results must not be represented as secure or vulnerable."]
     }
 
 
