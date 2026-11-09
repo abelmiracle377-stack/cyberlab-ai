@@ -856,6 +856,90 @@ def password_authentication_menu() -> dict:
     return result
 
 
+
+def classify_hash_inventory(path: Path) -> dict:
+    """Count local hash-format indicators without retaining hashes or attempting cracks."""
+    if not path.is_file():
+        raise ValueError("Select an existing local hash-inventory file.")
+    if path.stat().st_size > 5 * 1024 * 1024:
+        raise ValueError("Hash inventory exceeds the 5 MB analysis limit.")
+    counts = Counter()
+    total = 0
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            value = line.strip()
+            if not value or value.startswith("#"):
+                continue
+            total += 1
+            if value.startswith("$argon2id$") or value.startswith("$argon2i$"):
+                kind = "Argon2"
+            elif value.startswith(("$2a$", "$2b$", "$2y$")):
+                kind = "bcrypt"
+            elif value.startswith("$pbkdf2-") or value.startswith("pbkdf2:"):
+                kind = "PBKDF2"
+            elif re.fullmatch(r"[0-9a-fA-F]{32}", value):
+                kind = "32-character hex (MD5-like; ambiguous)"
+            elif re.fullmatch(r"[0-9a-fA-F]{40}", value):
+                kind = "40-character hex (SHA-1-like; ambiguous)"
+            elif re.fullmatch(r"[0-9a-fA-F]{64}", value):
+                kind = "64-character hex (SHA-256-like; ambiguous)"
+            else:
+                kind = "unclassified"
+            counts[kind] += 1
+    return {
+        "file_name": path.name,
+        "nonempty_records_reviewed": total,
+        "format_counts": dict(counts),
+        "hash_values_saved": False,
+        "cracking_attempted": False,
+        "note": "Metadata-only format classification. Hex lengths are ambiguous; no hash values are returned, stored in the report, or tested against passwords."
+    }
+
+
+def scam_investigation_menu(timeout: int = 12) -> dict:
+    """Collect public scam-site intelligence and locally supplied evidence."""
+    print("\\nLAW ENFORCEMENT & SCAM INVESTIGATION")
+    print("Use only public information and evidence you are legally authorised to handle.")
+    print("This module does not access accounts, bypass logins or impersonate anyone.")
+    print("  [1] Public scam-website intelligence (RDAP, DNS, certificates, homepage)")
+    print("  [2] Inspect one explicitly supplied public HTTPS page (read-only)")
+    print("  [3] Analyse a local authentication log (Hydra-style defence review)")
+    print("  [4] Classify a local password-hash inventory (John-style metadata only)")
+    print("  [5] Record an evidence note")
+    print("  [0] Back")
+    choice = input("scam-investigation> ").strip()
+    if choice == "1":
+        domain = validate_domain(input("Public website domain: "))
+        result = domain_osint(domain, timeout)
+        result["investigation_type"] = "public_scam_website_intelligence"
+        result["scope_note"] = "Public records and the supplied domain's homepage only; no account access or active probing."
+    elif choice == "2":
+        print("Only inspect a page you are authorised to review. One HTTPS GET; redirects are not followed.")
+        url = input("Explicit page HTTPS URL: ").strip()[:1000]
+        result = inspect_assessment_page(url, timeout=timeout, method="GET")
+        result["investigation_type"] = "read_only_authentication_surface_review"
+    elif choice == "3":
+        path = Path(input("Path to locally acquired authentication log (max 5 MB): ").strip()).expanduser()
+        result = analyse_auth_log(path)
+        result["investigation_type"] = "offline_authentication_abuse_detection"
+        result["interpretation"] = "Repeated failures can indicate password spraying or brute-force activity; correlate with provider logs, timestamps and known NAT/VPN infrastructure before attribution."
+    elif choice == "4":
+        print("Use only an authorised inventory. Do not provide stolen or third-party credential dumps.")
+        path = Path(input("Path to authorised local hash inventory (max 5 MB): ").strip()).expanduser()
+        result = classify_hash_inventory(path)
+        result["investigation_type"] = "offline_hash_format_inventory"
+    elif choice == "5":
+        note = input("Evidence note (no passwords, tokens or unnecessary personal data): ").strip()[:3000]
+        source = input("Source URL or local evidence reference: ").strip()[:1000]
+        result = {"investigation_type": "evidence_note", "note": note, "source_reference": source,
+                  "recorded_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                  "handling": "Locally recorded; preserve original evidence separately and document chain of custody."}
+    elif choice == "0":
+        return {}
+    else:
+        raise ValueError("Choose one of the listed options.")
+    return result
+
 def interactive_menu(timeout: int = 12) -> int:
     """Run the local-first CyberLab operations menu."""
     services = {
@@ -883,6 +967,7 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [12] Evidence Manager")
         print("  [13] Investigation Reports")
         print("  [14] Password & Authentication Security")
+        print("  [15] Law Enforcement & Scam Investigation")
         print("  [0] Exit")
         try:
             choice = input("\ncyberlab> ").strip()
@@ -892,6 +977,16 @@ def interactive_menu(timeout: int = 12) -> int:
         if choice == "0":
             print("CyberLab closed.")
             return 0
+        if choice == "15":
+            try:
+                result = scam_investigation_menu(timeout)
+                if result:
+                    print(json.dumps(result, indent=2, ensure_ascii=False))
+                    destination = save_investigation(result, "scam-investigation")
+                    print(f"\\nSaved locally: {destination}")
+            except (OSError, ValueError) as exc:
+                print(f"Investigation failed: {exc}")
+            continue
         if choice == "3":
             try:
                 result = manual_security_assessment()
