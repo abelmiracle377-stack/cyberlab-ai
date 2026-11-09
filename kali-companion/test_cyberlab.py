@@ -46,20 +46,34 @@ class CompanionTests(unittest.TestCase):
         summary = cyberlab._rdap_summary(data)
         self.assertEqual(summary["registered_on"], "2020-01-01")
         self.assertEqual(summary["registrar_or_network_name"], "Example Net")
-    def test_manual_assessment_is_guided_and_does_not_send_requests(self):
+    def test_manual_assessment_records_passive_page_and_admin_checks(self):
         answers = [
             "staging.example.test", "yes",
             "yes", "no", "no", "unknown",
-            "yes", "yes", "yes", "yes", "yes", "yes", "yes", "yes",
-            "yes", "yes", "unknown", "email/password", "", "Reviewed source and cookie configuration."
+            "yes", "yes", "yes", "yes", "yes",
+            "yes", "yes", "yes", "yes", "unknown",
+            "https://staging.example.test/login",
+            "https://staging.example.test/admin",
+            "Reviewed source and cookie configuration."
         ]
-        with patch("builtins.input", side_effect=answers):
+        page_result = {"status_code": 200, "login_classification": "email/password form pattern", "cookies": []}
+        admin_result = {"status_code": 401, "redirects_followed": False}
+        with patch("builtins.input", side_effect=answers), patch.object(
+            cyberlab, "inspect_assessment_page", side_effect=[page_result, admin_result]
+        ) as inspect:
             result = cyberlab.manual_security_assessment()
         self.assertTrue(result["authorisation_confirmed_by_operator"])
-        self.assertEqual(result["login_method"], "email/password")
-        self.assertEqual(result["findings"][0]["status"], "not_detected")
-        self.assertIn("No requests", result["method"])
+        self.assertEqual(result["login_method"], "email/password form pattern")
+        self.assertEqual(result["page_inspection"]["status_code"], 200)
+        self.assertEqual(result["admin_response_inspection"]["status_code"], 401)
+        self.assertEqual(inspect.call_count, 2)
+        self.assertEqual(inspect.call_args_list[0].kwargs["method"], "GET")
+        self.assertEqual(inspect.call_args_list[1].kwargs["method"], "HEAD")
         self.assertIn("Potential authentication bypass", result["sql_injection_explanation"]["impact"])
+
+    def test_assessment_url_rejects_private_network_address(self):
+        with self.assertRaisesRegex(ValueError, "non-public"):
+            cyberlab._validate_assessment_url("https://127.0.0.1/admin")
 
     def test_static_triage_hash_and_signature(self):
         payload = b"MZ" + b"sample executable content"
