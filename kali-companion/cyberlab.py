@@ -337,7 +337,7 @@ def evidence_directory() -> Path:
 def show_evidence_manager() -> None:
     directory = evidence_directory()
     files = sorted((p for p in directory.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
-    print("\\nLOCAL EVIDENCE MANAGER")
+    print("\nLOCAL EVIDENCE MANAGER")
     print(f"Storage: {directory}")
     if not files:
         print("No evidence files stored yet.")
@@ -350,7 +350,7 @@ def show_evidence_manager() -> None:
 
 
 def show_connection_status() -> None:
-    print("\\nDEVICE CONNECTION")
+    print("\nDEVICE CONNECTION")
     print("Remote gateway: NOT CONFIGURED")
     print("No VPS endpoint or authenticated pairing service is configured.")
     print("Device pairing and live sessions are not active yet.")
@@ -359,14 +359,14 @@ def show_connection_status() -> None:
 
 
 def show_session_status() -> None:
-    print("\\nLIVE SESSION MANAGER")
+    print("\nLIVE SESSION MANAGER")
     print("No remote session backend is configured.")
     print("Pause, resume and disconnect controls require an authenticated active session.")
     print("Configure the CyberLab gateway before starting remote sessions.")
 
 
 def content_analysis_menu(timeout: int = 12) -> None:
-    print("\\nMALICIOUS FILE & LINK ANALYSIS")
+    print("\nMALICIOUS FILE & LINK ANALYSIS")
     print("  [1] Static file analysis")
     print("  [2] Image/file signature analysis")
     print("  [3] URL structure analysis (does not open the URL)")
@@ -433,8 +433,8 @@ def interactive_menu(timeout: int = 12) -> int:
         "6": ("Nmap XML analysis", "nmap-xml"),
     }
     while True:
-        print("\\nCYBERLAB AI")
-        print("     SECURITY OPERATIONS\\n")
+        print("\nCYBERLAB AI")
+        print("     SECURITY OPERATIONS\n")
         print("  [1] Domain OSINT")
         print("  [2] DNS Intelligence")
         print("  [3] IP Intelligence")
@@ -449,9 +449,9 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [12] Investigation Reports")
         print("  [0] Exit")
         try:
-            choice = input("\\ncyberlab> ").strip()
+            choice = input("\ncyberlab> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\\nExiting CyberLab.")
+            print("\nExiting CyberLab.")
             return 0
         if choice == "0":
             print("CyberLab closed.")
@@ -494,11 +494,11 @@ def interactive_menu(timeout: int = 12) -> int:
                 result = parse_nmap_xml(Path(input("Path to existing Nmap XML report: ").strip()).expanduser())
             print(json.dumps(result, indent=2, ensure_ascii=False))
             destination = save_investigation(result, command)
-            print(f"\\nSaved locally: {destination}")
+            print(f"\nSaved locally: {destination}")
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            print(f"\\nOperation failed: {exc}")
+            print(f"\nOperation failed: {exc}")
         except (EOFError, KeyboardInterrupt):
-            print("\\nReturning to the CyberLab menu.")
+            print("\nReturning to the CyberLab menu.")
 
 def main() -> int:
     print_banner()
