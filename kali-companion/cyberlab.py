@@ -15,6 +15,7 @@ import socket
 import sys
 import shutil
 import subprocess
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1263,7 +1264,9 @@ def password_authentication_menu() -> dict:
     print("  [3] Create labelled usernames for YOUR test accounts")
     print("  [4] Review password-storage algorithm metadata")
     print("  [5] Review authentication defence controls")
-    print("  [6] Analyse a local authentication log")
+    print("  [6] Inspect an authorised website login page (read-only assessment)")
+    print("  [7] Analyse a local authentication log (optional forensic evidence)")
+    print("  [8] Run John the Ripper against an authorised offline hash inventory")
     print("  [0] Back")
     choice = input("password-audit> ").strip()
     if choice == "1":
@@ -1298,7 +1301,23 @@ def password_authentication_menu() -> dict:
             answers.append(_normalise_yes_no_unknown(input(prompt + " yes/no/unknown: "), prompt))
         result = review_authentication_policy(*answers)
     elif choice == "6":
-        result = analyse_auth_log(Path(input("Path to local auth log (max 5 MB): ").strip()).expanduser())
+        print("Enter a public HTTPS login page you own or are explicitly authorised to assess.")
+        print("CyberLab performs a read-only GET; it does not submit credentials or run Hydra.")
+        url = input("Authorised login page HTTPS URL: ").strip()[:1000]
+        result = inspect_assessment_page(url, method="GET")
+        result["feature"] = "website_authentication_surface_preflight"
+        result["hydra_style_note"] = "Read-only preflight only; no password guesses or login attempts are sent."
+    elif choice == "7":
+        result = analyse_auth_log(Path(input("Path to optional exported auth log (max 5 MB): ").strip()).expanduser())
+    elif choice == "8":
+        print("John the Ripper audits hashes offline. Use only hashes you own or are authorised to assess.")
+        hashes = Path(input("Path to authorised hash file: ").strip()).expanduser()
+        default_wordlist = "/usr/share/wordlists/rockyou.txt"
+        wordlist_text = input(f"Wordlist path [{default_wordlist}]: ").strip() or default_wordlist
+        hash_format = input("John format override (blank = auto-detect): ").strip()
+        confirmation = input("Type YES to confirm authorisation for this offline hash audit: ").strip()
+        result = run_john_audit(hashes, Path(wordlist_text), hash_format,
+                                authorised=(confirmation == "YES"))
     elif choice == "0":
         return {}
     else:
@@ -1344,6 +1363,64 @@ def classify_hash_inventory(path: Path) -> dict:
         "cracking_attempted": False,
         "note": "Metadata-only format classification. Hex lengths are ambiguous; no hash values are returned, stored in the report, or tested against passwords."
     }
+
+
+def run_john_audit(hash_path: Path, wordlist_path: Path, hash_format: str = "",
+                   timeout: int = 180, authorised: bool = False) -> dict:
+    """Run John against an explicitly authorised offline hash file; never return cracked secrets."""
+    if not authorised:
+        raise ValueError("Confirm that you own or are authorised to audit this offline hash inventory.")
+    john = shutil.which("john")
+    if not john:
+        raise ValueError("John the Ripper is not installed. On Kali, install it with: sudo apt install john")
+    hashes = hash_path.expanduser()
+    wordlist = wordlist_path.expanduser()
+    for candidate, label in ((hashes, "hash inventory"), (wordlist, "wordlist")):
+        if candidate.is_symlink() or not candidate.is_file():
+            raise ValueError(f"Select an existing regular local {label} file (symbolic links are not accepted).")
+    if hashes.stat().st_size == 0 or hashes.stat().st_size > 5 * 1024 * 1024:
+        raise ValueError("Hash inventory must be between 1 byte and 5 MB.")
+    if wordlist.stat().st_size == 0 or wordlist.stat().st_size > 250 * 1024 * 1024:
+        raise ValueError("Wordlist must be between 1 byte and 250 MB.")
+    selected_format = hash_format.strip()
+    if selected_format and not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", selected_format):
+        raise ValueError("Hash format must contain only letters, numbers, underscores or hyphens.")
+    try:
+        with tempfile.TemporaryDirectory(prefix="cyberlab-john-") as work:
+            workdir = Path(work)
+            pot = workdir / "audit.pot"
+            session = "cyberlab-audit"
+            command = [john, f"--wordlist={wordlist}", f"--pot={pot}", f"--session={session}"]
+            if selected_format:
+                command.append(f"--format={selected_format}")
+            command.append(str(hashes))
+            completed = subprocess.run(command, cwd=work, text=True, capture_output=True,
+                                        timeout=max(1, min(int(timeout), 300)), check=False)
+            if completed.returncode not in (0, 1):
+                detail = (completed.stderr or completed.stdout or "John returned an error").strip()
+                raise ValueError("John the Ripper failed: " + detail[-800:])
+            shown = subprocess.run([john, f"--show", f"--pot={pot}", str(hashes)],
+                                   cwd=work, text=True, capture_output=True,
+                                   timeout=30, check=False)
+            # --show contains plaintext credentials. Parse only aggregate counts and discard it.
+            summary = (shown.stdout or "") + "\n" + (shown.stderr or "")
+            match = re.search(r"(\d+)\s+password hashes? cracked,\s*(\d+)\s+left", summary, re.I)
+            return {
+                "feature": "john_the_ripper_offline_audit",
+                "tool": "John the Ripper",
+                "hash_inventory": hashes.name,
+                "wordlist": wordlist.name,
+                "format_override": selected_format or "automatic detection",
+                "cracked_hash_count": int(match.group(1)) if match else None,
+                "remaining_hash_count": int(match.group(2)) if match else None,
+                "tool_exit_code": completed.returncode,
+                "plaintext_passwords_returned_or_saved": False,
+                "temporary_pot_file_deleted": True,
+                "scope": "Offline hash auditing only; no network connections or website login attempts.",
+                "note": "Only aggregate counts are retained. John output containing recovered plaintext passwords is deliberately discarded."
+            }
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("John audit reached its time limit; no plaintext results were retained.") from exc
 
 
 def analyse_phone_number_metadata(value: str) -> dict:
@@ -1408,6 +1485,8 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
     print("  [5] Record an evidence note")
     print("  [6] Investigate a public website, email domain or social link")
     print("  [7] Review an authorised website login surface (public HTTPS page only)")
+    print("  [8] Run John the Ripper against an authorised offline hash inventory")
+    print("  [9] Inspect an authorised website login page (read-only Hydra-style preflight)")
     print("  [0] Back")
     choice = input("scam-investigation> ").strip()
     if choice == "1":
@@ -1437,12 +1516,23 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result = dns_intelligence_lookup(target, timeout)
         result["investigation_type"] = "scam_case_expanded_public_digital_footprint"
         result["scope_note"] = "Public-source lookup only. No account access, login bypass, private-profile scraping or active attack testing."
-    elif choice == "7":
+    elif choice == "7" or choice == "9":
         print("Provide one owner-approved public HTTPS login page. CyberLab performs a read-only inspection only.")
-        print("No password guessing, Hydra requests, form submission or authentication bypass is performed.")
+        print("This is a Hydra-style defensive preflight, not a password-guessing run.")
         url = input("Owner-approved login page HTTPS URL: ").strip()[:1000]
         result = inspect_assessment_page(url, timeout=timeout, method="GET")
         result["investigation_type"] = "authorised_read_only_website_login_surface_review"
+        result["hydra_execution"] = "Not run; no credentials or authentication requests were submitted."
+    elif choice == "8":
+        print("John the Ripper runs locally against a hash file and wordlist; no website is contacted.")
+        hashes = Path(input("Path to authorised offline hash file: ").strip()).expanduser()
+        default_wordlist = "/usr/share/wordlists/rockyou.txt"
+        wordlist_text = input(f"Wordlist path [{default_wordlist}]: ").strip() or default_wordlist
+        hash_format = input("John format override (blank = auto-detect): ").strip()
+        confirmation = input("Type YES to confirm authorisation for this offline hash audit: ").strip()
+        result = run_john_audit(hashes, Path(wordlist_text), hash_format,
+                                authorised=(confirmation == "YES"))
+        result["investigation_type"] = "john_the_ripper_offline_hash_audit"
     elif choice == "5":
         from datetime import datetime, timezone
         case_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", input("Case/reference ID: ").strip()).strip("-_")[:48] or "general"
@@ -1522,7 +1612,7 @@ def interactive_menu(timeout: int = 12) -> int:
             print("No selection entered. The menu will be shown again.")
             continue
         if choice not in valid_choices:
-            print(f"Invalid selection {choice!r}. Enter a number from 0 to 15.")
+            print(f"Invalid selection {choice!r}. Enter a number from 0 to 16.")
             continue
         if choice == "0":
             print("CyberLab closed.")
