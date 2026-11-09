@@ -758,16 +758,23 @@ def verify_investigation_reports() -> dict:
 
 def show_investigation_history() -> None:
     directory = investigation_directory()
-    reports = sorted(directory.glob("*.json"), reverse=True)
+    reports = sorted((p for p in directory.glob("*.json") if not p.name.endswith(".manifest.json")),
+                     reverse=True)
     print("\nLOCAL INVESTIGATION HISTORY")
     print(f"Location: {directory}")
-    if not reports:
-        print("No reports saved yet.")
-        return
-    for report in reports[:30]:
-        print(f"  {report.name} ({report.stat().st_size} bytes)")
-    if len(reports) > 30:
-        print(f"  ... and {len(reports) - 30} older report(s)")
+    print(f"Reports: {len(reports)}")
+    if reports:
+        for report in reports[:30]:
+            print(f"  {report.name} ({report.stat().st_size} bytes)")
+        if len(reports) > 30:
+            print(f"  ... and {len(reports) - 30} older report(s)")
+    print("  [V] Verify report integrity")
+    choice = input("reports> ").strip().lower()
+    if choice == "v":
+        result = verify_investigation_reports()
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif choice:
+        print("Choose V or press Enter to return.")
 
 
 
