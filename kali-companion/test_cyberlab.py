@@ -386,6 +386,19 @@ class CompanionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Confirm that you own"):
             cyberlab.run_john_audit(Path("hashes.txt"), Path("rockyou.txt"))
 
+    def test_scam_menu_option_three_uses_website_url_not_local_log(self):
+        with patch("builtins.input", side_effect=["3", "https://example.test/login"]), \\
+             patch.object(cyberlab, "inspect_assessment_page", return_value={"status_code": 200}) as inspect:
+            result = cyberlab.scam_investigation_menu()
+        inspect.assert_called_once_with("https://example.test/login", timeout=12, method="GET")
+        self.assertEqual(result["investigation_type"], "website_login_surface_assessment")
+        self.assertIn("hydra_style_note", result)
+
+    def test_phone_number_metadata_recognises_ghana_calling_code(self):
+        result = cyberlab.analyse_phone_number_metadata("+233201234567")
+        self.assertEqual(result["country_calling_code"], "+233")
+        self.assertEqual(result["numbering_region_reference"], "Ghana")
+
     def test_phone_number_metadata_parses_nigerian_country_code(self):
         result = cyberlab.analyse_phone_number_metadata("+234 801-234-5678")
         self.assertEqual(result["country_calling_code"], "+234")
