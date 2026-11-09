@@ -265,5 +265,33 @@ class CompanionTests(unittest.TestCase):
                 self.assertTrue(second.exists())
 
 
+    def test_case_timeline_appends_and_verifies_hash_chain(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                first = cyberlab.append_case_event("CASE-42", "observation", "Public page showed a contact form.")
+                second = cyberlab.append_case_event("CASE-42", "collection", "Saved public page metadata.", "evidence-01")
+                result = cyberlab.verify_case_timeline("CASE-42")
+                timeline = cyberlab.read_case_timeline("CASE-42")
+        self.assertEqual(result["status"], "valid")
+        self.assertEqual(result["events_checked"], 2)
+        self.assertEqual(len(timeline["events"]), 2)
+        self.assertEqual(second["event"]["previous_entry_hash"], first["event"]["entry_hash"])
+
+    def test_case_timeline_detects_modified_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                cyberlab.append_case_event("CASE-43", "note", "Initial observation recorded.")
+                path = cyberlab.case_timeline_path("CASE-43")
+                event = json.loads(path.read_text(encoding="utf-8"))
+                event["description"] = "Altered observation."
+                path.write_text(json.dumps(event) + "\\n", encoding="utf-8")
+                result = cyberlab.verify_case_timeline("CASE-43")
+        self.assertEqual(result["status"], "entry_hash_mismatch")
+
+    def test_case_timeline_rejects_empty_case_id(self):
+        with self.assertRaisesRegex(ValueError, "Case/reference ID"):
+            cyberlab.case_timeline_path(" !!! ")
+
+
 if __name__ == "__main__":
     unittest.main()
