@@ -1315,18 +1315,18 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [0] Exit")
         valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15"}
         try:
+            # Read exactly one selection per menu display. This avoids a tight
+            # validation loop consuming buffered blank lines or terminal input.
             choice = input("\ncyberlab> ").strip()
-            # Keep the current menu on screen while correcting blank or invalid input.
-            # Redraw the menu only after a real operation has completed.
-            while choice not in valid_choices:
-                if not choice:
-                    print("No selection entered. Type a number from 0 to 15.")
-                else:
-                    print("Invalid selection. Type a number from 0 to 15.")
-                choice = input("cyberlab> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nExiting CyberLab.")
             return 0
+        if not choice:
+            print("No selection entered. The menu will be shown again.")
+            continue
+        if choice not in valid_choices:
+            print(f"Invalid selection {choice!r}. Enter a number from 0 to 15.")
+            continue
         if choice == "0":
             print("CyberLab closed.")
             return 0
