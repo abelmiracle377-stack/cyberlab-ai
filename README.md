@@ -38,7 +38,7 @@ For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPA
 - Authorised assessment scope planner with exclusions and pre-engagement checklist
 - Local Markdown security report builder (no server-side storage)
 - Browser-local evidence vault using AES-256-GCM and PBKDF2-SHA-256, with encrypted backup import/export
-- Offline Kali companion for passive OSINT, scam investigation, evidence review, defensive authentication-abuse log analysis and metadata-only password-hash inventory
+- Offline Kali companion for passive OSINT, scam investigation, website login-surface preflight, authorised offline John the Ripper hash auditing, optional authentication-log review and evidence management
 - Baseline HTTP security headers and secret-file exclusions
 
 ## Test
@@ -82,9 +82,9 @@ MIT. See [LICENSE](./LICENSE).
 
 ### Password & Authentication Security
 
-The Kali companion includes a defensive password and authentication menu (option 14): local password-strength review with hidden input, strong password generation for new/reset credentials, labelled usernames for owned lab test accounts, password-storage metadata review, authentication-control checklist and local authentication-log analysis. It does not generate password guesses for existing accounts, crack hashes, enumerate real users or attempt logins. See [kali-companion/README.md](./kali-companion/README.md).
+The Kali companion password and authentication menu (option 14) includes local password-strength review, new-password generation, password-storage metadata, authentication-control review, read-only website login-surface inspection and an authorised offline John the Ripper workflow using a local hash inventory and wordlist. Optional exported authentication-log analysis remains available. It does not automate Hydra password guessing against live websites. See [kali-companion/README.md](./kali-companion/README.md).
 
 
 ### Law Enforcement & Scam Investigation
 
-Kali companion menu option 15 adds public scam-site intelligence, read-only inspection of an explicitly supplied HTTPS page, offline authentication-log analysis (defensive Hydra-style detection), metadata-only local hash-format inventory (safe John-style assessment), and locally saved evidence notes. It does **not** attempt logins, crack hashes, generate password lists, bypass access controls or retrieve private account data. See [the Kali companion guide](./kali-companion/README.md).
+Kali companion menu option 15 provides public scam-site intelligence, website-first read-only login-surface inspection, authorised offline John the Ripper hash auditing, optional exported authentication-log analysis, optional hash-format classification and locally saved evidence notes. It does **not** automate Hydra password guessing against live websites, bypass access controls or retrieve private account data. See [the Kali companion guide](./kali-companion/README.md).
