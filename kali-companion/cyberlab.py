@@ -275,6 +275,100 @@ def print_banner() -> None:
     print(reset, file=sys.stderr)
     print(file=sys.stderr)
 
+
+def investigation_directory() -> Path:
+    """Return the local, user-owned directory for JSON investigation reports."""
+    directory = Path.home() / "CyberLab" / "investigations"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def save_investigation(result: dict, service: str) -> Path:
+    """Save a timestamped JSON report locally; never upload it automatically."""
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    safe_service = re.sub(r"[^a-z0-9-]+", "-", service.lower()).strip("-") or "report"
+    destination = investigation_directory() / f"{stamp}_{safe_service}.json"
+    destination.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    return destination
+
+
+def show_investigation_history() -> None:
+    directory = investigation_directory()
+    reports = sorted(directory.glob("*.json"), reverse=True)
+    print("\\nLOCAL INVESTIGATION HISTORY")
+    print(f"Location: {directory}")
+    if not reports:
+        print("No reports saved yet.")
+        return
+    for report in reports[:30]:
+        print(f"  {report.name} ({report.stat().st_size} bytes)")
+    if len(reports) > 30:
+        print(f"  ... and {len(reports) - 30} older report(s)")
+
+
+def interactive_menu(timeout: int = 12) -> int:
+    """Run the local, menu-driven CyberLab command centre."""
+    services = {
+        "1": ("Domain OSINT", "domain"),
+        "2": ("DNS intelligence", "dns"),
+        "3": ("Public IP intelligence", "ip"),
+        "4": ("CVE research", "cve"),
+        "5": ("Static file triage", "triage"),
+        "6": ("Nmap XML analysis", "nmap-xml"),
+    }
+    print("\\nCYBERLAB AI — KALI COMMAND CENTRE")
+    print("Local-first operations. Reports stay on this machine unless you explicitly share them.")
+    while True:
+        print("\\n  [1] Domain OSINT")
+        print("  [2] DNS intelligence")
+        print("  [3] IP intelligence")
+        print("  [4] CVE research")
+        print("  [5] File triage")
+        print("  [6] Nmap XML analysis")
+        print("  [7] Investigation history")
+        print("  [0] Exit")
+        try:
+            choice = input("\\ncyberlab> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\\nExiting CyberLab.")
+            return 0
+        if choice == "0":
+            print("CyberLab closed.")
+            return 0
+        if choice == "7":
+            show_investigation_history()
+            continue
+        if choice not in services:
+            print("Choose one of the listed options.")
+            continue
+
+        label, command = services[choice]
+        try:
+            if command == "domain":
+                result = domain_osint(input("Public domain: ").strip(), timeout)
+            elif command == "dns":
+                result = dns_lookup(input("Public domain: ").strip(), timeout)
+            elif command == "ip":
+                result = ip_intelligence(input("Public global IP: ").strip(), timeout)
+            elif command == "cve":
+                term = input("Product, vendor or CVE keyword: ").strip()
+                raw_limit = input("Maximum results [10]: ").strip()
+                limit = int(raw_limit) if raw_limit else 10
+                result = cve_search(term, limit, timeout)
+            elif command == "triage":
+                result = triage_file(Path(input("Path to local sample file: ").strip()).expanduser())
+            else:
+                result = parse_nmap_xml(Path(input("Path to existing Nmap XML report: ").strip()).expanduser())
+
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            destination = save_investigation(result, command)
+            print(f"\\nSaved locally: {destination}")
+        except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            print(f"\\nOperation failed: {exc}")
+        except (EOFError, KeyboardInterrupt):
+            print("\\nReturning to the CyberLab menu.")
+
 def main() -> int:
     print_banner()
     parser = argparse.ArgumentParser(
@@ -284,6 +378,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=12, help="HTTP timeout in seconds (default: 12)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Check Python and companion readiness")
+    sub.add_parser("menu", help="Open the interactive Kali command centre")
     triage = sub.add_parser("triage", help="Statically inspect a local file (max 10 MB)")
     triage.add_argument("file", type=Path)
     nmap = sub.add_parser("nmap-xml", help="Parse an existing Nmap XML report (max 2 MB)")
@@ -303,6 +398,8 @@ def main() -> int:
     try:
         if args.timeout < 2 or args.timeout > 60:
             raise ValueError("Timeout must be between 2 and 60 seconds.")
+        if args.command == "menu":
+            return interactive_menu(args.timeout)
         if args.command == "doctor":
             result = {"status": "ready", "python": sys.version.split()[0],
                       "network_modules": ["domain", "dns", "ip", "cve"],
