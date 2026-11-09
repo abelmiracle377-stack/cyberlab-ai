@@ -745,9 +745,9 @@ def audit_password_strength(password: str) -> dict:
     }
     score = sum(classes.values()) + (1 if length >= 12 else 0) + (1 if length >= 16 else 0)
     common_patterns = [
-        bool(re.search(r"(.)\\1{3,}", password)),
+        bool(re.search(r"(.)\1{3,}", password)),
         bool(re.search(r"(?i)(password|qwerty|letmein|welcome|admin|123456)", password)),
-        bool(re.search(r"^(?:\\d+|[a-z]+)$", password, re.I)),
+        bool(re.search(r"^(?:\d+|[a-z]+)$", password, re.I)),
     ]
     recommendations = []
     if length < 14: recommendations.append("Use at least 14 characters; a longer unique passphrase is better.")
@@ -800,16 +800,16 @@ def analyse_auth_log(path: Path) -> dict:
     success = [line for line in lines if re.search(r"(?i)(accepted password|authentication success|login successful)", line)]
     sources = Counter()
     for line in failed:
-        match = re.search(r"(?i)\\bfrom\\s+([0-9a-f:.]+)", line)
+        match = re.search(r"(?i)\bfrom\s+([0-9a-f:.]+)", line)
         if match: sources[match.group(1)] += 1
     return {"file_name": path.name, "lines_reviewed": len(lines), "failed_authentication_indicators": len(failed),
             "successful_authentication_indicators": len(success), "source_addresses_in_failed_lines": sources.most_common(20),
-            "sample_failed_lines_redacted": [re.sub(r"(?i)(password|token|secret)=\\S+", r"\\1=[REDACTED]", line)[:240] for line in failed[:10]],
+            "sample_failed_lines_redacted": [re.sub(r"(?i)(password|token|secret)=\S+", r"\1=[REDACTED]", line)[:240] for line in failed[:10]],
             "note": "Local log pattern analysis only. Counts may include false positives; no login attempts or network connections were made."}
 
 
 def password_authentication_menu() -> dict:
-    print("\\nPASSWORD & AUTHENTICATION SECURITY")
+    print("\nPASSWORD & AUTHENTICATION SECURITY")
     print("  [1] Check a password's strength locally (input is not saved)")
     print("  [2] Generate a strong password for a NEW account/reset")
     print("  [3] Create labelled usernames for YOUR test accounts")
@@ -825,7 +825,7 @@ def password_authentication_menu() -> dict:
     elif choice == "2":
         alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
         generated = "".join(secrets.choice(alphabet) for _ in range(24))
-        print("\\nGenerated password for setting a NEW account credential (shown once):")
+        print("\nGenerated password for setting a NEW account credential (shown once):")
         print(generated)
         print("Save it directly in your password manager. It is not added to the report.")
         return {"feature": "new_account_password_generation", "length": 24, "plaintext_saved": False}
@@ -923,11 +923,11 @@ def interactive_menu(timeout: int = 12) -> int:
                     print(json.dumps(result, indent=2, ensure_ascii=False))
                     if result.get("feature") != "new_account_password_generation":
                         destination = save_investigation(result, "password-authentication-security")
-                        print(f"\\nSaved locally: {destination}")
+                        print(f"\nSaved locally: {destination}")
             except (OSError, ValueError) as exc:
                 print(f"Password audit stopped: {exc}")
             except (EOFError, KeyboardInterrupt):
-                print("\\nReturning to the CyberLab menu.")
+                print("\nReturning to the CyberLab menu.")
             continue
         if choice not in services:
             print("Choose one of the listed options.")
