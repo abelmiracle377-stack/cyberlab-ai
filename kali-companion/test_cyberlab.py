@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).with_name("cyberlab.py")
@@ -13,6 +14,15 @@ SPEC.loader.exec_module(cyberlab)
 
 
 class CompanionTests(unittest.TestCase):
+
+    def test_investigation_report_is_saved_locally(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                report = cyberlab.save_investigation({"status": "ok"}, "DNS intelligence")
+                self.assertTrue(report.exists())
+                self.assertIn("dns-intelligence", report.name)
+                self.assertIn('"status": "ok"', report.read_text(encoding="utf-8"))
+
     def test_static_triage_hash_and_signature(self):
         payload = b"MZ" + b"sample executable content"
         with tempfile.TemporaryDirectory() as directory:
