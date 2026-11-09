@@ -151,5 +151,21 @@ class CompanionTests(unittest.TestCase):
                 cyberlab.parse_nmap_xml(report)
 
 
+    def test_hash_inventory_classifies_formats_without_returning_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            inventory = Path(directory) / "hashes.txt"
+            inventory.write_text("$2b$12$example\n" + "a" * 32 + "\n" + "b" * 64 + "\n", encoding="utf-8")
+            result = cyberlab.classify_hash_inventory(inventory)
+        self.assertEqual(result["nonempty_records_reviewed"], 3)
+        self.assertEqual(result["format_counts"]["bcrypt"], 1)
+        self.assertEqual(result["format_counts"]["32-character hex (MD5-like; ambiguous)"], 1)
+        self.assertFalse(result["hash_values_saved"])
+        self.assertFalse(result["cracking_attempted"])
+
+    def test_hash_inventory_rejects_missing_file(self):
+        with self.assertRaisesRegex(ValueError, "existing local"):
+            cyberlab.classify_hash_inventory(Path("/definitely/not/a/real/hash-inventory.txt"))
+
+
 if __name__ == "__main__":
     unittest.main()
