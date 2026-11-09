@@ -240,14 +240,13 @@ def print_banner() -> None:
         return
 
     bold = "\033[1m"
-    red = "\033[91m"
-    green = "\033[92m"
     blue = "\033[94m"
+    green = "\033[92m"
     reset = "\033[0m"
     figlet = shutil.which("figlet")
     if figlet:
         for phrase, colour in (
-            ("CYBERLAB SAYS", red),
+            ("CYBERLAB SAYS", blue),
             ('"FUCK HATERS"', green),
             ("AND HACK FOR", green),
             ("ZODIAC M BY ABEL", blue),
@@ -259,7 +258,7 @@ def print_banner() -> None:
             if rendered.returncode == 0:
                 print(f"{bold}{colour}{rendered.stdout.rstrip()}{reset}", file=sys.stderr)
     else:
-        print(f"{bold}{red}CYBERLAB SAYS{reset}", file=sys.stderr)
+        print(f"{bold}{blue}CYBERLAB SAYS{reset}", file=sys.stderr)
         print(f'{bold}{green}"FUCK HATERS"{reset}', file=sys.stderr)
         print(f"{bold}{green}AND HACK FOR{reset}", file=sys.stderr)
         print(f"{bold}{blue}ZODIAC M BY ABEL{reset}", file=sys.stderr)
