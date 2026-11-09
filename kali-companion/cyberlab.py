@@ -142,10 +142,18 @@ def parse_nmap_xml(path: Path) -> dict:
         for port in host["ports"]:
             if port["state"] == "open":
                 open_ports.append({"host": address, **port})
+    service_counts = Counter(port["service"] for port in open_ports if port.get("service"))
+    versioned_services = [{"host": item["host"], "port": item["port"], "protocol": item["protocol"],
+                           "service": item["service"], "product": item["product"], "version": item["version"]}
+                          for item in open_ports if item.get("product") or item.get("version")]
     return {
         "summary": {"hosts": len(hosts), "hosts_up": sum(1 for host in hosts if host["status"] == "up"),
-                    "ports_parsed": sum(len(host["ports"]) for host in hosts), "open_ports": len(open_ports)},
-        "hosts": hosts, "open_ports": open_ports,
+                    "ports_parsed": sum(len(host["ports"]) for host in hosts), "open_ports": len(open_ports),
+                    "open_service_counts": dict(service_counts)},
+        "hosts": hosts, "open_ports": open_ports, "versioned_services": versioned_services[:200],
+        "review_guidance": ["Treat service banners as reported observations; they can be inaccurate or masked.",
+                            "Confirm exact product builds and patch levels from asset inventory before CVE matching.",
+                            "This parser reads an existing XML file and performs no network activity."],
         "note": "Parses an existing Nmap XML report only. It does not launch scans or contact hosts."
     }
 
