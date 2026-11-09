@@ -366,7 +366,7 @@ class CompanionTests(unittest.TestCase):
         result = cyberlab.analyse_phone_number_metadata("+234 801-234-5678")
         self.assertEqual(result["country_calling_code"], "+234")
         self.assertEqual(result["numbering_region_reference"], "Nigeria")
-        self.assertIn("not publicly discoverable", result["registration_date"])
+        self.assertIn("not publicly discoverable", result["registration_date"].lower())
 
     def test_phone_number_metadata_requires_international_prefix(self):
         with self.assertRaisesRegex(ValueError, "Include the international country code"):
