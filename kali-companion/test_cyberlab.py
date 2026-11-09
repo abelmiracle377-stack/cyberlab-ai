@@ -245,5 +245,25 @@ class CompanionTests(unittest.TestCase):
         self.assertFalse(result["salted"])
 
 
+    def test_investigation_report_integrity_detects_tampering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                report = cyberlab.save_investigation({"finding": "initial"}, "case report")
+                valid = cyberlab.verify_investigation_reports()
+                self.assertEqual(valid["integrity_valid"], 1)
+                report.write_text('{"finding":"changed"}', encoding="utf-8")
+                altered = cyberlab.verify_investigation_reports()
+                self.assertEqual(len(altered["hash_mismatches_or_invalid_manifests"]), 1)
+
+    def test_investigation_reports_do_not_overwrite_same_second(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cyberlab.Path, "home", return_value=Path(directory)):
+                first = cyberlab.save_investigation({"n": 1}, "repeat")
+                second = cyberlab.save_investigation({"n": 2}, "repeat")
+                self.assertNotEqual(first.name, second.name)
+                self.assertTrue(first.exists())
+                self.assertTrue(second.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
