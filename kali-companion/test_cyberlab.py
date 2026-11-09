@@ -362,6 +362,30 @@ class CompanionTests(unittest.TestCase):
 
 
 
+    def test_john_audit_runs_offline_and_discards_plaintext_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hashes = Path(directory) / "hashes.txt"
+            wordlist = Path(directory) / "rockyou.txt"
+            hashes.write_text("test-hash-record", encoding="utf-8")
+            wordlist.write_text("candidate-password", encoding="utf-8")
+            completed = [
+                __import__("subprocess").CompletedProcess([], 0, "Loaded 1 password hash", ""),
+                __import__("subprocess").CompletedProcess([], 0, "labuser:RecoveredSecret:1000:1000:::\\n1 password hash cracked, 0 left\\n", ""),
+            ]
+            with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/john"), \\
+                 patch.object(cyberlab.subprocess, "run", side_effect=completed) as run:
+                result = cyberlab.run_john_audit(hashes, wordlist, authorised=True)
+            self.assertEqual(result["cracked_hash_count"], 1)
+            self.assertEqual(result["remaining_hash_count"], 0)
+            self.assertFalse(result["plaintext_passwords_returned_or_saved"])
+            self.assertNotIn("RecoveredSecret", json.dumps(result))
+            self.assertIn("--wordlist=" + str(wordlist), run.call_args_list[0].args[0])
+            self.assertNotIn("shell", run.call_args_list[0].kwargs)
+
+    def test_john_audit_requires_authorisation(self):
+        with self.assertRaisesRegex(ValueError, "Confirm that you own"):
+            cyberlab.run_john_audit(Path("hashes.txt"), Path("rockyou.txt"))
+
     def test_phone_number_metadata_parses_nigerian_country_code(self):
         result = cyberlab.analyse_phone_number_metadata("+234 801-234-5678")
         self.assertEqual(result["country_calling_code"], "+234")
