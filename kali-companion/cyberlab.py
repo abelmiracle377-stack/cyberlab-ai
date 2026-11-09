@@ -630,6 +630,22 @@ def case_timeline_path(case_id: str) -> Path:
     return evidence_directory() / (safe_case + ".timeline.jsonl")
 
 
+def _safe_timeline_source_reference(value: str) -> str:
+    """Remove URL query/fragment data that may contain credentials or tracking tokens."""
+    value = value.strip()
+    if len(value) > 1000:
+        raise ValueError("Timeline source reference is too long.")
+    if value.lower().startswith(("http://", "https://")):
+        parsed = urllib.parse.urlsplit(value)
+        if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("Source URL must be valid HTTP(S) without embedded credentials.")
+        host = parsed.hostname.encode("idna").decode("ascii").lower()
+        if parsed.port:
+            host += ":" + str(parsed.port)
+        return urllib.parse.urlunsplit((parsed.scheme.lower(), host, parsed.path or "/", "", ""))
+    return value
+
+
 def append_case_event(case_id: str, event_type: str, description: str,
                       source_reference: str = "") -> dict:
     """Append a local case event to a SHA-256 linked JSONL timeline."""
@@ -637,19 +653,23 @@ def append_case_event(case_id: str, event_type: str, description: str,
     path = case_timeline_path(case_id)
     if len(description.strip()) < 3:
         raise ValueError("Enter a meaningful event description.")
-    if len(description) > 2000 or len(source_reference) > 1000:
-        raise ValueError("Timeline description or source reference is too long.")
+    if len(description) > 2000:
+        raise ValueError("Timeline description is too long.")
+    source_reference = _safe_timeline_source_reference(source_reference)
+    if path.is_symlink():
+        raise ValueError("Case timeline must not be a symbolic link.")
     if path.exists() and path.stat().st_size > 2 * 1024 * 1024:
         raise ValueError("Case timeline exceeds the 2 MB limit.")
     previous_hash = "0" * 64
     if path.exists() and path.stat().st_size:
+        verification = verify_case_timeline(case_id)
+        if verification.get("status") != "valid":
+            raise ValueError("Existing case timeline failed integrity verification; refusing to append.")
         lines = path.read_text(encoding="utf-8").splitlines()
-        if not lines:
-            raise ValueError("Existing timeline is empty or unreadable.")
         try:
             previous = json.loads(lines[-1])
             previous_hash = previous["entry_hash"]
-        except (ValueError, KeyError, TypeError) as exc:
+        except (ValueError, KeyError, TypeError, IndexError) as exc:
             raise ValueError("Existing timeline is invalid; verify it before adding events.") from exc
     event = {
         "case_id": _safe_case_id(case_id),
@@ -672,6 +692,8 @@ def verify_case_timeline(case_id: str) -> dict:
     path = case_timeline_path(case_id)
     if not path.exists():
         return {"case_id": _safe_case_id(case_id), "events_checked": 0, "status": "not_found"}
+    if path.is_symlink():
+        return {"case_id": _safe_case_id(case_id), "events_checked": 0, "status": "unsafe_symlink"}
     if path.stat().st_size > 2 * 1024 * 1024:
         raise ValueError("Case timeline exceeds the 2 MB verification limit.")
     previous_hash = "0" * 64
