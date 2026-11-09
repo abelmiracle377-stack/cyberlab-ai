@@ -285,7 +285,7 @@ class CompanionTests(unittest.TestCase):
                 path = cyberlab.case_timeline_path("CASE-43")
                 event = json.loads(path.read_text(encoding="utf-8"))
                 event["description"] = "Altered observation."
-                path.write_text(json.dumps(event) + "\\n", encoding="utf-8")
+                path.write_text(json.dumps(event) + "\n", encoding="utf-8")
                 result = cyberlab.verify_case_timeline("CASE-43")
         self.assertEqual(result["status"], "entry_hash_mismatch")
 
