@@ -1193,6 +1193,8 @@ def audit_password_strength(password: str) -> dict:
 
 def _normalise_yes_no_unknown(value: str, field_name: str) -> str:
     normal = value.strip().lower()
+    if not normal:
+        normal = "unknown"
     aliases = {"y": "yes", "n": "no", "u": "unknown", "na": "not_applicable"}
     normal = aliases.get(normal, normal)
     if normal not in ("yes", "no", "unknown", "not_applicable"):
