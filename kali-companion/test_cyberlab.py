@@ -199,7 +199,7 @@ class CompanionTests(unittest.TestCase):
     def test_triage_reports_extension_signature_mismatch(self):
         with tempfile.TemporaryDirectory() as directory:
             sample = Path(directory) / "disguised.exe"
-            sample.write_bytes(b"%PDF-1.7\\nnot an executable")
+            sample.write_bytes(b"%PDF-1.7\nnot an executable")
             result = cyberlab.triage_file(sample)
         self.assertTrue(result["extension_signature_mismatch"])
         self.assertIn("PDF", result["file_type"])
@@ -313,7 +313,7 @@ class CompanionTests(unittest.TestCase):
                 path = cyberlab.case_timeline_path("CASE-45")
                 event = json.loads(path.read_text(encoding="utf-8"))
                 event["description"] = "Tampered event."
-                path.write_text(json.dumps(event) + "\\n", encoding="utf-8")
+                path.write_text(json.dumps(event) + "\n", encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "failed integrity verification"):
                     cyberlab.append_case_event("CASE-45", "note", "Do not extend a broken chain.")
 
@@ -418,7 +418,7 @@ class CompanionTests(unittest.TestCase):
     def test_credential_guess_lab_matches_only_local_synthetic_secret(self):
         with tempfile.TemporaryDirectory() as directory:
             wordlist = Path(directory) / "candidates.txt"
-            wordlist.write_text("incorrect\\nsecond-guess\\nLabOnly-Password-42!\\n", encoding="utf-8")
+            wordlist.write_text("incorrect\nsecond-guess\nLabOnly-Password-42!\n", encoding="utf-8")
             progress = []
             result = cyberlab.run_credential_guess_lab(
                 "demo-user", "LabOnly-Password-42!", wordlist,
@@ -434,7 +434,7 @@ class CompanionTests(unittest.TestCase):
     def test_credential_guess_lab_mfa_still_required_after_password_match(self):
         with tempfile.TemporaryDirectory() as directory:
             wordlist = Path(directory) / "candidates.txt"
-            wordlist.write_text("Synthetic-Secret-77!\\n", encoding="utf-8")
+            wordlist.write_text("Synthetic-Secret-77!\n", encoding="utf-8")
             result = cyberlab.run_credential_guess_lab(
                 "demo-user", "Synthetic-Secret-77!", wordlist, mfa_enabled=True)
         self.assertEqual(result["simulated_outcome"], "password matched; MFA would still be required")
@@ -443,7 +443,7 @@ class CompanionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             actual = root / "actual.txt"
-            actual.write_text("secret\\n", encoding="utf-8")
+            actual.write_text("secret\n", encoding="utf-8")
             link = root / "link.txt"
             link.symlink_to(actual)
             with self.assertRaisesRegex(ValueError, "symbolic links"):
@@ -452,7 +452,7 @@ class CompanionTests(unittest.TestCase):
     def test_credential_guess_lab_enforces_attempt_cap(self):
         with tempfile.TemporaryDirectory() as directory:
             wordlist = Path(directory) / "candidates.txt"
-            wordlist.write_text("a\\nb\\n", encoding="utf-8")
+            wordlist.write_text("a\nb\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "1-50,000"):
                 cyberlab.run_credential_guess_lab("demo", "secret", wordlist, max_attempts=50001)
 
