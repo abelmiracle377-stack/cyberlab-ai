@@ -140,3 +140,6 @@ This is a public-source and evidence-review workspace, not an account-access too
 - **Password security and scam investigation:** existing defensive review and public-source/local-evidence workflows are retained; no cracking, password guessing, credential collection, account access or attribution claims are introduced.
 
 Evidence files may contain sensitive material. Keep the evidence directory access-controlled, avoid storing passwords/session tokens, and preserve original source files separately when chain-of-custody requirements apply.
+
+- **Investigation report integrity:** each new local JSON report now receives a SHA-256 sidecar manifest. The report history includes a verification action that identifies missing or changed reports. Timestamp precision and exclusive file creation reduce accidental same-name overwrites. This detects changes against the local manifest; it is not a digital signature or a substitute for formal chain-of-custody procedures.
+- **Scam-investigation evidence notes:** notes now include a case reference, UTC timestamp, note fingerprint and safer source-reference metadata. Query strings and URL fragments are omitted from recorded public URL references to avoid accidentally saving tokens. A URL reference is not fetched or independently verified.
