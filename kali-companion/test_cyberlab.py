@@ -35,6 +35,38 @@ class CompanionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "HTTP or HTTPS"):
             cyberlab.analyze_url("file:///etc/passwd")
 
+    def test_dns_intelligence_email_findings_classify_spf_and_dmarc(self):
+        records = {
+            "MX": {"answers": [{"value": "10 mail.example.test"}]},
+            "TXT": {"answers": [{"value": "v=spf1 include:mail.example.test ~all"}]},
+            "DMARC": {"answers": [{"value": "v=DMARC1; p=none; rua=mailto:dmarc@example.test"}]},
+            "CAA": {"answers": [{"value": '0 issue "ca.example"'}]},
+        }
+        result = cyberlab._email_security_findings("example.test", records, "person@example.test")
+        self.assertEqual(result["spf_terminal_qualifiers"], ["soft_fail"])
+        self.assertEqual(result["dmarc_policy"], ["none"])
+        self.assertEqual(result["mailbox_existence"], "Not tested")
+        self.assertTrue(any("DMARC policy is p=none" == item["finding"] for item in result["findings"]))
+
+    def test_dns_intelligence_email_flags_multiple_spf_records(self):
+        records = {
+            "MX": {"answers": []},
+            "TXT": {"answers": [{"value": "v=spf1 -all"}, {"value": "v=spf1 ~all"}]},
+            "DMARC": {"answers": []},
+            "CAA": {"answers": []},
+        }
+        result = cyberlab._email_security_findings("example.test", records)
+        self.assertEqual(result["spf_policy_count"], 2)
+        self.assertTrue(any(item["severity"] == "high" and "Multiple SPF" in item["finding"] for item in result["findings"]))
+
+    def test_dns_intelligence_url_findings_keep_query_values_private(self):
+        result = cyberlab._url_intelligence_findings("https://example.test/login?token=secret&next=%2Fhome#section")
+        self.assertIn("token", result["query_parameter_names"])
+        self.assertNotIn("secret", repr(result))
+        self.assertTrue(result["query_values_saved"] is False)
+        self.assertTrue(any("authentication route" in item for item in result["enhanced_indicators"]))
+        self.assertIn("Not performed", result["reputation_check"])
+
     def test_public_page_parser_detects_login_form_without_submitting(self):
         parser = cyberlab._PageMetadata()
         parser.feed("<title>Example Portal</title><meta name=\"description\" content=\"Example service\"><form><input name=\"email\" type=\"email\"><input name=\"password\" type=\"password\"></form>")
