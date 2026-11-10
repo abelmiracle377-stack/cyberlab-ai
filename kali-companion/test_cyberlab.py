@@ -537,6 +537,54 @@ class CompanionTests(unittest.TestCase):
         self.assertTrue(result["risk_signals"]["contains_birth_year_like_sequence"])
         self.assertFalse(result["account_existence_checked"])
 
+
+    def test_automated_password_audit_scans_and_redacts_secrets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "settings.py").write_text(
+                'USERNAME = "lab_operator"\\nEMAIL = "security@example.test"\\nPASSWORD = "QwErTy-Secret-9981!"\\n',
+                encoding="utf-8")
+            result = cyberlab.audit_password_security_target(directory)
+        encoded = json.dumps(result)
+        self.assertEqual(result["feature"], "automated_password_security_audit")
+        self.assertEqual(result["scan_summary"]["files_scanned"], 1)
+        self.assertEqual(result["scan_summary"]["email_addresses_found"], 1)
+        self.assertEqual(result["scan_summary"]["username_values_found"], 1)
+        self.assertEqual(result["scan_summary"]["literal_secret_candidates_found"], 1)
+        self.assertNotIn("QwErTy-Secret-9981!", encoded)
+        self.assertIn("security@example.test", encoded)
+        self.assertIn("lab_operator", encoded)
+
+    def test_automated_password_audit_uses_hibp_prefix_and_never_plaintext(self):
+        secret = "BreachCandidate-Secret-2026!"
+        suffix_hash = hashlib.sha1(secret.encode("utf-8")).hexdigest().upper()
+        payload = (suffix_hash[5:] + ":42\\n").encode("ascii")
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, size=-1): return payload
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.env").write_text(f'PASSWORD="{secret}"\\n', encoding="utf-8")
+            with patch.object(cyberlab.urllib.request, "urlopen", return_value=FakeResponse()) as mocked:
+                result = cyberlab.audit_password_security_target(directory)
+        request = mocked.call_args.args[0]
+        self.assertTrue(request.full_url.endswith(suffix_hash[:5]))
+        self.assertNotIn(secret, request.full_url)
+        self.assertTrue(result["breached_password_checks"][0]["breached_password_match"])
+        self.assertEqual(result["breached_password_checks"][0]["breach_corpus_occurrences"], 42)
+        self.assertNotIn(secret, json.dumps(result))
+        self.assertTrue(any(item["severity"] == "critical" for item in result["findings"]))
+
+    def test_automated_password_audit_handles_hibp_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "settings.env").write_text('PASSWORD="SomeCandidateValue!"', encoding="utf-8")
+            with patch.object(cyberlab.urllib.request, "urlopen", side_effect=OSError("offline")):
+                result = cyberlab.audit_password_security_target(directory)
+        self.assertEqual(result["breached_password_checks"][0]["status"], "unavailable")
+        self.assertEqual(result["scan_summary"]["literal_secret_candidates_found"], 1)
+
     def test_password_policy_review_reports_short_minimum(self):
         result = cyberlab.review_password_policy(8, "no", "unknown", "yes")
         self.assertEqual(result["controls"]["minimum_length"]["status"], "review")
