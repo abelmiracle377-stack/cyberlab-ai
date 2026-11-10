@@ -70,6 +70,15 @@ class CameraIntelligenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "private IPv4"):
             validate_camera_on_detected_lan("camera.local", ["192.168.1.0/24"])
 
+    def test_detect_private_lan_interfaces_parses_ipv6(self):
+        ipv4 = type("Completed", (), {"stdout": ""})()
+        ipv6 = type("Completed", (), {"stdout": "3: wlan0 inet6 fd12:3456:789a::10/64 scope global\\n"})()
+        with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"):
+            with patch("camera_intelligence.subprocess.run", side_effect=[ipv4, ipv6]):
+                result = detect_private_lan_interfaces()
+        self.assertTrue(any(item["family"] == "IPv6" and item["ip"] == "fd12:3456:789a::10"
+                            and item["network"] == "fd12:3456:789a::/64" for item in result))
+
     def test_camera_ipv6_matches_kali_ipv6_prefix(self):
         interfaces = [{"interface": "wlan0", "family": "IPv6", "ip": "fd12:3456:789a::10",
                        "network": "fd12:3456:789a::/64"}]
