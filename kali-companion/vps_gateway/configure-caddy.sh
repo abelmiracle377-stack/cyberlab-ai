@@ -13,7 +13,7 @@ fi
 
 read -r -p "Domain for this VPS gateway (for example gateway.example.com): " DOMAIN
 DOMAIN="${DOMAIN,,}"
-if [[ ! "${DOMAIN}" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$ ]]; then
+if [[ ! "${DOMAIN}" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; then
   echo "Invalid public DNS hostname."
   exit 1
 fi
