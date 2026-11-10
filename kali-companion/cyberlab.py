@@ -1446,6 +1446,20 @@ def save_vps_config(base_url: str, owner_token: str, provider: str = "Custom / o
     return path
 
 
+def display_vps_diagnostics(result: dict) -> bool:
+    """Print owner-authorised compatibility checks; return whether OS/runtime are supported."""
+    print("\nVPS COMPATIBILITY CHECK")
+    print("Gateway health: " + str(result.get("gateway", "unknown")))
+    for check in result.get("checks", []):
+        state = str(check.get("status", "unknown")).upper()
+        detail = check.get("detail")
+        if detail is None and check.get("detail_bytes") is not None:
+            detail = f"{check['detail_bytes'] / (1024 ** 3):.2f} GiB"
+        print(f"[{state}] {check.get('name', 'Check')}: {detail or 'Not reported'}")
+    print("Overall: " + str(result.get("status", "unknown")).upper())
+    return result.get("status") == "compatible"
+
+
 def vps_request(config: dict, endpoint: str, method: str = "GET", payload: Optional[dict] = None) -> dict:
     base_url = str(config.get("base_url", "")).rstrip("/")
     token = str(config.get("owner_token", ""))
@@ -1478,6 +1492,7 @@ def show_connection_status() -> None:
     print("  [2] Test saved connection")
     print("  [3] Generate a one-time device pairing code")
     print("  [4] Disconnect this Kali installation")
+    print("  [5] Run VPS compatibility check")
     print("  [0] Return")
     choice = input("vps> ").strip()
     try:
@@ -1506,6 +1521,13 @@ def show_connection_status() -> None:
             result = vps_request(candidate, "/health")
             if result.get("status") != "ok":
                 raise ValueError("The endpoint did not return the expected gateway health response.")
+            diagnostics = vps_request(candidate, "/v1/owner/diagnostics")
+            if not display_vps_diagnostics(diagnostics):
+                raise ValueError("This VPS does not meet the required Linux/Python compatibility checks.")
+            warnings = [item for item in diagnostics.get("checks", []) if item.get("status") == "warning"]
+            if warnings and input("Resource warnings found. Continue saving this VPS? Type YES: ").strip() != "YES":
+                print("VPS configuration was not saved.")
+                return
             path = save_vps_config(base_url, token, provider)
             print(f"{provider} VPS connected and configuration saved securely: {path}")
         elif choice == "2":
@@ -1526,6 +1548,15 @@ def show_connection_status() -> None:
                                  {"device_name": device_name, "platform": platform})
             print(json.dumps(result, indent=2))
             print("The recipient must use a compatible companion to accept this code and explicitly grant permissions.")
+        elif choice == "5":
+            if not config:
+                print("Connect a VPS first using option 1.")
+                return
+            health = vps_request(config, "/health")
+            if health.get("status") != "ok":
+                raise ValueError("The gateway health check failed.")
+            diagnostics = vps_request(config, "/v1/owner/diagnostics")
+            display_vps_diagnostics(diagnostics)
         elif choice == "4":
             path = vps_config_path()
             if path.exists():
