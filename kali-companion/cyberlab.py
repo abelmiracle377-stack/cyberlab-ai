@@ -1440,14 +1440,17 @@ def save_vps_config(base_url: str, owner_token: str) -> Path:
     return path
 
 
-def vps_request(config: dict, endpoint: str, method: str = "GET") -> dict:
+def vps_request(config: dict, endpoint: str, method: str = "GET", payload: Optional[dict] = None) -> dict:
     base_url = str(config.get("base_url", "")).rstrip("/")
     token = str(config.get("owner_token", ""))
     parsed = urllib.parse.urlsplit(base_url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Configure a valid HTTPS VPS gateway URL. Plain HTTP is not accepted.")
-    request = urllib.request.Request(base_url + endpoint, method=method,
-        headers={"Authorization": "Bearer " + token, "Accept": "application/json", "User-Agent": USER_AGENT})
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    headers = {"Authorization": "Bearer " + token, "Accept": "application/json", "User-Agent": USER_AGENT}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(base_url + endpoint, data=body, method=method, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=12) as response:
             payload = response.read(1_000_001)
@@ -1464,7 +1467,8 @@ def show_connection_status() -> None:
     config = load_vps_config()
     print("  [1] Configure or replace VPS")
     print("  [2] Test saved connection")
-    print("  [3] Disconnect this Kali installation")
+    print("  [3] Generate a one-time device pairing code")
+    print("  [4] Disconnect this Kali installation")
     print("  [0] Return")
     choice = input("vps> ").strip()
     try:
@@ -1489,6 +1493,18 @@ def show_connection_status() -> None:
             result = vps_request(config, "/health")
             print(json.dumps({"connection": "reachable", "gateway": result}, indent=2))
         elif choice == "3":
+            if not config:
+                print("Connect your VPS first.")
+                return
+            device_name = input("Device name to register: ").strip()[:80]
+            platform = input("Device platform (for example Android, Windows, Ubuntu): ").strip()[:40]
+            if not device_name or not platform:
+                raise ValueError("Device name and platform are required.")
+            result = vps_request(config, "/v1/pairing", "POST",
+                                 {"device_name": device_name, "platform": platform})
+            print(json.dumps(result, indent=2))
+            print("The recipient must use a compatible companion to accept this code and explicitly grant permissions.")
+        elif choice == "4":
             path = vps_config_path()
             if path.exists():
                 path.unlink()
@@ -1521,6 +1537,14 @@ def show_connected_devices() -> None:
             print(f"Status: {device.get('status', 'Unknown')}")
             print(f"Last heartbeat (UTC epoch): {device.get('last_seen') or 'Never'}")
             print(f"Permissions: {json.dumps(device.get('permissions', {}), sort_keys=True)}")
+        revoke_id = input("\nDevice ID to revoke (press Enter to return): ").strip()
+        if revoke_id:
+            confirm = input("Type REVOKE to disable this device token: ").strip()
+            if confirm == "REVOKE":
+                revoked = vps_request(config, f"/v1/devices/{urllib.parse.quote(revoke_id, safe='')}/revoke", "POST", {})
+                print(json.dumps(revoked, indent=2))
+            else:
+                print("Revocation cancelled.")
     except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
         print(f"Could not retrieve live device registry: {exc}")
 
