@@ -1414,20 +1414,121 @@ def show_evidence_manager() -> None:
         print("Choose A, V, E, T, C or press Enter to return.")
 
 
+def vps_config_path() -> Path:
+    return Path.home() / ".config" / "cyberlab" / "vps.json"
+
+
+def load_vps_config() -> dict:
+    path = vps_config_path()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_vps_config(base_url: str, owner_token: str) -> Path:
+    path = vps_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"base_url": base_url.rstrip("/"), "owner_token": owner_token}, indent=2) + "\n", encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
+    os.chmod(path, 0o600)
+    return path
+
+
+def vps_request(config: dict, endpoint: str, method: str = "GET") -> dict:
+    base_url = str(config.get("base_url", "")).rstrip("/")
+    token = str(config.get("owner_token", ""))
+    parsed = urllib.parse.urlsplit(base_url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Configure a valid HTTPS VPS gateway URL. Plain HTTP is not accepted.")
+    request = urllib.request.Request(base_url + endpoint, method=method,
+        headers={"Authorization": "Bearer " + token, "Accept": "application/json", "User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            payload = response.read(1_000_001)
+            if len(payload) > 1_000_000:
+                raise ValueError("VPS gateway response exceeded the 1 MB limit.")
+            return json.loads(payload.decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(2000).decode("utf-8", errors="replace")
+        raise ValueError(f"VPS gateway returned HTTP {exc.code}: {detail}") from exc
+
+
 def show_connection_status() -> None:
-    print("\nDEVICE CONNECTION")
-    print("Remote gateway: NOT CONFIGURED")
-    print("No VPS endpoint or authenticated pairing service is configured.")
-    print("Device pairing and live sessions are not active yet.")
-    print("This menu will become operational after the gateway and device companions are implemented.")
-    print("No fake pairing link or simulated device connection has been created.")
+    print("\nCONNECT YOUR PERSONAL VPS")
+    config = load_vps_config()
+    print("  [1] Configure or replace VPS")
+    print("  [2] Test saved connection")
+    print("  [3] Disconnect this Kali installation")
+    print("  [0] Return")
+    choice = input("vps> ").strip()
+    try:
+        if choice == "1":
+            base_url = input("Your VPS HTTPS gateway URL (for example https://gateway.example.com): ").strip().rstrip("/")
+            parsed = urllib.parse.urlsplit(base_url)
+            if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("A valid HTTPS URL without embedded credentials is required.")
+            token = getpass.getpass("VPS owner token (input hidden): ").strip()
+            if len(token) < 24:
+                raise ValueError("Owner token must contain at least 24 characters.")
+            candidate = {"base_url": base_url, "owner_token": token}
+            result = vps_request(candidate, "/health")
+            if result.get("status") != "ok":
+                raise ValueError("The endpoint did not return the expected gateway health response.")
+            path = save_vps_config(base_url, token)
+            print(f"VPS connected and configuration saved securely: {path}")
+        elif choice == "2":
+            if not config:
+                print("No VPS is configured. Choose option 1 first.")
+                return
+            result = vps_request(config, "/health")
+            print(json.dumps({"connection": "reachable", "gateway": result}, indent=2))
+        elif choice == "3":
+            path = vps_config_path()
+            if path.exists():
+                path.unlink()
+                print("Local VPS configuration removed. This does not delete devices or files on your VPS.")
+            else:
+                print("No local VPS configuration exists.")
+        elif choice != "0":
+            print("Choose one of the listed options.")
+    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        print(f"VPS operation failed: {exc}")
+
+
+def show_connected_devices() -> None:
+    print("\nCONNECTED DEVICES — LIVE VPS REGISTRY")
+    config = load_vps_config()
+    if not config:
+        print("No personal VPS is configured. Use option 9 to connect one.")
+        return
+    try:
+        result = vps_request(config, "/v1/devices")
+        devices = result.get("devices", [])
+        if not devices:
+            print("No devices are registered on this VPS.")
+            return
+        for device in devices:
+            print("-" * 48)
+            print(f"Name: {device.get('name', 'Unknown')}")
+            print(f"ID: {device.get('device_id', 'Unknown')}")
+            print(f"Platform: {device.get('platform', 'Unknown')}")
+            print(f"Status: {device.get('status', 'Unknown')}")
+            print(f"Last heartbeat (UTC epoch): {device.get('last_seen') or 'Never'}")
+            print(f"Permissions: {json.dumps(device.get('permissions', {}), sort_keys=True)}")
+    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        print(f"Could not retrieve live device registry: {exc}")
 
 
 def show_session_status() -> None:
     print("\nLIVE SESSION MANAGER")
-    print("No remote session backend is configured.")
-    print("Pause, resume and disconnect controls require an authenticated active session.")
-    print("Configure the CyberLab gateway before starting remote sessions.")
+    print("Session controls are not available until the consent-aware companion session service is implemented.")
+    print("Participants must be able to stop sharing and revoke permissions at any time.")
 
 
 def content_analysis_menu(timeout: int = 12) -> None:
@@ -2822,8 +2923,12 @@ def interactive_menu(timeout: int = 12) -> int:
             content_analysis_menu(timeout)
             wait_for_menu()
             continue
-        if choice in ("9", "10"):
+        if choice == "9":
             show_connection_status()
+            wait_for_menu()
+            continue
+        if choice == "10":
+            show_connected_devices()
             wait_for_menu()
             continue
         if choice == "11":
