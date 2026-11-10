@@ -1897,23 +1897,37 @@ def classify_hash_inventory(path: Path) -> dict:
 def run_john_audit(hash_path: Path, wordlist_path: Path, hash_format: str = "",
                    timeout: int = 180, authorised: bool = False) -> dict:
     """Run John against an explicitly authorised offline hash file; never return cracked secrets."""
-    if not authorised:
-        raise ValueError("Confirm that you own or are authorised to audit this offline hash inventory.")
-    john = shutil.which("john")
-    if not john:
-        raise ValueError("John the Ripper is not installed. On Kali, install it with: sudo apt install john")
-    hashes = hash_path.expanduser()
-    wordlist = wordlist_path.expanduser()
+    hashes = Path(hash_path).expanduser()
+    wordlist = Path(wordlist_path).expanduser()
     for candidate, label in ((hashes, "hash inventory"), (wordlist, "wordlist")):
-        if candidate.is_symlink() or not candidate.is_file():
-            raise ValueError(f"Select an existing regular local {label} file (symbolic links are not accepted).")
-    # Resolve before changing cwd to the temporary John session directory.
+        if candidate.is_symlink():
+            raise ValueError(f"{label.capitalize()} path is a symbolic link; provide the real local file path.")
+        if not candidate.exists():
+            raise ValueError(
+                f"{label.capitalize()} file does not exist: {candidate.absolute()}. "
+                f"Save the file first or provide its full path. No command was executed."
+            )
+        if not candidate.is_file():
+            raise ValueError(f"{label.capitalize()} path is not a regular file: {candidate.absolute()}. No command was executed.")
     hashes = hashes.resolve()
     wordlist = wordlist.resolve()
     if hashes.stat().st_size == 0 or hashes.stat().st_size > 5 * 1024 * 1024:
-        raise ValueError("Hash inventory must be between 1 byte and 5 MB.")
+        raise ValueError("Hash inventory must be between 1 byte and 5 MB. No command was executed.")
     if wordlist.stat().st_size == 0 or wordlist.stat().st_size > 250 * 1024 * 1024:
-        raise ValueError("Wordlist must be between 1 byte and 250 MB.")
+        raise ValueError("Wordlist must be between 1 byte and 250 MB. No command was executed.")
+    inventory = classify_hash_inventory(hashes)
+    if inventory["nonempty_records_reviewed"] == 0:
+        raise ValueError("Hash inventory contains no usable records. No command was executed.")
+    if inventory["format_counts"].get("unclassified", 0):
+        raise ValueError(
+            "Hash inventory contains unrecognised lines. Check that you supplied a hash file, not a domain name or ordinary text. "
+            "No command was executed."
+        )
+    if not authorised:
+        raise ValueError("Authorisation was not confirmed. No command was executed.")
+    john = shutil.which("john")
+    if not john:
+        raise ValueError("John the Ripper is not installed. No command was executed. On Kali, install it with: sudo apt install john")
     selected_format = hash_format.strip()
     if selected_format and not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", selected_format):
         raise ValueError("Hash format must contain only letters, numbers, underscores or hyphens.")
@@ -1928,24 +1942,36 @@ def run_john_audit(hash_path: Path, wordlist_path: Path, hash_format: str = "",
             command.append(str(hashes))
             completed = subprocess.run(command, cwd=work, text=True, capture_output=True,
                                         timeout=max(1, min(int(timeout), 300)), check=False)
-            if completed.returncode not in (0, 1):
+            if completed.returncode != 0:
                 detail = (completed.stderr or completed.stdout or "John returned an error").strip()
-                raise ValueError("John the Ripper failed: " + detail[-800:])
-            shown = subprocess.run([john, f"--show", f"--pot={pot}", str(hashes)],
+                raise ValueError("John the Ripper command failed (exit {}). No successful audit is reported: {}".format(
+                    completed.returncode, detail[-800:]))
+            shown = subprocess.run([john, "--show", f"--pot={pot}", str(hashes)],
                                    cwd=work, text=True, capture_output=True,
                                    timeout=30, check=False)
+            if shown.returncode != 0:
+                detail = (shown.stderr or shown.stdout or "John --show returned an error").strip()
+                raise ValueError("John executed, but result verification failed (exit {}). No completed audit is reported: {}".format(
+                    shown.returncode, detail[-800:]))
             # --show contains plaintext credentials. Parse only aggregate counts and discard it.
             summary = (shown.stdout or "") + "\n" + (shown.stderr or "")
             match = re.search(r"(\d+)\s+password hash(?:es)? cracked,\s*(\d+)\s+left", summary, re.I)
+            if not match:
+                raise ValueError("John ran, but its aggregate result could not be verified. No completed audit is reported.")
             return {
                 "feature": "john_the_ripper_offline_audit",
+                "execution_status": "completed",
+                "command_executed": True,
                 "tool": "John the Ripper",
                 "hash_inventory": hashes.name,
+                "hash_inventory_path": str(hashes),
                 "wordlist": wordlist.name,
+                "wordlist_path": str(wordlist),
                 "format_override": selected_format or "automatic detection",
                 "cracked_hash_count": int(match.group(1)) if match else None,
                 "remaining_hash_count": int(match.group(2)) if match else None,
                 "tool_exit_code": completed.returncode,
+                "result_verification_exit_code": shown.returncode,
                 "plaintext_passwords_returned_or_saved": False,
                 "temporary_pot_file_deleted": True,
                 "scope": "Offline hash auditing only; no network connections or website login attempts.",
@@ -2091,13 +2117,21 @@ def scam_investigation_menu(timeout: int = 12) -> dict:
         result["hydra_style_note"] = "Read-only authentication preflight; no login attempts or password guesses are sent."
     elif choice == "4":
         print("John the Ripper runs locally against an offline hash file and wordlist; no website is contacted.")
-        hashes = Path(input("Path to authorised offline hash file: ").strip()).expanduser()
+        hashes = Path(input("Path to existing authorised offline hash file: ").strip()).expanduser()
         default_wordlist = "/usr/share/wordlists/rockyou.txt"
         wordlist_text = input(f"Wordlist path [{default_wordlist}]: ").strip() or default_wordlist
+        # Preflight both paths before asking for authorisation or invoking John.
+        for candidate, label in ((hashes, "hash inventory"), (Path(wordlist_text).expanduser(), "wordlist")):
+            if not candidate.is_file() or candidate.is_symlink():
+                raise ValueError("{} file not found or not a regular file: {}. Save it first or enter its full path. John was not executed.".format(
+                    label.capitalize(), candidate.absolute()))
+        inventory = classify_hash_inventory(hashes)
+        print("Hash inventory preflight: {} records; formats: {}".format(
+            inventory["nonempty_records_reviewed"], json.dumps(inventory["format_counts"])))
         hash_format = input("John format override (blank = auto-detect): ").strip()
         confirmation = input("Type YES to confirm authorisation for this offline hash audit: ").strip()
         result = run_john_audit(hashes, Path(wordlist_text), hash_format,
-                                authorised=(confirmation == "YES"))
+                                authorised=(confirmation.casefold() == "yes"))
         result["investigation_type"] = "john_the_ripper_offline_hash_audit"
     elif choice == "6":
         target = input("Domain, website URL, email address or public social profile URL: ").strip()
