@@ -388,12 +388,18 @@ class CompanionTests(unittest.TestCase):
                    "CAA": {"answers": []}}
         with patch.object(cyberlab, "dns_lookup", return_value={"records": records}), \
              patch.object(cyberlab, "_dkim_selector_checks", return_value={"published_selectors_found": []}), \
-             patch.object(cyberlab, "resolve_public_site_ips", return_value={"addresses": []}):
+             patch.object(cyberlab, "resolve_public_site_ips", return_value={"addresses": ["203.0.113.10"]}), \
+             patch.object(cyberlab, "public_site_profile", return_value={"status": "ok", "organisation_name": "Example Org", "public_contact_emails": ["contact@example.org"], "public_contact_phone_numbers": ["+1 555 0100"], "social_media_links": ["https://linkedin.com/company/example"], "public_location": ["Lagos"], "public_address": []}):
             result = cyberlab.dns_intelligence_lookup("person@example.org")
         self.assertEqual(result["investigation_type"], "email_intelligence")
         self.assertIn("email_intelligence", result)
         self.assertNotIn("sources", result)
         self.assertEqual(result["email_intelligence"]["submitted_email_address"], "person@example.org")
+        associations = result["email_intelligence"]["public_domain_associations"]
+        self.assertEqual(associations["organisation_name"], "Example Org")
+        self.assertEqual(associations["public_business_phone_numbers"], ["+1 555 0100"])
+        self.assertEqual(associations["public_social_media_links"], ["https://linkedin.com/company/example"])
+        self.assertIn("not proof", associations["relationship_note"])
 
     def test_dns_intelligence_social_profile_inspects_supplied_profile_not_homepage(self):
         with patch.object(cyberlab, "inspect_assessment_page", return_value={"status_code": 200, "page_title": "Example Profile"}) as inspect:
