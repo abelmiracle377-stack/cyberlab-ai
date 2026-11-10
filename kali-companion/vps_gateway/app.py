@@ -205,6 +205,29 @@ async def upload_file(upload: UploadFile = File(...), device=Depends(device_auth
             "status": "stored", "preview_endpoint": f"/v1/files/{file_id}"}
 
 
+@app.get("/v1/files/{file_id}")
+def get_device_file(file_id: str, device=Depends(device_auth)):
+    con = db()
+    row = con.execute(
+        "SELECT id,name,media_type,path FROM files WHERE id=? AND device_id=?",
+        (file_id, device["id"])
+    ).fetchone()
+    con.close()
+    if not row or not Path(row["path"]).is_file():
+        raise HTTPException(404, "File not found.")
+    preview_types = {
+        "image/jpeg", "image/png", "image/webp", "image/gif",
+        "audio/mpeg", "audio/wav", "audio/ogg", "audio/webm",
+        "video/mp4", "video/webm", "application/pdf", "text/plain"
+    }
+    disposition = "inline" if row["media_type"] in preview_types else "attachment"
+    return FileResponse(
+        row["path"], media_type=row["media_type"], filename=row["name"],
+        content_disposition_type=disposition,
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+    )
+
+
 @app.get("/v1/files")
 def list_files(device=Depends(device_auth)):
     con = db()
