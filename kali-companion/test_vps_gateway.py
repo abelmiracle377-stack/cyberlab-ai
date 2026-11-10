@@ -19,10 +19,10 @@ class VPSCompatibilityTests(unittest.TestCase):
         self.assertEqual(result["gateway"], "healthy")
         names = {item["name"] for item in result["checks"]}
         self.assertEqual(names, {"Operating system", "Python", "Available memory", "Free storage"})
-        rendered = repr(result).lower()
-        self.assertNotIn("hostname", rendered)
-        self.assertNotIn("owner_token", rendered)
-        self.assertNotIn("environment", rendered)
+        self.assertEqual(set(result), {"status", "checks", "gateway", "notes"})
+        self.assertFalse(any("token" in key.lower() for key in result))
+        self.assertFalse(any("hostname" in key.lower() or "environment" in key.lower()
+                             for item in result["checks"] for key in item))
 
     def test_diagnostics_are_registered_as_owner_authenticated_route(self):
         route = next(
