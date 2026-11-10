@@ -436,6 +436,8 @@ def _url_intelligence_findings(value: str) -> dict:
     analysis = analyze_url(value)
     parsed = urllib.parse.urlsplit(value if "://" in value else "https://" + value)
     query_keys = sorted({key[:80] for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)})[:40]
+    safe_query = urllib.parse.urlencode([(key, "") for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)])
+    safe_submitted_url = urllib.parse.urlunsplit((parsed.scheme.lower(), parsed.netloc, parsed.path or "/", safe_query, ""))
     path_lower = parsed.path.lower()
     flags = list(analysis["structural_indicators"])
     if parsed.query:
@@ -451,7 +453,8 @@ def _url_intelligence_findings(value: str) -> dict:
     if len(parsed.query) > 500:
         flags.append("URL has an unusually long query string")
     return {
-        **analysis, "path_depth": len([part for part in parsed.path.split("/") if part]),
+        **analysis, "submitted_url": safe_submitted_url,
+        "path_depth": len([part for part in parsed.path.split("/") if part]),
         "query_parameter_names": query_keys, "query_values_saved": False,
         "fragment_present": bool(parsed.fragment), "enhanced_indicators": sorted(set(flags)),
         "reputation_check": "Not performed", "redirect_chain": "Not followed",
