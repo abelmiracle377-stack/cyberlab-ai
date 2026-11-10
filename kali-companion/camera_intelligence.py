@@ -160,9 +160,9 @@ def validate_camera_on_detected_lan(host: str, interfaces: list[dict] | None = N
                 normalized = item
                 network = ipaddress.ip_network(normalized["network"], strict=False)
                 local_address = ipaddress.ip_address(normalized.get("ip", str(network.network_address)))
-                if address.version != local_address.version:
-                    continue
             normalized_interfaces.append(normalized)
+            if address.version != network.version:
+                continue
             if address.version == network.version and address in network:
                 if address.version == 6 and address.is_link_local and normalized.get("interface") not in target:
                     continue
@@ -174,7 +174,7 @@ def validate_camera_on_detected_lan(host: str, interfaces: list[dict] | None = N
         if not detected:
             raise ValueError("Kali has no detected local IPv4/IPv6 interface address. Connect to the same Wi-Fi/LAN as the camera and retry.")
         local_summary = ", ".join("{} {} {} ({})".format(item.get("interface"), item.get("family"), item.get("ip"), item.get("network")) for item in detected)
-        raise ValueError("Camera IP {} is not inside Kali's detected local interface address/subnet: {}. Connect both devices to the same network or verify the camera IP.".format(target, local_summary))
+        raise ValueError("Camera IP {} does not match any Kali detected local interface address/subnet: {}. Connect both devices to the same network or verify the camera IP.".format(target, local_summary))
     selected = matching[0]
     connection_host = target
     if address.version == 6 and address.is_link_local and "%" not in target:
