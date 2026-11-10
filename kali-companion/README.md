@@ -241,3 +241,12 @@ python3 kali-companion/cyberlab.py menu
 ```
 
 Keep the key in your shell environment or a local untracked secrets file; never commit it to Git. Without the key, option 18 reports the setup requirement and does not pretend a search occurred.
+
+
+### Automated password security audit (menu option 19)
+
+Option 19 no longer asks the operator to self-report password controls. It automatically scans a selected local application source/configuration directory (or the current directory) for literal password/secret assignments, username-like configuration values and email addresses. Candidate literal secrets are redacted from the report. For up to 50 candidates, CyberLab checks breach-corpus exposure through the Have I Been Pwned Pwned Passwords range API using the k-anonymity method: only a five-character SHA-1 prefix is sent; the plaintext and full hash remain local. The report includes findings, severity, evidence counts, scan limits and remediation.
+
+This is a static code/configuration audit, not a live account lookup. Email addresses and usernames are discovered locally but are not submitted to web search or breach services. No password is guessed, no login is attempted, and no full password or email address is sent to HIBP. Password reuse, MFA and reset-flow enforcement cannot be proven from source text alone; those require identity-provider configuration or authorised authentication logs.
+
+Run option 19 and provide the path to your own application's source/configuration directory. Keep secrets out of source control; rotate any real secret found in a repository.
