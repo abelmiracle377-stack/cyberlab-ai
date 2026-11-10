@@ -2,7 +2,7 @@ import unittest
 import camera_intelligence
 from unittest.mock import patch
 
-from camera_intelligence import build_rtsp_url, public_webcam_directory, validate_camera_host, validate_lan_network
+from camera_intelligence import (build_rtsp_url, public_webcam_directory, validate_camera_host, validate_lan_network, validate_camera_on_detected_lan, validate_camera_port)
 
 
 class CameraIntelligenceTests(unittest.TestCase):
@@ -44,6 +44,27 @@ class CameraIntelligenceTests(unittest.TestCase):
             with patch("camera_intelligence.subprocess.run", return_value=completed):
                 from camera_intelligence import detect_private_lan_networks
                 self.assertEqual(detect_private_lan_networks(), ["10.20.30.0/24"])
+
+    def test_camera_ip_must_match_kali_local_subnet(self):
+        result = validate_camera_on_detected_lan("192.168.1.201", ["192.168.1.0/24"])
+        self.assertEqual(result["matching_local_network"], "192.168.1.0/24")
+
+    def test_camera_ip_outside_kali_subnet_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "not inside Kali"):
+            validate_camera_on_detected_lan("192.168.2.201", ["192.168.1.0/24"])
+
+    def test_public_camera_ip_is_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_camera_on_detected_lan("8.8.8.8", ["192.168.1.0/24"])
+
+    def test_hostname_is_not_accepted_for_subnet_match(self):
+        with self.assertRaisesRegex(ValueError, "private IPv4"):
+            validate_camera_on_detected_lan("camera.local", ["192.168.1.0/24"])
+
+    def test_camera_port_validation(self):
+        self.assertEqual(validate_camera_port("554"), 554)
+        with self.assertRaises(ValueError):
+            validate_camera_port("70000")
 
     def test_passwordless_rtsp_url(self):
         self.assertEqual(build_rtsp_url("192.168.1.20", 554, "/live"), "rtsp://192.168.1.20:554/live")
