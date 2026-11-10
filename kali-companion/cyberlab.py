@@ -2067,10 +2067,10 @@ def audit_password_security_target(target_path: str, timeout: int = 12) -> dict:
     emails, usernames, password_candidates = set(), set(), {}
     findings = []
     password_assignment = re.compile(
-        r"""(?im)\b(?:password|passwd|pwd|secret|client_secret|api_key)\b\s*[:=]\s*["']([^"'\r\n]{4,200})["']"""
+        r"""(?im)\b(?:password|passwd|pwd|secret|client_secret|api_key)\b\s*[:=]\s*["'](.*?)["']"""
     )
     username_assignment = re.compile(
-        r"""(?im)\b(?:username|user_name|login|account_name)\b\s*[:=]\s*["']([^"'\\\r\n]{2,100})["']"""
+        r"""(?im)\b(?:username|user_name|login|account_name)\b\s*[:=]\s*["']([^"'\r\n]{2,100})["']"""
     )
     for file_path in root.rglob("*"):
         if any(part in excluded for part in file_path.parts):
