@@ -11,11 +11,15 @@ from __future__ import annotations
 import concurrent.futures
 import getpass
 import ipaddress
+import json
+import os
 import re
 import shutil
 import socket
 import subprocess
 import urllib.parse
+import urllib.request
+import urllib.error
 
 CAMERA_PORTS = (80, 443, 554, 8000, 8080, 8554, 8899)
 PUBLIC_WEBCAM_DIRECTORIES = (
@@ -169,12 +173,80 @@ def launch_camera_viewer(rtsp_url: str) -> dict:
             "process_argument_visibility": "The RTSP URL is passed to ffplay; local users with process-inspection privileges may be able to see it.",
             "note": "The viewer was launched for the one manually entered camera stream. The RTSP URL and credentials are not included in this report."}
 
-def public_webcam_directory(location: str = "") -> dict:
-    """Return opt-in public webcam directories; does not enumerate exposed private feeds."""
-    return {"feature": "global_public_webcam_directory", "location_search": location.strip()[:120] or "not specified",
-            "directories": list(PUBLIC_WEBCAM_DIRECTORIES),
-            "how_to_use": "Open a directory and search for the requested city or country. These services publish webcams for public viewing.",
-            "privacy_boundary": "CyberLab does not crawl public IP ranges, enumerate exposed CCTV devices, or open feeds merely because authentication is absent."}
+def _read_json_url(url: str, headers: dict | None = None, timeout: float = 8.0) -> dict:
+    request = urllib.request.Request(url, headers=headers or {"User-Agent": "CyberLab-Camera-Directory/1.0"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read(2_000_000).decode("utf-8", errors="replace"))
+
+
+def _windy_public_webcams(location: str, timeout: float = 8.0) -> dict:
+    """Query Windy's licensed, operator-published webcam catalogue when configured."""
+    api_key = os.environ.get("WINDY_WEBCAMS_API_KEY", "").strip()
+    if not api_key:
+        return {"status": "not_configured", "message": "Set WINDY_WEBCAMS_API_KEY to enable structured camera results from Windy's official public webcam catalogue."}
+    geo_url = "https://geocoding-api.open-meteo.com/v1/search?" + urllib.parse.urlencode(
+        {"name": location, "count": 1, "language": "en", "format": "json"}
+    )
+    try:
+        geodata = _read_json_url(geo_url, timeout=timeout)
+        places = geodata.get("results") or []
+        if not places:
+            return {"status": "no_location_match", "message": "The location could not be resolved."}
+        place = places[0]
+        lat, lon = float(place["latitude"]), float(place["longitude"])
+        params = urllib.parse.urlencode({
+            "nearby": f"{lat},{lon},100", "limit": 50,
+            "include": "categories,images,location,player,urls", "lang": "en",
+        })
+        api_url = "https://api.windy.com/webcams/api/v3/webcams?" + params
+        payload = _read_json_url(api_url, headers={"x-windy-api-key": api_key, "User-Agent": "CyberLab-Camera-Directory/1.0"}, timeout=timeout)
+        cameras = []
+        for cam in payload.get("webcams", []):
+            loc, urls, player = cam.get("location") or {}, cam.get("urls") or {}, cam.get("player") or {}
+            detail_url = urls.get("detail") or urls.get("website") or urls.get("web")
+            webcam_id = cam.get("id") or cam.get("webcamId")
+            if not detail_url and webcam_id:
+                detail_url = "https://www.windy.com/webcams/" + urllib.parse.quote(str(webcam_id), safe="")
+            if not detail_url:
+                continue
+            cameras.append({
+                "name": str(cam.get("title") or cam.get("name") or "Public webcam")[:180],
+                "location": ", ".join(str(x) for x in (loc.get("city"), loc.get("region"), loc.get("country")) if x),
+                "latitude": loc.get("latitude"), "longitude": loc.get("longitude"),
+                "camera_page_url": detail_url,
+                "viewer_url": urls.get("player") or player.get("url"),
+                "live_status": "provider marks live" if player.get("live") else "not confirmed live",
+                "source": "Windy official public webcam catalogue",
+            })
+        return {
+            "status": "ok",
+            "resolved_location": {"name": place.get("name"), "admin1": place.get("admin1"), "country": place.get("country"), "latitude": lat, "longitude": lon},
+            "search_radius_km": 100, "result_count": len(cameras), "cameras": cameras,
+            "note": "A directory listing does not guarantee continuous live video."
+        }
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        return {"status": "unavailable", "message": f"Windy catalogue lookup failed: {str(exc)[:240]}"}
+
+
+def public_webcam_directory(location: str = "", timeout: float = 8.0) -> dict:
+    """Search operator-published webcams by location; never probe arbitrary CCTV hosts."""
+    query = location.strip()[:120]
+    if not query:
+        raise ValueError("Enter a city, state, country or landmark to search for public webcams.")
+    targeted = [
+        {"name": "EarthCam", "search_url": "https://www.google.com/search?" + urllib.parse.urlencode({"q": f"site:earthcam.com {query} webcam"}), "directory_url": "https://www.earthcam.com/search/advanced-search.php", "description": f"Search EarthCam listings for {query}."},
+        {"name": "SkylineWebcams", "search_url": "https://www.google.com/search?" + urllib.parse.urlencode({"q": f"site:skylinewebcams.com {query} webcam"}), "directory_url": "https://www.skylinewebcams.com/", "description": f"Search published scenic webcams near {query}."},
+        {"name": "Explore.org Livecams", "search_url": "https://www.google.com/search?" + urllib.parse.urlencode({"q": f"site:explore.org/livecams {query}"}), "directory_url": "https://explore.org/livecams", "description": f"Search Explore.org cameras for {query}."},
+        {"name": "Windy Webcams", "search_url": "https://www.windy.com/webcams/" + urllib.parse.quote_plus(query), "directory_url": "https://www.windy.com/webcams", "description": f"Open Windy's webcam map for {query}."},
+    ]
+    return {
+        "feature": "location_specific_public_webcam_search",
+        "location_search": query,
+        "targeted_searches": targeted,
+        "structured_catalogue_search": _windy_public_webcams(query, timeout=timeout),
+        "how_to_use": "Open targeted search links for matching published camera pages. Set WINDY_WEBCAMS_API_KEY to return structured Windy camera records and individual camera-page URLs.",
+        "privacy_boundary": "Only operator-published public webcam directories are searched. CyberLab does not enumerate arbitrary exposed CCTV, scan public IP ranges, bypass authentication or open private feeds.",
+    }
 
 def camera_intelligence_menu() -> dict:
     print("\nGLOBAL CAMERA INTELLIGENCE")
@@ -244,11 +316,21 @@ def camera_intelligence_menu() -> dict:
         stream_url = None
         return result
     if choice == "3":
-        location = input("Country or city to search (e.g. Nigeria or Lagos): ").strip()
+        location = input("Country, state, city or landmark to search: ").strip()
         result = public_webcam_directory(location)
-        print("\nPublicly published webcam directories:")
-        for item in result["directories"]:
-            print(f"  {item['name']}: {item['url']}\n    {item['description']}")
-        print("\nSearch the selected location inside these public webcam directories.")
+        print("\\nLocation-specific public webcam searches:")
+        for item in result["targeted_searches"]:
+            print(f"  {item['name']}: {item['search_url']}\\n    {item['description']}")
+        catalogue = result["structured_catalogue_search"]
+        print(f"\\nWindy catalogue lookup: {catalogue.get('status')}")
+        for camera in catalogue.get("cameras", []):
+            print(f"  {camera['name']} — {camera['location'] or 'location not supplied'}")
+            print(f"    Camera page: {camera['camera_page_url']}")
+            if camera.get("viewer_url"):
+                print(f"    Viewer: {camera['viewer_url']}")
+        if not catalogue.get("cameras"):
+            print("  No structured camera records returned. Use the targeted search links above.")
+            if catalogue.get("message"):
+                print("  " + catalogue["message"])
         return result
     raise ValueError("Choose one of the listed camera options.")
