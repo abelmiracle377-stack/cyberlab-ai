@@ -2381,28 +2381,124 @@ def review_password_policy(minimum_length: int, breached_blocklist: str,
     }
 
 
-def review_mfa_controls(mfa_required: str, phishing_resistant: str,
-                        recovery_protected: str, suspicious_login_alerts: str) -> dict:
-    fields = {
-        "mfa_required_for_sensitive_accounts": mfa_required,
-        "phishing_resistant_factor_available": phishing_resistant,
-        "recovery_and_reset_protected": recovery_protected,
-        "suspicious_login_alerts_enabled": suspicious_login_alerts,
-    }
-    controls = {key: _normalise_yes_no_unknown(value, key) for key, value in fields.items()}
-    gaps = [key for key, value in controls.items() if value == "no"]
-    unknown = [key for key, value in controls.items() if value == "unknown"]
+def _mask_email_address(address: str) -> str:
+    local, domain = address.rsplit("@", 1)
+    return (local[:1] if local else "") + "***@" + domain.lower()
+
+
+def assess_mfa_target(login_url: str, email_address: str, timeout: int = 12) -> dict:
+    """Passively assess a supplied login page and email domain; never signs in."""
+    url = _validate_assessment_url(login_url)
+    email = email_address.strip()
+    if len(email) > 254 or not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+", email):
+        raise ValueError("Enter a valid email address; the address is used locally to scope its domain only.")
+    email_domain = validate_domain(email.rsplit("@", 1)[1])
+    target_host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    same_domain = (target_host == email_domain or target_host.endswith("." + email_domain)
+                   or email_domain.endswith("." + target_host))
+
+    page = inspect_assessment_page(url, timeout=timeout, method="GET")
+    dns = dns_lookup(email_domain, timeout=timeout)
+    forms = page.get("authentication_analysis", {})
+    form_rows = forms.get("forms_analysed", [])
+    field_names = [str(name).lower() for form in form_rows for name in form.get("field_names", [])]
+    input_types = [str(kind).lower() for form in form_rows for kind in form.get("input_types", [])]
+    script_urls = [str(item.get("url", "")).lower() for item in page.get("scripts", [])]
+    metadata_text = json.dumps({
+        "title": page.get("page_title", ""), "metadata": page.get("page_metadata", {}),
+        "fields": field_names, "types": input_types, "scripts": script_urls,
+    }).lower()
+    otp_names = [name for name in field_names if any(term in name for term in (
+        "otp", "totp", "mfa", "2fa", "one_time", "verification_code", "authenticator",
+        "security_code", "passcode"
+    ))]
+    otp_types = [kind for kind in input_types if kind == "one-time-code"]
+    mfa_keywords = sorted(set(term for term in (
+        "multi-factor", "multifactor", "two-factor", "two factor", "2fa", "mfa",
+        "authenticator", "passkey", "webauthn", "security key", "verification code",
+        "one-time code", "one time password", "totp"
+    ) if term in metadata_text))
+    dmarc_rows = dns.get("records", {}).get("DMARC", {}).get("answers", [])
+    txt_rows = dns.get("records", {}).get("TXT", {}).get("answers", [])
+    spf = [str(row.get("value", "")) for row in txt_rows if "v=spf1" in str(row.get("value", "")).lower()]
+    dmarc = [str(row.get("value", "")) for row in dmarc_rows if "v=dmarc1" in str(row.get("value", "")).lower()]
+    mx = dns.get("records", {}).get("MX", {}).get("answers", [])
+    page_status = page.get("status_code")
+    page_accessible = isinstance(page_status, int) and 200 <= page_status < 400
+    mfa_ui_observed = bool(otp_names or otp_types or mfa_keywords)
+    findings = [
+        {
+            "area": "Login page reachability",
+            "status": "observed" if page_accessible else "not_confirmed",
+            "evidence": {"url_checked": url, "http_status": page_status, "page_title": page.get("page_title")},
+            "interpretation": "The supplied public page responded; reachability does not prove account security."
+                            if page_accessible else "The supplied login page did not return a confirmed successful response."
+        },
+        {
+            "area": "Email-to-site scope",
+            "status": "same_domain_or_parent_domain" if same_domain else "domain_mismatch_review",
+            "evidence": {"login_host": target_host, "email_domain": email_domain},
+            "interpretation": "The supplied email domain is related to the login host."
+                            if same_domain else "The email domain differs from the login host; confirm that this is the intended identity provider."
+        },
+        {
+            "area": "Visible MFA interface indicators",
+            "status": "observed" if mfa_ui_observed else "not_observed_in_static_page",
+            "evidence": {"field_names": otp_names[:20], "one_time_code_input_types": otp_types,
+                         "page_or_script_terms": mfa_keywords},
+            "interpretation": "MFA-related indicators were found in returned HTML metadata, form fields or script URLs. This does not prove MFA is required for the supplied account."
+                            if mfa_ui_observed else "No MFA-specific input or keyword was identified in the static page evidence. A JavaScript-rendered or post-password challenge may not appear here."
+        },
+        {
+            "area": "Account-specific MFA enforcement",
+            "status": "not_verifiable_without_identity_provider_evidence",
+            "evidence": {"account": _mask_email_address(email)},
+            "interpretation": "A public login page and email address cannot reveal whether this individual account has MFA enrolled or whether policy enforces it. Verify through the authorised identity-provider security console, API or sign-in logs."
+        },
+        {
+            "area": "Email-domain mail routing",
+            "status": "observed" if mx else "no_mx_answer_observed",
+            "evidence": {"domain": email_domain, "mx_records": mx},
+            "interpretation": "MX records were returned for the email domain." if mx else "No MX answer was returned for the email domain."
+        },
+        {
+            "area": "Email-domain sender protection",
+            "status": "records_observed" if spf and dmarc else "review",
+            "evidence": {"spf_records": spf, "dmarc_records": dmarc},
+            "interpretation": "SPF/DMARC are email anti-spoofing controls, not MFA controls. Their presence does not prove correct policy alignment or account MFA."
+        }
+    ]
     return {
-        "feature": "mfa_2fa_control_assessment",
-        "controls": controls,
-        "reported_gaps": gaps,
-        "unknown_controls": unknown,
-        "recommendations": [
-            "Prefer phishing-resistant FIDO2/passkeys or security keys for high-risk accounts.",
-            "Protect recovery codes and account-recovery workflows as strongly as primary sign-in.",
-            "Alert on unusual sign-in activity and review authentication logs."
-        ],
-        "note": "Operator-reported control review; no sign-in attempt, MFA challenge or account access was performed."
+        "feature": "automated_mfa_2fa_target_assessment",
+        "target_url_checked": url,
+        "email_address": _mask_email_address(email),
+        "email_domain_checked": email_domain,
+        "account_identity_provider": "Not reliably identified from public page metadata",
+        "page_inspection": page,
+        "email_domain_dns": dns,
+        "mfa_observations": {
+            "visible_mfa_ui_indicators": mfa_ui_observed,
+            "otp_related_field_names": otp_names[:20],
+            "mfa_related_public_page_terms": mfa_keywords,
+            "account_mfa_enrollment": "not_verifiable",
+            "account_mfa_enforcement": "not_verifiable",
+            "recovery_protection": "not_verifiable",
+            "suspicious_login_alerting": "not_verifiable"
+        },
+        "findings": findings,
+        "scope": {
+            "http_requests": "One read-only GET to the exact supplied URL; redirects are not followed.",
+            "tls": "One certificate-validating TLS handshake.",
+            "dns": "Bounded public DNS lookups for the email domain.",
+            "email_handling": "The full email address is not sent to any remote service; only its domain is queried.",
+            "authentication": "No sign-in, challenge, password, recovery flow or account API access was attempted."
+        },
+        "limitations": [
+            "A public login page cannot establish whether this specific email account has MFA enrolled or policy-enforced.",
+            "A visible OTP/passkey control is evidence of an interface feature, not proof it is mandatory or correctly enforced.",
+            "Account-level verification requires an authorised identity-provider admin API, security console export or sign-in/authentication logs.",
+            "SPF and DMARC concern email-domain spoofing and are not substitutes for MFA."
+        ]
     }
 
 
@@ -2550,16 +2646,23 @@ def interactive_menu(timeout: int = 12) -> int:
             continue
         if choice == "20":
             try:
-                result = review_mfa_controls(
-                    input("MFA required for sensitive accounts? (yes/no/unknown): "),
-                    input("Phishing-resistant factor available? (yes/no/unknown): "),
-                    input("Recovery/reset protected? (yes/no/unknown): "),
-                    input("Suspicious-login alerts enabled? (yes/no/unknown): "))
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-                destination = save_investigation(result, "mfa-security-assessment")
-                print(f"Saved locally: {destination}")
-            except (OSError, ValueError) as exc:
-                print(f"MFA review stopped: {exc}")
+                print("\nAUTOMATED MFA / 2FA TARGET ASSESSMENT")
+                print("Enter the exact public login URL and the account email address.")
+                print("CyberLab inspects public page/DNS evidence only; it does not sign in.")
+                target_url = input("Authorised login page URL (HTTPS): ").strip()
+                email_address = input("Account email address (used locally; not sent to a lookup service): ").strip()
+                approval = input("Confirm you own or are authorised to assess this login page (type AUTHORISED): ").strip()
+                if approval != "AUTHORISED":
+                    print("Assessment cancelled: explicit authorisation was not confirmed.")
+                else:
+                    result = assess_mfa_target(target_url, email_address, timeout=timeout)
+                    print(json.dumps(result, indent=2, ensure_ascii=False))
+                    destination = save_investigation(result, "mfa-security-assessment")
+                    print(f"Saved locally: {destination}")
+            except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+                print(f"MFA assessment stopped: {exc}")
+            except (EOFError, KeyboardInterrupt):
+                print("\nReturning to the CyberLab menu.")
             wait_for_menu()
             continue
         if choice == "16":
