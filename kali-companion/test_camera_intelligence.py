@@ -23,21 +23,21 @@ class CameraIntelligenceTests(unittest.TestCase):
 
 
     def test_detect_private_lan_networks_parses_ip_output(self):
-        completed = type("Completed", (), {"stdout": "2: wlan0 inet 192.168.1.23/24 scope global wlan0\\n"})()
+        completed = type("Completed", (), {"stdout": "2: wlan0 inet 192.168.1.23/24 scope global wlan0\n"})()
         with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"):
             with patch("camera_intelligence.subprocess.run", return_value=completed):
                 from camera_intelligence import detect_private_lan_networks
                 self.assertEqual(detect_private_lan_networks(), ["192.168.1.0/24"])
 
     def test_detect_private_lan_networks_ignores_public_interfaces(self):
-        completed = type("Completed", (), {"stdout": "2: eth0 inet 98.97.76.185/24 scope global eth0\\n"})()
+        completed = type("Completed", (), {"stdout": "2: eth0 inet 98.97.76.185/24 scope global eth0\n"})()
         with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"):
             with patch("camera_intelligence.subprocess.run", return_value=completed):
                 from camera_intelligence import detect_private_lan_networks
                 self.assertEqual(detect_private_lan_networks(), [])
 
     def test_detect_private_lan_networks_caps_large_interface_at_24(self):
-        completed = type("Completed", (), {"stdout": "2: eth0 inet 10.20.30.40/16 scope global eth0\\n"})()
+        completed = type("Completed", (), {"stdout": "2: eth0 inet 10.20.30.40/16 scope global eth0\n"})()
         with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"):
             with patch("camera_intelligence.subprocess.run", return_value=completed):
                 from camera_intelligence import detect_private_lan_networks
