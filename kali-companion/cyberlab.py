@@ -2034,7 +2034,7 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [14] Password & Authentication Security")
         print("  [15] Law Enforcement & Scam Investigation")
         print("  [16] Phone Number Intelligence (numbering metadata only)")
-        print("  [17] Hydra-Style Credential Guessing Lab (local simulation only)")
+        print("  [17] Live Authentication Security Assessment (authorised targets)")
         print("  [18] Username Privacy Assessment")
         print("  [19] Password Policy Assessment")
         print("  [20] MFA / 2FA Security Assessment")
@@ -2070,26 +2070,30 @@ def interactive_menu(timeout: int = 12) -> int:
             continue
         if choice == "17":
             try:
-                print("\nISOLATED CREDENTIAL-GUESSING LAB")
-                print("This is a local simulation. It never sends requests to a website or real account.")
-                username = input("Synthetic lab username: ").strip()
-                expected = getpass.getpass("Synthetic lab password to test (hidden; never saved): ")
-                wordlist_text = input("Local wordlist path [/usr/share/wordlists/rockyou.txt]: ").strip()
-                wordlist = Path(wordlist_text or "/usr/share/wordlists/rockyou.txt").expanduser()
-                mfa = _normalise_yes_no_unknown(input("Simulate MFA enabled? (yes/no): "), "MFA")
-                def show_progress(count, status):
-                    print(f"\rCandidates checked: {count} — {status}", end="", flush=True)
-                result = run_credential_guess_lab(username, expected, wordlist, mfa == "yes",
-                                                  progress_callback=show_progress)
-                expected = None
-                print()
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-                destination = save_investigation(result, "credential-guessing-lab")
-                print(f"Saved locally: {destination}")
-            except (OSError, ValueError) as exc:
-                print(f"Lab stopped: {exc}")
+                print("\\nLIVE AUTHENTICATION SECURITY ASSESSMENT")
+                print("Inspects one real HTTPS login page. No passwords are guessed or submitted.")
+                target = input("Full HTTPS login URL on a system you own or are authorised to assess: ").strip()
+                approval = input("Confirm written authorisation for this target (type AUTHORISED): ").strip()
+                if approval != "AUTHORISED":
+                    print("Assessment cancelled: explicit authorisation was not confirmed.")
+                else:
+                    result = inspect_assessment_page(target, timeout=timeout, method="GET")
+                    result["feature"] = "live_authentication_security_assessment"
+                    result["authorisation_confirmation"] = "Operator confirmed authorisation"
+                    result["assessment_scope"] = {
+                        "requests": "One HTTPS GET to the exact supplied URL",
+                        "redirects_followed": False,
+                        "credentials_submitted": False,
+                        "password_guessing_performed": False,
+                        "forms_submitted": False,
+                    }
+                    print(json.dumps(result, indent=2, ensure_ascii=False))
+                    destination = save_investigation(result, "live-authentication-assessment")
+                    print(f"Saved locally: {destination}")
+            except (OSError, ValueError, urllib.error.URLError) as exc:
+                print(f"Authentication assessment stopped: {exc}")
             except (EOFError, KeyboardInterrupt):
-                print("\nReturning to the CyberLab menu.")
+                print("\\nReturning to the CyberLab menu.")
             wait_for_menu()
             continue
         if choice == "18":
