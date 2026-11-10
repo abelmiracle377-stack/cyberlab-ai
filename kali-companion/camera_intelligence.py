@@ -254,6 +254,7 @@ def camera_intelligence_menu() -> dict:
     print("  [1] Discover camera-related services on YOUR private Wi-Fi/LAN")
     print("  [2] Connect to and view ONE camera you own or are authorised to access")
     print("  [3] Global public webcam directories (location-based search)")
+    print("  [4] Camera exposure assessment & responsible disclosure (owner-authorised)")
     print("  [0] Back")
     choice = input("camera-intelligence> ").strip()
     if choice == "0":
@@ -316,6 +317,9 @@ def camera_intelligence_menu() -> dict:
         result = launch_camera_viewer(stream_url)
         stream_url = None
         return result
+    if choice == "4":
+        from camera_exposure_defence import run_camera_exposure_assessment
+        return run_camera_exposure_assessment()
     if choice == "3":
         location = input("Country, state, city or landmark to search: ").strip()
         result = public_webcam_directory(location)
