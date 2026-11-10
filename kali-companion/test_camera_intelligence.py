@@ -59,7 +59,7 @@ class CameraIntelligenceTests(unittest.TestCase):
         self.assertEqual(result["matching_local_network"], "192.168.1.0/24")
 
     def test_camera_ip_outside_kali_subnet_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "not inside Kali"):
+        with self.assertRaisesRegex(ValueError, "does not match"):
             validate_camera_on_detected_lan("192.168.2.201", ["192.168.1.0/24"])
 
     def test_public_camera_ip_is_rejected(self):
