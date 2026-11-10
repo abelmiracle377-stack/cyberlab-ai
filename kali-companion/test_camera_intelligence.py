@@ -70,6 +70,30 @@ class CameraIntelligenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "private IPv4"):
             validate_camera_on_detected_lan("camera.local", ["192.168.1.0/24"])
 
+    def test_camera_ipv6_matches_kali_ipv6_prefix(self):
+        interfaces = [{"interface": "wlan0", "family": "IPv6", "ip": "fd12:3456:789a::10",
+                       "network": "fd12:3456:789a::/64"}]
+        result = validate_camera_on_detected_lan("fd12:3456:789a::201", interfaces)
+        self.assertEqual(result["ip_version"], 6)
+        self.assertEqual(result["kali_ip"], "fd12:3456:789a::10")
+        self.assertIn("Your Kali IP address is fd12:3456:789a::10", result["message"])
+
+    def test_camera_ipv6_outside_kali_prefix_is_rejected(self):
+        interfaces = [{"interface": "wlan0", "family": "IPv6", "ip": "fd12:3456:789a::10",
+                       "network": "fd12:3456:789a::/64"}]
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            validate_camera_on_detected_lan("fd12:3456:789b::201", interfaces)
+
+    def test_camera_ipv4_and_ipv6_use_matching_family_only(self):
+        interfaces = [{"interface": "wlan0", "family": "IPv4", "ip": "192.168.1.20",
+                       "network": "192.168.1.0/24"}]
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            validate_camera_on_detected_lan("fd12:3456:789a::201", interfaces)
+
+    def test_ipv6_rtsp_url_uses_bracketed_host(self):
+        self.assertEqual(build_rtsp_url("fd12:3456:789a::201", 554, "/live"),
+                         "rtsp://[fd12:3456:789a::201]:554/live")
+
     def test_camera_port_validation(self):
         self.assertEqual(validate_camera_port("554"), 554)
         with self.assertRaises(ValueError):
