@@ -125,7 +125,7 @@ The defensive password module provides:
 - Clearly labelled `<lab>-test-01` style usernames for provisioning accounts in your own isolated lab; these are not candidate usernames for guessing existing accounts.
 - Password-storage metadata review (algorithm family, salt usage and documented work-factor/parameters). Do not paste plaintext passwords or password hashes into the tool.
 - Operator-led review of rate limiting, progressive delay/lockout, MFA, breached-password blocklists and password-reset controls.
-- Read-only website login-surface inspection: enter an explicitly authorised public HTTPS login URL; CyberLab checks the page response, visible form structure, cookies and security headers without submitting credentials.
+- Read-only website login-surface inspection: enter an explicitly authorised public HTTPS login URL; CyberLab performs one bounded GET (no redirects) and a TLS handshake, parses visible authentication forms (method, action/origin, password/email/username fields, autocomplete, hidden token-name indicators and required fields), inventories scripts and external script integrity hints, checks mixed-content references, cookie attributes and expanded security headers, and reports TLS certificate issuer/subject/SAN/expiry/protocol/cipher plus evidence-based observations. It does not submit forms, authenticate, crawl routes or execute JavaScript.
 - John the Ripper integration for authorised offline hash audits using a local hash file and a chosen wordlist (RockYou can be selected). John runs locally; the temporary pot file is deleted and recovered plaintext passwords are never included in reports.
 - Optional local authentication-log analysis remains available for exported server/WAF/identity-provider evidence; it is not required for website investigations.
 
@@ -142,7 +142,7 @@ This is a public-source and evidence-review workspace, not an account-access too
 - Optional forensic tools remain available under options 8 and 9: exported authentication-log analysis and hash-format inventory classification.
 - Public digital-footprint research, page inspection, and locally saved evidence notes remain available.
 
-**Important boundary:** the credential-guessing lab at option 17 is an offline simulation only; it does not attack live websites, bypass authentication or access accounts. The read-only website preflight does not independently verify backend controls. John is restricted to offline hashes the operator owns or is explicitly authorised to audit. Public indicators are leads, not attribution or proof of criminal activity.
+**Important boundary:** the credential-guessing lab at option 17 is an offline simulation only; it does not attack live websites, bypass authentication or access accounts. The read-only website inspection is deeper than a header check, but it still cannot prove server-side password handling, SQL injection resistance, rate limiting, lockout, MFA, session rotation/expiry, logout invalidation or role enforcement. Those require source/configuration review, owner-provided logs or a separately authorised staging test. John is restricted to offline hashes the operator owns or is explicitly authorised to audit. Public indicators are leads, not attribution or proof of criminal activity.
 
 
 ## Dedicated authentication security options (menu options 17-20)
