@@ -227,3 +227,17 @@ python3 kali-companion/cyberlab.py menu
 ## Phone number intelligence (menu option 16)
 
 Option 16 performs local E.164 parsing and, when `phonenumbers` is installed, uses its bundled libphonenumber numbering-plan metadata to assess possible/valid format, number type, original carrier-range label and approximate numbering region. Install with `python -m pip install phonenumbers` in the active virtual environment. This is metadata enrichment, not a live subscriber lookup: it cannot reveal the subscriber's name, SIM registration date, last-used time, current carrier with certainty, private social accounts, fraud records or IP addresses. No SMS/call is sent and no phone number is submitted to a third-party lookup service. A valid numbering-plan result does not prove a number is active or assigned.
+
+
+### Username OSINT (menu option 18)
+
+Option 18 now performs three public-index searches for an operator-authorised username using the Brave Search API, deduplicates up to 25 returned pages, and saves source URLs, titles, snippets and available page-age metadata in the investigation report. It also retains the local username-format review. Search results are leads only: matching handles do not establish common ownership, and the tool does not access private profiles, login-protected pages, breach dumps or account-recovery flows.
+
+Configure a Brave Search API key (the API requires a key; see https://api-dashboard.search.brave.com/documentation/guides/authentication):
+
+```bash
+export BRAVE_SEARCH_API_KEY='your-brave-search-api-key'
+python3 kali-companion/cyberlab.py menu
+```
+
+Keep the key in your shell environment or a local untracked secrets file; never commit it to Git. Without the key, option 18 reports the setup requirement and does not pretend a search occurred.
