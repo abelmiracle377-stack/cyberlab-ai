@@ -2,7 +2,7 @@ import unittest
 import camera_intelligence
 from unittest.mock import patch
 
-from camera_intelligence import (build_rtsp_url, public_webcam_directory, validate_camera_host, validate_lan_network, validate_camera_on_detected_lan, validate_camera_port)
+from camera_intelligence import (build_rtsp_url, public_webcam_directory, validate_camera_host, validate_lan_network, validate_camera_on_detected_lan, validate_camera_port, detect_private_lan_interfaces)
 
 
 class CameraIntelligenceTests(unittest.TestCase):
@@ -44,6 +44,15 @@ class CameraIntelligenceTests(unittest.TestCase):
             with patch("camera_intelligence.subprocess.run", return_value=completed):
                 from camera_intelligence import detect_private_lan_networks
                 self.assertEqual(detect_private_lan_networks(), ["10.20.30.0/24"])
+
+    def test_detect_private_lan_interfaces_shows_wifi_ip_and_subnet(self):
+        completed = type("Completed", (), {"stdout": "3: wlan0 inet 192.168.1.23/24 scope global wlan0\\n"})()
+        with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"):
+            with patch("camera_intelligence.subprocess.run", return_value=completed):
+                result = detect_private_lan_interfaces()
+        self.assertEqual(result[0]["interface"], "wlan0")
+        self.assertEqual(result[0]["ipv4"], "192.168.1.23")
+        self.assertEqual(result[0]["network"], "192.168.1.0/24")
 
     def test_camera_ip_must_match_kali_local_subnet(self):
         result = validate_camera_on_detected_lan("192.168.1.201", ["192.168.1.0/24"])
