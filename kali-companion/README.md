@@ -308,6 +308,21 @@ Remote capture is opt-in and permission-scoped. An invitation must disclose the 
 
 Files uploaded by an enrolled device are stored in that operator's own VPS storage namespace. The gateway may issue authenticated, expiring preview/download links for supported images, audio, video and documents. Links must not expose public directory listings or permanent unauthenticated access. Apply upload size/type limits, per-device authorization, retention controls, deletion, and audit events. The original file should remain downloadable; previews are an additional way to view it, not a replacement for the file.
 
-### Implementation status
+### Gateway API implementation status
 
-This section describes the target architecture and safety requirements; it does **not** mean the VPS gateway, device companion, pairing flow, live capture, connected-device registry or File Hub has been implemented. Options 9-11 remain unconfigured until the real backend and integration tests are delivered. Do not report a successful connection, device, recording or file link unless it was actually verified against the user's configured VPS.
+The first backend foundation is now present in `vps_gateway/app.py`:
+- Health endpoint for option 9 connection checks.
+- Owner-authenticated, expiring one-time pairing-code creation.
+- Recipient-side pairing acceptance that requires terms acceptance and explicit permission flags; device credentials are returned once and stored hashed.
+- Authenticated device heartbeat and real device registry with online/offline status based on heartbeat age.
+- Owner-controlled device revocation.
+- Authenticated file upload/listing, per-device file namespace, and expiring share-token preview/download links.
+- 25 MB upload limit and SQLite registry suitable for a small single-user VPS.
+
+Option 9 in the Kali menu can save an HTTPS gateway URL and owner token with local file permissions 0600, test the health endpoint, and generate pairing codes. Option 10 reads the real registry and offers device revocation. The gateway installer creates a dedicated service account and systemd service bound to localhost only.
+
+### Not implemented yet
+
+The browser/companion recipient experience, companion-side permission prompts, native camera/microphone/screen/location capture, real-time media streaming, recipient-initiated session stop endpoint, file deletion/retention UI, and end-to-end integration tests are not yet implemented. The pairing accept API is a backend endpoint, not a finished user-facing consent page. Do not treat pairing as completed until a compatible companion exists. Do not report a successful camera/microphone recording, stream, location fix or screenshot unless a real permitted capture has occurred and been verified.
+
+The service must be placed behind a properly configured HTTPS reverse proxy. Never expose its localhost port 8000 directly to the internet. Do not use plain HTTP for owner credentials or device tokens.
