@@ -2067,7 +2067,7 @@ def audit_password_security_target(target_path: str, timeout: int = 12) -> dict:
     emails, usernames, password_candidates = set(), set(), {}
     findings = []
     password_assignment = re.compile(
-        r"""(?im)\b(?:password|passwd|pwd|secret|client_secret|api_key)\b\s*[:=]\s*["']([^"'\\\r\n]{4,200})["']"""
+        r"""(?im)\b(?:password|passwd|pwd|secret|client_secret|api_key)\b\s*[:=]\s*["']([^"'\r\n]{4,200})["']"""
     )
     username_assignment = re.compile(
         r"""(?im)\b(?:username|user_name|login|account_name)\b\s*[:=]\s*["']([^"'\\\r\n]{2,100})["']"""
@@ -2139,7 +2139,11 @@ def audit_password_security_target(target_path: str, timeout: int = 12) -> dict:
                     "remediation": "Rotate immediately, remove the secret from source and repository history, and block it through the password screening control."
                 })
         except (OSError, ValueError, urllib.error.URLError) as exc:
-            breach_checks.append({"file": metadata["file"], "status": "unavailable", "detail": str(exc)[:300]})
+            breach_checks.append({
+                "file": metadata["file"], "status": "unavailable",
+                "breached_password_match": None, "breach_corpus_occurrences": None,
+                "secret_value_disclosed": False, "detail": str(exc)[:300]
+            })
 
     if emails:
         findings.append({
