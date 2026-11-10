@@ -404,7 +404,7 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(associations["public_ip_addresses"], ["203.0.113.10"])
         self.assertEqual(associations["certificate_transparency_assets"]["public_ip_addresses"], ["203.0.113.11"])
         self.assertEqual(associations["public_locations"], ["Lagos"])
-        self.assertIn("not proof", associations["relationship_note"])
+        self.assertIn("does not establish", associations["relationship_note"])
 
     def test_dns_intelligence_social_profile_inspects_supplied_profile_not_homepage(self):
         with patch.object(cyberlab, "inspect_assessment_page", return_value={"status_code": 200, "page_title": "Example Profile"}) as inspect:
