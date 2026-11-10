@@ -583,6 +583,48 @@ def _public_social_account_refs(urls: list) -> list:
     return results
 
 
+def _dns_passive_domain_assets(domain: str, timeout: int = 12, limit: int = 30) -> dict:
+    """Discover certificate-listed subdomains and resolve their public IPs; never scan hosts."""
+    query = urllib.parse.urlencode({"q": "%." + domain, "output": "json"})
+    try:
+        rows = http_json("https://crt.sh/?" + query, timeout)
+        names = sorted({
+            name.strip().lower().rstrip(".").lstrip("*.")
+            for row in rows if isinstance(row, dict)
+            for name in str(row.get("name_value", "")).splitlines()
+            if name.strip() and name.strip().lower().rstrip(".").lstrip("*.").endswith("." + domain)
+        })
+    except Exception as exc:
+        return {"status": "unavailable", "source": "Certificate Transparency (crt.sh)",
+                "error": str(exc), "subdomains": [], "public_ip_addresses": [],
+                "note": "No host scanning or service probing is performed."}
+    assets = []
+    all_ips = set()
+    for name in names[:max(1, min(limit, 50))]:
+        resolved = resolve_public_site_ips(name)
+        addresses = resolved.get("addresses", [])
+        all_ips.update(addresses)
+        assets.append({"hostname": name, "public_ip_addresses": addresses,
+                       "resolution_status": "resolved" if addresses else "no_public_address_returned"})
+    return {"status": "ok", "source": "Certificate Transparency (crt.sh) plus public DNS resolution",
+            "certificate_names_returned": len(names), "subdomains": assets,
+            "public_ip_addresses": sorted(all_ips),
+            "note": "Certificate names can be historical or inactive. IP resolution is passive DNS only; no ports or services are tested."}
+
+
+def _clean_public_location_values(values: list) -> list:
+    """Drop obvious markup/script fragments from heuristic homepage location matches."""
+    cleaned = []
+    for value in values:
+        item = re.sub(r"\\s+", " ", str(value)).strip(" \\t\\r\\n.;,")
+        if not item or any(token in item.lower() for token in (".href=", "</", "<script", "function(", "=>", "{", "}", "var ")):
+            continue
+        if len(item) > 100 or not re.search(r"[A-Za-z]", item):
+            continue
+        cleaned.append(item)
+    return list(dict.fromkeys(cleaned))[:10]
+
+
 def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
     """Route input to a type-specific public intelligence workflow."""
     identity = _normalise_osint_input(value)
@@ -600,6 +642,8 @@ def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
         # Enrich only from the email domain's own public business website.
         # Do not attempt to discover private accounts or correlate a person across services.
         public_site = public_site_profile(domain, timeout)
+        passive_assets = _dns_passive_domain_assets(domain, timeout)
+        public_locations = _clean_public_location_values(public_site.get("public_location", []))
         result["email_intelligence"]["public_domain_associations"] = {
             "source_domain": domain,
             "source": "The domain's public HTTPS homepage, when available",
@@ -609,15 +653,24 @@ def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
             "public_business_phone_numbers": public_site.get("public_contact_phone_numbers", []),
             "public_social_media_links": public_site.get("social_media_links", []),
             "public_social_account_identifiers": _public_social_account_refs(public_site.get("social_media_links", [])),
-            "public_locations": public_site.get("public_location", []),
+            "public_locations": public_locations,
             "public_addresses": public_site.get("public_address", []),
             "public_ip_addresses": result["email_intelligence"]["domain_ip_addresses"].get("addresses", []),
-            "relationship_note": "These are domain-level DNS addresses and contact/social references published on the domain's own public homepage. A URL path identifier is not proof of account ownership or a link to the submitted mailbox owner."
+            "certificate_transparency_assets": passive_assets,
+            "public_social_account_identifiers": _public_social_account_refs(public_site.get("social_media_links", [])),
+            "association_quality": {
+                "public_contact_source": "Domain homepage only",
+                "social_username_source": "Visible public profile URL path only",
+                "ip_source": "Public DNS and certificate-transparency names",
+                "identity_linking": "Not performed"
+            },
+            "relationship_note": "These are domain-level DNS assets and contact/social references published by the domain or listed in public certificate records. A shared IP, email address, phone number or social URL does not establish that the submitted mailbox owner controls an account."
         }
         result["limitations"] = [
             "Mailbox existence, ownership, inbox activity and deliverability are not tested.",
             "No passwords, private messages, breach credentials or private-person contact details are retrieved.",
             "Public contacts and social links are extracted only from the email domain's own public homepage; no cross-platform identity matching is performed.",
+            "Certificate-transparency subdomains may be historical; public IP resolution does not test whether ports or services are exposed.",
             "Search hints are optional manual research leads, not live search results.",
             "DKIM checks cover a short common-selector list only; they are not exhaustive."
         ]
