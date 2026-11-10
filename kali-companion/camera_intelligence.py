@@ -53,6 +53,41 @@ def validate_lan_network(value: str) -> ipaddress.IPv4Network:
         raise ValueError("Choose a subnet containing no more than 256 addresses (normally /24 or smaller).")
     return network
 
+def detect_private_lan_networks() -> list[str]:
+    """Discover RFC1918 interface networks configured on this Kali host."""
+    ip_cmd = shutil.which("ip")
+    if not ip_cmd:
+        return []
+    try:
+        result = subprocess.run(
+            [ip_cmd, "-o", "-f", "inet", "addr", "show", "scope", "global"],
+            capture_output=True, text=True, timeout=3, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    networks = set()
+    for line in result.stdout.splitlines():
+        match = re.search(r"\\binet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)", line)
+        if not match:
+            continue
+        try:
+            interface_network = ipaddress.ip_interface(match.group(1)).network
+            rfc1918 = (ipaddress.ip_network("10.0.0.0/8"),
+                       ipaddress.ip_network("172.16.0.0/12"),
+                       ipaddress.ip_network("192.168.0.0/16"))
+            if any(interface_network.network_address in block for block in rfc1918):
+                # Never widen a configured interface prefix; cap discovery to /24.
+                if interface_network.num_addresses > 256:
+                    interface_network = ipaddress.ip_network(
+                        (interface_network.network_address, 24), strict=False
+                    )
+                if interface_network.num_addresses <= 256:
+                    networks.add(str(interface_network))
+        except ValueError:
+            continue
+    return sorted(networks)
+
+
 def discover_lan_cameras(cidr: str, timeout: float = 0.35, max_workers: int = 64) -> dict:
     """Check common camera ports on an operator-selected private subnet."""
     network = validate_lan_network(cidr)
@@ -151,7 +186,44 @@ def camera_intelligence_menu() -> dict:
         return {}
     if choice == "1":
         print("\nDiscovery is limited to one RFC1918 private subnet (256 addresses maximum).")
-        network = input("Your private LAN subnet (e.g. 192.168.1.0/24): ").strip()
+        network = input("Your private LAN subnet (e.g. 192.168.1.0/24; press Enter to detect it): ").strip()
+        if network:
+            try:
+                selected_network = validate_lan_network(network)
+            except ValueError as exc:
+                detected = detect_private_lan_networks()
+                if not detected:
+                    print(f"\\nThe supplied value is not an RFC1918 private subnet: {exc}")
+                    print("No private LAN subnet could be detected automatically.")
+                    print("For public webcams, choose menu option 3 and search by city or country.")
+                    return {
+                        "feature": "camera_discovery_input_diagnostic",
+                        "status": "private_lan_not_found",
+                        "supplied_value": network,
+                        "reason": str(exc),
+                        "public_ip_scanning": "Not performed. Public IP ranges are not scanned for exposed cameras.",
+                        "next_step": "Enter your router's private LAN subnet (for example 192.168.1.0/24), or use option 3 for public webcam directories."
+                    }
+                print("\\nThat is not a private LAN subnet. Detected private network(s) on this Kali host:")
+                for item in detected:
+                    print("  " + item)
+                if len(detected) == 1:
+                    network = detected[0]
+                    print("Using the detected local network: " + network)
+                else:
+                    network = input("Enter one of the detected private subnets: ").strip()
+                    if network not in detected:
+                        raise ValueError("Choose one of the detected private subnets.")
+        else:
+            detected = detect_private_lan_networks()
+            if not detected:
+                raise ValueError("No private LAN subnet was detected. Connect to your own Wi-Fi/LAN or use option 3 for public webcam directories.")
+            print("\\nDetected private network(s) on this Kali host:")
+            for item in detected:
+                print("  " + item)
+            network = detected[0] if len(detected) == 1 else input("Choose a detected private subnet: ").strip()
+            if network not in detected:
+                raise ValueError("Choose one of the detected private subnets.")
         confirmation = input("Type YES to confirm you own/administer this network and authorise these checks: ").strip()
         if confirmation != "YES":
             raise ValueError("LAN discovery cancelled; explicit authorisation confirmation is required.")
