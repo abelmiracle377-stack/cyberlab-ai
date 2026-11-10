@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 DB_PATH = Path(os.environ.get("CYBERLAB_GATEWAY_DB", "/var/lib/cyberlab-gateway/registry.sqlite3"))
