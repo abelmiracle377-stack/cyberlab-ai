@@ -331,6 +331,9 @@ The first backend foundation is now present in `vps_gateway/app.py`:
 
 Option 9 in the Kali menu can save an HTTPS gateway URL and owner token with local file permissions 0600, test the health endpoint, and generate pairing codes. Option 10 reads the real registry and offers device revocation. The gateway installer creates a dedicated service account and systemd service bound to localhost only.
 
+Option 9 also runs a compatibility check before saving a new VPS connection. The authenticated `/v1/owner/diagnostics` endpoint reports the Linux distribution label, Python version, available memory and free storage. It does not disclose hostnames, IP addresses, usernames, or environment variables. Linux and Python 3.10+ are required; low memory or free storage produces a warning and requires confirmation. Option 9 → 5 reruns the check for an already configured VPS. The HTTPS health request is checked separately before credentials are saved. These are basic host checks, not a load test or guarantee that a VPS can support heavy workloads.
+
+
 ### Not implemented yet
 
 The browser/companion recipient experience, companion-side permission prompts, native camera/microphone/screen/location capture, real-time media streaming, recipient-initiated session stop endpoint, file deletion/retention UI, and end-to-end integration tests are not yet implemented. The pairing accept API is a backend endpoint, not a finished user-facing consent page. Do not treat pairing as completed until a compatible companion exists. Do not report a successful camera/microphone recording, stream, location fix or screenshot unless a real permitted capture has occurred and been verified.
