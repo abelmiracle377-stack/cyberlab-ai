@@ -381,10 +381,35 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(result["addresses"], ["93.184.216.34"])
         self.assertEqual(result["count"], 1)
 
-    def test_dns_intelligence_social_reference_does_not_claim_member_count(self):
-        result = cyberlab.dns_intelligence_lookup("https://facebook.com/example")
-        self.assertEqual(result["sources"]["social_profile"]["status"], "reference_only")
-        self.assertIn("Not reliably available", result["sources"]["social_profile"]["follower_or_member_count"])
+    def test_dns_intelligence_email_uses_email_specific_workflow(self):
+        records = {"MX": {"answers": [{"value": "10 mx.example.org"}]},
+                   "TXT": {"answers": [{"value": "v=spf1 -all"}]},
+                   "DMARC": {"answers": [{"value": "v=DMARC1; p=reject"}]},
+                   "CAA": {"answers": []}}
+        with patch.object(cyberlab, "dns_lookup", return_value={"records": records}), \
+             patch.object(cyberlab, "_dkim_selector_checks", return_value={"published_selectors_found": []}), \
+             patch.object(cyberlab, "resolve_public_site_ips", return_value={"addresses": []}):
+            result = cyberlab.dns_intelligence_lookup("person@example.org")
+        self.assertEqual(result["investigation_type"], "email_intelligence")
+        self.assertIn("email_intelligence", result)
+        self.assertNotIn("sources", result)
+        self.assertEqual(result["email_intelligence"]["submitted_email_address"], "person@example.org")
+
+    def test_dns_intelligence_social_profile_inspects_supplied_profile_not_homepage(self):
+        with patch.object(cyberlab, "inspect_assessment_page", return_value={"status_code": 200, "page_title": "Example Profile"}) as inspect:
+            result = cyberlab.dns_intelligence_lookup("https://facebook.com/example")
+        self.assertEqual(result["investigation_type"], "social_profile_url_intelligence")
+        self.assertEqual(result["social_profile_intelligence"]["platform"], "facebook.com")
+        self.assertEqual(inspect.call_args.args[0], "https://facebook.com/example")
+        self.assertNotIn("sources", result)
+
+    def test_dns_intelligence_url_uses_url_specific_page_inspection(self):
+        with patch.object(cyberlab, "_url_intelligence_findings", return_value={"enhanced_indicators": []}), \
+             patch.object(cyberlab, "inspect_assessment_page", return_value={"status_code": 200, "page_title": "Example"}) as inspect:
+            result = cyberlab.dns_intelligence_lookup("https://example.org/login")
+        self.assertEqual(result["investigation_type"], "website_url_intelligence")
+        self.assertIn("page_inspection", result["url_intelligence"])
+        self.assertEqual(inspect.call_args.args[0], "https://example.org/login")
 
 
     def test_password_storage_review_rejects_unrecognised_answers(self):
