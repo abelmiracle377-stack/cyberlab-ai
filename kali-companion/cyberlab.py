@@ -1275,121 +1275,123 @@ def show_investigation_history() -> None:
 
 
 
-def manual_security_assessment() -> dict:
-    """Guide an authorised, evidence-based review without sending attack traffic."""
-    print("\nMANUAL SECURITY ASSESSMENT & VERIFICATION")
-    print("Use only on a system you own or are explicitly authorised to assess.")
-    target = input("Application/domain or approved test environment: ").strip()[:253]
+def manual_security_assessment(timeout: int = 12) -> dict:
+    """Automatically perform a bounded passive review of an explicitly authorised public site."""
+    print("\nAUTOMATED PASSIVE SECURITY ASSESSMENT")
+    print("Only public HTTPS, DNS and response metadata are inspected.")
+    print("No login attempts, payloads, form submissions, endpoint guessing or scans are performed.")
+    target = input("Application/domain or approved test environment: ").strip()[:1000]
     if not target:
         raise ValueError("A target label is required.")
-    authorised = input("Confirm you have permission to assess this system (yes/no): ").strip().lower()
+    authorised = input("Confirm you own or are explicitly authorised to assess this system (yes/no): ").strip().lower()
     if authorised not in ("yes", "y"):
         raise ValueError("Assessment stopped: explicit authorisation was not confirmed.")
 
-    print("\nSQL INJECTION — WHAT IT IS")
-    print("SQL injection occurs when an application mixes untrusted input into SQL text")
-    print("instead of binding that input as data. A crafted value can change query logic.")
-    print("Depending on the query and database permissions, impact can include unauthorised")
-    print("data access, data changes, authentication bypass or, in severe cases, server impact.")
-    print("The safe fix is parameterised queries/prepared statements or correctly bound ORM inputs.")
-    print("CyberLab will not submit SQL payloads, bypass a login, extract records or alter data.")
+    parsed = urllib.parse.urlsplit(target if "://" in target else "https://" + target)
+    if parsed.username or parsed.password or not parsed.hostname:
+        raise ValueError("Enter a public domain or HTTPS URL without embedded credentials.")
+    domain = validate_domain(parsed.hostname)
+    page_url = "https://" + domain + (parsed.path if parsed.path and parsed.path != "/" else "/")
+    print("\n[1/3] Reviewing public HTTPS page and visible authentication metadata...")
+    page_inspection = inspect_assessment_page(page_url, timeout=timeout, method="GET")
+    print("[2/3] Checking public DNS, mail and domain security records...")
+    dns_result = dns_lookup(domain, timeout=timeout)
+    print("[3/3] Analysing observed evidence and separating unobservable controls...")
 
-    checks = [
-        ("sql_parameter_binding", "Can the relevant source code/configuration be reviewed for parameterised queries or bound ORM parameters?"),
-        ("sql_string_concatenation", "Does reviewed code concatenate user-controlled input into SQL statements?"),
-        ("sql_error_disclosure", "Do existing, safely collected application logs show database errors exposed to end users?"),
-        ("sql_test_environment", "Has a qualified tester verified input handling in an isolated staging environment using non-destructive methods?"),
-        ("rate_limit", "Is there documented and verified rate limiting or throttling on authentication?"),
-        ("lockout", "Are progressive delays or account-protection controls applied after repeated failed logins?"),
-        ("captcha", "Is an appropriate bot challenge applied when suspicious authentication activity is detected?"),
-        ("session_secure", "Are session cookies marked Secure and served only over HTTPS?"),
-        ("session_httponly", "Are session cookies marked HttpOnly?"),
-        ("session_samesite", "Are session cookies configured with an appropriate SameSite policy?"),
-        ("session_rotation", "Are session identifiers rotated after login and privilege changes?"),
-        ("session_expiry", "Are idle and absolute session expiry enforced, with logout invalidating the session?"),
-        ("admin_access", "Has the owner supplied the admin URL, and are access controls/MFA/role restrictions verified there?"),
-        ("login_method", "What login method is visibly documented or confirmed by the application owner?"),
-        ("breach_response", "Has the organisation checked its own addresses through an approved breach-notification service without retrieving passwords?"),
-    ]
-    answers = {}
-    print("\nFor each check enter: yes / no / unknown / not-applicable.")
-    print("Answer from code review, owner documentation or evidence you already have;")
-    print("do not probe a live login or submit attack strings.")
-    for key, prompt in checks:
-        while True:
-            answer = input(f"\n{prompt}\n  Result: ").strip().lower()
-            if answer in ("yes", "y", "no", "n", "unknown", "u", "not-applicable", "na"):
-                answers[key] = {"yes": "yes", "y": "yes", "no": "no", "n": "no",
-                                "unknown": "unknown", "u": "unknown",
-                                "not-applicable": "not_applicable", "na": "not_applicable"}[answer]
-                break
-            print("Enter yes, no, unknown or not-applicable.")
-
-    page_url = input("\nOwner-approved public login/home page HTTPS URL (optional): ").strip()[:1000]
-    page_inspection = None
-    if page_url:
-        page_inspection = inspect_assessment_page(page_url, method="GET")
-        print("\nPASSIVE PAGE INSPECTION")
-        print(json.dumps(page_inspection, indent=2, ensure_ascii=False))
-    admin_url = input("\nOwner-provided admin panel HTTPS URL (optional; HEAD metadata only): ").strip()[:1000]
-    admin_inspection = inspect_assessment_page(admin_url, method="HEAD") if admin_url else None
-    if admin_inspection:
-        print("\nADMIN URL RESPONSE METADATA")
-        print(json.dumps(admin_inspection, indent=2, ensure_ascii=False))
-    login_method = (
-        page_inspection.get("login_classification", "unknown") if page_inspection else
-        input("Login method (email/password, username/password, SSO, passkey, mixed, unknown): ").strip()[:100] or "unknown"
-    )
-    evidence = input("Evidence notes (no passwords, tokens or personal records): ").strip()[:2000]
-    findings = []
-    if answers["sql_string_concatenation"] == "yes":
-        findings.append({"area": "SQL injection", "status": "potential",
-                         "severity": "high",
-                         "detail": "Reviewed code appears to concatenate user-controlled input into SQL. Confirm the data flow and query construction in an isolated authorised review; do not infer exploitability from this indicator alone.",
-                         "remediation": "Replace dynamic concatenation with parameterised queries/prepared statements or safely bound ORM parameters; use least-privilege database accounts and generic client-facing errors."})
-    elif answers["sql_parameter_binding"] == "yes" and answers["sql_string_concatenation"] == "no":
-        findings.append({"area": "SQL injection", "status": "not_detected",
-                         "severity": "informational",
-                         "detail": "The reviewed code indicates parameter binding and no concatenation in the reviewed path. This does not prove every query path is safe.",
-                         "remediation": "Extend code review to all input-to-query paths and retain regression tests."})
-    else:
-        findings.append({"area": "SQL injection", "status": "inconclusive",
-                         "severity": "unknown",
-                         "detail": "There is not enough source or staging evidence to determine whether SQL injection is present.",
-                         "remediation": "Review query construction and verify parameter binding in an isolated staging environment."})
-    mapping = [
-        ("rate_limit", "Authentication rate limiting"),
-        ("lockout", "Account lockout / progressive delay"),
-        ("captcha", "Adaptive bot protection"),
-        ("session_secure", "Secure session cookie"),
-        ("session_httponly", "HttpOnly session cookie"),
-        ("session_samesite", "SameSite session cookie"),
-        ("session_rotation", "Session rotation"),
-        ("session_expiry", "Session expiry and invalidation"),
-        ("admin_access", "Owner-provided admin access controls"),
-        ("breach_response", "Organisation-owned email exposure review"),
-    ]
-    for key, label in mapping:
-        status = "confirmed" if answers[key] == "yes" else ("potential" if answers[key] == "no" else ("not_applicable" if answers[key] == "not_applicable" else "inconclusive"))
-        findings.append({"area": label, "status": status, "detail": "Self-reported/manual evidence; not independently tested."})
-    return {
-        "assessment": "Manual Security Assessment & Verification",
-        "target": target,
-        "authorisation_confirmed_by_operator": True,
+    headers = page_inspection.get("response_headers", {})
+    observed_headers = page_inspection.get("security_headers", {})
+    cookies = page_inspection.get("cookies", [])
+    cookie_checks = {
+        "session_secure": ("yes" if cookies and all(c.get("secure") for c in cookies) else "no" if cookies else "unknown"),
+        "session_httponly": ("yes" if cookies and all(c.get("httponly") for c in cookies) else "no" if cookies else "unknown"),
+        "session_samesite": ("yes" if cookies and all(c.get("samesite") for c in cookies) else "no" if cookies else "unknown"),
+    }
+    rate_headers = {k: v for k, v in headers.items() if any(t in k.lower() for t in ("ratelimit", "retry-after"))}
+    forms = page_inspection.get("visible_forms", [])
+    login_method = page_inspection.get("login_classification", "unknown")
+    records = dns_result.get("records", {})
+    def has_answers(record):
+        return bool(records.get(record, {}).get("answers"))
+    answers = {
+        "sql_parameter_binding": "unknown",
+        "sql_string_concatenation": "unknown",
+        "sql_error_disclosure": "unknown",
+        "sql_test_environment": "unknown",
+        "rate_limit": "yes" if rate_headers else "unknown",
+        "lockout": "unknown",
+        "captcha": "unknown",
+        **cookie_checks,
+        "session_rotation": "unknown",
+        "session_expiry": "unknown",
+        "admin_access": "unknown",
         "login_method": login_method,
+        "breach_response": "not_applicable",
+    }
+    findings = []
+    missing = page_inspection.get("security_headers_missing", [])
+    if page_inspection.get("status_code") == 200:
+        findings.append({"area": "Public HTTPS page", "severity": "info", "status": "observed",
+                         "detail": "The supplied public page returned an HTTP response. This is an availability observation, not a security certification."})
+    for name in missing:
+        findings.append({"area": "HTTP security headers", "severity": "low", "status": "potential_gap",
+                         "detail": name + " was not observed on the inspected response.",
+                         "remediation": "Review whether this header is appropriate for the application and configure it at the application or edge."})
+    for key, label in (("session_secure", "Secure cookie attribute"), ("session_httponly", "HttpOnly cookie attribute"), ("session_samesite", "SameSite cookie attribute")):
+        if answers[key] == "no":
+            findings.append({"area": label, "severity": "medium", "status": "potential_gap",
+                             "detail": "At least one cookie set by the inspected response lacked the expected attribute.",
+                             "remediation": "Review cookie purpose and set Secure, HttpOnly and an appropriate SameSite policy for session cookies."})
+        elif answers[key] == "unknown":
+            findings.append({"area": label, "severity": "info", "status": "not_observed",
+                             "detail": "The inspected response did not set cookies, so this control could not be assessed."})
+    if rate_headers:
+        findings.append({"area": "Authentication throttling", "severity": "info", "status": "rate_limit_headers_observed",
+                         "detail": "Rate-limit or Retry-After response headers were present. This alone does not prove effective authentication throttling."})
+    else:
+        findings.append({"area": "Authentication throttling", "severity": "info", "status": "not_observed",
+                         "detail": "No rate-limit headers were observed on this single request; actual throttling requires owner-side configuration or controlled staging evidence."})
+    findings.append({"area": "SQL injection resistance", "severity": "info", "status": "not_assessable_passively",
+                     "detail": "Public HTML and DNS cannot establish parameter binding or unsafe SQL concatenation. Server-side source/configuration review is required."})
+    findings.append({"area": "Login protection and session lifecycle", "severity": "info", "status": "not_assessable_passively",
+                     "detail": "Lockout, bot challenges, session rotation, idle/absolute expiry, logout invalidation and MFA enforcement cannot be proven by a single unauthenticated page request."})
+    if not has_answers("MX"):
+        findings.append({"area": "Email configuration", "severity": "medium", "status": "review",
+                         "detail": "No MX answer was returned by the selected public DNS resolvers."})
+    txt_values = [str(x.get("value", "")) for x in records.get("TXT", {}).get("answers", [])]
+    if not any("v=spf1" in x.lower() for x in txt_values):
+        findings.append({"area": "SPF", "severity": "medium", "status": "not_observed",
+                         "detail": "No SPF TXT record was observed at the domain apex."})
+    dmarc = records.get("DMARC", {}).get("answers", [])
+    if not any("v=dmarc1" in str(x.get("value", "")).lower() for x in dmarc):
+        findings.append({"area": "DMARC", "severity": "medium", "status": "not_observed",
+                         "detail": "No DMARC record was observed at _dmarc." + domain + "."})
+    observed = sum(1 for v in answers.values() if v == "yes")
+    unknown = sum(1 for v in answers.values() if v == "unknown")
+    return {
+        "assessment": "Automated Passive Security Assessment",
+        "target": domain,
+        "authorisation_confirmed_by_operator": True,
+        "scope": {"https_page": page_url, "dns_domain": domain, "requests": "one public HTTPS GET plus bounded DNS queries"},
         "page_inspection": page_inspection,
-        "owner_provided_admin_url": admin_url or None,
-        "admin_response_inspection": admin_inspection,
+        "dns_inspection": dns_result,
+        "login_method": login_method,
         "checks": answers,
         "findings": findings,
-        "evidence_notes": evidence,
-        "method": "One GET to the explicitly supplied HTTPS page and one HEAD to the owner-provided admin URL when supplied, plus operator-led checklist. No redirects followed, forms submitted, payloads sent, login attempts, endpoint discovery or account lookups were performed.",
-        "sql_injection_explanation": {
-            "cause": "Untrusted input is concatenated into SQL text instead of being passed separately as a bound parameter.",
-            "impact": ["Potential unauthorised data access", "Potential data modification or deletion", "Potential authentication bypass", "In severe configurations, broader server impact"],
-            "safe_remediation": ["Use parameterised queries/prepared statements", "Use correctly bound ORM parameters", "Apply least-privilege database permissions", "Avoid exposing database errors to users", "Add regression tests for every query path"]
+        "analysis": {
+            "observed_yes_controls": observed,
+            "unknown_or_unverifiable_controls": unknown,
+            "finding_count": len(findings),
+            "overall_status": "review_required" if any(f.get("severity") in ("high", "medium") for f in findings) else "limited_passive_observations",
+            "interpretation": "This is an evidence-based passive review, not a penetration test. 'Not observed' and 'unknown' do not mean a control is absent."
         },
-        "limitations": ["A checklist is not a penetration test.", "No automated brute-force, SQL injection payloads, session hijacking, hidden-path enumeration or credential harvesting is performed. Rate-limit/lockout protections, session rotation/expiry and server-side admin authorization still require source/configuration review or owner-provided evidence; a single page response cannot prove them.", "Unknown and inconclusive results must not be represented as secure or vulnerable."]
+        "method": "Automatically inspected the explicit public HTTPS URL once without following redirects, inspected response headers/cookies/forms, and queried public DNS records. No admin URL guessing, authentication attempts, form submissions, payloads, endpoint discovery, port scans, breach lookups or personal-account searches.",
+        "limitations": [
+            "SQL injection requires server-side source/configuration review; it cannot be identified reliably from public HTML.",
+            "Rate limiting, lockout, CAPTCHA triggers, MFA enforcement, session rotation/expiry and admin role restrictions need owner-side evidence or an isolated staging review.",
+            "No breach-notification service was queried and no email address or password was submitted to a third party.",
+            "Only one supplied public page was fetched. No hidden paths or admin endpoints were guessed.",
+            "DNS answers and HTTP headers are observations at the time of assessment and may vary by CDN, region or deployment."
+        ]
     }
 
 
@@ -2140,7 +2142,7 @@ def interactive_menu(timeout: int = 12) -> int:
             continue
         if choice == "3":
             try:
-                result = manual_security_assessment()
+                result = manual_security_assessment(timeout)
                 print(json.dumps(result, indent=2, ensure_ascii=False))
                 destination = save_investigation(result, "manual-security-assessment")
                 print(f"\nSaved locally: {destination}")
