@@ -93,6 +93,40 @@ def detect_private_lan_networks() -> list[str]:
     return sorted(networks)
 
 
+def validate_camera_on_detected_lan(host: str, networks: list[str] | None = None) -> dict:
+    """Require one private camera IPv4 address to belong to a subnet configured on Kali."""
+    target = validate_camera_host(host)
+    try:
+        address = ipaddress.ip_address(target)
+    except ValueError as exc:
+        raise ValueError("Enter the camera's private IPv4 address so it can be matched to Kali's local network.") from exc
+    if not isinstance(address, ipaddress.IPv4Address) or not address.is_private:
+        raise ValueError("Camera IP must be a private IPv4 address on your local Wi-Fi/LAN.")
+    detected = networks if networks is not None else detect_private_lan_networks()
+    parsed_networks = [validate_lan_network(item) for item in detected]
+    matching = [str(network) for network in parsed_networks if address in network]
+    if not matching:
+        if not parsed_networks:
+            raise ValueError("Kali has no detected private Wi-Fi/LAN IPv4 subnet. Connect to the same Wi-Fi/LAN as the camera and try again.")
+        raise ValueError(
+            "Camera IP {} is not inside Kali's detected local network(s): {}. "
+            "Check that both devices are connected to the same Wi-Fi/router and that the camera IP is correct."
+            .format(address, ", ".join(str(network) for network in parsed_networks))
+        )
+    return {"camera_ip": str(address), "matching_local_network": matching[0],
+            "detected_local_networks": [str(network) for network in parsed_networks]}
+
+
+def validate_camera_port(value: str | int) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Camera RTSP port must be a number between 1 and 65535.") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("Camera RTSP port must be between 1 and 65535.")
+    return port
+
+
 def discover_lan_cameras(cidr: str, timeout: float = 0.35, max_workers: int = 64) -> dict:
     """Check common camera ports on an operator-selected private subnet."""
     network = validate_lan_network(cidr)
@@ -305,17 +339,43 @@ def camera_intelligence_menu() -> dict:
         return discover_lan_cameras(network)
     if choice == "2":
         print("\nEnter one camera you own or have explicit permission to access.")
-        host = validate_camera_host(input("Camera IP address or hostname: "))
+        host = validate_camera_host(input("Camera/device private IPv4 address: "))
         confirmation = input("Type YES to confirm you own/administer this camera or have permission to view it: ").strip()
-        if confirmation != "YES":
+        if confirmation.upper() != "YES":
             raise ValueError("Camera connection cancelled; explicit authorisation confirmation is required.")
-        port_text = input("RTSP port [554]: ").strip() or "554"
+
+        detected_networks = detect_private_lan_networks()
+        if detected_networks:
+            print("\nKali detected these local private Wi-Fi/LAN networks:")
+            for network in detected_networks:
+                print("  " + network)
+        else:
+            raise ValueError("Kali could not detect a private Wi-Fi/LAN IPv4 address. Connect to the same Wi-Fi/router as the camera and retry.")
+
+        network_match = validate_camera_on_detected_lan(host, detected_networks)
+        print("Camera IP matches Kali's local network: " + network_match["matching_local_network"])
+
+        port_text = input("Camera RTSP port [554]: ").strip() or "554"
+        port = validate_camera_port(port_text)
+        print("Checking the selected RTSP port on the one authorised camera...")
+        try:
+            with socket.create_connection((host, port), timeout=2.0):
+                print("RTSP port {} is reachable.".format(port))
+        except OSError as exc:
+            raise ValueError(
+                "Could not connect to {}:{} ({}). Check the camera RTSP setting, port, power and firewall. "
+                "The device may use a different RTSP port or have RTSP disabled."
+                .format(host, port, exc)
+            ) from exc
+
         path = input("RTSP stream path [/]: ").strip() or "/"
         username = input("Camera username (leave blank if no username is configured): ").strip()
-        password = getpass.getpass("Camera password (leave blank if no password is configured): ") if username else ""
-        stream_url = build_rtsp_url(host, int(port_text), path, username, password)
+        password = getpass.getpass("Camera password (leave blank if no username is configured): ") if username else ""
+        stream_url = build_rtsp_url(host, port, path, username, password)
         result = launch_camera_viewer(stream_url)
         stream_url = None
+        result["network_check"] = network_match
+        result["port_check"] = {"port": port, "status": "reachable"}
         return result
     if choice == "4":
         from camera_exposure_defence import run_camera_exposure_assessment
