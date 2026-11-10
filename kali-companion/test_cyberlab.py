@@ -521,7 +521,7 @@ class CompanionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             hashes = Path(directory) / "hashes.txt"
             wordlist = Path(directory) / "rockyou.txt"
-            hashes.write_text("test-hash-record", encoding="utf-8")
+            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\\n", encoding="utf-8")
             wordlist.write_text("candidate-password", encoding="utf-8")
             completed = [
                 __import__("subprocess").CompletedProcess([], 0, "Loaded 1 password hash", ""),
@@ -536,6 +536,46 @@ class CompanionTests(unittest.TestCase):
             self.assertNotIn("RecoveredSecret", json.dumps(result))
             self.assertIn("--wordlist=" + str(wordlist), run.call_args_list[0].args[0])
             self.assertNotIn("shell", run.call_args_list[0].kwargs)
+
+    def test_john_audit_does_not_execute_when_hash_file_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "transcript.art"
+            wordlist = Path(directory) / "rockyou.txt"
+            wordlist.write_text("candidate\\n", encoding="utf-8")
+            with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/john"):
+                with patch.object(cyberlab.subprocess, "run") as run:
+                    with self.assertRaisesRegex(ValueError, "does not exist.*No command was executed"):
+                        cyberlab.run_john_audit(missing, wordlist, authorised=True)
+            run.assert_not_called()
+
+    def test_john_audit_rejects_non_hash_text_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hashes = Path(directory) / "transcript.art"
+            wordlist = Path(directory) / "rockyou.txt"
+            hashes.write_text("this is a website name, not a hash\\n", encoding="utf-8")
+            wordlist.write_text("candidate\\n", encoding="utf-8")
+            with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/john"):
+                with patch.object(cyberlab.subprocess, "run") as run:
+                    with self.assertRaisesRegex(ValueError, "not a domain name or ordinary text"):
+                        cyberlab.run_john_audit(hashes, wordlist, authorised=True)
+            run.assert_not_called()
+
+    def test_john_menu_accepts_lowercase_yes_and_requires_existing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hashes = Path(directory) / "hashes.txt"
+            wordlist = Path(directory) / "rockyou.txt"
+            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\\n", encoding="utf-8")
+            wordlist.write_text("candidate\\n", encoding="utf-8")
+            answers = ["4", str(hashes), str(wordlist), "", "yes"]
+            with patch("builtins.input", side_effect=answers):
+                with patch.object(cyberlab, "run_john_audit", return_value={
+                    "feature": "john_the_ripper_offline_audit", "execution_status": "completed",
+                    "command_executed": True, "cracked_hash_count": 0, "remaining_hash_count": 1
+                }) as audit:
+                    result = cyberlab.scam_investigation_menu()
+            self.assertTrue(audit.call_args.kwargs["authorised"])
+            self.assertEqual(result["execution_status"], "completed")
+            self.assertTrue(result["command_executed"])
 
     def test_john_audit_requires_authorisation(self):
         with self.assertRaisesRegex(ValueError, "Confirm that you own"):
