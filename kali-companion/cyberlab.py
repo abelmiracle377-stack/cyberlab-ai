@@ -10,6 +10,7 @@ import string
 import ipaddress
 import json
 import math
+import os
 import re
 import socket
 import sys
@@ -1931,6 +1932,100 @@ def run_credential_guess_lab(username: str, expected_password: str, wordlist_pat
     }
 
 
+def username_osint_search(username: str, timeout: int = 12) -> dict:
+    """Search indexed public web pages for an operator-authorised username using Brave Search."""
+    value = username.strip()
+    if not value or len(value) > 64 or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value):
+        raise ValueError("Username must be 1-64 characters using letters, digits, dot, underscore or hyphen.")
+    api_key = os.environ.get("BRAVE_SEARCH_API_KEY", "").strip()
+    if not api_key:
+        return {
+            "feature": "username_osint_investigation",
+            "status": "api_key_required",
+            "username": value,
+            "search_provider": "Brave Search API",
+            "configuration": [
+                "Create a Brave Search API key at https://api.search.brave.com/",
+                "Set it in this terminal: export BRAVE_SEARCH_API_KEY='your-key'",
+                "Restart CyberLab from the same terminal and run option 18 again."
+            ],
+            "note": "No search was performed. CyberLab does not scrape search-engine result pages."
+        }
+
+    queries = [
+        '"' + value + '"',
+        '"' + value + '" profile OR account OR username',
+        '"' + value + '" site:github.com OR site:gitlab.com OR site:reddit.com'
+    ]
+    collected = {}
+    query_reports = []
+    for query in queries:
+        params = urllib.parse.urlencode({
+            "q": query, "count": 10, "country": "NG",
+            "search_lang": "en", "safesearch": "moderate"
+        })
+        request = urllib.request.Request(
+            "https://api.search.brave.com/res/v1/web/search?" + params,
+            headers={
+                "Accept": "application/json",
+                "X-Subscription-Token": api_key,
+                "User-Agent": USER_AGENT
+            }
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = response.read(2_000_001)
+                if len(payload) > 2_000_000:
+                    raise ValueError("Search response exceeded the 2 MB safety limit.")
+                data = json.loads(payload.decode("utf-8"))
+            rows = data.get("web", {}).get("results", [])
+            query_reports.append({"query": query, "results_returned": len(rows), "status": "ok"})
+            for row in rows:
+                url = row.get("url")
+                if not url:
+                    continue
+                collected[url] = {
+                    "title": str(row.get("title", ""))[:300],
+                    "url": url,
+                    "description": str(row.get("description", ""))[:700],
+                    "page_age": row.get("page_age"),
+                    "language": row.get("language"),
+                    "matched_query": query
+                }
+        except urllib.error.HTTPError as exc:
+            detail = exc.read(2000).decode("utf-8", errors="replace")
+            query_reports.append({"query": query, "status": "http_error", "http_status": exc.code,
+                                  "detail": detail[:1000]})
+            if exc.code in (401, 403, 429):
+                break
+        except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            query_reports.append({"query": query, "status": "error", "detail": str(exc)[:500]})
+
+    results = list(collected.values())[:25]
+    return {
+        "feature": "username_osint_investigation",
+        "status": "completed" if results else "no_indexed_results_or_search_error",
+        "username": value,
+        "search_provider": "Brave Search API",
+        "queries_executed": query_reports,
+        "public_web_results": results,
+        "result_count": len(results),
+        "analysis_guidance": [
+            "Open each source and verify that the username is an exact match, not a similar string.",
+            "A matching handle on two websites does not prove the accounts belong to the same person.",
+            "Search snippets can be stale; check the live source page and its publication/update date.",
+            "No private profiles, login-protected content, breach dumps or account-recovery endpoints were queried."
+        ],
+        "scope": {
+            "public_indexed_web_search_only": True,
+            "platform_account_existence_verified": False,
+            "identity_linkage_inferred": False,
+            "private_data_accessed": False
+        },
+        "note": "Search-engine results are leads, not proof of account ownership or identity."
+    }
+
+
 def assess_username_quality(username: str) -> dict:
     """Review a username string locally without checking whether an account exists."""
     value = username.strip()
@@ -2098,12 +2193,21 @@ def interactive_menu(timeout: int = 12) -> int:
             continue
         if choice == "18":
             try:
-                result = assess_username_quality(input("Username to review locally: "))
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-                destination = save_investigation(result, "username-privacy-review")
-                print(f"Saved locally: {destination}")
-            except (OSError, ValueError) as exc:
-                print(f"Username review stopped: {exc}")
+                username = input("Username to investigate (public web only): ").strip()
+                approval = input("Confirm this is your username or an authorised investigation (type SEARCH): ").strip()
+                if approval != "SEARCH":
+                    print("Search cancelled: authorisation was not confirmed.")
+                else:
+                    result = username_osint_search(username, timeout=timeout)
+                    local_review = assess_username_quality(username)
+                    result["local_username_review"] = local_review
+                    print(json.dumps(result, indent=2, ensure_ascii=False))
+                    destination = save_investigation(result, "username-osint-investigation")
+                    print(f"Saved locally: {destination}")
+            except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+                print(f"Username investigation stopped: {exc}")
+            except (EOFError, KeyboardInterrupt):
+                print("\\nReturning to the CyberLab menu.")
             wait_for_menu()
             continue
         if choice == "19":
