@@ -31,6 +31,42 @@ class CompanionTests(unittest.TestCase):
         self.assertIn("URL does not use HTTPS", result["structural_indicators"])
         self.assertIn("NOT opened", result["risk_note"])
 
+    def test_automated_url_assessment_checks_dns_tls_and_page_without_query_values(self):
+        page = {"status_code": 200, "page_title": "Example", "authentication_analysis": {},
+                "security_headers_missing": [], "cookies": []}
+        dns = {"records": {"A": {"answers": [{"value": "93.184.216.34"}]}, "AAAA": {"answers": []}}}
+        tls = {"status": "validated", "protocol": "TLSv1.3"}
+        with patch.object(cyberlab, "_validate_assessment_url", return_value="https://example.test/"), \
+             patch.object(cyberlab, "dns_lookup", return_value=dns) as dns_check, \
+             patch.object(cyberlab, "_tls_certificate_summary", return_value=tls) as tls_check, \
+             patch.object(cyberlab, "inspect_assessment_page", return_value=page) as page_check, \
+             patch.dict(os.environ, {}, clear=True):
+            result = cyberlab.automated_url_assessment("https://example.test/login?token=secret#frag")
+        dns_check.assert_called_once()
+        tls_check.assert_called_once_with("example.test", 443, 12)
+        page_check.assert_called_once_with("https://example.test/login", timeout=12, method="GET")
+        self.assertEqual(result["submitted_url"], "https://example.test/login")
+        self.assertEqual(result["query_parameter_names"], ["token"])
+        self.assertNotIn("secret", json.dumps(result))
+        self.assertEqual(result["http_page_inspection"]["status_code"], 200)
+
+    def test_automated_url_assessment_blocks_private_destinations(self):
+        with patch.object(cyberlab, "_validate_assessment_url",
+                          side_effect=ValueError("non-public address")):
+            result = cyberlab.automated_url_assessment("https://127.0.0.1/admin")
+        self.assertEqual(result["assessment_status"], "blocked_for_safety")
+        self.assertIn("non-public", result["error"])
+
+    def test_safe_browsing_lookup_reports_match(self):
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, size): return b'{"matches":[{"threatType":"MALWARE","platformType":"ANY_PLATFORM"}]}'
+        with patch.object(cyberlab.urllib.request, "urlopen", return_value=FakeResponse()):
+            result = cyberlab._safe_browsing_url_lookup("https://example.test/path", "test-key")
+        self.assertEqual(result["status"], "match")
+        self.assertEqual(result["matches"][0]["threat_type"], "MALWARE")
+
     def test_url_analysis_rejects_non_http_scheme(self):
         with self.assertRaisesRegex(ValueError, "HTTP or HTTPS"):
             cyberlab.analyze_url("file:///etc/passwd")
