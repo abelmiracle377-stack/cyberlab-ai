@@ -651,7 +651,6 @@ def _safe_browsing_url_lookup(url: str, api_key: str, timeout: int = 12) -> dict
 
 def automated_url_assessment(value: str, timeout: int = 12) -> dict:
     """Perform bounded public URL checks; never execute page content or follow redirects."""
-    structural = analyze_url(value)
     parsed = urllib.parse.urlsplit(value.strip() if "://" in value else "https://" + value.strip())
     host = (parsed.hostname or "").encode("idna").decode("ascii").lower()
     scheme = parsed.scheme.lower()
@@ -659,6 +658,10 @@ def automated_url_assessment(value: str, timeout: int = 12) -> dict:
     # Query values and fragments may contain session tokens; never retain or submit them.
     checked_url = urllib.parse.urlunsplit((scheme, parsed.netloc, parsed.path or "/", "", ""))
     query_names = sorted({key[:80] for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)})[:40]
+    structural = analyze_url(checked_url)
+    structural["query_present"] = bool(parsed.query)
+    if parsed.query:
+        structural["structural_indicators"].append("URL contains query parameters; values are deliberately excluded")
     try:
         _validate_assessment_url(checked_url if scheme == "https" else
             urllib.parse.urlunsplit(("https", parsed.netloc, "/", "", "")))
@@ -705,6 +708,8 @@ def automated_url_assessment(value: str, timeout: int = 12) -> dict:
         findings.append({"severity": "critical", "finding": "A configured reputation provider reported a threat match."})
     elif all(item.get("status") in ("no_match", "error") for item in reputation):
         findings.append({"severity": "info", "finding": "No threat match was returned; this is not proof of safety."})
+    if any(item.get("status") == "not_configured" for item in reputation):
+        findings.append({"severity": "info", "finding": "Threat-intelligence reputation lookup is not configured; DNS/TLS/page checks do not replace a reputation database."})
 
     return {"feature": "automated_url_security_assessment", "submitted_url": checked_url,
         "hostname": host, "port": port, "query_parameter_names": query_names,
