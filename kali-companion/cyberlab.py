@@ -1731,6 +1731,7 @@ def analyse_phone_number_metadata(value: str) -> dict:
         }
         assigned_carrier = carrier.name_for_number(parsed, "en")
         enrichment = {
+            "enrichment_depth": "libphonenumber_numbering_plan_metadata",
             "library_validation": "phonenumbers",
             "is_possible_number": phonenumbers.is_possible_number(parsed),
             "is_valid_number": phonenumbers.is_valid_number(parsed),
@@ -1738,12 +1739,21 @@ def analyse_phone_number_metadata(value: str) -> dict:
             "original_carrier_assignment": assigned_carrier or "Not available in numbering metadata",
             "approximate_region_description": geocoder.description_for_number(parsed, "en") or "Not available",
             "formatted_international": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL),
+            "formatted_national": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL),
+            "region_code": phonenumbers.region_code_for_number(parsed),
+            "numbering_metadata_source": "Google libphonenumber metadata via the local phonenumbers package; no remote subscriber lookup.",
             "carrier_caveat": "Carrier data describes the original number-range assignment where available; number portability means it may not identify the current carrier."
         }
     except ImportError:
         enrichment = {
+            "enrichment_depth": "basic_only",
             "library_validation": "basic built-in calling-code reference only",
-            "optional_enrichment": "Install the phonenumbers package to add number validity, line type, original carrier-range and approximate region metadata."
+            "optional_enrichment": "The phonenumbers dependency is not installed. Install it with: python3 -m pip install phonenumbers",
+            "number_validity": "Not assessed",
+            "line_type": "Not assessed",
+            "original_carrier_assignment": "Not available",
+            "approximate_region_description": "Not available",
+            "next_step": "Install phonenumbers and rerun option 16 for offline numbering-plan metadata."
         }
     except Exception:
         enrichment = {
@@ -1758,7 +1768,8 @@ def analyse_phone_number_metadata(value: str) -> dict:
         "numbering_region_reference": calling_codes[country_code],
         "national_number_digits": digits[len(country_code):],
         "number_length_digits": len(digits),
-        "carrier": "Not determined; number portability and country-specific numbering data require an authoritative provider.",
+        "carrier": enrichment.get("original_carrier_assignment", "Not determined; number portability and country-specific numbering data require an authoritative provider."),
+        "current_carrier_status": "Not determined; original number-range assignment is not proof of current carrier because of number portability.",
         "registration_date": "Not publicly discoverable from a phone number alone; requires carrier records and lawful authority.",
         "last_used_or_active_status": "Not available from public numbering metadata; requires carrier/account-holder records.",
         "linked_ip_addresses_or_dns": "A phone number does not have a stable public IP address or DNS record. IPs are assigned to network sessions and are not publicly mapped to subscriber numbers.",
