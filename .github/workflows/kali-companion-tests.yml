@@ -21,7 +21,7 @@ jobs:
       - name: Compile VPS gateway
         run: python -m py_compile kali-companion/vps_gateway/app.py
       - name: Validate VPS installer shell syntax
-        run: bash -n kali-companion/vps_gateway/install-ubuntu.sh kali-companion/vps_gateway/configure-caddy.sh
+        run: for script in kali-companion/vps_gateway/install-ubuntu.sh kali-companion/vps_gateway/configure-caddy.sh; do bash -n "$script"; done
       - name: Validate consent page assets
         run: test -s kali-companion/vps_gateway/consent.html && grep -q 'Grant selected permissions' kali-companion/vps_gateway/consent.html && grep -q 'Stop and disconnect' kali-companion/vps_gateway/consent.html
       - name: Run unit tests
