@@ -245,7 +245,7 @@ def build_rtsp_url(host: str, port: int, path: str, username: str = "", password
     auth = urllib.parse.quote(username, safe="") + ":" + urllib.parse.quote(password, safe="") + "@" if username else ""
     try:
         address = ipaddress.ip_address(target)
-        display_host = "[" + target + "]" if address.version == 6 else target
+        display_host = "[" + target.replace("%", "%25") + "]" if address.version == 6 else target
     except ValueError:
         display_host = target
     safe_path = urllib.parse.quote(stream_path, safe="/%:@!def validate_camera_on_detected_lan(host: str, networks: list[str] | None = None) -> dict:'()*+,;=-._~")
