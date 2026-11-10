@@ -316,7 +316,7 @@ The first backend foundation is now present in `vps_gateway/app.py`:
 - Recipient-facing `/consent` webpage with separate camera, microphone, screen-share, one-time location and file-upload choices; browser/OS permission prompts are triggered only after the recipient clicks Grant. The page shows a local media preview, keeps the device token in page memory, sends heartbeats while open, and provides a Stop button. Closing the page stops local media tracks and attempts to revoke the device session. Pairing acceptance requires terms and explicit permission flags; device credentials are returned once and stored hashed.
 - Authenticated device heartbeat and real device registry with online/offline status based on heartbeat age.
 - Owner-controlled device revocation.
-- Authenticated file upload/listing, per-device file namespace, and expiring share-token preview/download links.
+- Authenticated file upload/listing and device-scoped file retrieval, per-device file namespace, and expiring share-token preview/download links. Inline responses are limited to a safe media-type allowlist; other file types are forced to download with `nosniff`.
 - 25 MB upload limit and SQLite registry suitable for a small single-user VPS.
 
 Option 9 in the Kali menu can save an HTTPS gateway URL and owner token with local file permissions 0600, test the health endpoint, and generate pairing codes. Option 10 reads the real registry and offers device revocation. The gateway installer creates a dedicated service account and systemd service bound to localhost only.
