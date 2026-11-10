@@ -67,7 +67,7 @@ def detect_private_lan_networks() -> list[str]:
         return []
     networks = set()
     for line in result.stdout.splitlines():
-        match = re.search(r"\\binet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)", line)
+        match = re.search(r"\binet\s+(\d+\.\d+\.\d+\.\d+/\d+)", line)
         if not match:
             continue
         try:
