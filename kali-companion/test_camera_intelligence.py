@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from camera_intelligence import build_rtsp_url, public_webcam_directory, validate_camera_host, validate_lan_network
 
