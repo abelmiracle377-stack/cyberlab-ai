@@ -313,7 +313,7 @@ Files uploaded by an enrolled device are stored in that operator's own VPS stora
 The first backend foundation is now present in `vps_gateway/app.py`:
 - Health endpoint for option 9 connection checks.
 - Owner-authenticated, expiring one-time pairing-code creation.
-- Recipient-side pairing acceptance that requires terms acceptance and explicit permission flags; device credentials are returned once and stored hashed.
+- Recipient-facing `/consent` webpage with separate camera, microphone, screen-share, one-time location and file-upload choices; browser/OS permission prompts are triggered only after the recipient clicks Grant. The page shows a local media preview, keeps the device token in page memory, sends heartbeats while open, and provides a Stop button. Closing the page stops local media tracks and attempts to revoke the device session. Pairing acceptance requires terms and explicit permission flags; device credentials are returned once and stored hashed.
 - Authenticated device heartbeat and real device registry with online/offline status based on heartbeat age.
 - Owner-controlled device revocation.
 - Authenticated file upload/listing, per-device file namespace, and expiring share-token preview/download links.
