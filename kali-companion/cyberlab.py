@@ -562,6 +562,27 @@ def _public_search_hints(kind: str, value: str) -> list:
     return []
 
 
+def _public_social_account_refs(urls: list) -> list:
+    """Extract public account URLs and visible path handles from published links."""
+    results = []
+    for value in urls[:50]:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            host = (parsed.hostname or "").lower()
+            path_parts = [part for part in parsed.path.split("/") if part]
+            if not host or not path_parts:
+                continue
+            results.append({
+                "platform": host.removeprefix("www."),
+                "public_profile_url": urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", "")),
+                "public_path_identifier": path_parts[-1][:120],
+                "identifier_type": "public URL path; not independently verified as a person's username"
+            })
+        except ValueError:
+            continue
+    return results
+
+
 def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
     """Route input to a type-specific public intelligence workflow."""
     identity = _normalise_osint_input(value)
@@ -587,9 +608,11 @@ def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
             "public_business_emails": public_site.get("public_contact_emails", []),
             "public_business_phone_numbers": public_site.get("public_contact_phone_numbers", []),
             "public_social_media_links": public_site.get("social_media_links", []),
+            "public_social_account_identifiers": _public_social_account_refs(public_site.get("social_media_links", [])),
             "public_locations": public_site.get("public_location", []),
             "public_addresses": public_site.get("public_address", []),
-            "relationship_note": "These are contact details and social links published on the domain's own public homepage. They are domain-level business associations, not proof that the submitted mailbox owner controls them."
+            "public_ip_addresses": result["email_intelligence"]["domain_ip_addresses"].get("addresses", []),
+            "relationship_note": "These are domain-level DNS addresses and contact/social references published on the domain's own public homepage. A URL path identifier is not proof of account ownership or a link to the submitted mailbox owner."
         }
         result["limitations"] = [
             "Mailbox existence, ownership, inbox activity and deliverability are not tested.",
