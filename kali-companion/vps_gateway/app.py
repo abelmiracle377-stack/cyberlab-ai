@@ -215,6 +215,8 @@ def get_device_file(file_id: str, device=Depends(device_auth)):
     con.close()
     if not row or not Path(row["path"]).is_file():
         raise HTTPException(404, "File not found.")
+    if not json.loads(device["permissions"]).get("file_upload"):
+        raise HTTPException(403, "File access was not granted for this device.")
     preview_types = {
         "image/jpeg", "image/png", "image/webp", "image/gif",
         "audio/mpeg", "audio/wav", "audio/ogg", "audio/webm",
@@ -264,5 +266,14 @@ def view_shared_file(token: str):
     con.close()
     if not row or not Path(row["path"]).is_file():
         raise HTTPException(404, "Share link is invalid, expired or unavailable.")
-    return FileResponse(row["path"], media_type=row["media_type"],
-                        filename=row["name"], content_disposition_type="inline")
+    preview_types = {
+        "image/jpeg", "image/png", "image/webp", "image/gif",
+        "audio/mpeg", "audio/wav", "audio/ogg", "audio/webm",
+        "video/mp4", "video/webm", "application/pdf", "text/plain"
+    }
+    disposition = "inline" if row["media_type"] in preview_types else "attachment"
+    return FileResponse(
+        row["path"], media_type=row["media_type"], filename=row["name"],
+        content_disposition_type=disposition,
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+    )
