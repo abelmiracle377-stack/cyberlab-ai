@@ -243,9 +243,10 @@ def public_webcam_directory(location: str = "", timeout: float = 8.0) -> dict:
         "feature": "location_specific_public_webcam_search",
         "location_search": query,
         "targeted_searches": targeted,
+        "directories": list(PUBLIC_WEBCAM_DIRECTORIES),
         "structured_catalogue_search": _windy_public_webcams(query, timeout=timeout),
         "how_to_use": "Open targeted search links for matching published camera pages. Set WINDY_WEBCAMS_API_KEY to return structured Windy camera records and individual camera-page URLs.",
-        "privacy_boundary": "Only operator-published public webcam directories are searched. CyberLab does not enumerate arbitrary exposed CCTV, scan public IP ranges, bypass authentication or open private feeds.",
+        "privacy_boundary": "CyberLab does not crawl public IP ranges or enumerate arbitrary exposed CCTV. Only operator-published public webcam directories are searched; authentication is never bypassed and private feeds are not opened.",
     }
 
 def camera_intelligence_menu() -> dict:
