@@ -23,6 +23,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 from camera_intelligence import camera_intelligence_menu
 
