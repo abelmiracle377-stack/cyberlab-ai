@@ -26,7 +26,14 @@ python3 kali-companion/cyberlab.py menu
 
 The menu exposes 21 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
-Device pairing and remote connected-device listing remain unconfigured. The separate Global Camera Intelligence module (option 21) supports owner-authorised RTSP viewing and bounded private-LAN service discovery; it does not search for exposed private cameras on the public internet.
+Device pairing and remote connected-device listing remain unconfigured. The separate Global Camera Intelligence module (option 21) supports owner-authorised RTSP viewing, bounded private-LAN service discovery, and location-specific searches of operator-published public webcam directories. Option 3 creates targeted location search links and can return individual camera-page URLs from Windy's official webcam catalogue when configured with an API key. To enable structured Windy results, obtain a Windy Webcams API key and set it before launching CyberLab:
+
+```bash
+export WINDY_WEBCAMS_API_KEY="your-windy-webcams-api-key"
+python3 kali-companion/cyberlab.py menu
+```
+
+The Windy integration geocodes the entered place and searches a 100 km radius, returning published camera pages and provider live-status metadata where supplied. Without the key, the tool still produces location-specific search links for EarthCam, SkylineWebcams, Explore.org and Windy. It never scans arbitrary public IP ranges, enumerates unsecured private CCTV, bypasses authentication or opens private feeds.
 
 ## Interactive command centre
 
