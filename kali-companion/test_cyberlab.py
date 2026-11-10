@@ -647,7 +647,8 @@ class CompanionTests(unittest.TestCase):
             "TXT": {"answers": [{"value": "v=spf1 -all"}]},
             "DMARC": {"answers": [{"value": "v=DMARC1; p=reject"}]}
         }}
-        with patch.object(cyberlab, "inspect_assessment_page", return_value=page) as inspect, \
+        with patch.object(cyberlab, "_validate_assessment_url", return_value="https://login.example.test/signin"), \
+             patch.object(cyberlab, "inspect_assessment_page", return_value=page) as inspect, \
              patch.object(cyberlab, "dns_lookup", return_value=dns) as dns_check:
             result = cyberlab.assess_mfa_target("https://login.example.test/signin",
                                                 "abel@example.test")
@@ -662,7 +663,8 @@ class CompanionTests(unittest.TestCase):
     def test_mfa_target_assessment_flags_email_domain_mismatch_and_does_not_claim_mfa(self):
         page = {"status_code": 200, "authentication_analysis": {"forms_analysed": []}, "scripts": []}
         dns = {"records": {"MX": {"answers": []}, "TXT": {"answers": []}, "DMARC": {"answers": []}}}
-        with patch.object(cyberlab, "inspect_assessment_page", return_value=page), \
+        with patch.object(cyberlab, "_validate_assessment_url", return_value="https://login.example.test/"), \
+             patch.object(cyberlab, "inspect_assessment_page", return_value=page), \
              patch.object(cyberlab, "dns_lookup", return_value=dns):
             result = cyberlab.assess_mfa_target("https://login.example.test/", "user@other.test")
         self.assertEqual(result["findings"][1]["status"], "domain_mismatch_review")
@@ -671,8 +673,9 @@ class CompanionTests(unittest.TestCase):
         self.assertNotIn("user@other.test", json.dumps(result))
 
     def test_mfa_target_assessment_rejects_invalid_email(self):
-        with self.assertRaisesRegex(ValueError, "valid email"):
-            cyberlab.assess_mfa_target("https://login.example.test/", "not-an-email")
+        with patch.object(cyberlab, "_validate_assessment_url", return_value="https://login.example.test/"):
+            with self.assertRaisesRegex(ValueError, "valid email"):
+                cyberlab.assess_mfa_target("https://login.example.test/", "not-an-email")
 
 
 if __name__ == "__main__":
