@@ -24,7 +24,7 @@ Launch the full local-first menu:
 python3 kali-companion/cyberlab.py menu
 ```
 
-The menu exposes 21 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis is structural and does not visit or download the URL. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
+The menu exposes 21 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis performs bounded public DNS, TLS certificate and single-page HTTPS metadata checks, plus optional Google Safe Browsing threat-list lookup. It strips query values/fragments, does not follow redirects, execute JavaScript, submit forms or download files. Requests originate from the Kali machine; this is not a cloud sandbox. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
 Device pairing and remote connected-device listing remain unconfigured. The separate Global Camera Intelligence module (option 21) supports owner-authorised RTSP viewing, bounded private-LAN service discovery, and location-specific searches of operator-published public webcam directories. Option 3 creates targeted location search links and can return individual camera-page URLs from Windy's official webcam catalogue when configured with an API key. To enable structured Windy results, obtain a Windy Webcams API key and set it before launching CyberLab:
 
@@ -178,6 +178,7 @@ Evidence files may contain sensitive material. Keep the evidence directory acces
 
 - **Phone Number Intelligence (menu option 16):** accepts an international-format phone number and reports the supplied digits, recognised country calling code, a broad numbering-region reference and digit count. This is offline parsing only; it does not identify a subscriber, carrier, registration date, last-used time, active status, linked IP/DNS or social accounts. Those details are not publicly derivable from a phone number and require lawful carrier/provider records or consent-based services. The built-in calling-code table is partial.
 - **Scam investigation menu option 7:** accepts one explicitly supplied, owner-approved public HTTPS login page for read-only page/header/form inspection. No credentials are submitted and no authentication is attempted.
+- **Malicious File & Link Analysis option 8 → 3:** runs automated URL investigation: public-host validation, DNS records, TLS certificate checks, one bounded HTTPS GET without redirects, and page metadata inspection. It does not execute browser code or download files. Set `GOOGLE_SAFE_BROWSING_API_KEY` locally to enable Google's threat-list lookup. Query parameter values and URL fragments are excluded from the saved report and reputation request.
 - **Authentication log input:** the requested local file is an exported log from a website host, web server, reverse proxy, WAF or identity provider. Download/export it from a system the operator administers or is authorised to investigate, then provide its path on the Kali machine. CyberLab does not automatically access a website's private logs.
 - **Hash inventory:** the existing option identifies likely hash formats in an authorised offline file only. It does not run John the Ripper or perform password guessing. CyberLab does not perform Hydra-style password spraying or dictionary attacks against live login pages; authorised login security can instead be reviewed through owner-provided logs, configuration and controlled staging assessments.
 
@@ -259,3 +260,17 @@ Option 19 no longer asks the operator to self-report password controls. It autom
 This is a static code/configuration audit, not a live account lookup. Email addresses and usernames are discovered locally but are not submitted to web search or breach services. No password is guessed, no login is attempted, and no full password or email address is sent to HIBP. Password reuse, MFA and reset-flow enforcement cannot be proven from source text alone; those require identity-provider configuration or authorised authentication logs.
 
 Run option 19 and provide the path to your own application's source/configuration directory. Keep secrets out of source control; rotate any real secret found in a repository.
+
+
+### Automated URL investigation
+
+Menu option 8 → 3 performs a bounded investigation of an explicitly supplied public URL. It validates that the destination resolves to globally routable addresses, checks public DNS records, validates the HTTPS certificate, and makes at most one GET to the query-free URL path without following redirects. The response is parsed as inert text; JavaScript is not executed, forms are not submitted and files are not downloaded. HTTP URLs receive structural/DNS checks but are not fetched.
+
+The target connection originates from the Kali machine and can be visible to the website operator. This is **not** an isolated sandbox or browser detonation environment. For a reputation lookup, configure a Google Safe Browsing API key in the local shell:
+
+```bash
+export GOOGLE_SAFE_BROWSING_API_KEY='your-google-safe-browsing-api-key'
+python3 kali-companion/cyberlab.py menu
+```
+
+Keep API keys out of Git. The query-free URL path is sent to Google only when the key is configured; query values and fragments are intentionally removed because they may contain session tokens or private identifiers. A no-match result is not proof that a URL is safe.
