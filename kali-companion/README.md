@@ -35,6 +35,8 @@ python3 kali-companion/cyberlab.py menu
 
 The Windy integration geocodes the entered place and searches a 100 km radius, returning published camera pages and provider live-status metadata where supplied. Without the key, the tool still produces location-specific search links for EarthCam, SkylineWebcams, Explore.org and Windy. It never scans arbitrary public IP ranges, enumerates unsecured private CCTV, bypasses authentication or opens private feeds.
 
+Camera Intelligence also includes option 4, **Camera Exposure Assessment & Defence**. This additive, offline checklist records operator answers about internet exposure, remote administration, HTTPS, unique credentials, MFA, firmware support, UPnP/port forwarding, network segmentation and security logging. It produces a triage score, remediation guidance, verification tasks and a responsible-disclosure message template. Answers are self-reported and are not technical proof of exposure; this option makes no network connections and does not access video streams.
+
 ## Interactive command centre
 
 Launch the local menu-driven interface:
