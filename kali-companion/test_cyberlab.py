@@ -633,10 +633,46 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(result["controls"]["minimum_length"]["status"], "review")
         self.assertEqual(result["controls"]["breached_password_blocklist"], "no")
 
-    def test_mfa_review_reports_missing_controls(self):
-        result = cyberlab.review_mfa_controls("yes", "no", "unknown", "no")
-        self.assertIn("phishing_resistant_factor_available", result["reported_gaps"])
-        self.assertIn("recovery_and_reset_protected", result["unknown_controls"])
+    def test_mfa_target_assessment_checks_url_email_domain_and_page_evidence(self):
+        page = {
+            "status_code": 200, "page_title": "Sign in",
+            "authentication_analysis": {"forms_analysed": [{
+                "field_names": ["email", "password", "otp_code"],
+                "input_types": ["email", "password", "one-time-code"]
+            }]},
+            "scripts": [{"url": "https://login.example.test/authenticator.js"}]
+        }
+        dns = {"records": {
+            "MX": {"answers": [{"value": "mail.example.test"}]},
+            "TXT": {"answers": [{"value": "v=spf1 -all"}]},
+            "DMARC": {"answers": [{"value": "v=DMARC1; p=reject"}]}
+        }}
+        with patch.object(cyberlab, "inspect_assessment_page", return_value=page) as inspect, \
+             patch.object(cyberlab, "dns_lookup", return_value=dns) as dns_check:
+            result = cyberlab.assess_mfa_target("https://login.example.test/signin",
+                                                "abel@example.test")
+        inspect.assert_called_once_with("https://login.example.test/signin", timeout=12, method="GET")
+        dns_check.assert_called_once_with("example.test", timeout=12)
+        self.assertEqual(result["target_url_checked"], "https://login.example.test/signin")
+        self.assertEqual(result["email_address"], "a***@example.test")
+        self.assertTrue(result["mfa_observations"]["visible_mfa_ui_indicators"])
+        self.assertEqual(result["mfa_observations"]["account_mfa_enforcement"], "not_verifiable")
+        self.assertEqual(result["findings"][1]["status"], "same_domain_or_parent_domain")
+
+    def test_mfa_target_assessment_flags_email_domain_mismatch_and_does_not_claim_mfa(self):
+        page = {"status_code": 200, "authentication_analysis": {"forms_analysed": []}, "scripts": []}
+        dns = {"records": {"MX": {"answers": []}, "TXT": {"answers": []}, "DMARC": {"answers": []}}}
+        with patch.object(cyberlab, "inspect_assessment_page", return_value=page), \
+             patch.object(cyberlab, "dns_lookup", return_value=dns):
+            result = cyberlab.assess_mfa_target("https://login.example.test/", "user@other.test")
+        self.assertEqual(result["findings"][1]["status"], "domain_mismatch_review")
+        self.assertFalse(result["mfa_observations"]["visible_mfa_ui_indicators"])
+        self.assertEqual(result["mfa_observations"]["account_mfa_enrollment"], "not_verifiable")
+        self.assertNotIn("user@other.test", json.dumps(result))
+
+    def test_mfa_target_assessment_rejects_invalid_email(self):
+        with self.assertRaisesRegex(ValueError, "valid email"):
+            cyberlab.assess_mfa_target("https://login.example.test/", "not-an-email")
 
 
 if __name__ == "__main__":
