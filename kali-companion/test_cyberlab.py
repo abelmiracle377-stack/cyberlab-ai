@@ -521,7 +521,7 @@ class CompanionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             hashes = Path(directory) / "hashes.txt"
             wordlist = Path(directory) / "rockyou.txt"
-            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\\n", encoding="utf-8")
+            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\n", encoding="utf-8")
             wordlist.write_text("candidate-password", encoding="utf-8")
             completed = [
                 __import__("subprocess").CompletedProcess([], 0, "Loaded 1 password hash", ""),
@@ -577,9 +577,14 @@ class CompanionTests(unittest.TestCase):
             self.assertEqual(result["execution_status"], "completed")
             self.assertTrue(result["command_executed"])
 
-    def test_john_audit_requires_authorisation(self):
-        with self.assertRaisesRegex(ValueError, "Confirm that you own"):
-            cyberlab.run_john_audit(Path("hashes.txt"), Path("rockyou.txt"))
+    def test_john_audit_requires_authorisation_after_file_preflight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hashes = Path(directory) / "hashes.txt"
+            wordlist = Path(directory) / "rockyou.txt"
+            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\n", encoding="utf-8")
+            wordlist.write_text("candidate\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Authorisation was not confirmed"):
+                cyberlab.run_john_audit(hashes, wordlist)
 
     def test_scam_menu_option_three_uses_website_url_not_local_log(self):
         with patch("builtins.input", side_effect=["3", "https://example.test/login"]):
