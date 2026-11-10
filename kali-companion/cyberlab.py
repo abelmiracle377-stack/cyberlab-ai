@@ -487,9 +487,11 @@ def _normalise_osint_input(value: str) -> dict:
                 "domain": None,
                 "limitations": ["The supplied social profile is recorded as a public reference only; platform login walls, privacy settings and anti-automation controls prevent reliable profile or follower extraction."]}
     domain = validate_domain(host)
+    safe_query = urllib.parse.urlencode([(key, "") for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)])
+    safe_url = urllib.parse.urlunsplit((parsed.scheme.lower(), parsed.netloc, parsed.path or "/", safe_query, ""))
     return {"input_type": "website_url" if "://" in raw else "domain",
-            "input": raw[:1000], "domain": domain,
-            "website_url": candidate[:1000]}
+            "input": safe_url[:1000] if "://" in raw else raw[:1000], "domain": domain,
+            "website_url": safe_url[:1000]}
 
 
 def resolve_public_site_ips(domain: str) -> dict:
