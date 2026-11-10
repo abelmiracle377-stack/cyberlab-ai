@@ -94,64 +94,90 @@ def detect_private_lan_networks() -> list[str]:
 
 
 def detect_private_lan_interfaces() -> list[dict]:
-    """Return private IPv4 addresses and their interface/subnet for operator visibility."""
+    """Return IPv4 and IPv6 addresses/prefixes configured on this Kali host."""
     ip_cmd = shutil.which("ip")
     if not ip_cmd:
         return []
-    try:
-        result = subprocess.run(
-            [ip_cmd, "-o", "-f", "inet", "addr", "show", "scope", "global"],
-            capture_output=True, text=True, timeout=3, check=False
-        )
-    except (OSError, subprocess.SubprocessError):
-        return []
     interfaces = []
-    for line in result.stdout.splitlines():
-        match = re.search(r"^\d+:\s+([^\s]+).*?\binet\s+(\d+\.\d+\.\d+\.\d+/\d+)", line)
-        if not match:
-            continue
+    for family in ("inet", "inet6"):
         try:
-            interface = ipaddress.ip_interface(match.group(2))
-            if not interface.ip.is_private:
-                continue
-            # Keep the same /24 maximum scope used by the existing LAN helper.
-            network = interface.network
-            if network.num_addresses > 256:
-                network = ipaddress.ip_network((interface.ip, 24), strict=False)
-            if any(network.subnet_of(block) for block in (
-                ipaddress.ip_network("10.0.0.0/8"),
-                ipaddress.ip_network("172.16.0.0/12"),
-                ipaddress.ip_network("192.168.0.0/16"),
-            )):
-                interfaces.append({"interface": match.group(1), "ipv4": str(interface.ip),
-                                   "network": str(network)})
-        except ValueError:
+            result = subprocess.run(
+                [ip_cmd, "-o", "-f", family, "addr", "show"],
+                capture_output=True, text=True, timeout=3, check=False
+            )
+        except (OSError, subprocess.SubprocessError):
             continue
+        for line in result.stdout.splitlines():
+            match = re.search(r"^(\d+):\s+([^\s@]+).*?\binet6?\s+([0-9a-fA-F:.]+/\d+)", line)
+            if not match:
+                continue
+            try:
+                interface = ipaddress.ip_interface(match.group(3))
+                if family == "inet":
+                    if not isinstance(interface, ipaddress.IPv4Interface) or not interface.ip.is_private:
+                        continue
+                    network = interface.network
+                    if network.num_addresses > 256:
+                        network = ipaddress.ip_network((interface.ip, 24), strict=False)
+                    if not any(network.subnet_of(block) for block in (
+                        ipaddress.ip_network("10.0.0.0/8"),
+                        ipaddress.ip_network("172.16.0.0/12"),
+                        ipaddress.ip_network("192.168.0.0/16"),
+                    )):
+                        continue
+                    interfaces.append({"interface": match.group(2), "family": "IPv4",
+                                       "ip": str(interface.ip), "network": str(network)})
+                else:
+                    if not isinstance(interface, ipaddress.IPv6Interface):
+                        continue
+                    if interface.ip.is_unspecified or interface.ip.is_loopback:
+                        continue
+                    interfaces.append({"interface": match.group(2), "family": "IPv6",
+                                       "ip": str(interface.ip), "network": str(interface.network),
+                                       "scope": "link" if interface.ip.is_link_local else "global"})
+            except ValueError:
+                continue
     return interfaces
 
-
-def validate_camera_on_detected_lan(host: str, networks: list[str] | None = None) -> dict:
-    """Require one private camera IPv4 address to belong to a subnet configured on Kali."""
+def validate_camera_on_detected_lan(host: str, interfaces: list[dict] | None = None) -> dict:
+    """Require the camera IP to fall within a prefix configured on this Kali host."""
     target = validate_camera_host(host)
     try:
-        address = ipaddress.ip_address(target)
+        address_text = target.split("%", 1)[0]
+        address = ipaddress.ip_address(address_text)
     except ValueError as exc:
-        raise ValueError("Enter the camera's private IPv4 address so it can be matched to Kali's local network.") from exc
-    if not isinstance(address, ipaddress.IPv4Address) or not address.is_private:
-        raise ValueError("Camera IP must be a private IPv4 address on your local Wi-Fi/LAN.")
-    detected = networks if networks is not None else detect_private_lan_networks()
-    parsed_networks = [validate_lan_network(item) for item in detected]
-    matching = [str(network) for network in parsed_networks if address in network]
+        raise ValueError("Enter a valid IPv4 or IPv6 camera address; hostnames cannot be subnet-matched.") from exc
+    detected = interfaces if interfaces is not None else detect_private_lan_interfaces()
+    matching = []
+    for item in detected:
+        try:
+            local_address = ipaddress.ip_address(item["ip"])
+            network = ipaddress.ip_network(item["network"], strict=False)
+            if address.version == local_address.version and address in network:
+                if address.version == 6 and address.is_link_local and item.get("interface") not in target:
+                    continue
+                matching.append(item)
+        except (KeyError, ValueError):
+            continue
     if not matching:
-        if not parsed_networks:
-            raise ValueError("Kali has no detected private Wi-Fi/LAN IPv4 subnet. Connect to the same Wi-Fi/LAN as the camera and try again.")
-        raise ValueError(
-            "Camera IP {} is not inside Kali's detected local network(s): {}. "
-            "Check that both devices are connected to the same Wi-Fi/router and that the camera IP is correct."
-            .format(address, ", ".join(str(network) for network in parsed_networks))
-        )
-    return {"camera_ip": str(address), "matching_local_network": matching[0],
-            "detected_local_networks": [str(network) for network in parsed_networks]}
+        if not detected:
+            raise ValueError("Kali has no detected local IPv4/IPv6 interface address. Connect to the same Wi-Fi/LAN as the camera and retry.")
+        local_summary = ", ".join("{} {} {} ({})".format(item.get("interface"), item.get("family"), item.get("ip"), item.get("network")) for item in detected)
+        raise ValueError("Camera IP {} does not match any detected Kali interface address/subnet: {}. Connect both devices to the same network or verify the camera IP.".format(target, local_summary))
+    selected = matching[0]
+    connection_host = target
+    if address.version == 6 and address.is_link_local and "%" not in target:
+        connection_host = target + "%" + selected["interface"]
+    return {
+        "camera_ip": target,
+        "kali_ip": selected["ip"],
+        "interface": selected["interface"],
+        "ip_version": address.version,
+        "matching_local_network": selected["network"],
+        "connection_host": connection_host,
+        "detected_local_interfaces": detected,
+        "message": "Your Kali IP address is {}. It corresponds to the camera IP you entered ({}); both are on {}. Proceeding to stream.".format(selected["ip"], target, selected["network"]),
+    }
 
 
 def validate_camera_port(value: str | int) -> int:
@@ -376,7 +402,7 @@ def camera_intelligence_menu() -> dict:
         return discover_lan_cameras(network)
     if choice == "2":
         print("\nEnter one camera you own or have explicit permission to access.")
-        host = validate_camera_host(input("Camera/device private IPv4 address: "))
+        host = validate_camera_host(input("Camera/device IPv4 or IPv6 address: "))
         confirmation = input("Type YES to confirm you own/administer this camera or have permission to view it: ").strip()
         if confirmation.upper() != "YES":
             raise ValueError("Camera connection cancelled; explicit authorisation confirmation is required.")
@@ -397,7 +423,7 @@ def camera_intelligence_menu() -> dict:
         port = validate_camera_port(port_text)
         print("Checking the selected RTSP port on the one authorised camera...")
         try:
-            with socket.create_connection((host, port), timeout=2.0):
+            with socket.create_connection((connection_host, port), timeout=2.0):
                 print("RTSP port {} is reachable.".format(port))
         except OSError as exc:
             raise ValueError(
@@ -409,7 +435,7 @@ def camera_intelligence_menu() -> dict:
         path = input("RTSP stream path [/]: ").strip() or "/"
         username = input("Camera username (leave blank if no username is configured): ").strip()
         password = getpass.getpass("Camera password (leave blank if no username is configured): ") if username else ""
-        stream_url = build_rtsp_url(host, port, path, username, password)
+        stream_url = build_rtsp_url(connection_host, port, path, username, password)
         result = launch_camera_viewer(stream_url)
         stream_url = None
         result["network_check"] = network_match
@@ -688,16 +714,17 @@ def camera_intelligence_menu() -> dict:
         if confirmation.upper() != "YES":
             raise ValueError("Camera connection cancelled; explicit authorisation confirmation is required.")
 
-        detected_networks = detect_private_lan_networks()
-        if detected_networks:
-            print("\nKali detected these local private Wi-Fi/LAN networks:")
-            for network in detected_networks:
-                print("  " + network)
+        local_interfaces = detect_private_lan_interfaces()
+        if local_interfaces:
+            print("\nKali detected these local network addresses:")
+            for item in local_interfaces:
+                print("  {} {}: {} ({})".format(item["interface"], item["family"], item["ip"], item["network"]))
         else:
-            raise ValueError("Kali could not detect a private Wi-Fi/LAN IPv4 address. Connect to the same Wi-Fi/router as the camera and retry.")
+            raise ValueError("Kali could not detect a local IPv4/IPv6 address. Connect to the same Wi-Fi/LAN as the camera and retry.")
 
-        network_match = validate_camera_on_detected_lan(host, detected_networks)
-        print("Camera IP matches Kali's local network: " + network_match["matching_local_network"])
+        network_match = validate_camera_on_detected_lan(host, local_interfaces)
+        print(network_match["message"])
+        connection_host = network_match["connection_host"]
 
         port_text = input("Camera RTSP port [554]: ").strip() or "554"
         port = validate_camera_port(port_text)
