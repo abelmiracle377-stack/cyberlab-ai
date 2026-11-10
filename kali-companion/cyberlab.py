@@ -285,6 +285,10 @@ def inspect_assessment_page(value: str, timeout: int = 12, method: str = "GET") 
             result = {
                 "requested_url": url, "method": method, "status_code": response.status,
                 "final_url": response.geturl(),
+                "response_headers": {name: headers.get(name) for name in (
+                    "Retry-After", "RateLimit-Limit", "RateLimit-Remaining",
+                    "RateLimit-Reset", "X-RateLimit-Limit", "X-RateLimit-Remaining"
+                ) if headers.get(name)},
                 "security_headers": {name: headers.get(name) for name in (
                     "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
                     "X-Content-Type-Options", "Referrer-Policy"
@@ -341,7 +345,7 @@ def inspect_assessment_page(value: str, timeout: int = 12, method: str = "GET") 
             return result
     except urllib.error.HTTPError as exc:
         return {"requested_url": url, "method": method, "status_code": exc.code,
-                "response_headers": {name: exc.headers.get(name) for name in ("Location", "WWW-Authenticate", "Set-Cookie") if exc.headers.get(name)},
+                "response_headers": {name: exc.headers.get(name) for name in ("Location", "WWW-Authenticate", "Set-Cookie", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "X-RateLimit-Limit", "X-RateLimit-Remaining") if exc.headers.get(name)},
                 "redirects_followed": False, "note": "Response metadata only; access control was not bypassed or challenged."}
     except urllib.error.URLError as exc:
         return {"requested_url": url, "method": method, "error": str(exc.reason),
