@@ -33,6 +33,14 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
 <label class="choice"><input type="checkbox" id="terms"><span>I have read the permission descriptions and agree to connect this device with only the permissions I selected.</span></label>
 <button id="grant">Grant selected permissions</button><button id="stop" class="danger" disabled>Stop and disconnect</button>
 <video id="preview" autoplay playsinline muted hidden></video>
+<div id="filehub" hidden>
+<h2>My File Hub</h2>
+<p class="muted small">Choose a file and upload it yourself. Maximum 25 MB per file. Your files are private to this device unless you create a separate share link.</p>
+<input id="fileinput" type="file">
+<button id="uploadfile" class="secondary">Upload selected file</button>
+<button id="refreshfiles" class="secondary">Refresh files</button>
+<div id="filelist"></div><div id="filepreview"></div>
+</div>
 <div id="status" role="status" aria-live="polite">Not connected.</div>
 <p class="muted small">This page does not record, upload, or stream media. Keep it open only while you want the connection active. The browser's own permission indicators remain in effect.</p>
 </section></main>
@@ -55,6 +63,57 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
     token = null; deviceId = null; $('stop').disabled = true;
     status('Disconnected. Local media tracks have been stopped. You may close this page.');
   }
+  let previewUrl = null;
+  const allowedPreview = new Set(['image/jpeg','image/png','image/webp','image/gif','audio/mpeg','audio/wav','audio/ogg','audio/webm','video/mp4','video/webm','application/pdf','text/plain']);
+  async function refreshFiles() {
+    if (!token) return;
+    const response = await fetch('/v1/files',{headers:{Authorization:'Bearer '+token}});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Could not load files.');
+    const list = $('filelist'); list.replaceChildren();
+    for (const file of data.files) {
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:10px 0;border-bottom:1px solid #263443';
+      const name = document.createElement('strong'); name.textContent = file.name+' ';
+      const meta = document.createElement('span'); meta.className='muted small'; meta.textContent = (file.media_type||'unknown type')+' · '+file.size+' bytes ';
+      const view = document.createElement('button'); view.className='secondary'; view.textContent='Preview / open';
+      view.addEventListener('click', () => previewFile(file)); item.append(name,meta,view); list.append(item);
+    }
+    if (!data.files.length) list.textContent='No files uploaded yet.';
+  }
+  async function previewFile(file) {
+    const response = await fetch('/v1/files/'+encodeURIComponent(file.file_id),{headers:{Authorization:'Bearer '+token}});
+    if (!response.ok) throw new Error('File preview is unavailable.');
+    const blob = await response.blob();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(blob);
+    const panel = $('filepreview'); panel.replaceChildren();
+    const heading = document.createElement('p'); heading.textContent='Selected: '+file.name; panel.append(heading);
+    let element;
+    if (allowedPreview.has(file.media_type) && file.media_type.startsWith('image/')) { element=document.createElement('img'); element.style.maxWidth='100%'; element.style.maxHeight='360px'; element.src=previewUrl; }
+    else if (allowedPreview.has(file.media_type) && file.media_type.startsWith('audio/')) { element=document.createElement('audio'); element.controls=true; element.src=previewUrl; }
+    else if (allowedPreview.has(file.media_type) && file.media_type.startsWith('video/')) { element=document.createElement('video'); element.controls=true; element.playsInline=true; element.style.maxWidth='100%'; element.src=previewUrl; }
+    else if (file.media_type==='text/plain') { element=document.createElement('pre'); element.style.cssText='white-space:pre-wrap;max-height:300px;overflow:auto'; element.textContent=await blob.text(); }
+    else { element=document.createElement('a'); element.href=previewUrl; element.target='_blank'; element.rel='noopener noreferrer'; element.textContent='Open or download '+file.name; }
+    panel.append(element);
+  }
+  $('uploadfile').addEventListener('click', async () => {
+    if (!token) return;
+    const file = $('fileinput').files[0];
+    if (!file) { status('Choose a file first.'); return; }
+    if (file.size > 25*1024*1024) { status('File is larger than the 25 MB limit.'); return; }
+    const form = new FormData(); form.append('upload',file,file.name);
+    $('uploadfile').disabled=true;
+    try {
+      const response=await fetch('/v1/files',{method:'POST',headers:{Authorization:'Bearer '+token},body:form});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.detail||'Upload failed.');
+      status('Uploaded '+data.name+' ('+data.size+' bytes).');
+      await refreshFiles();
+    } catch(error) { status('Upload failed: '+error.message); }
+    finally { $('uploadfile').disabled=false; }
+  });
+  $('refreshfiles').addEventListener('click', () => refreshFiles().catch(error=>status(error.message)));
   $('grant').addEventListener('click', async () => {
     $('grant').disabled = true;
     const requested = ['camera','microphone','screen_capture','location','file_upload'].filter(id => $(id).checked);
@@ -85,6 +144,7 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
       if (!response.ok) throw new Error(data.detail || 'Pairing was not accepted.');
       token = data.device_token; deviceId = data.device_id;
       $('stop').disabled = false;
+      if (granted.file_upload) { $('filehub').hidden=false; await refreshFiles(); }
       status('Connected. Device ID: '+deviceId+'\nGranted permissions: '+Object.keys(granted).filter(k=>granted[k]).join(', ')+'\nNo recording or upload is running.');
       heartbeat = setInterval(async () => {
         if (!token) return;
