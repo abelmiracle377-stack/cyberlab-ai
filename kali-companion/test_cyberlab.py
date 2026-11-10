@@ -85,33 +85,35 @@ class CompanionTests(unittest.TestCase):
         summary = cyberlab._rdap_summary(data)
         self.assertEqual(summary["registered_on"], "2020-01-01")
         self.assertEqual(summary["registrar_or_network_name"], "Example Net")
-    def test_manual_assessment_records_passive_page_and_admin_checks(self):
-        # The assessment currently asks 15 checklist questions. Keep the
-        # mocked input sequence aligned with that count so optional URL and
-        # evidence prompts receive their intended values.
-        answers = (
-            ["staging.example.test", "yes"]
-            + ["yes"] * 15
-            + [
-                "https://staging.example.test/login",
-                "https://staging.example.test/admin",
-                "Reviewed source and cookie configuration.",
-            ]
-        )
-        page_result = {"status_code": 200, "login_classification": "email/password form pattern", "cookies": []}
-        admin_result = {"status_code": 401, "redirects_followed": False}
-        with patch("builtins.input", side_effect=answers), patch.object(
-            cyberlab, "inspect_assessment_page", side_effect=[page_result, admin_result]
-        ) as inspect:
+    def test_automated_assessment_uses_passive_evidence_without_checklist(self):
+        page_result = {
+            "status_code": 200,
+            "login_classification": "email/password form pattern",
+            "cookies": [{"secure": True, "httponly": True, "samesite": "Lax"}],
+            "security_headers_missing": [],
+            "security_headers": {},
+            "response_headers": {"RateLimit-Limit": "10"},
+            "visible_forms": [],
+        }
+        dns_result = {"records": {
+            "MX": {"answers": [{"value": "mail.example.test"}]},
+            "TXT": {"answers": [{"value": "v=spf1 -all"}]},
+            "DMARC": {"answers": [{"value": "v=DMARC1; p=reject"}]},
+        }}
+        with patch("builtins.input", side_effect=["staging.example.test", "yes"]), \
+             patch.object(cyberlab, "inspect_assessment_page", return_value=page_result) as inspect, \
+             patch.object(cyberlab, "dns_lookup", return_value=dns_result):
             result = cyberlab.manual_security_assessment()
         self.assertTrue(result["authorisation_confirmed_by_operator"])
+        self.assertEqual(result["target"], "staging.example.test")
         self.assertEqual(result["login_method"], "email/password form pattern")
-        self.assertEqual(result["page_inspection"]["status_code"], 200)
-        self.assertEqual(result["admin_response_inspection"]["status_code"], 401)
-        self.assertEqual(inspect.call_count, 2)
-        self.assertEqual(inspect.call_args_list[0].kwargs["method"], "GET")
-        self.assertEqual(inspect.call_args_list[1].kwargs["method"], "HEAD")
-        self.assertIn("Potential authentication bypass", result["sql_injection_explanation"]["impact"])
+        self.assertEqual(result["checks"]["session_secure"], "yes")
+        self.assertEqual(result["checks"]["rate_limit"], "yes")
+        self.assertEqual(result["checks"]["sql_parameter_binding"], "unknown")
+        self.assertEqual(inspect.call_count, 1)
+        self.assertEqual(inspect.call_args.kwargs["method"], "GET")
+        self.assertIn("analysis", result)
+        self.assertEqual(result["dns_inspection"], dns_result)
 
     def test_assessment_url_rejects_private_network_address(self):
         with self.assertRaisesRegex(ValueError, "non-public"):
