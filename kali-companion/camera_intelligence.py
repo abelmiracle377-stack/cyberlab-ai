@@ -126,14 +126,14 @@ def detect_private_lan_interfaces() -> list[dict]:
                     )):
                         continue
                     interfaces.append({"interface": match.group(2), "family": "IPv4",
-                                       "ip": str(interface.ip), "network": str(network)})
+                                       "ip": str(interface.ip), "ipv4": str(interface.ip), "network": str(network)})
                 else:
                     if not isinstance(interface, ipaddress.IPv6Interface):
                         continue
                     if interface.ip.is_unspecified or interface.ip.is_loopback:
                         continue
                     interfaces.append({"interface": match.group(2), "family": "IPv6",
-                                       "ip": str(interface.ip), "network": str(interface.network),
+                                       "ip": str(interface.ip), "ipv6": str(interface.ip), "network": str(interface.network),
                                        "scope": "link" if interface.ip.is_link_local else "global"})
             except ValueError:
                 continue
@@ -146,24 +146,35 @@ def validate_camera_on_detected_lan(host: str, interfaces: list[dict] | None = N
         address_text = target.split("%", 1)[0]
         address = ipaddress.ip_address(address_text)
     except ValueError as exc:
-        raise ValueError("Enter a valid IPv4 or IPv6 camera address; hostnames cannot be subnet-matched.") from exc
+        raise ValueError("Enter a valid private IPv4 or IPv6 camera address; hostnames cannot be subnet-matched.") from exc
     detected = interfaces if interfaces is not None else detect_private_lan_interfaces()
     matching = []
+    normalized_interfaces = []
     for item in detected:
         try:
-            local_address = ipaddress.ip_address(item["ip"])
-            network = ipaddress.ip_network(item["network"], strict=False)
-            if address.version == local_address.version and address in network:
-                if address.version == 6 and address.is_link_local and item.get("interface") not in target:
+            if isinstance(item, str):
+                network = ipaddress.ip_network(item, strict=False)
+                normalized = {"interface": "detected-network", "family": "IPv{}".format(network.version),
+                              "ip": str(network.network_address), "network": str(network)}
+            else:
+                normalized = item
+                network = ipaddress.ip_network(normalized["network"], strict=False)
+                local_address = ipaddress.ip_address(normalized.get("ip", str(network.network_address)))
+                if address.version != local_address.version:
                     continue
-                matching.append(item)
+            normalized_interfaces.append(normalized)
+            if address.version == network.version and address in network:
+                if address.version == 6 and address.is_link_local and normalized.get("interface") not in target:
+                    continue
+                matching.append(normalized)
         except (KeyError, ValueError):
             continue
+    detected = normalized_interfaces
     if not matching:
         if not detected:
             raise ValueError("Kali has no detected local IPv4/IPv6 interface address. Connect to the same Wi-Fi/LAN as the camera and retry.")
         local_summary = ", ".join("{} {} {} ({})".format(item.get("interface"), item.get("family"), item.get("ip"), item.get("network")) for item in detected)
-        raise ValueError("Camera IP {} does not match any detected Kali interface address/subnet: {}. Connect both devices to the same network or verify the camera IP.".format(target, local_summary))
+        raise ValueError("Camera IP {} is not inside Kali's detected local interface address/subnet: {}. Connect both devices to the same network or verify the camera IP.".format(target, local_summary))
     selected = matching[0]
     connection_host = target
     if address.version == 6 and address.is_link_local and "%" not in target:
