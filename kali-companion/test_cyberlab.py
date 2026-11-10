@@ -40,7 +40,7 @@ class CompanionTests(unittest.TestCase):
              patch.object(cyberlab, "dns_lookup", return_value=dns) as dns_check, \
              patch.object(cyberlab, "_tls_certificate_summary", return_value=tls) as tls_check, \
              patch.object(cyberlab, "inspect_assessment_page", return_value=page) as page_check, \
-             patch.dict(os.environ, {}, clear=True):
+             patch.dict(cyberlab.os.environ, {}, clear=True):
             result = cyberlab.automated_url_assessment("https://example.test/login?token=secret#frag")
         dns_check.assert_called_once()
         tls_check.assert_called_once_with("example.test", 443, 12)
