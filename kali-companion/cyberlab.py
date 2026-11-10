@@ -576,10 +576,26 @@ def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
         result["email_intelligence"]["dkim"] = _dkim_selector_checks(domain, timeout)
         result["email_intelligence"]["public_search_hints"] = _public_search_hints("email", identity["email_address"])
         result["email_intelligence"]["domain_ip_addresses"] = resolve_public_site_ips(domain)
+        # Enrich only from the email domain's own public business website.
+        # Do not attempt to discover private accounts or correlate a person across services.
+        public_site = public_site_profile(domain, timeout)
+        result["email_intelligence"]["public_domain_associations"] = {
+            "source_domain": domain,
+            "source": "The domain's public HTTPS homepage, when available",
+            "status": public_site.get("status", "unavailable"),
+            "organisation_name": public_site.get("organisation_name", ""),
+            "public_business_emails": public_site.get("public_contact_emails", []),
+            "public_business_phone_numbers": public_site.get("public_contact_phone_numbers", []),
+            "public_social_media_links": public_site.get("social_media_links", []),
+            "public_locations": public_site.get("public_location", []),
+            "public_addresses": public_site.get("public_address", []),
+            "relationship_note": "These are contact details and social links published on the domain's own public homepage. They are domain-level business associations, not proof that the submitted mailbox owner controls them."
+        }
         result["limitations"] = [
-            "An email address is not treated as a website URL; no homepage scraping is performed.",
             "Mailbox existence, ownership, inbox activity and deliverability are not tested.",
-            "No passwords, private messages or breach credentials are retrieved. Search hints are provided for optional manual review.",
+            "No passwords, private messages, breach credentials or private-person contact details are retrieved.",
+            "Public contacts and social links are extracted only from the email domain's own public homepage; no cross-platform identity matching is performed.",
+            "Search hints are optional manual research leads, not live search results.",
             "DKIM checks cover a short common-selector list only; they are not exhaustive."
         ]
         return result
