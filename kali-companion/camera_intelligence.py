@@ -107,7 +107,7 @@ def detect_private_lan_interfaces() -> list[dict]:
         return []
     interfaces = []
     for line in result.stdout.splitlines():
-        match = re.search(r"^\\d+:\\s+([^\\s]+).*?\\binet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)", line)
+        match = re.search(r"^\d+:\s+([^\s]+).*?\binet\s+(\d+\.\d+\.\d+\.\d+/\d+)", line)
         if not match:
             continue
         try:
