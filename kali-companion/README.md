@@ -1,13 +1,16 @@
 # CyberLab AI Kali Companion
 
-A command-line research companion for Kali Linux and other Linux distributions. It adds passive OSINT and public vulnerability intelligence to the original local evidence tools. Python 3.9+; Python standard library only; no pip packages or API keys. Optional `figlet` and `chafa` packages provide the large coloured startup lettering and terminal mascot artwork.
+A command-line research companion for Kali Linux and other Linux distributions. It adds passive OSINT and public vulnerability intelligence to the original local evidence tools. Python 3.9+. Core modules use the Python standard library. Install the optional `phonenumbers` package for deeper offline numbering-plan metadata (validity, line type, original carrier-range label and approximate numbering region). Optional `figlet` and `chafa` packages provide startup artwork.
 
 ## Install
 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-sudo apt update && sudo apt install -y figlet chafa
+sudo apt update && sudo apt install -y figlet chafa python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip phonenumbers
 python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
@@ -219,3 +222,8 @@ sudo apt update
 sudo apt install -y ffmpeg
 python3 kali-companion/cyberlab.py menu
 ```
+
+
+## Phone number intelligence (menu option 16)
+
+Option 16 performs local E.164 parsing and, when `phonenumbers` is installed, uses its bundled libphonenumber numbering-plan metadata to assess possible/valid format, number type, original carrier-range label and approximate numbering region. Install with `python -m pip install phonenumbers` in the active virtual environment. This is metadata enrichment, not a live subscriber lookup: it cannot reveal the subscriber's name, SIM registration date, last-used time, current carrier with certainty, private social accounts, fraud records or IP addresses. No SMS/call is sent and no phone number is submitted to a third-party lookup service. A valid numbering-plan result does not prove a number is active or assigned.
