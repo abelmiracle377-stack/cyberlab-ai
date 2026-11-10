@@ -2052,6 +2052,140 @@ def assess_username_quality(username: str) -> dict:
     }
 
 
+def audit_password_security_target(target_path: str, timeout: int = 12) -> dict:
+    """Automatically audit a local application tree for password/authentication risks."""
+    root = Path(target_path).expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        raise ValueError("Enter an existing application source/configuration directory.")
+    excluded = {".git", ".venv", "venv", "node_modules", "__pycache__", ".next",
+                "dist", "build", "vendor", ".tox", ".mypy_cache"}
+    allowed_suffixes = {".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".yaml", ".yml",
+                        ".toml", ".ini", ".env", ".conf", ".cfg", ".properties", ".php",
+                        ".rb", ".go", ".java", ".cs", ".html", ".xml", ".md", ".txt", ".log"}
+    max_files, max_file_bytes, max_total_bytes = 1200, 2 * 1024 * 1024, 30 * 1024 * 1024
+    scanned, total_bytes = [], 0
+    emails, usernames, password_candidates = set(), set(), {}
+    findings = []
+    password_assignment = re.compile(
+        r"""(?im)\b(?:password|passwd|pwd|secret|client_secret|api_key)\b\s*[:=]\s*["']([^"'\\\r\n]{4,200})["']"""
+    )
+    username_assignment = re.compile(
+        r"""(?im)\b(?:username|user_name|login|account_name)\b\s*[:=]\s*["']([^"'\\\r\n]{2,100})["']"""
+    )
+    for file_path in root.rglob("*"):
+        if any(part in excluded for part in file_path.parts):
+            continue
+        if not file_path.is_file() or file_path.is_symlink() or file_path.suffix.lower() not in allowed_suffixes:
+            continue
+        if len(scanned) >= max_files:
+            findings.append({"severity": "info", "finding": "File scan limit reached", "evidence": f"Stopped after {max_files} files."})
+            break
+        try:
+            size = file_path.stat().st_size
+            if size > max_file_bytes or total_bytes + size > max_total_bytes:
+                continue
+            raw = file_path.read_bytes()
+            total_bytes += len(raw)
+            text_data = raw.decode("utf-8", errors="ignore")
+        except OSError:
+            continue
+        rel = str(file_path.relative_to(root))
+        scanned.append(rel)
+        for email in re.findall(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text_data):
+            emails.add(email.lower())
+        for match in username_assignment.finditer(text_data):
+            candidate = match.group(1).strip()
+            if candidate and len(candidate) <= 64 and not re.search(r"(?i)(example|changeme|your_|placeholder)", candidate):
+                usernames.add(candidate[:64])
+        for match in password_assignment.finditer(text_data):
+            candidate = match.group(1)
+            if candidate.lower() in {"", "none", "null", "false", "true", "changeme", "your_password", "password"}:
+                continue
+            digest = hashlib.sha1(candidate.encode("utf-8")).hexdigest().upper()
+            password_candidates[digest] = {"file": rel, "length": len(candidate)}
+            findings.append({
+                "severity": "high",
+                "finding": "Possible hard-coded secret in source/configuration",
+                "file": rel,
+                "evidence": "A password/secret-like assignment contains a literal value; the value is deliberately redacted.",
+                "remediation": "Move the secret to a secret manager or environment variable, rotate it, and remove it from repository history."
+            })
+
+    breach_checks = []
+    for digest, metadata in list(password_candidates.items())[:50]:
+        prefix, suffix = digest[:5], digest[5:]
+        request = urllib.request.Request(
+            "https://api.pwnedpasswords.com/range/" + prefix,
+            headers={"User-Agent": USER_AGENT, "Add-Padding": "true"}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                body = response.read(500_001).decode("ascii", errors="replace")
+            count = 0
+            for line in body.splitlines():
+                parts = line.strip().split(":")
+                if len(parts) == 2 and parts[0].upper() == suffix:
+                    count = int(parts[1])
+                    break
+            breach_checks.append({
+                "file": metadata["file"], "secret_value_disclosed": False,
+                "breached_password_match": count > 0, "breach_corpus_occurrences": count,
+                "check_method": "HIBP Pwned Passwords k-anonymity range API (5-character SHA-1 prefix only)"
+            })
+            if count:
+                findings.append({
+                    "severity": "critical", "finding": "Hard-coded password appears in known breach corpus",
+                    "file": metadata["file"], "breach_corpus_occurrences": count,
+                    "remediation": "Rotate immediately, remove the secret from source and repository history, and block it through the password screening control."
+                })
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            breach_checks.append({"file": metadata["file"], "status": "unavailable", "detail": str(exc)[:300]})
+
+    if emails:
+        findings.append({
+            "severity": "info", "finding": "Email addresses discovered in local project files",
+            "count": len(emails), "addresses": sorted(emails)[:100],
+            "remediation": "Verify these are intended public/project addresses. Do not publish personal addresses unintentionally."
+        })
+    if usernames:
+        findings.append({
+            "severity": "info", "finding": "Username-like configuration values discovered",
+            "count": len(usernames), "values": sorted(usernames)[:100],
+            "remediation": "Review whether these are service accounts, test identities or personal identifiers; redact before sharing reports."
+        })
+    if not password_candidates:
+        findings.append({
+            "severity": "info", "finding": "No obvious literal password/secret assignments detected",
+            "evidence": "This is a pattern-based source scan; secrets in other formats, encoded values, runtime stores or external services may be missed."
+        })
+    return {
+        "feature": "automated_password_security_audit",
+        "target_directory": str(root),
+        "scan_summary": {
+            "files_scanned": len(scanned), "bytes_scanned": total_bytes,
+            "email_addresses_found": len(emails), "username_values_found": len(usernames),
+            "literal_secret_candidates_found": len(password_candidates)
+        },
+        "breached_password_checks": breach_checks,
+        "findings": findings,
+        "files_scanned_sample": scanned[:100],
+        "scope": {
+            "manual_control_answers_requested": False,
+            "raw_passwords_sent_to_service": False,
+            "external_password_check": "Only the first 5 SHA-1 hex characters are sent to the HIBP Pwned Passwords range endpoint; full hashes and plaintext values remain local.",
+            "email_breach_lookup": "Not performed; email addresses are identified in local files only. No addresses are submitted to breach-search services.",
+            "username_web_search": "Not performed; usernames are extracted from local configuration only.",
+            "login_attempts_or_password_guessing": False
+        },
+        "limitations": [
+            "This is a bounded static source/configuration scan, not a full application penetration test.",
+            "Pattern matching can produce false positives and miss secrets stored in other formats.",
+            "Email addresses and usernames found in source files are not proof of active accounts or breach exposure.",
+            "Password reuse, MFA enforcement and reset-flow security require identity-provider configuration or owner-provided authentication logs."
+        ]
+    }
+
+
 def review_password_policy(minimum_length: int, breached_blocklist: str,
                            reuse_prevention: str, reset_protection: str) -> dict:
     if not 8 <= int(minimum_length) <= 128:
@@ -2212,17 +2346,15 @@ def interactive_menu(timeout: int = 12) -> int:
             continue
         if choice == "19":
             try:
-                minimum = int(input("Minimum password length configured [14]: ").strip() or "14")
-                result = review_password_policy(
-                    minimum,
-                    input("Breached-password blocklist enabled? (yes/no/unknown): "),
-                    input("Password reuse prevention? (yes/no/unknown): "),
-                    input("Secure reset protection? (yes/no/unknown): "))
+                target = input("Application source/configuration directory [current directory]: ").strip() or "."
+                result = audit_password_security_target(target, timeout=timeout)
                 print(json.dumps(result, indent=2, ensure_ascii=False))
-                destination = save_investigation(result, "password-policy-assessment")
+                destination = save_investigation(result, "automated-password-security-audit")
                 print(f"Saved locally: {destination}")
-            except (OSError, ValueError) as exc:
-                print(f"Password policy review stopped: {exc}")
+            except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+                print(f"Password security audit stopped: {exc}")
+            except (EOFError, KeyboardInterrupt):
+                print("\\nReturning to the CyberLab menu.")
             wait_for_menu()
             continue
         if choice == "21":
