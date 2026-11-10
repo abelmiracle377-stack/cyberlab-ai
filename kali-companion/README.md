@@ -287,3 +287,27 @@ sudo gzip -dk /usr/share/wordlists/rockyou.txt.gz
 ```
 
 Only after John and its result-summary command both complete successfully does CyberLab report `execution_status: completed` and `command_executed: true`. If validation, execution or result verification fails, no successful audit result is returned. Plaintext recovered values are discarded; only aggregate counts are retained. Use this workflow only for hash inventories you own or are explicitly authorised to audit.
+
+## Per-user VPS gateway, device pairing and file hub (options 9-10)
+
+CyberLab's remote-device architecture is **self-hosted per operator**. Each CyberLab user provisions and pays for their own VPS; CyberLab does not route users through a shared developer-owned server. The operator configures their own HTTPS gateway in option 9. Option 10 reads that gateway's real authenticated device registry; it must never display synthetic devices or simulated online states.
+
+### Intended deployment model
+
+- A lightweight gateway runs on the operator's VPS and owns that operator's device registry and file storage.
+- Kali and enrolled companion devices initiate outbound, authenticated TLS connections to the operator's gateway. Do not expose remote device-management ports to the public internet.
+- Pairing uses short-lived, single-use invitations, explicit device approval, per-device credentials and revocation.
+- Device status is derived from authenticated heartbeats and server-side timestamps, not guessed from stale records.
+- Gateway credentials and device secrets are stored locally with restrictive file permissions and are never committed to Git.
+
+### Consent and session lifecycle
+
+Remote capture is opt-in and permission-scoped. An invitation must disclose the requesting operator, the requested capabilities, the purpose, and the expected data destination before the recipient accepts. Camera, microphone, screen capture and location permissions are requested separately through the operating system or browser. Capture must remain visibly indicated while active. The recipient can stop sharing or revoke permissions at any time; the Kali operator can also stop the session. Revocation, loss of required OS/browser permission, or companion shutdown immediately stops capture and upload. CyberLab must not hide capture, bypass protected/restricted screens, or continue recording after the participant withdraws consent.
+
+### File Hub
+
+Files uploaded by an enrolled device are stored in that operator's own VPS storage namespace. The gateway may issue authenticated, expiring preview/download links for supported images, audio, video and documents. Links must not expose public directory listings or permanent unauthenticated access. Apply upload size/type limits, per-device authorization, retention controls, deletion, and audit events. The original file should remain downloadable; previews are an additional way to view it, not a replacement for the file.
+
+### Implementation status
+
+This section describes the target architecture and safety requirements; it does **not** mean the VPS gateway, device companion, pairing flow, live capture, connected-device registry or File Hub has been implemented. Options 9-11 remain unconfigured until the real backend and integration tests are delivered. Do not report a successful connection, device, recording or file link unless it was actually verified against the user's configured VPS.
