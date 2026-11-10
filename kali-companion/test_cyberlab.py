@@ -115,6 +115,49 @@ class CompanionTests(unittest.TestCase):
         self.assertIn("analysis", result)
         self.assertEqual(result["dns_inspection"], dns_result)
 
+    def test_login_form_analysis_reports_action_method_csrf_and_autocomplete(self):
+        forms = [{
+            "method": "post", "action": "/session", "enctype": "application/x-www-form-urlencoded",
+            "autocomplete": "off",
+            "fields": [
+                {"tag": "input", "type": "email", "name": "email", "autocomplete": "username", "required": True},
+                {"tag": "input", "type": "password", "name": "password", "autocomplete": "current-password", "required": True},
+                {"tag": "input", "type": "hidden", "name": "csrf_token", "autocomplete": "", "required": False},
+            ],
+        }]
+        result = cyberlab._analyse_login_forms(forms, "https://example.test/login")
+        self.assertEqual(result["authentication_form_count"], 1)
+        form = result["forms_analysed"][0]
+        self.assertEqual(form["method"], "POST")
+        self.assertTrue(form["action_same_origin"])
+        self.assertEqual(form["csrf_or_token_field_names"], ["csrf_token"])
+        self.assertIn("current-password", form["autocomplete_values"])
+        self.assertTrue(result["csrf_token_field_observed"])
+
+    def test_login_form_analysis_flags_get_password_submission_pattern(self):
+        forms = [{
+            "method": "get", "action": "https://other.example.test/collect",
+            "fields": [
+                {"type": "text", "name": "username"},
+                {"type": "password", "name": "password"},
+            ],
+        }]
+        result = cyberlab._analyse_login_forms(forms, "https://example.test/login")
+        form = result["forms_analysed"][0]
+        self.assertFalse(form["action_same_origin"])
+        self.assertIn("Authentication-like form uses GET", " ".join(form["security_observations"]))
+
+    def test_page_metadata_parser_collects_scripts_and_auth_form_attributes(self):
+        parser = cyberlab._PageMetadata()
+        parser.feed('<title>Sign in</title><script src="/app.js"></script>'
+                    '<form method="post" action="/session"><input type="password" '
+                    'name="password" autocomplete="current-password" required></form>')
+        self.assertEqual(parser.title, ["Sign in"])
+        self.assertEqual(parser.scripts[0]["src"], "/app.js")
+        self.assertEqual(parser.forms[0]["method"], "post")
+        self.assertEqual(parser.forms[0]["fields"][0]["autocomplete"], "current-password")
+        self.assertTrue(parser.forms[0]["fields"][0]["required"])
+
     def test_assessment_url_rejects_private_network_address(self):
         with self.assertRaisesRegex(ValueError, "non-public"):
             cyberlab._validate_assessment_url("https://127.0.0.1/admin")
