@@ -564,7 +564,7 @@ class CompanionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             hashes = Path(directory) / "hashes.txt"
             wordlist = Path(directory) / "rockyou.txt"
-            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\\n", encoding="utf-8")
+            hashes.write_text("5f4dcc3b5aa765d61d8327deb882cf99\n", encoding="utf-8")
             wordlist.write_text("candidate\\n", encoding="utf-8")
             answers = ["4", str(hashes), str(wordlist), "", "yes"]
             with patch("builtins.input", side_effect=answers):
