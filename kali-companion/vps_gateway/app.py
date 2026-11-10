@@ -8,6 +8,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
+import shutil
+import sys
 import secrets
 import sqlite3
 import time
@@ -94,6 +97,52 @@ class AcceptPairing(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "cyberlab-personal-vps-gateway"}
+
+
+@app.get("/v1/owner/diagnostics", dependencies=[Depends(owner_auth)])
+def owner_diagnostics():
+    """Return limited host compatibility facts to the authenticated VPS owner."""
+    try:
+        distro = platform.freedesktop_os_release()
+        os_name = distro.get("PRETTY_NAME") or distro.get("ID") or platform.system()
+    except (AttributeError, OSError):
+        os_name = platform.system()
+    memory_bytes = None
+    try:
+        with open("/proc/meminfo", "r", encoding="ascii") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemAvailable:"):
+                    memory_bytes = int(line.split()[1]) * 1024
+                    break
+    except (OSError, ValueError, IndexError):
+        pass
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    disk = shutil.disk_usage(DATA_DIR)
+    python_ok = sys.version_info >= (3, 10)
+    linux_ok = platform.system() == "Linux"
+    memory_ok = memory_bytes is not None and memory_bytes >= 1536 * 1024 * 1024
+    disk_ok = disk.free >= 2 * 1024 * 1024 * 1024
+    checks = [
+        {"name": "Operating system", "status": "pass" if linux_ok else "fail",
+         "detail": os_name, "required": "Linux"},
+        {"name": "Python", "status": "pass" if python_ok else "fail",
+         "detail": platform.python_version(), "required": "3.10 or newer"},
+        {"name": "Available memory", "status": "pass" if memory_ok else "warning",
+         "detail_bytes": memory_bytes, "required_bytes": 1536 * 1024 * 1024},
+        {"name": "Free storage", "status": "pass" if disk_ok else "warning",
+         "detail_bytes": disk.free, "required_bytes": 2 * 1024 * 1024 * 1024},
+    ]
+    compatible = linux_ok and python_ok
+    return {
+        "status": "compatible" if compatible else "incompatible",
+        "checks": checks,
+        "gateway": "healthy",
+        "notes": [
+            "Memory and disk checks are advisory; workload and retention needs may require more.",
+            "Only the authenticated owner can retrieve these diagnostics.",
+            "Hostname, IP addresses, usernames and environment variables are not disclosed.",
+        ],
+    }
 
 
 @app.post("/v1/pairing", dependencies=[Depends(owner_auth)])
