@@ -232,6 +232,8 @@ def get_device_file(file_id: str, device=Depends(device_auth)):
 
 @app.get("/v1/files")
 def list_files(device=Depends(device_auth)):
+    if not json.loads(device["permissions"]).get("file_upload"):
+        raise HTTPException(403, "File access was not granted for this device.")
     con = db()
     rows = con.execute("SELECT id,name,media_type,size,created_at FROM files WHERE device_id=? ORDER BY created_at DESC",
                        (device["id"],)).fetchall()
