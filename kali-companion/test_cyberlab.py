@@ -389,7 +389,8 @@ class CompanionTests(unittest.TestCase):
         with patch.object(cyberlab, "dns_lookup", return_value={"records": records}), \
              patch.object(cyberlab, "_dkim_selector_checks", return_value={"published_selectors_found": []}), \
              patch.object(cyberlab, "resolve_public_site_ips", return_value={"addresses": ["203.0.113.10"]}), \
-             patch.object(cyberlab, "public_site_profile", return_value={"status": "ok", "organisation_name": "Example Org", "public_contact_emails": ["contact@example.org"], "public_contact_phone_numbers": ["+1 555 0100"], "social_media_links": ["https://linkedin.com/company/example"], "public_location": ["Lagos"], "public_address": []}):
+             patch.object(cyberlab, "public_site_profile", return_value={"status": "ok", "organisation_name": "Example Org", "public_contact_emails": ["contact@example.org"], "public_contact_phone_numbers": ["+1 555 0100"], "social_media_links": ["https://linkedin.com/company/example"], "public_location": ["Lagos", '.href="/lander"}'], "public_address": []}), \
+             patch.object(cyberlab, "_dns_passive_domain_assets", return_value={"status": "ok", "subdomains": [{"hostname": "www.example.org", "public_ip_addresses": ["203.0.113.11"]}], "public_ip_addresses": ["203.0.113.11"]}):
             result = cyberlab.dns_intelligence_lookup("person@example.org")
         self.assertEqual(result["investigation_type"], "email_intelligence")
         self.assertIn("email_intelligence", result)
@@ -401,6 +402,8 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(associations["public_social_media_links"], ["https://linkedin.com/company/example"])
         self.assertEqual(associations["public_social_account_identifiers"][0]["public_path_identifier"], "example")
         self.assertEqual(associations["public_ip_addresses"], ["203.0.113.10"])
+        self.assertEqual(associations["certificate_transparency_assets"]["public_ip_addresses"], ["203.0.113.11"])
+        self.assertEqual(associations["public_locations"], ["Lagos"])
         self.assertIn("not proof", associations["relationship_note"])
 
     def test_dns_intelligence_social_profile_inspects_supplied_profile_not_homepage(self):
