@@ -2070,7 +2070,7 @@ def interactive_menu(timeout: int = 12) -> int:
             continue
         if choice == "17":
             try:
-                print("\\nLIVE AUTHENTICATION SECURITY ASSESSMENT")
+                print("\nLIVE AUTHENTICATION SECURITY ASSESSMENT")
                 print("Inspects one real HTTPS login page. No passwords are guessed or submitted.")
                 target = input("Full HTTPS login URL on a system you own or are authorised to assess: ").strip()
                 approval = input("Confirm written authorisation for this target (type AUTHORISED): ").strip()
@@ -2093,7 +2093,7 @@ def interactive_menu(timeout: int = 12) -> int:
             except (OSError, ValueError, urllib.error.URLError) as exc:
                 print(f"Authentication assessment stopped: {exc}")
             except (EOFError, KeyboardInterrupt):
-                print("\\nReturning to the CyberLab menu.")
+                print("\nReturning to the CyberLab menu.")
             wait_for_menu()
             continue
         if choice == "18":
