@@ -78,8 +78,9 @@ def detect_private_lan_networks() -> list[str]:
             if any(interface_network.network_address in block for block in rfc1918):
                 # Never widen a configured interface prefix; cap discovery to /24.
                 if interface_network.num_addresses > 256:
+                    interface_address = ipaddress.ip_interface(match.group(1)).ip
                     interface_network = ipaddress.ip_network(
-                        (interface_network.network_address, 24), strict=False
+                        (interface_address, 24), strict=False
                     )
                 if interface_network.num_addresses <= 256:
                     networks.add(str(interface_network))
