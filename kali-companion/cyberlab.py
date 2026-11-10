@@ -630,6 +630,99 @@ def _email_security_findings(domain: str, records: dict, submitted_email: str | 
     }
 
 
+def _safe_browsing_url_lookup(url: str, api_key: str, timeout: int = 12) -> dict:
+    endpoint = "https://safebrowsing.googleapis.com/v4/threatMatches:find?" + urllib.parse.urlencode({"key": api_key})
+    payload = {"client": {"clientId": "cyberlab-ai", "clientVersion": "1.0"},
+        "threatInfo": {"threatTypes": ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"],
+        "platformTypes": ["ANY_PLATFORM"], "threatEntryTypes": ["URL"], "threatEntries": [{"url": url}]}}
+    request = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read(200001).decode("utf-8"))
+        matches = data.get("matches", []) if isinstance(data, dict) else []
+        return {"provider": "Google Safe Browsing", "status": "match" if matches else "no_match",
+            "matches": [{"threat_type": item.get("threatType"), "platform_type": item.get("platformType")}
+                        for item in matches[:20]], "checked_url": url,
+            "note": "No match is not a guarantee of safety."}
+    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        return {"provider": "Google Safe Browsing", "status": "error", "error": str(exc)}
+
+
+def automated_url_assessment(value: str, timeout: int = 12) -> dict:
+    """Perform bounded public URL checks; never execute page content or follow redirects."""
+    structural = analyze_url(value)
+    parsed = urllib.parse.urlsplit(value.strip() if "://" in value else "https://" + value.strip())
+    host = (parsed.hostname or "").encode("idna").decode("ascii").lower()
+    scheme = parsed.scheme.lower()
+    port = parsed.port or (443 if scheme == "https" else 80)
+    # Query values and fragments may contain session tokens; never retain or submit them.
+    checked_url = urllib.parse.urlunsplit((scheme, parsed.netloc, parsed.path or "/", "", ""))
+    query_names = sorted({key[:80] for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)})[:40]
+    try:
+        _validate_assessment_url(checked_url if scheme == "https" else
+            urllib.parse.urlunsplit(("https", parsed.netloc, "/", "", "")))
+    except ValueError as exc:
+        return {"feature": "automated_url_security_assessment", "submitted_url": checked_url,
+            "hostname": host, "structural_analysis": structural, "assessment_status": "blocked_for_safety",
+            "error": str(exc), "note": "Private, loopback, link-local and non-public destinations are not contacted."}
+
+    dns = {}
+    try:
+        ipaddress.ip_address(host)
+        resolved = {"addresses": [host], "note": "IP literal supplied; DNS lookup is not applicable."}
+    except ValueError:
+        try:
+            dns = dns_lookup(host, timeout=timeout)
+            records = dns.get("records", {})
+            resolved = {kind: records.get(kind, {}).get("answers", [])
+                        for kind in ("A", "AAAA", "MX", "NS", "TXT", "DMARC")}
+        except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            resolved = {"error": str(exc)}
+
+    reputation = []
+    key = os.environ.get("GOOGLE_SAFE_BROWSING_API_KEY", "").strip()
+    reputation.append(_safe_browsing_url_lookup(checked_url, key, timeout) if key else
+        {"provider": "Google Safe Browsing", "status": "not_configured",
+         "setup": "Set GOOGLE_SAFE_BROWSING_API_KEY locally to enable threat-list lookups."})
+
+    tls = {"status": "not_checked"}
+    page = {"status": "not_fetched", "reason": "Only HTTPS URLs are fetched."}
+    if scheme == "https":
+        tls = _tls_certificate_summary(host, port, timeout)
+        page = inspect_assessment_page(checked_url, timeout=timeout, method="GET")
+
+    findings = []
+    if scheme != "https":
+        findings.append({"severity": "medium", "finding": "The URL uses HTTP rather than HTTPS."})
+    if tls.get("status") == "unavailable_or_invalid":
+        findings.append({"severity": "high", "finding": "TLS validation failed or could not be completed.",
+                         "evidence": tls.get("error")})
+    if isinstance(page.get("status_code"), int) and not (200 <= page["status_code"] < 400):
+        findings.append({"severity": "medium", "finding": "The page returned a non-success HTTP status.",
+                         "evidence": page.get("status_code")})
+    if any(item.get("status") == "match" for item in reputation):
+        findings.append({"severity": "critical", "finding": "A configured reputation provider reported a threat match."})
+    elif all(item.get("status") in ("no_match", "error") for item in reputation):
+        findings.append({"severity": "info", "finding": "No threat match was returned; this is not proof of safety."})
+
+    return {"feature": "automated_url_security_assessment", "submitted_url": checked_url,
+        "hostname": host, "port": port, "query_parameter_names": query_names,
+        "query_values_sent_or_saved": False, "structural_analysis": structural,
+        "dns_and_domain_intelligence": {"hostname_resolution": resolved, "records": dns.get("records", {})},
+        "tls_certificate": tls, "http_page_inspection": page, "reputation_checks": reputation,
+        "findings": findings, "assessment_status": "completed_with_evidence",
+        "network_scope": {"target_requests": "At most one GET to the HTTPS URL with query values and fragment removed; no redirects.",
+            "tls": "One certificate-validating TLS handshake for HTTPS.",
+            "dns": "Public DNS-over-HTTPS lookups for domain names.",
+            "execution": "No browser, JavaScript, form submission or file download.",
+            "source_ip": "Requests originate from this Kali machine, not a cloud sandbox.",
+            "third_party": "Query-free URL path sent to Google only if the API key is configured."},
+        "limitations": ["No reputation match does not establish safety.",
+            "Only one page is inspected; redirects and linked pages are not followed.",
+            "The target can observe a connection from Kali. This is not an isolated sandbox."]}
+
+
 def _url_intelligence_findings(value: str) -> dict:
     """Add richer URL-only indicators without visiting the supplied URL."""
     analysis = analyze_url(value)
@@ -1336,7 +1429,7 @@ def content_analysis_menu(timeout: int = 12) -> None:
     print("\nMALICIOUS FILE & LINK ANALYSIS")
     print("  [1] Static file analysis")
     print("  [2] Image/file signature analysis")
-    print("  [3] URL structure analysis (does not open the URL)")
+    print("  [3] Automated URL investigation (DNS, TLS, page metadata, reputation)")
     print("  [0] Back")
     choice = input("analysis> ").strip()
     try:
@@ -1347,7 +1440,7 @@ def content_analysis_menu(timeout: int = 12) -> None:
             destination = save_investigation(result, "file-triage")
             print(f"Saved locally: {destination}")
         elif choice == "3":
-            result = analyze_url(input("URL to inspect: ").strip())
+            result = automated_url_assessment(input("URL to investigate: ").strip(), timeout=timeout)
             print(json.dumps(result, indent=2, ensure_ascii=False))
             destination = save_investigation(result, "url-analysis")
             print(f"Saved locally: {destination}")
