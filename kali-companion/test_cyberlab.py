@@ -542,7 +542,7 @@ class CompanionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "settings.py").write_text(
-                'USERNAME = "lab_operator"\\nEMAIL = "security@example.test"\\nPASSWORD = "QwErTy-Secret-9981!"\\n',
+                'USERNAME = "lab_operator"\nEMAIL = "security@example.test"\nPASSWORD = "QwErTy-Secret-9981!"\\n',
                 encoding="utf-8")
             result = cyberlab.audit_password_security_target(directory)
         encoded = json.dumps(result)
@@ -558,14 +558,14 @@ class CompanionTests(unittest.TestCase):
     def test_automated_password_audit_uses_hibp_prefix_and_never_plaintext(self):
         secret = "BreachCandidate-Secret-2026!"
         suffix_hash = hashlib.sha1(secret.encode("utf-8")).hexdigest().upper()
-        payload = (suffix_hash[5:] + ":42\\n").encode("ascii")
+        payload = (suffix_hash[5:] + ":42\n").encode("ascii")
         class FakeResponse:
             def __enter__(self): return self
             def __exit__(self, *args): return False
             def read(self, size=-1): return payload
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "config.env").write_text(f'PASSWORD="{secret}"\\n', encoding="utf-8")
+            (root / "config.env").write_text(f'PASSWORD="{secret}"\n', encoding="utf-8")
             with patch.object(cyberlab.urllib.request, "urlopen", return_value=FakeResponse()) as mocked:
                 result = cyberlab.audit_password_security_target(directory)
         request = mocked.call_args.args[0]
