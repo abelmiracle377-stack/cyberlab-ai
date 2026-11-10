@@ -59,6 +59,12 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(result["spf_policy_count"], 2)
         self.assertTrue(any(item["severity"] == "high" and "Multiple SPF" in item["finding"] for item in result["findings"]))
 
+    def test_dns_intelligence_input_redacts_url_query_values(self):
+        identity = cyberlab._normalise_osint_input("https://example.test/path?token=secret&next=%2Fhome#frag")
+        self.assertNotIn("secret", repr(identity))
+        self.assertNotIn("frag", repr(identity))
+        self.assertIn("token=", identity["website_url"])
+
     def test_dns_intelligence_url_findings_keep_query_values_private(self):
         result = cyberlab._url_intelligence_findings("https://example.test/login?token=secret&next=%2Fhome#section")
         self.assertIn("token", result["query_parameter_names"])
