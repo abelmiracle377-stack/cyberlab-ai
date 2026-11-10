@@ -339,3 +339,22 @@ Option 9 also runs a compatibility check before saving a new VPS connection. The
 The browser/companion recipient experience, companion-side permission prompts, native camera/microphone/screen/location capture, real-time media streaming, recipient-initiated session stop endpoint, file deletion/retention UI, and end-to-end integration tests are not yet implemented. The pairing accept API is a backend endpoint, not a finished user-facing consent page. Do not treat pairing as completed until a compatible companion exists. Do not report a successful camera/microphone recording, stream, location fix or screenshot unless a real permitted capture has occurred and been verified.
 
 The service must be placed behind a properly configured HTTPS reverse proxy. Never expose its localhost port 8000 directly to the internet. Do not use plain HTTP for owner credentials or device tokens.
+
+### Automated HTTPS setup with Caddy
+
+After installing the gateway on an Ubuntu/Debian VPS, point a DNS A record (and any AAAA record you intend to use) for a hostname such as `gateway.example.com` to the VPS. Allow inbound TCP ports 80 and 443 in the provider firewall. Then run:
+
+```bash
+cd cyberlab-ai/kali-companion/vps_gateway
+sudo bash configure-caddy.sh
+```
+
+The script asks you to confirm DNS is pointed at the server, installs Caddy from its official package repository, configures a reverse proxy to `127.0.0.1:8000`, and enables HTTPS certificate issuance/renewal. If UFW is already active, it allows TCP 80 and 443; it does not alter SSH rules. It keeps the gateway's application port private and does not open port 8000.
+
+Verify the gateway from the VPS:
+
+```bash
+curl -fsS https://gateway.example.com/health
+```
+
+Replace the example hostname with the domain you configured. Certificate issuance requires public DNS to resolve to this VPS and inbound ports 80/443 to be reachable. Check Caddy logs with `sudo journalctl -u caddy -n 50 --no-pager` if issuance fails. Then configure the HTTPS URL in Kali option 9. Do not paste the owner token into chat or commit it to Git.
