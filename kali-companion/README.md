@@ -274,3 +274,16 @@ python3 kali-companion/cyberlab.py menu
 ```
 
 Keep API keys out of Git. The query-free URL path is sent to Google only when the key is configured; query values and fragments are intentionally removed because they may contain session tokens or private identifiers. A no-match result is not proof that a URL is safe.
+
+
+### John the Ripper offline hash audit (Scam Investigation → option 4)
+
+This operation accepts an **existing local hash-inventory file**, not a website name, domain or URL. CyberLab checks that both the hash inventory and wordlist exist as regular local files, are non-empty and within size limits, and that the inventory contains recognised hash-like records before it asks for authorisation or starts John. Missing files and ordinary text are rejected with an explicit message that no command was executed. The confirmation accepts `yes` or `YES`.
+
+On Kali, the packaged RockYou list is often compressed. If `/usr/share/wordlists/rockyou.txt` is missing but `rockyou.txt.gz` exists, decompress a local copy with:
+
+```bash
+sudo gzip -dk /usr/share/wordlists/rockyou.txt.gz
+```
+
+Only after John and its result-summary command both complete successfully does CyberLab report `execution_status: completed` and `command_executed: true`. If validation, execution or result verification fails, no successful audit result is returned. Plaintext recovered values are discarded; only aggregate counts are retained. Use this workflow only for hash inventories you own or are explicitly authorised to audit.
