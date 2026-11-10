@@ -652,7 +652,6 @@ def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
             "public_business_emails": public_site.get("public_contact_emails", []),
             "public_business_phone_numbers": public_site.get("public_contact_phone_numbers", []),
             "public_social_media_links": public_site.get("social_media_links", []),
-            "public_social_account_identifiers": _public_social_account_refs(public_site.get("social_media_links", [])),
             "public_locations": public_locations,
             "public_addresses": public_site.get("public_address", []),
             "public_ip_addresses": result["email_intelligence"]["domain_ip_addresses"].get("addresses", []),
