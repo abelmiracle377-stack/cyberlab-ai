@@ -399,6 +399,8 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(associations["organisation_name"], "Example Org")
         self.assertEqual(associations["public_business_phone_numbers"], ["+1 555 0100"])
         self.assertEqual(associations["public_social_media_links"], ["https://linkedin.com/company/example"])
+        self.assertEqual(associations["public_social_account_identifiers"][0]["public_path_identifier"], "example")
+        self.assertEqual(associations["public_ip_addresses"], ["203.0.113.10"])
         self.assertIn("not proof", associations["relationship_note"])
 
     def test_dns_intelligence_social_profile_inspects_supplied_profile_not_homepage(self):
