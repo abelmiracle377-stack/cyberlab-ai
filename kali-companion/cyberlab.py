@@ -184,25 +184,51 @@ class _PageMetadata(__import__("html.parser", fromlist=["HTMLParser"]).HTMLParse
         self.in_title = False
         self.meta = {}
         self.links = []
+        self.scripts = []
         self.forms = []
         self.form = None
+
     def handle_starttag(self, tag, attrs):
         a = {k.lower(): (v or "") for k, v in attrs}
-        if tag == "title": self.in_title = True
+        if tag == "title":
+            self.in_title = True
         if tag == "meta":
             key = (a.get("name") or a.get("property") or "").lower()
-            if key in ("description", "og:description", "og:site_name", "generator"): self.meta[key] = a.get("content", "")[:500]
-        if tag == "a" and a.get("href"): self.links.append(a["href"][:1000])
+            if key in ("description", "og:description", "og:site_name", "generator",
+                       "csrf-token", "csrf-param", "viewport"):
+                self.meta[key] = a.get("content", "")[:500]
+        if tag in ("a", "link") and a.get("href"):
+            self.links.append({"tag": tag, "href": a["href"][:1000],
+                               "rel": a.get("rel", "")[:100], "type": a.get("type", "")[:100]})
+        if tag == "script":
+            if a.get("src"):
+                self.scripts.append({"src": a["src"][:1000], "type": a.get("type", "")[:100],
+                                     "integrity_present": bool(a.get("integrity")),
+                                     "crossorigin": a.get("crossorigin", "")[:50]})
         if tag == "form":
-            self.form = {"method": a.get("method", "get").lower(), "fields": []}
+            self.form = {"method": a.get("method", "get").lower(),
+                         "action": a.get("action", ""), "enctype": a.get("enctype", ""),
+                         "autocomplete": a.get("autocomplete", ""),
+                         "fields": []}
             self.forms.append(self.form)
-        if tag == "input" and self.form is not None:
-            self.form["fields"].append({"type": a.get("type", "text").lower(), "name": a.get("name", "")[:100]})
+        if tag in ("input", "button", "select", "textarea") and self.form is not None:
+            self.form["fields"].append({
+                "tag": tag, "type": a.get("type", "text" if tag == "input" else tag).lower(),
+                "name": a.get("name", "")[:100], "autocomplete": a.get("autocomplete", "")[:100],
+                "required": "required" in a, "disabled": "disabled" in a,
+                "value_present": bool(a.get("value")),
+            })
+
     def handle_endtag(self, tag):
-        if tag == "title": self.in_title = False
-        if tag == "form": self.form = None
+        if tag == "title":
+            self.in_title = False
+        if tag == "form":
+            self.form = None
+
     def handle_data(self, data):
-        if self.in_title and data.strip(): self.title.append(data.strip())
+        if self.in_title and data.strip():
+            self.title.append(data.strip())
+
 
 def public_site_profile(domain: str, timeout: int = 12) -> dict:
     """Fetch only the public HTTPS home page; never crawl or submit forms."""
@@ -271,11 +297,101 @@ def _validate_assessment_url(value: str) -> str:
     return urllib.parse.urlunsplit((parsed.scheme.lower(), parsed.netloc, parsed.path or "/", parsed.query, ""))
 
 
+def _tls_certificate_summary(host: str, port: int, timeout: int = 12) -> dict:
+    """Read the public TLS certificate and negotiated protocol without sending HTTP data."""
+    import ssl
+    context = ssl.create_default_context()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as raw_socket:
+            with context.wrap_socket(raw_socket, server_hostname=host) as tls_socket:
+                cert = tls_socket.getpeercert()
+                sans = [value for kind, value in cert.get("subjectAltName", []) if kind == "DNS"][:30]
+                subject = {key: value for group in cert.get("subject", ()) for key, value in group}
+                issuer = {key: value for group in cert.get("issuer", ()) for key, value in group}
+                not_after = cert.get("notAfter")
+                import datetime
+                expires = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z").replace(
+                    tzinfo=datetime.timezone.utc) if not_after else None
+                days_left = (expires - datetime.datetime.now(datetime.timezone.utc)).days if expires else None
+                return {
+                    "status": "validated", "protocol": tls_socket.version(),
+                    "cipher": tls_socket.cipher()[0] if tls_socket.cipher() else None,
+                    "certificate_subject": subject, "certificate_issuer": issuer,
+                    "subject_alternative_names": sans,
+                    "not_before": cert.get("notBefore"), "not_after": not_after,
+                    "days_until_expiry": days_left,
+                    "hostname_match_and_trust": True,
+                    "note": "Certificate was validated by the local trusted CA store during a TLS handshake; this does not test application authentication."
+                }
+    except (OSError, ssl.SSLError, ValueError) as exc:
+        return {"status": "unavailable_or_invalid", "error": str(exc),
+                "hostname_match_and_trust": False,
+                "note": "TLS certificate validation could not be completed; review the reported error."}
+
+
+def _analyse_login_forms(forms: list, page_url: str) -> dict:
+    base = urllib.parse.urlsplit(page_url)
+    analysed = []
+    for index, form in enumerate(forms[:20], 1):
+        fields = form.get("fields", [])
+        types = sorted({field.get("type", "") for field in fields})
+        names = [field.get("name", "").lower() for field in fields if field.get("name")]
+        password_fields = [field for field in fields if field.get("type") == "password"]
+        hidden_fields = [field for field in fields if field.get("type") == "hidden"]
+        email_fields = [field for field in fields if field.get("type") == "email" or "email" in field.get("name", "").lower()]
+        username_fields = [field for field in fields if any(term in field.get("name", "").lower()
+                            for term in ("user", "login", "account", "identifier"))]
+        csrf_names = [field.get("name") for field in hidden_fields
+                      if any(term in field.get("name", "").lower() for term in ("csrf", "token", "authenticity"))]
+        action = urllib.parse.urljoin(page_url, form.get("action") or page_url)
+        action_parts = urllib.parse.urlsplit(action)
+        same_origin = (action_parts.scheme == base.scheme and action_parts.hostname == base.hostname
+                       and action_parts.port == base.port)
+        autocomplete_values = sorted({field.get("autocomplete", "").lower() for field in fields
+                                      if field.get("autocomplete")})
+        auth_likely = bool(password_fields or email_fields or username_fields)
+        analysed.append({
+            "form_number": index, "method": form.get("method", "get").upper(),
+            "action_url": action[:500], "action_same_origin": same_origin,
+            "enctype": form.get("enctype") or "application/x-www-form-urlencoded (browser default)",
+            "form_autocomplete": form.get("autocomplete") or "browser default",
+            "input_types": types, "field_names": names[:30],
+            "password_field_count": len(password_fields), "email_field_count": len(email_fields),
+            "username_like_field_count": len(username_fields), "hidden_field_count": len(hidden_fields),
+            "csrf_or_token_field_names": csrf_names[:10],
+            "autocomplete_values": autocomplete_values,
+            "required_field_count": sum(1 for field in fields if field.get("required")),
+            "authentication_form_likely": auth_likely,
+            "security_observations": [
+                *([] if not password_fields else ["Password input is present; this does not prove password handling or storage is secure."]),
+                *([] if not password_fields or csrf_names else ["No clearly named CSRF/token hidden field was observed; frameworks may use another mechanism or JavaScript/header token."]),
+                *([] if same_origin else ["Form action is cross-origin or could not be matched to the page origin; verify that this is intentional."]),
+                *([] if form.get("method", "get").lower() == "post" else (["Authentication-like form uses GET; query-string exposure risk should be reviewed."] if auth_likely else [])),
+            ]
+        })
+    auth_forms = [form for form in analysed if form["authentication_form_likely"]]
+    return {
+        "forms_found": len(forms), "forms_analysed": analysed,
+        "authentication_form_count": len(auth_forms),
+        "login_classification": (
+            "password-based authentication form observed" if any(x["password_field_count"] for x in auth_forms)
+            else "authentication-like form observed; password input not present"
+            if auth_forms else "no authentication form identified in returned HTML; JavaScript/SSO/passkey flows may be rendered later"
+        ),
+        "csrf_token_field_observed": any(x["csrf_or_token_field_names"] for x in analysed),
+        "note": "Only static HTML form structure is inspected. No form is submitted and CSRF enforcement is not tested."
+    }
+
+
 def inspect_assessment_page(value: str, timeout: int = 12, method: str = "GET") -> dict:
-    """Inspect one explicitly supplied public HTTPS page; no redirects or form submissions."""
+    """Perform bounded read-only analysis of one explicitly supplied public HTTPS page."""
     url = _validate_assessment_url(value)
     if method not in ("GET", "HEAD"):
         raise ValueError("Only GET and HEAD metadata inspection are supported.")
+    parsed_url = urllib.parse.urlsplit(url)
+    host = parsed_url.hostname
+    port = parsed_url.port or 443
+    tls = _tls_certificate_summary(host, port, timeout)
     opener = urllib.request.build_opener(_NoRedirect)
     request = urllib.request.Request(url, method=method, headers={
         "User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"
@@ -283,23 +399,24 @@ def inspect_assessment_page(value: str, timeout: int = 12, method: str = "GET") 
     try:
         with opener.open(request, timeout=timeout) as response:
             headers = response.headers
+            security_names = (
+                "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
+                "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy",
+                "Cross-Origin-Opener-Policy", "Cross-Origin-Resource-Policy",
+                "Cross-Origin-Embedder-Policy"
+            )
             result = {
                 "requested_url": url, "method": method, "status_code": response.status,
-                "final_url": response.geturl(),
+                "final_url": response.geturl(), "content_type": headers.get("Content-Type", ""),
+                "server_header": headers.get("Server"),
+                "security_headers": {name: headers.get(name) for name in security_names if headers.get(name)},
+                "security_headers_missing": [name for name in security_names if not headers.get(name)],
                 "response_headers": {name: headers.get(name) for name in (
-                    "Retry-After", "RateLimit-Limit", "RateLimit-Remaining",
-                    "RateLimit-Reset", "X-RateLimit-Limit", "X-RateLimit-Remaining"
+                    "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset",
+                    "X-RateLimit-Limit", "X-RateLimit-Remaining", "WWW-Authenticate"
                 ) if headers.get(name)},
-                "security_headers": {name: headers.get(name) for name in (
-                    "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
-                    "X-Content-Type-Options", "Referrer-Policy"
-                ) if headers.get(name)},
-                "security_headers_missing": [name for name in (
-                    "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
-                    "X-Content-Type-Options", "Referrer-Policy"
-                ) if not headers.get(name)],
                 "set_cookie_headers": headers.get_all("Set-Cookie", [])[:30],
-                "redirects_followed": False,
+                "redirects_followed": False, "tls_certificate": tls,
             }
             cookies = []
             for raw_cookie in result["set_cookie_headers"]:
@@ -308,49 +425,107 @@ def inspect_assessment_page(value: str, timeout: int = 12, method: str = "GET") 
                 attr_names = {part.split("=", 1)[0].strip().lower() for part in attrs}
                 cookies.append({
                     "name": first.split("=", 1)[0][:100],
-                    "secure": "secure" in attr_names,
-                    "httponly": "httponly" in attr_names,
+                    "secure": "secure" in attr_names, "httponly": "httponly" in attr_names,
                     "samesite": next((part.split("=", 1)[1].strip() for part in attrs if part.lower().startswith("samesite=")), None),
                     "path": next((part.split("=", 1)[1].strip() for part in attrs if part.lower().startswith("path=")), None),
                     "max_age": next((part.split("=", 1)[1].strip() for part in attrs if part.lower().startswith("max-age=")), None),
+                    "expires_present": any(part.lower().startswith("expires=") for part in attrs),
                 })
             result["cookies"] = cookies
-            result["cookie_note"] = "Only cookies set by this one response are visible; this does not verify session rotation, server-side expiry or logout invalidation."
+            result["cookie_note"] = "Only cookies set by this response are visible; session rotation, server-side expiry and logout invalidation require authenticated owner-side tests."
             if method == "GET" and "html" in headers.get("Content-Type", "").lower():
-                raw = response.read(500001)
+                raw = response.read(1000001)
+                truncated = len(raw) > 1000000
+                raw = raw[:1000000]
+                html = raw.decode(headers.get_content_charset() or "utf-8", errors="replace")
                 parser = _PageMetadata()
-                parser.feed(raw.decode(headers.get_content_charset() or "utf-8", errors="replace"))
-                forms = []
-                for form in parser.forms[:20]:
-                    types = sorted({field["type"] for field in form["fields"]})
-                    names = [field["name"].lower() for field in form["fields"] if field["name"]]
-                    email_field = "email" in types or any("email" in name for name in names)
-                    username_field = any(any(term in name for term in ("user", "login", "account")) for name in names)
-                    password_field = "password" in types
-                    forms.append({
-                        "method": form["method"], "input_types": types, "field_names": names[:20],
-                        "email_password_pattern": bool(email_field and password_field),
-                        "username_password_pattern": bool(username_field and password_field),
-                        "authentication_form_likely": bool(password_field or email_field or username_field),
-                    })
-                result["page_title"] = " ".join(parser.title)[:300]
-                result["visible_forms"] = forms
-                result["login_classification"] = (
-                    "email/password form pattern" if any(f["email_password_pattern"] for f in forms) else
-                    "username/password form pattern" if any(f["username_password_pattern"] for f in forms) else
-                    "no password-based form detected in this page; SSO/passkey/backend auth remains possible"
-                )
-                result["sql_injection_observation"] = "Forms and field names are identified only. SQL injection cannot be confirmed from HTML; review server-side query construction and parameter binding."
+                parser.feed(html)
+                forms = _analyse_login_forms(parser.forms, url)
+                scripts = []
+                for item in parser.scripts[:50]:
+                    script_url = urllib.parse.urljoin(url, item["src"])
+                    script_parts = urllib.parse.urlsplit(script_url)
+                    scripts.append({**item, "same_origin": script_parts.hostname == parsed_url.hostname,
+                                    "url": script_url[:500]})
+                mixed_content = sorted(set(re.findall(r"""(?:src|href)\s*=\s*["'](http://[^"']+)["']""", html, re.I)))[:30]
+                result.update({
+                    "page_title": " ".join(parser.title)[:300],
+                    "page_metadata": parser.meta,
+                    "visible_forms": parser.forms[:20],
+                    "authentication_analysis": forms,
+                    "login_classification": forms["login_classification"],
+                    "scripts": scripts,
+                    "external_script_count": sum(1 for item in scripts if not item["same_origin"]),
+                    "scripts_without_subresource_integrity": [item["url"] for item in scripts
+                        if not item["same_origin"] and not item["integrity_present"]][:30],
+                    "mixed_content_http_references": mixed_content,
+                    "html_truncated_at_1mb": truncated,
+                    "csrf_meta_tag_observed": bool(parser.meta.get("csrf-token") or parser.meta.get("csrf-param")),
+                    "sql_injection_observation": "SQL injection cannot be established from HTML. Review server-side query construction, parameter binding and ORM usage in source code."
+                })
             else:
                 result["body_inspection"] = "Not performed (HEAD request or non-HTML response)."
+            findings = []
+            for name in result["security_headers_missing"]:
+                findings.append({"severity": "low", "area": "HTTP response hardening",
+                                 "finding": name + " was not observed on this response.",
+                                 "confidence": "observed_absence_on_one_response"})
+            if tls.get("status") != "validated":
+                findings.append({"severity": "high", "area": "TLS certificate",
+                                 "finding": "TLS certificate validation did not complete successfully.",
+                                 "evidence": tls.get("error", tls.get("status"))})
+            elif isinstance(tls.get("days_until_expiry"), int) and tls["days_until_expiry"] < 21:
+                findings.append({"severity": "medium", "area": "TLS certificate",
+                                 "finding": "Certificate expires within 21 days.",
+                                 "days_until_expiry": tls["days_until_expiry"]})
+            for cookie in cookies:
+                if not cookie["secure"] or not cookie["httponly"]:
+                    findings.append({"severity": "medium", "area": "Cookie attributes",
+                                     "finding": "Cookie " + cookie["name"] + " lacks " +
+                                     ", ".join(name for name, present in (("Secure", cookie["secure"]),
+                                     ("HttpOnly", cookie["httponly"])) if not present) + ".",
+                                     "confidence": "observed_cookie_attribute"})
+            if result.get("mixed_content_http_references"):
+                findings.append({"severity": "medium", "area": "Mixed content",
+                                 "finding": "The HTML references HTTP resources from an HTTPS page.",
+                                 "evidence_count": len(result["mixed_content_http_references"])})
+            for form in forms["forms_analysed"]:
+                for observation in form["security_observations"]:
+                    findings.append({"severity": "medium" if "cross-origin" in observation or "GET;" in observation else "info",
+                                     "area": "Authentication form", "finding": observation,
+                                     "form_number": form["form_number"]})
+            if any(item["password_field_count"] for item in forms["forms_analysed"]):
+                findings.append({"severity": "info", "area": "Authentication form",
+                                 "finding": "Password input observed. Password validation, storage, MFA, throttling and account recovery are server-side controls and remain unverified."})
+            if not result.get("response_headers", {}).keys() & {"RateLimit-Limit", "RateLimit-Remaining", "X-RateLimit-Limit", "X-RateLimit-Remaining", "Retry-After"}:
+                findings.append({"severity": "info", "area": "Rate limiting",
+                                 "finding": "No rate-limit header observed on this single GET. This is not evidence that authentication throttling is absent."})
+            result["evidence_based_findings"] = findings
+            result["unverified_controls"] = [
+                "Password validation and storage", "SQL injection resistance and server-side parameter binding",
+                "Rate limiting and progressive delay", "Account lockout and enumeration resistance",
+                "MFA enforcement and recovery controls", "Session rotation, expiry and logout invalidation",
+                "Authorisation and role-based access control", "CSRF enforcement on state-changing requests"
+            ]
+            result["assessment_summary"] = {
+                "forms_observed": len(parser.forms) if method == "GET" and "html" in headers.get("Content-Type", "").lower() else 0,
+                "authentication_forms_observed": forms["authentication_form_count"] if method == "GET" and "html" in headers.get("Content-Type", "").lower() else 0,
+                "findings_count": len(findings),
+                "scope": "One GET/HEAD request to the exact supplied page plus one TLS handshake; no crawling or authentication attempts."
+            }
             return result
     except urllib.error.HTTPError as exc:
         return {"requested_url": url, "method": method, "status_code": exc.code,
-                "response_headers": {name: exc.headers.get(name) for name in ("Location", "WWW-Authenticate", "Set-Cookie", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "X-RateLimit-Limit", "X-RateLimit-Remaining") if exc.headers.get(name)},
-                "redirects_followed": False, "note": "Response metadata only; access control was not bypassed or challenged."}
+                "tls_certificate": tls,
+                "response_headers": {name: exc.headers.get(name) for name in (
+                    "Location", "WWW-Authenticate", "Set-Cookie", "Retry-After",
+                    "RateLimit-Limit", "RateLimit-Remaining", "X-RateLimit-Limit",
+                    "X-RateLimit-Remaining") if exc.headers.get(name)},
+                "redirects_followed": False,
+                "note": "Response metadata only; access control was not bypassed or challenged."}
     except urllib.error.URLError as exc:
-        return {"requested_url": url, "method": method, "error": str(exc.reason),
-                "note": "No redirect or alternative path was attempted."}
+        return {"requested_url": url, "method": method, "tls_certificate": tls,
+                "error": str(exc.reason), "note": "No redirect or alternative path was attempted."}
 
 
 def _rdap_summary(data: dict) -> dict:
