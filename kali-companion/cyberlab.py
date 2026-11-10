@@ -356,6 +356,31 @@ def _rdap_summary(data: dict) -> dict:
             "registrar_or_network_name": data.get("name"), "country": data.get("country"),
             "nameservers": [n.get("ldhName") for n in data.get("nameservers", []) if isinstance(n, dict) and n.get("ldhName")]}
 
+def _dns_over_https(query_name: str, query_type: str, timeout: int = 12) -> dict:
+    """Query public DNS JSON endpoints with a fallback; returns normalised DNS JSON."""
+    failures = []
+    endpoints = (
+        ("https://cloudflare-dns.com/dns-query?", {"Accept": "application/dns-json"}),
+        ("https://dns.google/resolve?", {"Accept": "application/json"}),
+    )
+    for endpoint, headers in endpoints:
+        url = endpoint + urllib.parse.urlencode({"name": query_name, "type": query_type})
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **headers})
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = response.read(500001)
+                if len(payload) > 500000:
+                    raise ValueError("DNS response exceeded the 500 KB limit.")
+                data = json.loads(payload.decode("utf-8"))
+                return {"status": data.get("Status"), "answers": [
+                    {"ttl": row.get("TTL"), "value": row.get("data", "")}
+                    for row in data.get("Answer", []) if isinstance(row, dict)
+                ], "resolver": endpoint.split("/")[2]}
+        except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            failures.append(endpoint.split("/")[2] + ": " + str(exc))
+    raise ValueError("All public DNS resolvers failed: " + " | ".join(failures))
+
+
 def dns_lookup(domain: str, timeout: int = 12) -> dict:
     domain = validate_domain(domain)
     output = {}
@@ -363,16 +388,11 @@ def dns_lookup(domain: str, timeout: int = 12) -> dict:
                ("TXT", domain), ("DMARC", "_dmarc." + domain), ("CAA", domain))
     for record, query_name in queries:
         query_type = "TXT" if record == "DMARC" else record
-        url = "https://cloudflare-dns.com/dns-query?" + urllib.parse.urlencode({"name": query_name, "type": query_type})
         try:
-            data = http_json(url, timeout)
-            answers = []
-            for answer in data.get("Answer", []):
-                answers.append({"ttl": answer.get("TTL"), "value": answer.get("data", "")})
-            output[record] = {"query_name": query_name, "status": data.get("Status"), "answers": answers}
+            output[record] = {"query_name": query_name, **_dns_over_https(query_name, query_type, timeout)}
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
             output[record] = {"query_name": query_name, "error": str(exc)}
-    return {"domain": domain, "records": output, "source": "Cloudflare public DNS-over-HTTPS"}
+    return {"domain": domain, "records": output, "source": "Cloudflare DNS-over-HTTPS with Google DNS fallback"}
 
 
 def _email_security_findings(domain: str, records: dict, submitted_email: str | None = None) -> dict:
@@ -509,51 +529,99 @@ def resolve_public_site_ips(domain: str) -> dict:
         return {"addresses": [], "count": 0, "error": str(exc)}
 
 
+def _dkim_selector_checks(domain: str, timeout: int = 12) -> dict:
+    """Check a short, documented set of common DKIM selectors; never brute-force."""
+    selectors = ("default", "google", "selector1", "selector2", "s1", "s2", "smtp", "k1")
+    found, errors = [], []
+    for selector in selectors:
+        name = selector + "._domainkey." + domain
+        try:
+            answer = _dns_over_https(name, "TXT", timeout)
+            values = [row["value"] for row in answer.get("answers", []) if "v=dkim1" in row.get("value", "").lower() or "p=" in row.get("value", "")]
+            if values:
+                found.append({"selector": selector, "records": values})
+        except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            errors.append({"selector": selector, "error": str(exc)})
+    return {"selectors_checked": list(selectors), "published_selectors_found": found,
+            "errors": errors, "note": "Limited common-selector check only; absence does not mean DKIM is not configured. Use a selector supplied by the mail administrator for a definitive lookup."}
+
+
+def _public_search_hints(kind: str, value: str) -> list:
+    """Provide focused, user-controlled search terms without disclosing identifiers automatically."""
+    if kind == "email":
+        return [
+            {"source": "Search engine", "query": '"' + value + '"'},
+            {"source": "Search engine", "query": '"' + value.split("@", 1)[1] + '" email'},
+            {"source": "Search engine", "query": '"' + value + '" filetype:pdf'},
+        ]
+    if kind == "social_profile_url":
+        path = urllib.parse.urlsplit(value).path.strip("/")
+        handle = path.split("/")[-1] if path else ""
+        return [{"source": "Search engine", "query": '"' + handle + '" ' + kind},
+                {"source": "Search engine", "query": 'site:' + urllib.parse.urlsplit(value).hostname + ' "' + handle + '"'}] if handle else []
+    return []
+
+
 def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
-    """Expanded passive DNS and public digital-footprint lookup."""
+    """Route input to a type-specific public intelligence workflow."""
     identity = _normalise_osint_input(value)
-    result = {"investigation_type": "expanded_passive_dns_and_digital_footprint",
-              "submitted_input": identity, "sources": {},
-              "limitations": [
-                  "Only publicly accessible DNS and the supplied website homepage are inspected.",
-                  "Social profile URLs are recorded as references; private profile data and follower/member counts are not collected.",
-                  "Website visitor counts, connected-user counts and real-time traffic volumes are not exposed by ordinary public DNS or homepage data.",
-                  "DDoS assessment is limited to passive exposure indicators; no traffic is generated and no availability stress test is performed."
-              ]}
-    domain = identity.get("domain")
-    if not domain:
-        result["sources"]["social_profile"] = {
-            "platform": identity.get("platform_host"),
-            "reference": identity.get("social_profile_reference"),
-            "status": "reference_only",
-            "follower_or_member_count": "Not reliably available from public unauthenticated profile metadata."
-        }
+    kind = identity["input_type"]
+    result = {"investigation_type": kind + "_intelligence", "submitted_input": identity,
+              "scope_note": "Results are specific to the submitted input type; no generic cross-category report is appended."}
+
+    if kind == "email":
+        domain = identity["domain"]
+        records = dns_lookup(domain, timeout)["records"]
+        result["email_intelligence"] = _email_security_findings(domain, records, identity["email_address"])
+        result["email_intelligence"]["dkim"] = _dkim_selector_checks(domain, timeout)
+        result["email_intelligence"]["public_search_hints"] = _public_search_hints("email", identity["email_address"])
+        result["email_intelligence"]["domain_ip_addresses"] = resolve_public_site_ips(domain)
+        result["limitations"] = [
+            "An email address is not treated as a website URL; no homepage scraping is performed.",
+            "Mailbox existence, ownership, inbox activity and deliverability are not tested.",
+            "No passwords, private messages or breach credentials are retrieved. Search hints are provided for optional manual review.",
+            "DKIM checks cover a short common-selector list only; they are not exhaustive."
+        ]
         return result
+
+    if kind == "website_url":
+        url = identity["website_url"]
+        result["url_intelligence"] = _url_intelligence_findings(url)
+        result["url_intelligence"]["page_inspection"] = inspect_assessment_page(url, timeout, method="GET")
+        result["url_intelligence"]["scope"] = [
+            "One explicitly supplied HTTPS page is requested after public-IP validation.",
+            "Redirects are not followed; no forms are submitted and no hidden paths are enumerated.",
+            "Page metadata, response headers, cookies and visible authentication-form patterns are observational only."
+        ]
+        return result
+
+    if kind == "social_profile_url":
+        profile_url = identity["social_profile_reference"]
+        parsed = urllib.parse.urlsplit(profile_url)
+        path_parts = [part for part in parsed.path.split("/") if part]
+        result["social_profile_intelligence"] = {
+            "platform": identity["platform_host"],
+            "profile_reference": profile_url,
+            "profile_path": parsed.path,
+            "profile_identifier_or_slug": path_parts[-1] if path_parts else None,
+            "public_page_inspection": inspect_assessment_page(profile_url, timeout, method="GET"),
+            "public_search_hints": _public_search_hints(kind, profile_url),
+            "privacy_boundary": "Only the supplied public profile URL is inspected. No login, private profile access, follower scraping, contact harvesting or identity correlation is attempted."
+        }
+        result["limitations"] = [
+            "Platforms may return login walls, consent pages, bot challenges or incomplete metadata.",
+            "A page title or public slug is not proof of a person's identity.",
+            "Follower counts, private email/phone details and account activity are not inferred."
+        ]
+        return result
+
+    domain = identity["domain"]
     result["domain"] = domain
     result["dns_records"] = dns_lookup(domain, timeout)["records"]
     result["site_ip_resolution"] = resolve_public_site_ips(domain)
-    result["email_domain"] = _email_security_findings(domain, result["dns_records"], identity.get("email_address"))
-    if identity.get("input_type") == "website_url":
-        result["url_findings"] = _url_intelligence_findings(identity["website_url"])
-    result["sources"]["website_profile"] = public_site_profile(domain, timeout)
-    profile = result["sources"]["website_profile"]
-    result["company_and_location"] = {
-        "organisation_or_site_name": profile.get("organisation_name") or profile.get("site_name") or profile.get("page_title"),
-        "public_address": profile.get("public_address"),
-        "public_location": profile.get("public_location"),
-        "public_contact_emails": profile.get("public_contact_emails", []),
-        "public_contact_phone_numbers": profile.get("public_contact_phone_numbers", []),
-        "source_note": "Only details explicitly published in the inspected homepage metadata or visible text are reported."
-    }
-    result["social_media_and_community_links"] = profile.get("social_media_links", [])
-    result["passive_ddos_and_availability_indicators"] = {
-        "cdn_or_reverse_proxy_indicators": profile.get("cdn_indicators", []),
-        "rate_limit_or_waf_headers_observed": profile.get("availability_headers", {}),
-        "assessment": "Informational only; these observations do not establish DDoS protection, capacity or resilience.",
-        "not_tested": ["traffic capacity", "request-rate limits", "origin exposure", "DDoS mitigation effectiveness", "real-time attack traffic"]
-    }
-    if identity.get("email_address"):
-        result["submitted_email_address"] = identity["email_address"]
+    result["sources"] = {"website_profile": public_site_profile(domain, timeout)}
+    result["domain_email_security"] = _email_security_findings(domain, result["dns_records"])
+    result["domain_email_security"]["dkim"] = _dkim_selector_checks(domain, timeout)
     return result
 
 
