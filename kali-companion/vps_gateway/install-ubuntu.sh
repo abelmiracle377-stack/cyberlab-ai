@@ -16,7 +16,7 @@ apt-get install -y python3 python3-venv python3-pip
 id cyberlab-gateway >/dev/null 2>&1 || useradd --system --home-dir "${STATE_DIR}" --create-home --shell /usr/sbin/nologin cyberlab-gateway
 install -d -o root -g root -m 0755 "${APP_DIR}"
 install -d -o cyberlab-gateway -g cyberlab-gateway -m 0750 "${STATE_DIR}" "${STATE_DIR}/files"
-install -m 0644 "${SOURCE_DIR}/app.py" "${APP_DIR}/app.py"
+install -m 0644 "${SOURCE_DIR}/app.py" "${APP_DIR}/app.py"\ninstall -m 0644 "${SOURCE_DIR}/consent.html" "${APP_DIR}/consent.html"
 install -m 0644 "${SOURCE_DIR}/requirements.txt" "${APP_DIR}/requirements.txt"
 
 python3 -m venv "${APP_DIR}/venv"
