@@ -1430,11 +1430,16 @@ def load_vps_config() -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def save_vps_config(base_url: str, owner_token: str) -> Path:
+def save_vps_config(base_url: str, owner_token: str, provider: str = "Custom / other") -> Path:
+    """Save provider-neutral gateway credentials with owner-only filesystem access."""
     path = vps_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"base_url": base_url.rstrip("/"), "owner_token": owner_token}, indent=2) + "\n", encoding="utf-8")
+    temporary.write_text(json.dumps({
+        "provider": provider,
+        "base_url": base_url.rstrip("/"),
+        "owner_token": owner_token,
+    }, indent=2) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o600)
     temporary.replace(path)
     os.chmod(path, 0o600)
@@ -1466,6 +1471,9 @@ def vps_request(config: dict, endpoint: str, method: str = "GET", payload: Optio
 def show_connection_status() -> None:
     print("\nCONNECT YOUR PERSONAL VPS")
     config = load_vps_config()
+    if config:
+        print("  Current provider: " + str(config.get("provider", "Custom / other")))
+        print("  Current gateway: " + str(config.get("base_url", "(not set)")))
     print("  [1] Configure or replace VPS")
     print("  [2] Test saved connection")
     print("  [3] Generate a one-time device pairing code")
@@ -1474,6 +1482,19 @@ def show_connection_status() -> None:
     choice = input("vps> ").strip()
     try:
         if choice == "1":
+            providers = {
+                "1": "DigitalOcean", "2": "Hetzner", "3": "Contabo",
+                "4": "Vultr", "5": "Linode / Akamai", "6": "OVHcloud",
+                "7": "Other provider / self-hosted",
+            }
+            print("\nVPS PROVIDER (guidance only; no provider account/API is required)")
+            for number, name in providers.items():
+                print(f"  [{number}] {name}")
+            provider_choice = input("Provider> ").strip()
+            if provider_choice not in providers:
+                raise ValueError("Choose a listed provider. Select 7 for any other compatible VPS.")
+            provider = providers[provider_choice]
+            print("Any provider is accepted if its server runs the CyberLab gateway and has a valid HTTPS endpoint.")
             base_url = input("Your VPS HTTPS gateway URL (for example https://gateway.example.com): ").strip().rstrip("/")
             parsed = urllib.parse.urlsplit(base_url)
             if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
@@ -1485,8 +1506,8 @@ def show_connection_status() -> None:
             result = vps_request(candidate, "/health")
             if result.get("status") != "ok":
                 raise ValueError("The endpoint did not return the expected gateway health response.")
-            path = save_vps_config(base_url, token)
-            print(f"VPS connected and configuration saved securely: {path}")
+            path = save_vps_config(base_url, token, provider)
+            print(f"{provider} VPS connected and configuration saved securely: {path}")
         elif choice == "2":
             if not config:
                 print("No VPS is configured. Choose option 1 first.")
