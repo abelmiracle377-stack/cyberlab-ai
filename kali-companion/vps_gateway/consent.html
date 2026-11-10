@@ -96,6 +96,6 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
     } finally { $('grant').disabled = false; }
   });
   $('stop').addEventListener('click', disconnect);
-  window.addEventListener('pagehide', () => { if (heartbeat) clearInterval(heartbeat); stopTracks(); });
+  window.addEventListener('pagehide', () => { if (heartbeat) clearInterval(heartbeat); stopTracks(); if (token) { fetch('/v1/consent/withdraw',{method:'POST',headers:{Authorization:'Bearer '+token},keepalive:true}).catch(()=>{}); token=null; } });
 })();
 </script></body></html>
