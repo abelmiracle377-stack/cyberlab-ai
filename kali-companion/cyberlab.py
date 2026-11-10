@@ -197,9 +197,8 @@ class _PageMetadata(__import__("html.parser", fromlist=["HTMLParser"]).HTMLParse
             if key in ("description", "og:description", "og:site_name", "generator",
                        "csrf-token", "csrf-param", "viewport"):
                 self.meta[key] = a.get("content", "")[:500]
-        if tag in ("a", "link") and a.get("href"):
-            self.links.append({"tag": tag, "href": a["href"][:1000],
-                               "rel": a.get("rel", "")[:100], "type": a.get("type", "")[:100]})
+        if tag == "a" and a.get("href"):
+            self.links.append(a["href"][:1000])
         if tag == "script":
             if a.get("src"):
                 self.scripts.append({"src": a["src"][:1000], "type": a.get("type", "")[:100],
