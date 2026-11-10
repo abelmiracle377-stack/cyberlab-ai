@@ -1,4 +1,5 @@
 import unittest
+import camera_intelligence
 from unittest.mock import patch
 
 from camera_intelligence import build_rtsp_url, public_webcam_directory, validate_camera_host, validate_lan_network
@@ -55,6 +56,38 @@ class CameraIntelligenceTests(unittest.TestCase):
     def test_rejects_partial_credentials(self):
         with self.assertRaises(ValueError):
             build_rtsp_url("192.168.1.20", 554, "/live", "operator", "")
+
+
+    def test_public_webcam_search_builds_location_specific_links(self):
+        with patch.object(camera_intelligence, "_windy_public_webcams", return_value={"status": "not_configured"}):
+            result = camera_intelligence.public_webcam_directory("Texas")
+        self.assertEqual(result["feature"], "location_specific_public_webcam_search")
+        self.assertEqual(result["location_search"], "Texas")
+        self.assertEqual(len(result["targeted_searches"]), 4)
+        for item in result["targeted_searches"]:
+            self.assertIn("Texas", item["search_url"])
+        self.assertIn("does not enumerate arbitrary exposed CCTV", result["privacy_boundary"])
+
+    def test_public_webcam_search_rejects_empty_location(self):
+        with self.assertRaisesRegex(ValueError, "Enter a city"):
+            camera_intelligence.public_webcam_directory("  ")
+
+    def test_windy_catalogue_returns_structured_public_camera_pages(self):
+        geocode = {"results": [{"name": "Austin", "admin1": "Texas", "country": "United States", "latitude": 30.2672, "longitude": -97.7431}]}
+        webcams = {"webcams": [{
+            "id": 12345, "title": "Austin skyline camera",
+            "location": {"city": "Austin", "region": "Texas", "country": "United States", "latitude": 30.2672, "longitude": -97.7431},
+            "urls": {"detail": "https://www.windy.com/webcams/12345", "player": "https://player.example.test/cam"},
+            "player": {"live": True}
+        }]}
+        with patch.dict("camera_intelligence.os.environ", {"WINDY_WEBCAMS_API_KEY": "test-key"}):
+            with patch.object(camera_intelligence, "_read_json_url", side_effect=[geocode, webcams]) as fetch:
+                result = camera_intelligence._windy_public_webcams("Austin")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["result_count"], 1)
+        self.assertEqual(result["cameras"][0]["camera_page_url"], "https://www.windy.com/webcams/12345")
+        self.assertEqual(result["cameras"][0]["live_status"], "provider marks live")
+        self.assertEqual(fetch.call_count, 2)
 
     def test_public_directory_only_lists_opt_in_sources(self):
         result = public_webcam_directory("Lagos")
