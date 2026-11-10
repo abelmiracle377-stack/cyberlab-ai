@@ -292,6 +292,16 @@ Only after John and its result-summary command both complete successfully does C
 
 CyberLab's remote-device architecture is **self-hosted per operator**. Each CyberLab user provisions and pays for their own VPS; CyberLab does not route users through a shared developer-owned server. The operator configures their own HTTPS gateway in option 9. Option 10 reads that gateway's real authenticated device registry; it must never display synthetic devices or simulated online states.
 
+### VPS provider compatibility
+
+Option 9 is provider-neutral. The provider selection is used only to label the saved connection and provide setup guidance; CyberLab does not call a provider API, require a provider account integration, or lock the gateway to one vendor.
+
+Supported provider labels include DigitalOcean, Hetzner, Contabo, Vultr, Linode/Akamai, OVHcloud, and Other provider/self-hosted. A VPS from another vendor can connect through the custom option if it meets the gateway requirements.
+
+The current automated installer targets Ubuntu/Debian-style systems with `apt`, Python 3, systemd and sudo/root access. Ubuntu 24.04 LTS is the recommended documented baseline. Other Linux distributions may be compatible, but may require adapting package installation and service setup. Provider selection does not imply that every operating system has a ready-made installer.
+
+Minimum practical guidance: use a public server with a stable address, sufficient memory for the gateway and its workload, SSH administration, and a domain with HTTPS configured. Keep the gateway bound to localhost and expose only the HTTPS reverse proxy; never publish port 8000 directly. Users choose and pay their own VPS plan, and can use a different provider by connecting its HTTPS gateway URL and owner token in option 9.
+
 ### Intended deployment model
 
 - A lightweight gateway runs on the operator's VPS and owns that operator's device registry and file storage.
