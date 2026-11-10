@@ -21,6 +21,28 @@ class CameraIntelligenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_camera_host("rtsp://192.168.1.20/live")
 
+
+    def test_detect_private_lan_networks_parses_ip_output(self):
+        completed = type("Completed", (), {"stdout": "2: wlan0 inet 192.168.1.23/24 brd 192.168.1.255 scope global wlan0\\n"})()
+        with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"), \\
+             patch("camera_intelligence.subprocess.run", return_value=completed):
+            from camera_intelligence import detect_private_lan_networks
+            self.assertEqual(detect_private_lan_networks(), ["192.168.1.0/24"])
+
+    def test_detect_private_lan_networks_ignores_public_interfaces(self):
+        completed = type("Completed", (), {"stdout": "2: eth0 inet 98.97.76.185/24 scope global eth0\\n"})()
+        with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"), \\
+             patch("camera_intelligence.subprocess.run", return_value=completed):
+            from camera_intelligence import detect_private_lan_networks
+            self.assertEqual(detect_private_lan_networks(), [])
+
+    def test_detect_private_lan_networks_caps_large_interface_at_24(self):
+        completed = type("Completed", (), {"stdout": "2: eth0 inet 10.20.30.40/16 scope global eth0\\n"})()
+        with patch("camera_intelligence.shutil.which", return_value="/usr/sbin/ip"), \\
+             patch("camera_intelligence.subprocess.run", return_value=completed):
+            from camera_intelligence import detect_private_lan_networks
+            self.assertEqual(detect_private_lan_networks(), ["10.20.30.0/24"])
+
     def test_passwordless_rtsp_url(self):
         self.assertEqual(build_rtsp_url("192.168.1.20", 554, "/live"), "rtsp://192.168.1.20:554/live")
 
