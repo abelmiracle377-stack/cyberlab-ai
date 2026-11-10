@@ -359,17 +359,105 @@ def _rdap_summary(data: dict) -> dict:
 def dns_lookup(domain: str, timeout: int = 12) -> dict:
     domain = validate_domain(domain)
     output = {}
-    for record in ("A", "AAAA", "MX", "NS", "TXT"):
-        url = "https://cloudflare-dns.com/dns-query?" + urllib.parse.urlencode({"name": domain, "type": record})
+    queries = (("A", domain), ("AAAA", domain), ("MX", domain), ("NS", domain),
+               ("TXT", domain), ("DMARC", "_dmarc." + domain), ("CAA", domain))
+    for record, query_name in queries:
+        query_type = "TXT" if record == "DMARC" else record
+        url = "https://cloudflare-dns.com/dns-query?" + urllib.parse.urlencode({"name": query_name, "type": query_type})
         try:
             data = http_json(url, timeout)
             answers = []
             for answer in data.get("Answer", []):
                 answers.append({"ttl": answer.get("TTL"), "value": answer.get("data", "")})
-            output[record] = {"status": data.get("Status"), "answers": answers}
+            output[record] = {"query_name": query_name, "status": data.get("Status"), "answers": answers}
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            output[record] = {"error": str(exc)}
+            output[record] = {"query_name": query_name, "error": str(exc)}
     return {"domain": domain, "records": output, "source": "Cloudflare public DNS-over-HTTPS"}
+
+
+def _email_security_findings(domain: str, records: dict, submitted_email: str | None = None) -> dict:
+    """Summarise public mail-routing and sender-policy signals; never verify a mailbox."""
+    mx = records.get("MX", {}).get("answers", [])
+    txt = records.get("TXT", {}).get("answers", [])
+    dmarc_answers = records.get("DMARC", {}).get("answers", [])
+    spf_records = [str(row.get("value", "")) for row in txt if "v=spf1" in str(row.get("value", "")).lower()]
+    dmarc_records = [str(row.get("value", "")) for row in dmarc_answers if "v=dmarc1" in str(row.get("value", "")).lower()]
+    spf_qualifiers = []
+    for record in spf_records:
+        if record.rstrip().endswith("-all"):
+            spf_qualifiers.append("hard_fail")
+        elif record.rstrip().endswith("~all"):
+            spf_qualifiers.append("soft_fail")
+        elif record.rstrip().endswith("?all"):
+            spf_qualifiers.append("neutral")
+        elif record.rstrip().endswith("+all"):
+            spf_qualifiers.append("allow_all")
+        else:
+            spf_qualifiers.append("no_explicit_all_mechanism")
+    dmarc_policy = []
+    for record in dmarc_records:
+        match = re.search(r"(?:^|;)\s*p\s*=\s*(none|quarantine|reject)", record, re.I)
+        dmarc_policy.append(match.group(1).lower() if match else "policy_missing_or_unrecognised")
+    findings = []
+    if not mx:
+        findings.append({"severity": "medium", "finding": "No public MX record returned", "meaning": "The domain may not receive email directly, or DNS data may be incomplete."})
+    if not spf_records:
+        findings.append({"severity": "medium", "finding": "SPF record not found", "meaning": "Receivers may lack a published SPF sender-authorisation policy for this domain."})
+    elif len(spf_records) > 1:
+        findings.append({"severity": "high", "finding": "Multiple SPF records found", "meaning": "More than one SPF policy can cause SPF permerror; consolidate to one policy."})
+    elif spf_qualifiers and spf_qualifiers[0] == "allow_all":
+        findings.append({"severity": "high", "finding": "SPF ends with +all", "meaning": "This explicitly authorises any sender and defeats SPF restriction."})
+    elif spf_qualifiers and spf_qualifiers[0] == "soft_fail":
+        findings.append({"severity": "low", "finding": "SPF uses ~all", "meaning": "Unauthorised senders are marked soft-fail rather than explicitly rejected by SPF."})
+    if not dmarc_records:
+        findings.append({"severity": "medium", "finding": "DMARC record not found", "meaning": "The domain has no observed DMARC policy at _dmarc." + domain + "."})
+    elif any(policy == "none" for policy in dmarc_policy):
+        findings.append({"severity": "low", "finding": "DMARC policy is p=none", "meaning": "DMARC reporting may be enabled, but receivers are not asked to quarantine or reject failing mail."})
+    if len(dmarc_records) > 1:
+        findings.append({"severity": "high", "finding": "Multiple DMARC records found", "meaning": "Multiple DMARC TXT records at the same name can make policy evaluation fail."})
+    if not records.get("CAA", {}).get("answers"):
+        findings.append({"severity": "info", "finding": "No CAA record observed", "meaning": "No CAA restriction was returned at this exact domain; parent-domain CAA inheritance is not evaluated."})
+    return {
+        "domain": domain, "submitted_email_address": submitted_email,
+        "mx_records": mx, "spf_records": spf_records, "spf_policy_count": len(spf_records),
+        "spf_terminal_qualifiers": spf_qualifiers, "dmarc_records": dmarc_records,
+        "dmarc_policy": dmarc_policy, "findings": findings,
+        "mailbox_existence": "Not tested", "mailbox_ownership": "Not tested",
+        "deliverability": "Not tested", "breach_exposure": "Not queried",
+        "limits": ["DNS policy presence does not prove mail delivery or inbox existence.",
+                   "SPF include/redirect DNS lookup counts and full RFC evaluation are not calculated.",
+                   "DKIM selectors are not guessed; publish and provide known selectors for targeted checks.",
+                   "Breach databases and private mailbox activity are not queried."]
+    }
+
+
+def _url_intelligence_findings(value: str) -> dict:
+    """Add richer URL-only indicators without visiting the supplied URL."""
+    analysis = analyze_url(value)
+    parsed = urllib.parse.urlsplit(value if "://" in value else "https://" + value)
+    query_keys = sorted({key[:80] for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)})[:40]
+    path_lower = parsed.path.lower()
+    flags = list(analysis["structural_indicators"])
+    if parsed.query:
+        flags.append("URL contains query parameters; values are deliberately not retained")
+    if parsed.fragment:
+        flags.append("URL contains a fragment identifier")
+    if any(token in path_lower for token in ("/wp-admin", "/admin", "/login", "/signin", "/auth")):
+        flags.append("Path name suggests an administrative or authentication route; route existence is not checked")
+    if any(token in path_lower for token in ("/redirect", "/out", "/url=", "/continue")):
+        flags.append("Path may implement a redirect or continuation flow; redirect behaviour is not tested")
+    if re.search(r"%(?:2e|2f|5c|00)", parsed.path, re.I):
+        flags.append("Path contains encoded dot, slash, backslash or NUL characters")
+    if len(parsed.query) > 500:
+        flags.append("URL has an unusually long query string")
+    return {
+        **analysis, "path_depth": len([part for part in parsed.path.split("/") if part]),
+        "query_parameter_names": query_keys, "query_values_saved": False,
+        "fragment_present": bool(parsed.fragment), "enhanced_indicators": sorted(set(flags)),
+        "reputation_check": "Not performed", "redirect_chain": "Not followed",
+        "certificate_validation": "Not performed by this URL-only structural check",
+        "risk_note": "Structural and lexical indicators only. The URL was not opened, resolved, downloaded, crawled or submitted to a reputation service. Findings are leads for analyst review, not a maliciousness verdict."
+    }
 
 def _normalise_osint_input(value: str) -> dict:
     """Accept a domain, website URL, email address or public social profile URL."""
@@ -439,13 +527,9 @@ def dns_intelligence_lookup(value: str, timeout: int = 12) -> dict:
     result["domain"] = domain
     result["dns_records"] = dns_lookup(domain, timeout)["records"]
     result["site_ip_resolution"] = resolve_public_site_ips(domain)
-    result["email_domain"] = {
-        "domain": domain,
-        "mx_records": result["dns_records"].get("MX", {}).get("answers", []),
-        "spf_txt_records": [item for item in result["dns_records"].get("TXT", {}).get("answers", [])
-                            if "v=spf1" in str(item.get("value", "")).lower()],
-        "dmarc_record": "Not queried in this initial passive lookup; use a dedicated DNS record review for _dmarc." if not identity.get("email_address") else "Email address supplied; mailbox existence and ownership are not tested."
-    }
+    result["email_domain"] = _email_security_findings(domain, result["dns_records"], identity.get("email_address"))
+    if identity.get("input_type") == "website_url":
+        result["url_findings"] = _url_intelligence_findings(identity["website_url"])
     result["sources"]["website_profile"] = public_site_profile(domain, timeout)
     profile = result["sources"]["website_profile"]
     result["company_and_location"] = {
