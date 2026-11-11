@@ -739,9 +739,10 @@ def camera_intelligence_menu() -> dict:
     print("  [2] Connect to and view ONE camera you own or are authorised to access")
     print("  [3] Global public webcam directories (location-based search)")
     print("  [4] Camera exposure assessment & responsible disclosure (owner-authorised)")
-    print("  [0] Back")
-    choice = input("camera-intelligence> ").strip()
-    if choice == "0":
+    print("  [0] Back to previous menu")
+    print("  [M] Return to main CyberLab menu")
+    choice = input("camera-intelligence> ").strip().lower()
+    if choice in ("0", "m"):
         return {}
     if choice == "1":
         print("\nDiscovery is limited to one RFC1918 private subnet (256 addresses maximum).")
