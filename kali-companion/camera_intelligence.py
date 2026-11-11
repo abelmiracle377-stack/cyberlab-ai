@@ -665,7 +665,7 @@ def _read_json_url(url: str, headers: dict | None = None, timeout: float = 8.0) 
 
 def _windy_public_webcams(location: str, timeout: float = 8.0) -> dict:
     """Query Windy's licensed, operator-published webcam catalogue when configured."""
-    api_key = os.environ.get("WINDY_WEBCAMS_API_KEY", "").strip()
+    api_key = _load_windy_api_key()
     if not api_key:
         return {"status": "not_configured", "message": "Set WINDY_WEBCAMS_API_KEY to enable structured camera results from Windy's official public webcam catalogue."}
     geo_url = "https://geocoding-api.open-meteo.com/v1/search?" + urllib.parse.urlencode(
