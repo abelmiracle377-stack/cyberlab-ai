@@ -72,7 +72,7 @@ def build_responsible_disclosure_template(asset, findings):
 def run_camera_exposure_assessment():
     print("\nCAMERA EXPOSURE ASSESSMENT & DEFENCE")
     print("Use only for a camera/NVR system you own, administer, or are explicitly authorised to assess.")
-    if input("Type YES to confirm authorisation for this assessment: ").strip() != "YES":
+    if input("Type YES to confirm authorisation for this assessment: ").strip().upper() != "YES":
         raise ValueError("Assessment cancelled; explicit authorisation confirmation is required.")
     asset = {
         "label": input("Asset label/site (optional): ").strip(),
