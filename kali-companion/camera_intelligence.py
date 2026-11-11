@@ -20,6 +20,66 @@ import subprocess
 import urllib.parse
 import urllib.request
 import urllib.error
+from pathlib import Path
+
+def _credential_file() -> Path:
+    return Path.home() / ".config" / "cyberlab" / "credentials.json"
+
+def _load_windy_api_key() -> str:
+    """Load the Windy key from the process environment or private local config."""
+    value = os.environ.get("WINDY_WEBCAMS_API_KEY", "").strip()
+    if value:
+        return value
+    path = _credential_file()
+    try:
+        if path.is_symlink():
+            return ""
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = data.get("WINDY_WEBCAMS_API_KEY", "") if isinstance(data, dict) else ""
+        return value.strip() if isinstance(value, str) else ""
+    except (OSError, ValueError, TypeError):
+        return ""
+
+def configure_windy_api_key() -> dict:
+    """Prompt for a masked key and save it with owner-only permissions."""
+    print("\nWINDY WEBCAMS API CONFIGURATION")
+    print("Get a key from Windy's developer portal. Input is hidden.")
+    key = getpass.getpass("Windy Webcams API key (blank to cancel): ").strip()
+    if not key:
+        return {"status": "cancelled", "message": "No API key was changed."}
+    path = _credential_file()
+    if path.is_symlink():
+        raise ValueError("Credential path is a symbolic link; refusing to write secrets.")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        path.parent.chmod(0o700)
+    except OSError:
+        pass
+    data = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(existing, dict):
+                data = existing
+        except (OSError, ValueError):
+            raise ValueError("Existing credential file is unreadable or invalid; refusing to overwrite it.")
+    data["WINDY_WEBCAMS_API_KEY"] = key
+    temporary = path.with_suffix(".tmp")
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+            handle.write("\n")
+        os.replace(temporary, path)
+        path.chmod(0o600)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    os.environ["WINDY_WEBCAMS_API_KEY"] = key
+    return {"status": "saved", "message": "Windy API key saved locally with owner-only file permissions.", "credential_file": str(path)}
+
 
 CAMERA_PORTS = (80, 443, 554, 8000, 8080, 8554, 8899)
 PUBLIC_WEBCAM_DIRECTORIES = (
@@ -289,7 +349,7 @@ def _read_json_url(url: str, headers: dict | None = None, timeout: float = 8.0) 
 
 def _windy_public_webcams(location: str, timeout: float = 8.0) -> dict:
     """Query Windy's licensed, operator-published webcam catalogue when configured."""
-    api_key = os.environ.get("WINDY_WEBCAMS_API_KEY", "").strip()
+    api_key = _load_windy_api_key()
     if not api_key:
         return {"status": "not_configured", "message": "Set WINDY_WEBCAMS_API_KEY to enable structured camera results from Windy's official public webcam catalogue."}
     geo_url = "https://geocoding-api.open-meteo.com/v1/search?" + urllib.parse.urlencode(
@@ -363,10 +423,13 @@ def camera_intelligence_menu() -> dict:
     print("  [2] Connect to and view ONE camera you own or are authorised to access")
     print("  [3] Global public webcam directories (location-based search)")
     print("  [4] Camera exposure assessment & responsible disclosure (owner-authorised)")
+    print("  [5] Configure Windy Webcams API key")
     print("  [0] Back")
     choice = input("camera-intelligence> ").strip()
     if choice == "0":
         return {}
+    if choice == "5":
+        return configure_windy_api_key()
     if choice == "1":
         print("\nDiscovery is limited to one RFC1918 private subnet (256 addresses maximum).")
         network = input("Your private LAN subnet (e.g. 192.168.1.0/24; press Enter to detect it): ").strip()
@@ -456,6 +519,12 @@ def camera_intelligence_menu() -> dict:
         from camera_exposure_defence import run_camera_exposure_assessment
         return run_camera_exposure_assessment()
     if choice == "3":
+        if not _load_windy_api_key():
+            print("\nWindy structured webcam results are not configured.")
+            setup = input("Would you like to enter your Windy API key now? [y/N]: ").strip().lower()
+            if setup in ("y", "yes"):
+                configured = configure_windy_api_key()
+                print(configured.get("message", ""))
         location = input("Country, state, city or landmark to search: ").strip()
         result = public_webcam_directory(location)
         print("\\nLocation-specific public webcam searches:")
