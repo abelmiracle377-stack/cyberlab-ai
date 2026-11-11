@@ -159,5 +159,35 @@ class CameraIntelligenceTests(unittest.TestCase):
         self.assertIn("does not crawl public IP ranges", result["privacy_boundary"])
 
 
+    def test_windy_api_key_is_loaded_from_private_local_config(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as home:
+            config_dir = Path(home) / ".config" / "cyberlab"
+            config_dir.mkdir(parents=True)
+            (config_dir / "credentials.json").write_text(
+                json.dumps({"WINDY_WEBCAMS_API_KEY": "saved-test-key"}), encoding="utf-8"
+            )
+            with patch("camera_intelligence.Path.home", return_value=Path(home)):
+                with patch.dict("camera_intelligence.os.environ", {}, clear=True):
+                    self.assertEqual(camera_intelligence._load_windy_api_key(), "saved-test-key")
+
+    def test_windy_api_key_configuration_saves_owner_only_file(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as home:
+            with patch("camera_intelligence.Path.home", return_value=Path(home)):
+                with patch("camera_intelligence.getpass.getpass", return_value="new-test-key"):
+                    result = camera_intelligence.configure_windy_api_key()
+                target = Path(home) / ".config" / "cyberlab" / "credentials.json"
+                self.assertEqual(result["status"], "saved")
+                self.assertEqual(json.loads(target.read_text())["WINDY_WEBCAMS_API_KEY"], "new-test-key")
+                self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(target.parent.stat().st_mode & 0o777, 0o700)
+
+
+
 if __name__ == "__main__":
     unittest.main()
