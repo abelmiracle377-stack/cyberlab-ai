@@ -16,7 +16,7 @@ python3 kali-companion/cyberlab.py menu
 python3 kali-companion/cyberlab.py --help
 ```
 
-## 21-option Kali command centre
+## Kali command centre
 
 Launch the full local-first menu:
 
@@ -24,15 +24,15 @@ Launch the full local-first menu:
 python3 kali-companion/cyberlab.py menu
 ```
 
-The menu exposes 21 separately numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, and dedicated username, password-policy, MFA and isolated credential-guessing lab modules. URL analysis performs bounded public DNS, TLS certificate and single-page HTTPS metadata checks, plus optional Google Safe Browsing threat-list lookup. It strips query values/fragments, does not follow redirects, execute JavaScript, submit forms or download files. Requests originate from the Kali machine; this is not a cloud sandbox. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
+The menu exposes 22 numbered operations, including research tools, manual assessment, evidence management, password and authentication review, phone-number metadata, dedicated username/password-policy/MFA modules, and a central API Key Manager. URL analysis performs bounded public DNS, TLS certificate and single-page HTTPS metadata checks, plus optional Google Safe Browsing threat-list lookup. It strips query values/fragments, does not follow redirects, execute JavaScript, submit forms or download files. Requests originate from the Kali machine; this is not a cloud sandbox. File and image analysis uses static signature/hash/string triage; it does not execute files or guarantee a malware verdict.
 
-Device pairing and remote connected-device listing remain unconfigured. The separate Global Camera Intelligence module (option 21) supports owner-authorised RTSP viewing, bounded private-LAN service discovery, and location-specific searches of operator-published public webcam directories. Option 3 creates targeted location search links and can return individual camera-page URLs from Windy's official webcam catalogue when configured with an API key. To enable structured Windy results, open CyberLab's Global Camera Intelligence menu and choose **[5] Configure Windy Webcams API key**. Enter the key at the hidden prompt. If you choose public webcam search without a configured key, CyberLab offers to collect it there. The key is saved locally at `~/.config/cyberlab/credentials.json` with directory permissions `0700` and file permissions `0600`. It is not written into the repository or investigation reports. You can still use targeted public webcam search links without a key.
+Device pairing and remote connected-device listing remain unconfigured. The separate Global Camera Intelligence module (option 21) supports owner-authorised RTSP viewing, bounded private-LAN service discovery, and location-specific searches of operator-published public webcam directories. Option 3 creates targeted location search links and can return individual camera-page URLs from Windy's official webcam catalogue when configured with an API key. To configure Windy, Brave Search or Google Safe Browsing credentials, choose **[22] API Key Manager** from the main CyberLab menu. Select the provider and enter its key at the hidden prompt. The dedicated manager stores keys locally; you do not need to export environment variables manually. If you choose public webcam search without a configured key, CyberLab offers to collect it there. The key is saved locally at `~/.config/cyberlab/credentials.json` with directory permissions `0700` and file permissions `0600`. It is not written into the repository or investigation reports. You can still use targeted public webcam search links without a key.
 
 The Windy integration geocodes the entered place and searches a 100 km radius, returning published camera pages and provider live-status metadata where supplied. Without the key, the tool still produces location-specific search links for EarthCam, SkylineWebcams, Explore.org and Windy. It never scans arbitrary public IP ranges, enumerates unsecured private CCTV, bypasses authentication or opens private feeds.
 
 Camera Intelligence also includes option 4, **Camera Exposure Assessment & Defence**. This additive, offline checklist records operator answers about internet exposure, remote administration, HTTPS, unique credentials, MFA, firmware support, UPnP/port forwarding, network segmentation and security logging. It produces a triage score, remediation guidance, verification tasks and a responsible-disclosure message template. Answers are self-reported and are not technical proof of exposure; this option makes no network connections and does not access video streams.
 
-## Interactive command centre
+## Interactive command centre and navigation
 
 Launch the local menu-driven interface:
 
@@ -40,7 +40,7 @@ Launch the local menu-driven interface:
 python3 kali-companion/cyberlab.py menu
 ```
 
-Choose Domain OSINT, DNS, Manual Security Assessment & Verification, public IP intelligence, CVE research, static file triage, Nmap XML analysis, or local investigation history. Successful results are saved as timestamped JSON files under `~/CyberLab/investigations/`. Reports remain on the Kali machine and are not uploaded automatically. The menu does not execute arbitrary shell commands or start network scans.
+Choose Domain OSINT, DNS, Manual Security Assessment & Verification, public IP intelligence, CVE research, static file triage, Nmap XML analysis, or local investigation history. Successful results are saved as timestamped JSON files under `~/CyberLab/investigations/`. Reports remain on the Kali machine and are not uploaded automatically. The menu does not execute arbitrary shell commands or start network scans. From the main menu, enter **M** to redraw/return to the main menu, or **Q** (or **0**) to close CyberLab and return to your Kali terminal. In submenus, **0** returns to the previous menu; **M** returns to the main CyberLab menu where supported. After a tool finishes, press Enter to continue to the main menu.
 
 ## Commands
 
