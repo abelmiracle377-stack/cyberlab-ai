@@ -63,9 +63,10 @@ def api_key_manager_menu() -> dict:
     print("  [2] Configure Brave Search")
     print("  [3] Configure Google Safe Browsing")
     print("  [4] View configuration status")
-    print("  [0] Back")
-    choice = input("api-keys> ").strip()
-    if choice == "0":
+    print("  [0] Back to previous menu")
+    print("  [M] Return to main CyberLab menu")
+    choice = input("api-keys> ").strip().lower()
+    if choice in ("0", "m"):
         return {"status": "cancelled"}
     if choice == "4":
         statuses = {}
@@ -2899,7 +2900,7 @@ def interactive_menu(timeout: int = 12) -> int:
     }
     def wait_for_menu() -> None:
         try:
-            input("\nPress Enter to return to the menu (results remain above)...")
+            input("\nPress Enter to continue to the main menu...")
         except (EOFError, KeyboardInterrupt):
             print("\nReturning to the menu.")
 
@@ -2928,8 +2929,10 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [20] MFA / 2FA Security Assessment")
         print("  [21] Global Camera Intelligence (authorised cameras and public webcams)")
         print("  [22] API Key Manager (Windy, Brave, Google)")
-        print("  [0] Exit")
-        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"}
+        print("  [M] Main menu / refresh menu")
+        print("  [Q] Quit CyberLab and return to Kali terminal")
+        print("  [0] Exit CyberLab")
+        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "m", "q"}
         try:
             # Read exactly one selection per menu display. This avoids a tight
             # validation loop consuming buffered blank lines or terminal input.
@@ -2943,9 +2946,11 @@ def interactive_menu(timeout: int = 12) -> int:
         if choice not in valid_choices:
             print(f"Invalid selection {choice!r}. Enter a listed option from 0 to 22.")
             continue
-        if choice == "0":
-            print("CyberLab closed.")
+        if choice in ("0", "q"):
+            print("CyberLab closed. Returning to the Kali terminal.")
             return 0
+        if choice == "m":
+            continue
         if choice == "22":
             try:
                 print(json.dumps(api_key_manager_menu(), indent=2))
