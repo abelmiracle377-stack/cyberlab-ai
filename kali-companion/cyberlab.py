@@ -30,6 +30,81 @@ from camera_intelligence import camera_intelligence_menu
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_XML_BYTES = 2 * 1024 * 1024
 USER_AGENT = "CyberLabAI-Kali-Companion/1.0 (passive-security-research)"
+API_KEY_PROVIDERS = {
+    "1": ("WINDY_WEBCAMS_API_KEY", "Windy Webcams"),
+    "2": ("BRAVE_SEARCH_API_KEY", "Brave Search"),
+    "3": ("GOOGLE_SAFE_BROWSING_API_KEY", "Google Safe Browsing"),
+}
+
+def _api_credentials_path() -> Path:
+    return Path.home() / ".config" / "cyberlab" / "credentials.json"
+
+def _load_api_credentials() -> dict:
+    path = _api_credentials_path()
+    try:
+        if path.is_symlink():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+def _get_api_key(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    saved = _load_api_credentials().get(name, "")
+    return saved.strip() if isinstance(saved, str) else ""
+
+def api_key_manager_menu() -> dict:
+    print("\nCYBERLAB API KEY MANAGER")
+    print("Keys are entered with hidden input and stored locally on this Kali account.")
+    print("  [1] Configure Windy Webcams")
+    print("  [2] Configure Brave Search")
+    print("  [3] Configure Google Safe Browsing")
+    print("  [4] View configuration status")
+    print("  [0] Back")
+    choice = input("api-keys> ").strip()
+    if choice == "0":
+        return {"status": "cancelled"}
+    if choice == "4":
+        statuses = {}
+        for env_name, label in API_KEY_PROVIDERS.values():
+            statuses[label] = "configured" if _get_api_key(env_name) else "not configured"
+        for label, status in statuses.items():
+            print(f"  {label}: {status}")
+        return {"status": "ok", "providers": statuses}
+    if choice not in API_KEY_PROVIDERS:
+        raise ValueError("Choose a listed API key provider.")
+    env_name, label = API_KEY_PROVIDERS[choice]
+    key = getpass.getpass(f"Enter {label} API key (input hidden; blank cancels): ").strip()
+    if not key:
+        return {"status": "cancelled", "message": "No API key was changed."}
+    path = _api_credentials_path()
+    if path.is_symlink():
+        raise ValueError("Credential file is a symbolic link; refusing to write secrets.")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        path.parent.chmod(0o700)
+    except OSError:
+        pass
+    data = _load_api_credentials()
+    data[env_name] = key
+    temporary = path.with_suffix(".tmp")
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+            handle.write("\n")
+        os.replace(temporary, path)
+        path.chmod(0o600)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    os.environ[env_name] = key
+    return {"status": "saved", "provider": label, "message": f"{label} API key saved locally. The key value will not be displayed."}
 INDICATORS = {
     "PowerShell": re.compile(r"powershell(?:\.exe)?|pwsh(?:\.exe)?", re.I),
     "Windows script host": re.compile(r"wscript(?:\.exe)?|cscript(?:\.exe)?", re.I),
@@ -685,7 +760,7 @@ def automated_url_assessment(value: str, timeout: int = 12) -> dict:
             resolved = {"error": str(exc)}
 
     reputation = []
-    key = os.environ.get("GOOGLE_SAFE_BROWSING_API_KEY", "").strip()
+    key = _get_api_key("GOOGLE_SAFE_BROWSING_API_KEY")
     reputation.append(_safe_browsing_url_lookup(checked_url, key, timeout) if key else
         {"provider": "Google Safe Browsing", "status": "not_configured",
          "setup": "Set GOOGLE_SAFE_BROWSING_API_KEY locally to enable threat-list lookups."})
@@ -2421,7 +2496,7 @@ def username_osint_search(username: str, timeout: int = 12) -> dict:
     value = username.strip()
     if not value or len(value) > 64 or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value):
         raise ValueError("Username must be 1-64 characters using letters, digits, dot, underscore or hyphen.")
-    api_key = os.environ.get("BRAVE_SEARCH_API_KEY", "").strip()
+    api_key = _get_api_key("BRAVE_SEARCH_API_KEY")
     if not api_key:
         return {
             "feature": "username_osint_investigation",
@@ -2852,8 +2927,9 @@ def interactive_menu(timeout: int = 12) -> int:
         print("  [19] Password Policy Assessment")
         print("  [20] MFA / 2FA Security Assessment")
         print("  [21] Global Camera Intelligence (authorised cameras and public webcams)")
+        print("  [22] API Key Manager (Windy, Brave, Google)")
         print("  [0] Exit")
-        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"}
+        valid_choices = set(services) | {"0", "3", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"}
         try:
             # Read exactly one selection per menu display. This avoids a tight
             # validation loop consuming buffered blank lines or terminal input.
@@ -2865,11 +2941,18 @@ def interactive_menu(timeout: int = 12) -> int:
             print("No selection entered. The menu will be shown again.")
             continue
         if choice not in valid_choices:
-            print(f"Invalid selection {choice!r}. Enter a listed option from 0 to 21.")
+            print(f"Invalid selection {choice!r}. Enter a listed option from 0 to 22.")
             continue
         if choice == "0":
             print("CyberLab closed.")
             return 0
+        if choice == "22":
+            try:
+                print(json.dumps(api_key_manager_menu(), indent=2))
+            except (OSError, ValueError) as exc:
+                print(f"API key configuration error: {exc}")
+            wait_for_menu()
+            continue
         if choice == "15":
             try:
                 result = scam_investigation_menu(timeout)
