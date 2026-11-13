@@ -13,7 +13,7 @@ const modules = [
 ];
 
 const ports = [21,22,25,53,80,110,143,443,445,3000,3306,3389,5000,5432,5900,6379,8000,8080,8443,9000];
-type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
+type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; state_summary:{open:number;closed:number;filtered:number}; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
 
 export default function KaliConnectionPage() {
   const [token,setToken]=useState("");
@@ -23,7 +23,7 @@ export default function KaliConnectionPage() {
   const [confirmationTarget,setConfirmationTarget]=useState("");
   const [reference,setReference]=useState("");
   const [confirmed,setConfirmed]=useState(false);
-  const [selectedPorts,setSelectedPorts]=useState<number[]>([22,80,443,8080,8443]);
+  const [portSpec,setPortSpec]=useState("1-100");
   const [running,setRunning]=useState(false);
   const [error,setError]=useState("");
   const [result,setResult]=useState<Result|null>(null);
@@ -44,7 +44,16 @@ export default function KaliConnectionPage() {
   async function runAssessment(event:React.FormEvent){
     event.preventDefault();setRunning(true);setError("");setResult(null);
     try{
-      const response=await fetch("http://127.0.0.1:8765/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:selectedPorts})});
+      const parsedPorts=new Set<number>();
+      for(const item of portSpec.split(",")){
+        const part=item.trim();
+        if(/^\\d+-\\d+$/.test(part)){const [start,end]=part.split("-").map(Number);if(start<1||end>65535||start>end||end-start+1>100)throw new Error("Each port range must contain at most 100 valid ports.");for(let p=start;p<=end;p++)parsedPorts.add(p);}
+        else if(/^\\d+$/.test(part)){const p=Number(part);if(p<1||p>65535)throw new Error("Ports must be between 1 and 65535.");parsedPorts.add(p);}
+        else throw new Error("Use a port list such as 22,80,443 or a range such as 1-100.");
+        if(parsedPorts.size>100)throw new Error("Choose no more than 100 unique TCP ports.");
+      }
+      if(!parsedPorts.size)throw new Error("Enter at least one TCP port.");
+      const response=await fetch("http://127.0.0.1:8765/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:[...parsedPorts]})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Local assessment failed.");
       setResult(data);
@@ -97,14 +106,14 @@ export default function KaliConnectionPage() {
 
       {connected&&<section className="kali-panel">
         <h2>4. Run an authorised Nmap assessment</h2>
-        <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This runs a TCP connect scan and light service-version detection; no NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
+        <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
           <label>Retype exact target to confirm scope<input value={confirmationTarget} onChange={e=>setConfirmationTarget(e.target.value)} placeholder="Type the same target again" required maxLength={253}/></label>
           <label>Authorisation / ticket reference<input value={reference} onChange={e=>setReference(e.target.value)} placeholder="Your approval or engagement reference" required maxLength={160}/></label>
-          <div className="scope-checks"><h2>TCP ports · up to 20</h2><div className="port-choice-grid">{ports.map(port=><label key={port}><input type="checkbox" checked={selectedPorts.includes(port)} onChange={()=>togglePort(port)}/><span>{port}</span></label>)}</div><small>Selected: {selectedPorts.length}/20. This scan is limited to the selected common TCP ports and one target.</small></div>
+          <label>TCP ports to check<input value={portSpec} onChange={e=>setPortSpec(e.target.value)} placeholder="1-100 or 22,80,443,8080" required/><small>Enter a comma-separated list or range. Maximum 100 ports per run; valid range is 1–65535. Default checks ports 1–100.</small></label>
           <div className="scope-checks"><label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I own this target or have explicit written authorisation for this exact assessment and confirm it is in scope.</label></div>
-          <button className="report-download" type="submit" disabled={running||!confirmed||!reference.trim()||target.trim().toLowerCase()!==confirmationTarget.trim().toLowerCase()||selectedPorts.length<1}>{running?<><LoaderCircle size={14}/> Running on Kali…</>:<><Radar size={14}/> Run Nmap assessment locally</>}</button>
+          <button className="report-download" type="submit" disabled={running||!confirmed||!reference.trim()||target.trim().toLowerCase()!==confirmationTarget.trim().toLowerCase()}>{running?<><LoaderCircle size={14}/> Running on Kali…</>:<><Radar size={14}/> Run Nmap assessment locally</>}</button>
         </form>
       </section>}
 
@@ -112,6 +121,7 @@ export default function KaliConnectionPage() {
       {result&&<section className="network-results">
         <h2>Local Nmap results</h2>
         <p><strong>{result.target}</strong> · {result.duration_seconds}s · {result.method}</p>
+        <div className="bridge-connected"><CheckCircle2 size={14}/> Open: {result.state_summary.open} · Closed: {result.state_summary.closed} · Filtered: {result.state_summary.filtered}</div>
         <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Service</th><th>State</th><th>Product / version</th></tr></thead><tbody>{result.hosts.flatMap((host,i)=>host.ports.map(p=><tr key={i+"-"+p.port}><td>{host.addresses[0]?.address||result.target}</td><td>{p.port}</td><td>{p.service}</td><td>{p.state}</td><td>{[p.product,p.version].filter(Boolean).join(" ")||"—"}</td></tr>))}</tbody></table></div>
         <p>{result.note}</p>
       </section>}
