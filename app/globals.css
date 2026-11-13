@@ -514,3 +514,23 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
   .cockpit-switch { width:100%; }
   .cockpit-switch button { flex:1; }
 }
+
+.tool-registry-page{min-height:100vh;background:#050706;color:#e8efeb;padding:28px max(16px,calc((100vw - 1050px)/2));font-family:var(--sans)}
+.registry-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:15px;margin:10px 0 22px}
+.registry-heading h1{font-size:32px;letter-spacing:-1px;margin:0 0 7px}
+.registry-heading p{color:#899580;font:10px var(--mono)}
+.registry-refresh{display:flex;align-items:center;gap:7px;background:#111a08;border:1px solid #516c16;color:#c7f16d;padding:9px 12px;font:9px var(--mono)}
+.registry-counts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:17px}
+.registry-counts>div{border:1px solid #28331c;background:#090d08;padding:12px;display:grid;gap:8px}
+.registry-counts span{font:8px var(--mono);color:#8c9a7d}.registry-counts b{font:20px var(--mono);color:#e5efda}
+.registry-list{display:grid;gap:7px}
+.registry-item{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #27321c;background:#090d08;padding:13px 15px}
+.registry-item>a{color:#a6f000;padding:8px}.registry-item-main{min-width:0}
+.registry-item-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:11px var(--mono);color:#edf2e8}
+.registry-item p{color:#8b9680;font-size:10px;line-height:1.6;margin:7px 0}
+.registry-meta{display:flex;gap:12px;flex-wrap:wrap;color:#657353;font:8px var(--mono)}
+.registry-state{font:8px var(--mono);padding:4px 6px;border:1px solid #39472b}
+.state-operational{color:#b7ef63;border-color:#526e19;background:#152006}.state-configured{color:#b5cf7b}.state-partial{color:#d9b85b}.state-requires-setup{color:#d9b85b;border-color:#66551d}.state-planned{color:#88917c;border-color:#30392b}
+.registry-foot{display:flex;align-items:center;gap:8px;color:#859276;border-top:1px solid #27321c;padding-top:14px;margin-top:20px;font:9px var(--mono)}
+.registry-foot svg{color:#a6f000;flex-shrink:0}.registry-error,.registry-loading{padding:14px;color:#d9b85b;font:10px var(--mono)}
+@media(max-width:600px){.registry-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.registry-heading{align-items:flex-start;flex-direction:column}.registry-item{padding:11px}.registry-item-title{font-size:10px}}
