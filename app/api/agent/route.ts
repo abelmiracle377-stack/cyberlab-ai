@@ -21,7 +21,7 @@ async function isOpenWeightModel(id: string): Promise<boolean> {
     };
     const model = catalogue.data?.find((item) => item.id === id);
     const likelyOpenWeight = Boolean(model?.hugging_face_id) || /^(qwen|deepseek|mistralai|meta-llama|nousresearch|cognitivecomputations|google|microsoft|tii|01-ai|internlm)\//i.test(id);
-    return Boolean(model && likelyOpenWeight && model.supported_parameters?.includes("tools"));
+    return Boolean(model && likelyOpenWeight);
   } catch {
     return false;
   }
