@@ -82,6 +82,20 @@ python3 kali-companion/cyberlab.py cve "OpenSSH"
 
 See [kali-companion/README.md](./kali-companion/README.md) for all commands, data sources and limitations.
 
+
+## Admin, billing and shared AI knowledge
+
+- The hosted web workspace uses Supabase email/password authentication. The hosted workspace subscription is USD $10/month; Paystack handles recurring payment when its plan and webhook are configured.
+- `/admin/login` is the separate administrator sign-in entry. Only users whose `user_profiles.role` is `admin` can access `/admin`, `/learning`, and admin APIs; other signed-in users receive a not-found response. An existing administrator grants this role from the admin user controls or an owner-run Supabase SQL update.
+- Apply the committed migrations in order in the Supabase SQL Editor: `202611130001_investigation_cases.sql`, `202611130002_billing_and_admin.sql`, then `202611130003_admin_knowledge_base.sql`.
+- Configure server-side Vercel variables: `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, and `PAYSTACK_PLAN_CODE`, alongside the public Supabase URL and anon key. Never expose the service-role or Paystack secret in client code.
+- The Admin Panel links to AI Knowledge Review. Knowledge is stored centrally in `public.knowledge_items`; new entries enter `pending`, and only admin-approved entries are supplied to the hosted agent as bounded reference context. This is retrieval/grounding (RAG), not model-weight fine-tuning. Uploaded content remains untrusted data.
+- Paystack webhook endpoint: `https://cyberlab-ai.vercel.app/api/paystack/webhook`. Configure this exact endpoint in Paystack and verify the merchant account supports the intended USD recurring plan before enabling live subscriptions.
+
+## Kali authentication boundary
+
+The Kali companion and local bridge run independently on the Kali machine and do not require a CyberLab web-app account, web login, or subscription to execute local CLI commands. The local bridge uses a machine-local pairing token and binds only to `127.0.0.1`; this is local pairing protection, not a CyberLab account login. The hosted dashboard and hosted AI/API features remain subject to web-app authentication and subscription rules. Cloud-only functionality may still require its own API credentials.
+
 ## Security principles
 
 - Use assessment features only on systems you own or are explicitly authorised to test.
