@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Activity, ArrowRight, Bell, Bot, Bug, Cable, ChevronDown, CircleHelp, Code2, Command,
+  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command,
   Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
 } from "lucide-react";
@@ -11,6 +11,7 @@ const groups = [
   { title: "COMMAND CENTER", items: [
     { label: "Overview", icon: Layers3, href: "/" },
     { label: "AI Agent", icon: Bot, href: "/agent" },
+    { label: "Learning Centre", icon: BookOpen, href: "/learning" },
   ]},
   { title: "INTELLIGENCE", items: [
     { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
@@ -42,6 +43,7 @@ const groups = [
 
 const modules = [
   { name:"AI Agent", desc:"Coordinate scoped security workflows with tool-assisted analysis.", icon:Bot, state:"CONFIG CHECK", href:"/agent" },
+  { name:"Learning Centre", desc:"Curate, review and approve knowledge that the agent can use alongside web research.", icon:BookOpen, state:"HUMAN APPROVAL", href:"/learning" },
   { name:"IP Intelligence", desc:"Inspect public IP, ASN, DNS, hosting and ownership signals.", icon:Globe2, state:"AVAILABLE", href:"/ip-intelligence" },
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
   { name:"Domain & Privacy Verification", desc:"Review SPF, DMARC, DKIM, CAA, historical URLs and local browser attributes.", icon:ShieldCheck, state:"NEW", href:"/verification" },

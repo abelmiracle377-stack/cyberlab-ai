@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 
 type State = "operational" | "configured" | "partial" | "requires-setup" | "planned";
 const registry: Array<{ id:string; name:string; category:string; description:string; state:State; route:string; permission:"passive"|"local-approved"|"manual"; dependency?:string }> = [
- {id:"ai-agent",name:"AI Agent",category:"Orchestration",description:"Streaming model access with specialist routing and existing research tools.",state:"configured",route:"/agent",permission:"passive",dependency:"OPENROUTER_API_KEY"},
+ {id:"ai-agent",name:"AI Agent",category:"Orchestration",description:"Streaming model access with specialist routing, web research and operator-approved local learning references.",state:"configured",route:"/agent",permission:"passive",dependency:"OPENROUTER_API_KEY"},
+ {id:"learning-centre",name:"Learning Centre",category:"Knowledge",description:"Browser-local curated knowledge submissions with explicit analyst approval, review states, import/export and agent context injection. Not model-weight training.",state:"operational",route:"/learning",permission:"manual"},
  {id:"ip-intelligence",name:"IP Intelligence",category:"Intelligence",description:"Public IP, ASN, ISP and approximate network context.",state:"operational",route:"/ip-intelligence",permission:"passive"},
  {id:"dns-intelligence",name:"DNS Intelligence",category:"Intelligence",description:"Passive A, AAAA, MX, NS and TXT resolution.",state:"operational",route:"/osint",permission:"passive"},
  {id:"rdap-ct",name:"Domain OSINT",category:"Intelligence",description:"Registration and certificate-transparency research.",state:"operational",route:"/osint",permission:"passive"},

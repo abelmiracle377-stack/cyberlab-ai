@@ -113,7 +113,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12) }),
+        body: JSON.stringify({ prompt: text, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -153,7 +153,7 @@ export default function AgentPage() {
       <header className="agent-topbar">
         <Link href="/" className="agent-back"><ArrowLeft size={14} /> Dashboard</Link>
         <div className="agent-brand"><span className="agent-brand-icon"><ShieldCheck size={16} /></span> CYBERLAB AI <span className="agent-top-sep">/</span> AGENT CONSOLE</div>
-        <span className="agent-secure-label"><span /> SERVER-SIDE INFERENCE</span>
+        <Link href="/learning" className="agent-secure-label">LEARNING CENTRE ↗</Link>
       </header>
       <section className="agent-main">
         <div className="agent-heading">
