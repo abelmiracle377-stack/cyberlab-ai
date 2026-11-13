@@ -46,8 +46,8 @@ export default function KaliConnectionPage() {
       const parsedPorts=new Set<number>();
       for(const item of portSpec.split(",")){
         const part=item.trim();
-        if(/^\\d+-\\d+$/.test(part)){const [start,end]=part.split("-").map(Number);if(start<1||end>65535||start>end||end-start+1>100)throw new Error("Each port range must contain at most 100 valid ports.");for(let p=start;p<=end;p++)parsedPorts.add(p);}
-        else if(/^\\d+$/.test(part)){const p=Number(part);if(p<1||p>65535)throw new Error("Ports must be between 1 and 65535.");parsedPorts.add(p);}
+        if(/^\d+-\d+$/.test(part)){const [start,end]=part.split("-").map(Number);if(start<1||end>65535||start>end||end-start+1>100)throw new Error("Each port range must contain at most 100 valid ports.");for(let p=start;p<=end;p++)parsedPorts.add(p);}
+        else if(/^\d+$/.test(part)){const p=Number(part);if(p<1||p>65535)throw new Error("Ports must be between 1 and 65535.");parsedPorts.add(p);}
         else throw new Error("Use a port list such as 22,80,443 or a range such as 1-100.");
         if(parsedPorts.size>100)throw new Error("Choose no more than 100 unique TCP ports.");
       }
