@@ -35,6 +35,7 @@ export default function KaliConnectionPage() {
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
       if(!data.nmap)throw new Error("Bridge is running, but Nmap is missing. Run: sudo apt install -y nmap");
+      sessionStorage.setItem("cyberlab.kaliBridgeToken", token.trim());
       setConnected(true);
     }catch(e){setError(e instanceof Error?e.message:"Could not connect. Start the Kali bridge and try again.");}
     finally{setChecking(false);}
@@ -94,7 +95,7 @@ export default function KaliConnectionPage() {
 
       <section className="kali-panel">
         <h2>3. Pair this browser with Kali</h2>
-        <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);}} placeholder="Paste the local pairing token"/></label>
+        <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Paste the local pairing token"/></label>
         <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Connect to Kali</>}</button>
         {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local Kali bridge. The pairing token is held only in this page's memory.</p>}
       </section>
