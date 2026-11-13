@@ -21,7 +21,7 @@ python3 kali-companion/cyberlab.py --help
 | `ip 8.8.8.8` | Public global IP | RDAP network registration context |
 | `cve "OpenSSH"` | Product/vendor/version/CVE keyword | Searches NIST NVD and returns CVE descriptions and available CVSS severity |
 | `triage ./file.exe` | Local file, max 10 MB | SHA-256, file signature, entropy and selected printable-string indicators |
-| `port-scan example.com --ports 1-100` | One authorised IP or domain | Nmap TCP scan of up to 100 selected ports; reports open, closed and filtered states |
+| `port-scan example.com --ports 1-100` / `nmap example.com --ports 1-100` | One authorised IP or domain | Runs the Nmap TCP scanner for up to 100 selected ports; reports open, closed and filtered states |
 | `nmap-xml ./scan.xml` | Existing Nmap XML, max 2 MB | Parses host, port and service evidence from an existing report |
 
 ## Examples
