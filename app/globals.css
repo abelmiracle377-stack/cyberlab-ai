@@ -389,3 +389,12 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .agent-mode-switch button{border:1px solid transparent;border-radius:5px;background:transparent;color:#84938a;padding:8px 11px;font-size:9px}
 .agent-mode-switch button.selected{background:#183021;border-color:#385c43;color:#d5ebdc}
 .agent-mode-switch button:disabled{opacity:.5;cursor:not-allowed}
+
+
+/* Active security lab port selection */
+.port-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.port-choice-grid label{display:flex!important;align-items:center;gap:8px;padding:9px;border:1px solid #26362c;border-radius:6px;background:#0a100d;color:#cbd6ce!important;font:10px var(--mono)!important}
+.port-choice-grid input{accent-color:#6bb582}
+.scope-checks small{color:#75847b;font-size:9px;line-height:1.6}
+.report-download:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:480px){.port-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
