@@ -12,7 +12,6 @@ const modules = [
   { icon: Network, title: "Network evidence", detail: "Parse existing Nmap XML reports into hosts, ports and services." },
 ];
 
-const ports = [21,22,25,53,80,110,143,443,445,3000,3306,3389,5000,5432,5900,6379,8000,8080,8443,9000];
 type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; state_summary:{open:number;closed:number;filtered:number}; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
 
 export default function KaliConnectionPage() {
@@ -59,10 +58,6 @@ export default function KaliConnectionPage() {
       setResult(data);
     }catch(e){setError(e instanceof Error?e.message:"Local assessment failed. Check that the Kali bridge is running.");}
     finally{setRunning(false);}
-  }
-
-  function togglePort(port:number){
-    setSelectedPorts(old=>old.includes(port)?old.filter(p=>p!==port):old.length<20?[...old,port]:old);
   }
 
   async function copyCommand(){
