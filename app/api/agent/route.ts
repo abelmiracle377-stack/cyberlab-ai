@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { resolve4, resolve6, resolveMx, resolveNs, resolveTxt, reverse } from "node:dns/promises";
-import { gateway, stepCountIs, streamText, tool } from "ai";
+import { stepCountIs, streamText, tool } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -9,17 +10,18 @@ export const maxDuration = 60;
 const modelSchema = z.string().min(3).max(160).regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:-]+$/);
 async function isOpenWeightModel(id: string): Promise<boolean> {
   try {
-    const response = await fetch("https://ai-gateway.vercel.sh/v1/models", {
+    const response = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: process.env.OPENROUTER_API_KEY ? { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` } : {},
       next: { revalidate: 300 },
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return false;
     const catalogue = await response.json() as {
-      data?: Array<{ id?: string; type?: string; tags?: string[] }>;
+      data?: Array<{ id?: string; hugging_face_id?: string; supported_parameters?: string[] }>;
     };
-    return catalogue.data?.some((item) =>
-      item.id === id && item.type === "language" && item.tags?.includes("open-weights") && item.tags?.includes("tool-use")
-    ) ?? false;
+    const model = catalogue.data?.find((item) => item.id === id);
+    const likelyOpenWeight = Boolean(model?.hugging_face_id) || /^(qwen|deepseek|mistralai|meta-llama|nousresearch|cognitivecomputations|google|microsoft|tii|01-ai|internlm)\//i.test(id);
+    return Boolean(model && likelyOpenWeight && model.supported_parameters?.includes("tools"));
   } catch {
     return false;
   }
@@ -27,7 +29,7 @@ async function isOpenWeightModel(id: string): Promise<boolean> {
 
 const agentInstructions = `You are CyberLab AI, an evidence-first cybersecurity research assistant.
 Help with defensive security, authorised testing, OSINT from public sources, network intelligence, vulnerability research, safe malware triage, and technical reporting.
-Use available tools when they materially improve accuracy. Explain what a tool checked and distinguish observed facts from inference.
+Use available tools when they materially improve accuracy. Explain what a tool checked and distinguish observed facts from inference. Do not claim live web searches; this deployment provides passive IP/DNS intelligence and NVD CVE lookup tools.
 Never claim a scan or lookup occurred unless a tool returned its result. Do not identify a private person from an IP address, infer subscriber registration details, retrieve private browsing history, or facilitate covert camera capture or deceptive tracking.
 Do not provide instructions for unauthorised access, credential theft, persistence, evasion, malware deployment, or disruption. For active testing, ask for explicit authorisation and scope; this first version only performs passive IP and DNS lookups.
 Keep responses clear, technically precise, and include uncertainty and limitations.`;
@@ -35,14 +37,10 @@ Keep responses clear, technically precise, and include uncertainty and limitatio
 const openWeightInstructions = agentInstructions + `
 
 RESEARCH MODE:
-Give technically detailed, direct answers for legitimate security research. Avoid generic warnings and unnecessary refusals when the request is clearly defensive, educational, or within an authorised scope. Explain concepts, analyse supplied code and logs, discuss vulnerability mechanics at a level appropriate to the stated defensive purpose, and give safe validation and remediation steps. Use public web research for current advisories, vendor patches, exploit status, and technical references; cite sources clearly. If authorisation or scope is unclear for an active test, ask for it before giving operational steps. The same boundaries against unauthorised access, credential theft, persistence, evasion, malware deployment, covert surveillance and disruption always apply. Open-weight mode changes model selection and response style; it does not disable these boundaries.`;
+Give technically detailed, direct answers for legitimate security research. Avoid generic warnings and unnecessary refusals when the request is clearly defensive, educational, or within an authorised scope. Explain concepts, analyse supplied code and logs, discuss vulnerability mechanics at a level appropriate to the stated defensive purpose, and give safe validation and remediation steps. If authorisation or scope is unclear for an active test, ask for it before giving operational steps. The same boundaries against unauthorised access, credential theft, persistence, evasion, malware deployment, covert surveillance and disruption always apply. Open-weight mode changes model selection and response style; it does not disable these boundaries.`;
 
 const tools = {
-  public_web_search: gateway.tools.parallelSearch({
-    mode: "fast",
-    maxResults: 5,
-  }),
-  cve_lookup: tool({
+cve_lookup: tool({
     description: "Search the public NVD vulnerability catalogue by CVE identifier or keyword. Return CVSS severity, summary and references; do not provide exploit instructions.",
     inputSchema: z.object({ query: z.string().min(3).max(120).describe("CVE identifier such as CVE-2024-3094, or a product/vulnerability keyword") }),
     execute: async ({ query }) => {
@@ -162,15 +160,16 @@ export async function POST(request: Request) {
     if (agentMode === "open-weight" && !(await isOpenWeightModel(model.data))) {
       return Response.json({ error: "Open-weight mode only accepts models identified in CyberLab AI's curated open-weight catalogue. Select an open-weight model first." }, { status: 400 });
     }
-    if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
+    if (!process.env.OPENROUTER_API_KEY) {
       return Response.json({
-        error: "AI Gateway authentication is not configured. Enable Vercel OIDC for this project or add AI_GATEWAY_API_KEY as a protected Vercel environment variable.",
+        error: "OpenRouter authentication is not configured. Add OPENROUTER_API_KEY as a protected Vercel environment variable and redeploy.",
         needsConfiguration: true,
       }, { status: 503 });
     }
 
+    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     const result = streamText({
-      model: model.data,
+      model: openrouter(model.data),
       system: agentMode === "open-weight" ? openWeightInstructions : agentInstructions,
       messages: [...history, { role: "user" as const, content: prompt }],
       tools,
