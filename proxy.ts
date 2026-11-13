@@ -5,7 +5,7 @@ export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const path = request.nextUrl.pathname;
-  const adminPath = path === "/admin" || path.startsWith("/admin/");
+  const adminPath = path === "/admin" || path.startsWith("/admin/") || path === "/learning" || path.startsWith("/learning/");
   const adminLogin = path === "/admin/login";
   if (!url || !key) {
     if (adminPath) return new NextResponse(null, { status: 404 });
