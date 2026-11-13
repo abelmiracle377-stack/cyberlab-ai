@@ -31,6 +31,7 @@ const groups = [
     { label: "Evidence Vault", icon: FileLock2, href: "/evidence-vault" },
   ]},
   { title: "OPERATIONS", items: [
+    { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
     { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
     { label: "Settings", icon: Settings2, href: "/settings" },
   ]},
