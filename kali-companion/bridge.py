@@ -22,10 +22,9 @@ from urllib.parse import urlparse
 HOST = "127.0.0.1"
 PORT = 8765
 MAX_BODY = 8192
-MAX_PORTS = 20
+MAX_PORTS = 100
 MAX_RUNTIME = 55
 ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app"}
-PORTS = {21, 22, 25, 53, 80, 110, 143, 443, 445, 3306, 3389, 5432, 5900, 6379, 8080, 8443, 9000, 3000, 5000, 8000}
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
@@ -107,6 +106,7 @@ def parse_report(xml_text: str) -> dict:
             {"address": (h["addresses"][0]["address"] if h["addresses"] else "unknown"), **p}
             for h in hosts for p in h["ports"] if p["state"] == "open"
         ],
+        "state_summary": {state: sum(1 for h in hosts for p in h["ports"] if p["state"] == state) for state in ("open", "closed", "filtered")},
     }
 
 
@@ -176,8 +176,8 @@ class Handler(BaseHTTPRequestHandler):
             if data.get("authorizationConfirmed") is not True or confirmation != str(data.get("target", "")).strip().lower().rstrip(".") or not reference or len(reference) > 160:
                 raise ValueError("Confirm ownership or written permission, provide an approval reference and retype the exact target.")
             ports_raw = data.get("ports", [])
-            if not isinstance(ports_raw, list) or not ports_raw or len(ports_raw) > MAX_PORTS or any(type(p) is not int or p not in PORTS for p in ports_raw):
-                raise ValueError("Select 1–20 supported TCP ports.")
+            if not isinstance(ports_raw, list) or not ports_raw or len(ports_raw) > MAX_PORTS or any(type(p) is not int or not 1 <= p <= 65535 for p in ports_raw):
+                raise ValueError("Select between 1 and 100 unique TCP ports in the range 1–65535.")
             ports = sorted(set(ports_raw))
             if len(ports) != len(ports_raw):
                 raise ValueError("Duplicate ports are not accepted.")
@@ -203,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
                     "duration_seconds": round(time.time() - started, 1),
                     "method": "Nmap TCP connect scan with light service version detection",
                     **report,
-                    "note": "Results are observations, not proof of vulnerability. This run used no NSE scripts, exploit checks, credentials, evasion or denial-of-service options. Assess only systems explicitly in scope.",
+                    "note": "Nmap reports selected TCP ports as open, closed or filtered when determinable. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. No NSE scripts, exploit checks, credentials, evasion or denial-of-service options are used. Assess only systems explicitly in scope.",
                 }, origin)
             finally:
                 scan_lock.release()
