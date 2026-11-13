@@ -398,3 +398,11 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .scope-checks small{color:#75847b;font-size:9px;line-height:1.6}
 .report-download:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:480px){.port-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Local Kali bridge connection and result states */
+.bridge-label{display:flex;flex-direction:column;gap:8px;color:#cbd6ce;font-size:11px;margin:12px 0}
+.bridge-label input{width:100%;border:1px solid #26362c;border-radius:6px;background:#0a100d;color:#e5eee8;padding:12px;font:12px var(--mono);outline:none}
+.bridge-label input:focus{border-color:#6bb582}
+.bridge-connected{display:flex;align-items:center;gap:8px;color:#85d6a0;font-size:11px;margin-top:12px}
+.kali-panel .report-download{margin-top:10px}
