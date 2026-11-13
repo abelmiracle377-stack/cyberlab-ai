@@ -108,3 +108,10 @@ MIT. See [LICENSE](./LICENSE).
 ### Local SOC host telemetry
 
 The paired Kali companion exposes an authenticated `GET /system` endpoint for an on-demand, read-only host health snapshot. The Kali Connection workspace displays platform/release, uptime, load average, available memory, root-disk capacity, process count and Nmap availability. It does not collect usernames, process names, command lines, file contents, network payloads or authentication logs. It is not a continuous SIEM, EDR, intrusion-detection or ATT&CK event pipeline. The bridge remains bound to `127.0.0.1`, requires the existing pairing token and official-site origin, and must run on the same machine as the browser using it.
+
+
+### Defensive Malware Workshop
+
+- The Malware Lab includes a defensive workshop that generates an EICAR antivirus test signature as plain text, synthetic IOC JSON using reserved example domains/documentation IP ranges, inert endpoint-behaviour event records, and starter YARA/Sigma training rules.
+- Generated artefacts are returned as downloadable text/data files. The behaviour fixture describes hypothetical events only; it does not create files, launch processes, modify registry/persistence settings or open network connections.
+- This is not a malware builder. It does not generate deployable malware, destructive payloads, credential theft, stealth, persistence, evasion or command-and-control code. Review and validate detection rules against your own telemetry before operational use.
