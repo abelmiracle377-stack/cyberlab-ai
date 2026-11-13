@@ -138,6 +138,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.send_header("Vary", "Origin")
         self.end_headers()
 
