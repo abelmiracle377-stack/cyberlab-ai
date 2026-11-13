@@ -6,6 +6,7 @@ import Link from "next/link";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
 type Message = { role: "user" | "assistant"; content: string };
+type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
 
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
@@ -15,6 +16,13 @@ export default function AgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [scanRequest, setScanRequest] = useState<{ target: string; ports: string } | null>(null);
+  const [scanConfirmation, setScanConfirmation] = useState("");
+  const [scanReference, setScanReference] = useState("");
+  const [scanAuthorised, setScanAuthorised] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanStatus, setScanStatus] = useState("");
+  const [scanResult, setScanResult] = useState<LocalScanResult | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const availableModels = agentMode === "open-weight" ? models.filter((item) => item.openWeight) : models;
 
@@ -41,7 +49,18 @@ export default function AgentPage() {
     const text = prompt.trim();
     if (!text || busy) return;
     setError("");
+    setScanRequest(null);
+    setScanStatus("");
+    setScanResult(null);
     setPrompt("");
+    const scanMatch = text.match(/\\b(?:nmap|scan|port\\s+scan|scan\\s+ports)\\b[\\s\\S]*?\\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}|(?:\\d{1,3}\\.){3}\\d{1,3})\\b/i);
+    if (scanMatch) {
+      const portsMatch = text.match(/\\bports?\\s+([0-9,-]+(?:\\s*[-,]\\s*[0-9]+)*)/i);
+      setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can prepare a bounded Nmap TCP scan on your paired local Kali machine. Before anything runs, confirm the exact target, authorisation reference and scope below. No scan has started." }]);
+      setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\\s+/g, "") || "1-100" });
+      setBusy(false);
+      return;
+    }
     setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "" }]);
     setBusy(true);
     try {
@@ -116,7 +135,7 @@ export default function AgentPage() {
             <div className="agent-welcome">
               <div className="agent-welcome-icon"><Bot size={25} /></div>
               <h2>What are we investigating?</h2>
-              <p>The agent can use live public-web research, passive IP/DNS intelligence and NVD CVE lookup, then explain findings and help structure authorised security research. Active TCP checks require the separate scoped lab.</p>
+              <p>The agent can research public sources, analyse passive IP/DNS intelligence and NVD CVEs. Ask “scan example.com” to prepare a local Kali Nmap scan; it will wait for your explicit scope approval.</p>
               <div className="agent-prompts">
                 {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for an IP address I provide.", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
               </div>
@@ -131,10 +150,25 @@ export default function AgentPage() {
             </div>
           )}
         </div>
+        {scanRequest && <section className="kali-panel" style={{ marginTop: 16 }}>
+          <h2>Approve local Nmap scan</h2>
+          <p>Target detected from your message: <strong>{scanRequest.target}</strong>. Proposed TCP ports: <strong>{scanRequest.ports}</strong> (maximum 100). The request will run directly in your browser against the paired Kali bridge; it is not sent to the CyberLab server.</p>
+          <form className="report-editor" onSubmit={runLocalScan}>
+            <label>Retype exact target<input value={scanConfirmation} onChange={event => setScanConfirmation(event.target.value)} placeholder={scanRequest.target} required /></label>
+            <label>Authorisation / ticket reference<input value={scanReference} onChange={event => setScanReference(event.target.value)} placeholder="Written approval or engagement reference" required maxLength={160} /></label>
+            <label>TCP ports<input value={scanRequest.ports} onChange={event => setScanRequest(current => current ? { ...current, ports: event.target.value } : current)} required /></label>
+            <div className="scope-checks"><label><input type="checkbox" checked={scanAuthorised} onChange={event => setScanAuthorised(event.target.checked)} /> I own this target or have explicit written permission to scan this exact target and these ports.</label></div>
+            <button className="report-download" type="submit" disabled={scanBusy || !scanAuthorised || !scanReference.trim() || scanConfirmation.trim().toLowerCase() !== scanRequest.target.toLowerCase()}>{scanBusy ? "Running on Kali…" : "Confirm and run local Nmap scan"}</button>
+            <button className="report-download" type="button" onClick={() => setScanRequest(null)} disabled={scanBusy}>Cancel</button>
+          </form>
+          {scanStatus && <p role="status">{scanStatus}</p>}
+        </section>}
+        {scanResult && <section className="network-results" style={{ marginTop: 16 }}><h2>Local Nmap results · {scanResult.target}</h2><p>{scanResult.duration_seconds}s · {scanResult.method}</p><p><strong>Open:</strong> {scanResult.state_summary.open} · <strong>Closed:</strong> {scanResult.state_summary.closed} · <strong>Filtered:</strong> {scanResult.state_summary.filtered}</p><div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Service</th><th>State</th><th>Product / version</th></tr></thead><tbody>{scanResult.hosts.flatMap((host, index) => host.ports.map(port => <tr key={index + "-" + port.port}><td>{host.addresses[0]?.address || scanResult.target}</td><td>{port.port}</td><td>{port.service}</td><td>{port.state}</td><td>{[port.product, port.version].filter(Boolean).join(" ") || "—"}</td></tr>))}</tbody></table></div><p>{scanResult.note}</p></section>}
+        {scanStatus && !scanRequest && !scanResult && <div className="agent-error">{scanStatus}</div>}
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Live web research + passive IP/DNS/CVE tools · Active checks require scope confirmation</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
