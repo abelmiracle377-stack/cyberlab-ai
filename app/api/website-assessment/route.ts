@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 export const runtime = "nodejs";
 export const maxDuration = 20;
 const MAX_BYTES = 4 * 1024 * 1024;
-const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/i;
+const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 function publicIPv4(value: string) {
   const p = value.split(".").map(Number);
@@ -86,11 +86,11 @@ export async function POST(request: Request) {
       .filter(item => !item.present);
     const cookies = headers.getSetCookie?.() || [];
     const cookieFindings = cookies.flatMap((cookie,index) => [
-      ...(!/;\\s*secure(?:;|$)/i.test(cookie) && url.protocol === "https:" ? [{ name: "Cookie " + (index+1) + " missing Secure", severity: "review" }] : []),
-      ...(!/;\\s*httponly(?:;|$)/i.test(cookie) ? [{ name: "Cookie " + (index+1) + " missing HttpOnly", severity: "review" }] : []),
-      ...(!/;\\s*samesite=/i.test(cookie) ? [{ name: "Cookie " + (index+1) + " missing SameSite", severity: "review" }] : [])
+      ...(!/;\s*secure(?:;|$)/i.test(cookie) && url.protocol === "https:" ? [{ name: "Cookie " + (index+1) + " missing Secure", severity: "review" }] : []),
+      ...(!/;\s*httponly(?:;|$)/i.test(cookie) ? [{ name: "Cookie " + (index+1) + " missing HttpOnly", severity: "review" }] : []),
+      ...(!/;\s*samesite=/i.test(cookie) ? [{ name: "Cookie " + (index+1) + " missing SameSite", severity: "review" }] : [])
     ]);
-    const html = /text\\/html|application\\/xhtml/i.test(contentType);
+    const html = /text\/html|application\/xhtml/i.test(contentType);
     const externalScripts = html ? [...text.matchAll(/<script[^>]+src=["']([^"']+)/gi)].slice(0,30).map(m => m[1]) : [];
     return Response.json({
       requestedUrl: raw, finalUrl: url.toString(), status: response.status, contentType, bytes: total,
