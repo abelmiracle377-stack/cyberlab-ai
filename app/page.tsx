@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Activity, ArrowLeft, ArrowRight, Bell, Bot, Bug, Cable, CircleHelp, Code2, Database,
+  Activity, ArrowLeft, ArrowRight, Bell, Bot, Bug, Cable, CircleHelp, Code2, Database, Globe,
   FileSearch, Fingerprint, Globe2, Layers3, Network, FileLock2, Radar, Shield, ShieldCheck, Terminal, Workflow,
 } from "lucide-react";
 
@@ -13,6 +13,8 @@ const navigation = [
   { label: "OSINT", icon: Fingerprint, group: "intelligence" },
   { label: "Network Analysis", icon: Network, group: "security" },
   { label: "Penetration Testing", icon: Radar, group: "security" },
+  { label: "Active Security Lab", icon: Radar, group: "security" },
+  { label: "Live Research", icon: Globe, group: "intelligence" },
   { label: "Vulnerability Lab", icon: Bug, group: "security" },
   { label: "Malware Lab", icon: Shield, group: "research" },
   { label: "Reverse Engineering", icon: Code2, group: "research" },
@@ -28,6 +30,8 @@ const modules = [
   { name: "OSINT", description: "Organise public-source findings with provenance and confidence.", icon: Fingerprint, status: "Available" },
   { name: "Network Analysis", description: "Review network evidence and interpret authorised scan results.", icon: Network, status: "Available" },
   { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Available" },
+  { name: "Active Security Lab", description: "Run limited TCP reachability checks against explicitly authorised public targets.", icon: Radar, status: "Controlled" },
+  { name: "Live Research", description: "Search current public advisories, CVEs, vendor bulletins and technical references.", icon: Globe, status: "Available" },
   { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Available" },
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Available" },
   { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Available" },
@@ -51,7 +55,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Kali Connection": "/kali-connection" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Active Security Lab": "/active-security-lab", "Live Research": "/research", "Kali Connection": "/kali-connection" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setNotice("");
@@ -140,7 +144,7 @@ export default function Home() {
               {notice && <div className="notice"><CircleHelp size={15} className="notice-icon" /><div><div className="notice-title">Workspace message</div><div className="notice-text">{notice}</div></div></div>}
               <div className="notice">
                 <ShieldCheck size={16} className="notice-icon" />
-                <div><div className="notice-title">Start an investigation</div><div className="notice-text">Choose an operational tool. IP and domain intelligence use passive public sources; the AI agent uses the selected model and reports provider errors when unavailable.</div></div>
+                <div><div className="notice-title">Start an investigation</div><div className="notice-text">Choose an operational tool. Live Research uses Perplexity Sonar through OpenRouter. Active Security Lab offers limited TCP reachability checks only after exact target and authorisation confirmation.</div></div>
               </div>
 
               <div className="section-heading"><h2>Workspace status</h2><span className="section-meta">CURRENT CAPABILITIES</span></div>
