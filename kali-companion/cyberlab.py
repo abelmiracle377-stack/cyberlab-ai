@@ -137,7 +137,7 @@ def port_scan(target: str, port_spec: str, timeout: int = 60) -> dict:
     try:
         ipaddress.ip_address(target)
     except ValueError:
-        if not re.fullmatch(r'(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}', target):
+        if not re.fullmatch(r'(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}', target):
             raise ValueError('Enter one valid IP address or fully-qualified domain name.')
     ports = set()
     for part in port_spec.split(','):
