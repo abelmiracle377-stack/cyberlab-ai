@@ -35,7 +35,7 @@ export async function GET() {
           name: item.name ?? id,
           provider: id.split("/")[0],
           contextLength: item.context_length ?? null,
-          openWeight: Boolean(supportsTools && (item.hugging_face_id || openWeightProvider.test(id))),
+          openWeight: Boolean(supportsTools && (item.hugging_face_id || openWeightProviders.some((provider) => id.toLowerCase().startsWith(provider)))),
         };
       })
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
