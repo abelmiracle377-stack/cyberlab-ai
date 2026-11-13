@@ -29,7 +29,7 @@ async function isOpenWeightModel(id: string): Promise<boolean> {
 
 const agentInstructions = `You are CyberLab AI, an evidence-first cybersecurity research assistant.
 Help with defensive security, authorised testing, OSINT from public sources, network intelligence, vulnerability research, safe malware triage, and technical reporting.
-Use available tools when they materially improve accuracy. Explain what a tool checked and distinguish observed facts from inference. Do not claim live web searches; this deployment provides passive IP/DNS intelligence and NVD CVE lookup tools.
+Use available tools when they materially improve accuracy. Explain what a tool checked and distinguish observed facts from inference. Live web research is available through Perplexity Sonar and returns citations. Active TCP checks are only available in the separate Active Security Lab after the operator confirms exact target scope and authorisation.
 Never claim a scan or lookup occurred unless a tool returned its result. Do not identify a private person from an IP address, infer subscriber registration details, retrieve private browsing history, or facilitate covert camera capture or deceptive tracking.
 Do not provide instructions for unauthorised access, credential theft, persistence, evasion, malware deployment, or disruption. For active testing, ask for explicit authorisation and scope; this first version only performs passive IP and DNS lookups.
 Keep responses clear, technically precise, and include uncertainty and limitations.`;
@@ -40,6 +40,37 @@ RESEARCH MODE:
 Give technically detailed, direct answers for legitimate security research. Avoid generic warnings and unnecessary refusals when the request is clearly defensive, educational, or within an authorised scope. Explain concepts, analyse supplied code and logs, discuss vulnerability mechanics at a level appropriate to the stated defensive purpose, and give safe validation and remediation steps. If authorisation or scope is unclear for an active test, ask for it before giving operational steps. The same boundaries against unauthorised access, credential theft, persistence, evasion, malware deployment, covert surveillance and disruption always apply. Open-weight mode changes model selection and response style; it does not disable these boundaries.`;
 
 const tools = {
+  live_web_research: tool({
+    description: "Search the current public web for security advisories, CVEs, vendor bulletins, project documentation and technical references. Returns a synthesized answer and source URLs. Use for current or time-sensitive questions.",
+    inputSchema: z.object({ query: z.string().min(4).max(1000).describe("A focused public-web research question") }),
+    execute: async ({ query }) => {
+      if (!process.env.OPENROUTER_API_KEY) return { error: "OpenRouter is not configured." };
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json", "HTTP-Referer": "https://cyberlab-ai.vercel.app", "X-Title": "CyberLab AI Agent Research" },
+        body: JSON.stringify({
+          model: "perplexity/sonar",
+          temperature: 0.1,
+          max_tokens: 1200,
+          messages: [
+            { role: "system", content: "Research the current public web. Prioritise primary vendor, maintainer, NIST and CISA sources. Distinguish verified facts from analysis and include dates. Do not invent citations." },
+            { role: "user", content: query },
+          ],
+        }),
+        signal: AbortSignal.timeout(35000),
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      if (!response.ok) return { error: payload.error?.message || `Search provider returned HTTP ${response.status}.` };
+      return {
+        answer: payload.choices?.[0]?.message?.content || "No answer returned.",
+        citations: Array.isArray(payload.citations) ? payload.citations.filter((url: unknown) => typeof url === "string" && url.startsWith("https://")).slice(0, 10) : [],
+        results: Array.isArray(payload.search_results) ? payload.search_results.slice(0, 10) : [],
+        source: "OpenRouter · Perplexity Sonar",
+        note: "Verify important claims against original primary sources.",
+      };
+    },
+  }),
 cve_lookup: tool({
     description: "Search the public NVD vulnerability catalogue by CVE identifier or keyword. Return CVSS severity, summary and references; do not provide exploit instructions.",
     inputSchema: z.object({ query: z.string().min(3).max(120).describe("CVE identifier such as CVE-2024-3094, or a product/vulnerability keyword") }),
