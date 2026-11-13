@@ -53,11 +53,11 @@ export default function AgentPage() {
     setScanStatus("");
     setScanResult(null);
     setPrompt("");
-    const scanMatch = text.match(/\\b(?:nmap|scan|port\\s+scan|scan\\s+ports)\\b[\\s\\S]*?\\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}|(?:\\d{1,3}\\.){3}\\d{1,3})\\b/i);
+    const scanMatch = text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i);
     if (scanMatch) {
-      const portsMatch = text.match(/\\bports?\\s+([0-9,-]+(?:\\s*[-,]\\s*[0-9]+)*)/i);
+      const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
       setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can prepare a bounded Nmap TCP scan on your paired local Kali machine. Before anything runs, confirm the exact target, authorisation reference and scope below. No scan has started." }]);
-      setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\\s+/g, "") || "1-100" });
+      setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\s+/g, "") || "1-100" });
       setBusy(false);
       return;
     }
