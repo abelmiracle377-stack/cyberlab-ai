@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Terminal, ShieldCheck, Github, Globe, Search, FileSearch, Network, Link2, Unplug, Radar, LoaderCircle, AlertTriangle, CheckCircle2, Copy } from "lucide-react";
+import { ArrowLeft, Activity, Terminal, ShieldCheck, Github, Globe, Search, FileSearch, Network, Link2, Unplug, Radar, LoaderCircle, AlertTriangle, CheckCircle2, Copy } from "lucide-react";
 
 const modules = [
   { icon: Globe, title: "Domain OSINT", detail: "RDAP registration, certificate-transparency names and DNS records." },
@@ -11,6 +11,8 @@ const modules = [
   { icon: Terminal, title: "File triage", detail: "SHA-256, file signature, entropy and selected printable-string indicators." },
   { icon: Network, title: "Network evidence", detail: "Parse existing Nmap XML reports into hosts, ports and services." },
 ];
+
+type Snapshot = { platform:string; release:string; architecture:string; uptime_seconds:number|null; load_average_1_5_15:number[]|null; memory_bytes:Record<string,number>; disk_root_bytes:{total:number;used:number;free:number}; process_count:number|null; nmap_available:boolean; collected_at:string; scope:string };
 
 type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; state_summary:{open:number;closed:number;filtered:number}; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
 
@@ -27,6 +29,8 @@ export default function KaliConnectionPage() {
   const [error,setError]=useState("");
   const [result,setResult]=useState<Result|null>(null);
   const [copied,setCopied]=useState(false);
+  const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
+  const [telemetryBusy,setTelemetryBusy]=useState(false);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -39,6 +43,17 @@ export default function KaliConnectionPage() {
       setConnected(true);
     }catch(e){setError(e instanceof Error?e.message:"Could not connect. Start the Kali bridge and try again.");}
     finally{setChecking(false);}
+  }
+
+  async function refreshTelemetry(){
+    setTelemetryBusy(true);setError("");
+    try{
+      const response=await fetch("http://127.0.0.1:8765/system",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Could not retrieve local host telemetry.");
+      setSnapshot(data.metrics as Snapshot);
+    }catch(e){setError(e instanceof Error?e.message:"Local telemetry request failed.");}
+    finally{setTelemetryBusy(false);}
   }
 
   async function runAssessment(event:React.FormEvent){
@@ -101,7 +116,25 @@ export default function KaliConnectionPage() {
       </section>
 
       {connected&&<section className="kali-panel">
-        <h2>4. Run an authorised Nmap assessment</h2>
+        <h2>4. SOC host telemetry</h2>
+        <p>Read-only health snapshot from the paired Kali machine. It does not collect usernames, process names, command lines, files or network payloads.</p>
+        <button className="report-download" type="button" onClick={refreshTelemetry} disabled={telemetryBusy}>{telemetryBusy?<><LoaderCircle size={14}/> Reading local metrics…</>:<><Activity size={14}/> Refresh host telemetry</>}</button>
+        {snapshot&&<div className="network-results">
+          <p><strong>{snapshot.platform} {snapshot.release}</strong> · {snapshot.architecture} · captured {new Date(snapshot.collected_at).toLocaleTimeString()}</p>
+          <div className="kali-module-grid">
+            <div className="kali-module"><Activity size={16}/><div><strong>Uptime</strong><p>{snapshot.uptime_seconds===null?"Unavailable":Math.floor(snapshot.uptime_seconds/3600)+"h "+Math.floor((snapshot.uptime_seconds%3600)/60)+"m"}</p></div></div>
+            <div className="kali-module"><Activity size={16}/><div><strong>Load average</strong><p>{snapshot.load_average_1_5_15?.map(v=>v.toFixed(2)).join(" / ")||"Unavailable"}</p></div></div>
+            <div className="kali-module"><Activity size={16}/><div><strong>Memory available</strong><p>{snapshot.memory_bytes.MemAvailable===undefined?"Unavailable":(snapshot.memory_bytes.MemAvailable/1073741824).toFixed(2)+" GB"}</p></div></div>
+            <div className="kali-module"><Activity size={16}/><div><strong>Root disk free</strong><p>{(snapshot.disk_root_bytes.free/1073741824).toFixed(2)+" GB / "+(snapshot.disk_root_bytes.total/1073741824).toFixed(2)+" GB"}</p></div></div>
+            <div className="kali-module"><Activity size={16}/><div><strong>Process count</strong><p>{snapshot.process_count??"Unavailable"}</p></div></div>
+            <div className="kali-module"><Activity size={16}/><div><strong>Nmap</strong><p>{snapshot.nmap_available?"Installed":"Not found"}</p></div></div>
+          </div>
+          <p className="network-note">{snapshot.scope}</p>
+        </div>}
+      </section>}
+
+      {connected&&<section className="kali-panel">
+        <h2>5. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
