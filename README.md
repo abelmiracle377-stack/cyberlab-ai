@@ -117,3 +117,12 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - YARA and Sigma structural checks are lightweight lint checks, not official compiler or schema validation. Run official tools and test against representative telemetry before deployment.
 - The SOC simulation workspace provides hypothetical file-write, process, persistence and network event scenarios with response guidance and downloadable investigation notes; no host activity is performed.
 - This is not a malware builder. It does not generate deployable malware, destructive payloads, credential theft, stealth, persistence, evasion or command-and-control code. Review and validate detection rules against your own telemetry before operational use.
+
+
+### Persistent investigation cases
+
+- `/investigations` provides authenticated case creation, severity/status tracking, analyst-authored timeline events and Markdown export.
+- `/api/investigations` and `/api/investigations/[id]/events` use the signed-in Supabase session. Row Level Security restricts each case and its events to its owner.
+- Malware Lab can attach YARA/Sigma structural-check results and inert behaviour simulations to a selected case timeline.
+- Apply `supabase/migrations/202611130001_investigation_cases.sql` in the Supabase SQL Editor before using this feature. Supabase URL/key configuration and user sign-in are required; without them, cases are not persisted.
+- The initial integration is analyst-triggered. It does not silently ingest or claim to correlate every module's findings. Additional integrations should retain source, timestamp, severity, provenance and explicit analyst approval.
