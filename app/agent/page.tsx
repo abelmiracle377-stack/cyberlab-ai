@@ -116,7 +116,7 @@ export default function AgentPage() {
             <div className="agent-welcome">
               <div className="agent-welcome-icon"><Bot size={25} /></div>
               <h2>What are we investigating?</h2>
-              <p>The agent can use passive IP, reverse-DNS and DNS intelligence, search public NVD CVE records, explain findings, and help structure authorised security research. Open-weight mode prioritises supported open-weight models and more direct technical depth.</p>
+              <p>The agent can use live public-web research, passive IP/DNS intelligence and NVD CVE lookup, then explain findings and help structure authorised security research. Active TCP checks require the separate scoped lab.</p>
               <div className="agent-prompts">
                 {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for an IP address I provide.", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
               </div>
@@ -134,7 +134,7 @@ export default function AgentPage() {
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Passive IP/DNS/CVE tools · No active scanning · authorised research</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Live web research + passive IP/DNS/CVE tools · Active checks require scope confirmation</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
