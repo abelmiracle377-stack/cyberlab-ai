@@ -18,7 +18,10 @@ export async function proxy(request: NextRequest) {
     },
   });
   const { data: { user } } = await supabase.auth.getUser();
-  const isPublic = request.nextUrl.pathname === "/login" || request.nextUrl.pathname.startsWith("/auth/callback");
+  const path = request.nextUrl.pathname;
+  const isPublic = path === "/login" || path === "/pricing" || path.startsWith("/auth/callback") || path === "/api/paystack/webhook";
+  const isBilling = path === "/billing" || path.startsWith("/api/billing/");
+  const isAdmin = path === "/admin" || path.startsWith("/api/admin/");
   if (!user && !isPublic) {
     if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.json({ error: "Authentication required. Sign in to CyberLab AI." }, { status: 401 });
     const destination = request.nextUrl.clone();
@@ -26,7 +29,14 @@ export async function proxy(request: NextRequest) {
     destination.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(destination);
   }
-  if (user && request.nextUrl.pathname === "/login") return NextResponse.redirect(new URL("/", request.url));
+  if (user && path === "/login") return NextResponse.redirect(new URL("/", request.url));
+  if (user && !isPublic && !isBilling && !isAdmin) {
+    const { data: subscription } = await supabase.from("subscriptions").select("status").eq("user_id", user.id).in("status", ["active", "comped"]).limit(1).maybeSingle();
+    if (!subscription) {
+      if (path.startsWith("/api/")) return NextResponse.json({ error: "An active $10/month subscription is required.", billingRequired: true }, { status: 402 });
+      return NextResponse.redirect(new URL("/billing", request.url));
+    }
+  }
   return response;
 }
 
