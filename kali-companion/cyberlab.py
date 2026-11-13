@@ -132,6 +132,47 @@ def parse_nmap_xml(path: Path) -> dict:
         "note": "Parses an existing Nmap XML report only. It does not launch scans or contact hosts."
     }
 
+def port_scan(target: str, port_spec: str, timeout: int = 60) -> dict:
+    target = target.strip().lower().rstrip('.')
+    try:
+        ipaddress.ip_address(target)
+    except ValueError:
+        if not re.fullmatch(r'(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}', target):
+            raise ValueError('Enter one valid IP address or fully-qualified domain name.')
+    ports = set()
+    for part in port_spec.split(','):
+        if '-' in part:
+            bits = part.split('-')
+            if len(bits) != 2 or not all(x.isdigit() for x in bits): raise ValueError('Use ports like 22,80,443 or 1-100.')
+            start, end = map(int, bits)
+            if start < 1 or end > 65535 or start > end or end - start + 1 > 100: raise ValueError('Each range must contain 1–100 valid ports.')
+            ports.update(range(start, end + 1))
+        else:
+            if not part.isdigit() or not 1 <= int(part) <= 65535: raise ValueError('Ports must be between 1 and 65535.')
+            ports.add(int(part))
+        if len(ports) > 100: raise ValueError('Choose no more than 100 unique ports.')
+    if not ports: raise ValueError('Select at least one TCP port.')
+    nmap = shutil.which('nmap')
+    if not nmap: raise ValueError('Nmap is not installed. Run: sudo apt install -y nmap')
+    command = [nmap, '-n', '-sT', '-sV', '--version-light', '-T2', '--max-retries', '1', '--host-timeout', '55s', '-p', ','.join(map(str, sorted(ports))), '-oX', '-', target]
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError('Nmap exceeded the time limit; try fewer ports.') from exc
+    if completed.returncode not in (0, 1) or not completed.stdout.strip(): raise ValueError((completed.stderr or 'Nmap returned no report.')[:700])
+    root = ET.fromstring(completed.stdout)
+    hosts, all_ports = [], []
+    for host in root.findall('host'):
+        status = host.find('status')
+        addresses = [n.get('addr', '') for n in host.findall('address')]
+        rows = []
+        for node in host.findall('./ports/port'):
+            state, service = node.find('state'), node.find('service')
+            row = {'port': int(node.get('portid', '0')), 'protocol': node.get('protocol', 'tcp'), 'state': state.get('state', 'unknown') if state is not None else 'unknown', 'service': service.get('name', 'unknown') if service is not None else 'unknown', 'product': service.get('product', '') if service is not None else '', 'version': service.get('version', '') if service is not None else ''}
+            rows.append(row); all_ports.append(row)
+        hosts.append({'status': status.get('state', 'unknown') if status is not None else 'unknown', 'addresses': addresses, 'ports': rows})
+    return {'target': target, 'ports_checked': sorted(ports), 'hosts': hosts, 'state_summary': {s: sum(1 for p in all_ports if p['state'] == s) for s in ('open', 'closed', 'filtered')}, 'open_ports': [p for p in all_ports if p['state'] == 'open'], 'note': 'Selected TCP ports are classified as open, closed or filtered when determinable. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. Use only with explicit authorisation.'}
+
 def http_json(url: str, timeout: int = 12):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -294,6 +335,10 @@ def main() -> int:
     domain.add_argument("domain")
     ip = sub.add_parser("ip", help="Look up public IP network registration context")
     ip.add_argument("address")
+    scan = sub.add_parser("port-scan", help="Scan selected TCP ports on one authorised IP or domain using Nmap")
+    scan.add_argument("target", help="One IP address or domain name")
+    scan.add_argument("--ports", default="1-100", help="Up to 100 TCP ports, e.g. 22,80,443 or 1-100")
+    scan.add_argument("--scan-timeout", type=int, default=60, help="Scan timeout in seconds (10–120)")
     cve = sub.add_parser("cve", help="Search the public NIST NVD vulnerability database")
     cve.add_argument("query", help="Vendor, product, version or CVE keyword")
     cve.add_argument("--limit", type=int, default=10)
@@ -310,7 +355,11 @@ def main() -> int:
                       "dependencies": "Python standard library only"}
             save_or_print(result, None)
             return 0
-        if args.command == "triage":
+        if args.command == "port-scan":
+            if args.scan_timeout < 10 or args.scan_timeout > 120:
+                raise ValueError("Scan timeout must be between 10 and 120 seconds.")
+            result = port_scan(args.target, args.ports, args.scan_timeout)
+        elif args.command == "triage":
             result = triage_file(args.file)
         elif args.command == "nmap-xml":
             result = parse_nmap_xml(args.file)
@@ -320,7 +369,7 @@ def main() -> int:
             result = domain_osint(args.domain, args.timeout)
         elif args.command == "ip":
             result = ip_intelligence(args.address, args.timeout)
-        else:
+        elif args.command == "cve":
             result = cve_search(args.query, args.limit, args.timeout)
         save_or_print(result, args.output)
         return 0
