@@ -78,3 +78,12 @@ See [kali-companion/README.md](./kali-companion/README.md) for all commands, dat
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+
+## Live research and authorised active checks
+
+- **Live Research** uses the existing `OPENROUTER_API_KEY` with Perplexity Sonar through OpenRouter to search current public web sources and return citations. Search requests may incur OpenRouter/provider charges.
+- **AI Agent** can call the live research tool as part of a response. Confirm important claims against primary vendor, maintainer, NIST or CISA sources.
+- **Active Security Lab** performs a deliberately limited TCP connection check against a public IPv4 address or domain after the operator confirms the exact target, provides an authorisation reference and retypes the target. It permits up to five selected common TCP ports and blocks private, loopback, link-local and reserved IPv4 ranges.
+- The hosted TCP check is not Nmap, a full port scan, service fingerprinting, a vulnerability scan or proof of exploitability. Use the Kali companion locally for a fuller assessment within a verified written scope.
+- Never test assets without explicit permission. Respect third-party/cloud-provider rules, engagement windows, exclusions and stop conditions.
