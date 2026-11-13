@@ -2,7 +2,7 @@ import { resolve4,resolve6,resolveMx,resolveNs,resolveTxt,resolveCaa } from "nod
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const validDomain=(value:string)=>/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(value);
-async function safe<T>(fn:()=>Promise<T>):Promise<T|{error:string}>{try{return await fn()}catch(e){const code=(e as NodeJS.ErrnoException).code;if(code==="ENODATA"||code==="ENOTFOUND")return [];return {error:code||"DNS_LOOKUP_FAILED"}}}
+async function safe<T>(fn:()=>Promise<T>):Promise<T|{error:string}>{try{return await fn()}catch(e){const code=(e as NodeJS.ErrnoException).code;if(code==="ENODATA"||code==="ENOTFOUND")return [] as unknown as T;return {error:code||"DNS_LOOKUP_FAILED"}}}
 export async function POST(request:Request){
  try{
   const body=await request.json();const domain=String(body.domain||"").trim().toLowerCase().replace(/\.$/,"");
