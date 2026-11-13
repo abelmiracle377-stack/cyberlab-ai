@@ -2,6 +2,10 @@
 
 An open-source AI-assisted cybersecurity research workspace for passive OSINT, IP intelligence, authorised assessment planning, vulnerability research, safe malware triage, binary inspection, network evidence analysis and Kali Linux workflows.
 
+## Product roadmap
+
+The additive capability-parity plan and Kodachi-inspired information architecture are documented in [docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md](./docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md). This plan preserves all existing routes, tools and workflows; planned capabilities are not represented as implemented until verified.
+
 ## Current status
 
 The application includes an AI agent interface, passive IP and DNS intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion. Not every navigation item represents a completed operational integration; use the dedicated tool pages and their returned status/errors to determine availability.
