@@ -40,13 +40,14 @@ create policy "Users manage their investigation cases" on public.investigation_c
 
 drop policy if exists "Users manage their investigation events" on public.investigation_events;
 create policy "Users manage their investigation events" on public.investigation_events
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for all using (auth.uid() = user_id and exists (select 1 from public.investigation_cases c where c.id = case_id and c.user_id = auth.uid()))
+  with check (auth.uid() = user_id and exists (select 1 from public.investigation_cases c where c.id = case_id and c.user_id = auth.uid()));
 
 create or replace function public.touch_investigation_case_updated_at()
 returns trigger language plpgsql as $$
 begin
-  update public.investigation_cases set updated_at = now() where id = new.case_id;
-  return new;
+  update public.investigation_cases set updated_at = now() where id = coalesce(new.case_id, old.case_id);
+  return coalesce(new, old);
 end;
 $$;
 
