@@ -114,4 +114,6 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 
 - The Malware Lab includes a defensive workshop that generates an EICAR antivirus test signature as plain text, synthetic IOC JSON using reserved example domains/documentation IP ranges, inert endpoint-behaviour event records, and starter YARA/Sigma training rules.
 - Generated artefacts are returned as downloadable text/data files. The behaviour fixture describes hypothetical events only; it does not create files, launch processes, modify registry/persistence settings or open network connections.
+- YARA and Sigma structural checks are lightweight lint checks, not official compiler or schema validation. Run official tools and test against representative telemetry before deployment.
+- The SOC simulation workspace provides hypothetical file-write, process, persistence and network event scenarios with response guidance and downloadable investigation notes; no host activity is performed.
 - This is not a malware builder. It does not generate deployable malware, destructive payloads, credential theft, stealth, persistence, evasion or command-and-control code. Review and validate detection rules against your own telemetry before operational use.
