@@ -12,7 +12,7 @@ type OpenRouterModel = {
   architecture?: { modality?: string };
 };
 
-const openWeightProvider = /^(qwen|deepseek|mistralai|meta-llama|nousresearch|cognitivecomputations|google|microsoft|tii|01-ai|internlm)\\//i;
+const openWeightProviders: string[] = ["qwen/", "deepseek/", "mistralai/", "meta-llama/", "nousresearch/", "cognitivecomputations/", "google/", "microsoft/", "tii/", "01-ai/", "internlm/"];
 
 export async function GET() {
   try {
