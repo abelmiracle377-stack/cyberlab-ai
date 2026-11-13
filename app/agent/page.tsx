@@ -44,6 +44,52 @@ export default function AgentPage() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  async function runLocalScan(event: FormEvent) {
+    event.preventDefault();
+    if (!scanRequest || scanBusy) return;
+    const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+    if (!token) {
+      setScanStatus("Kali bridge is not paired in this browser session. Open Kali Connection and pair the local companion first.");
+      return;
+    }
+    const ports: number[] = [];
+    for (const part of scanRequest.ports.split(",")) {
+      const value = part.trim();
+      const range = value.match(/^(\\d{1,5})-(\\d{1,5})$/);
+      if (range) {
+        const start = Number(range[1]), end = Number(range[2]);
+        if (end < start || end - start > 99) { setScanStatus("Each port range must be ascending and contain at most 100 ports."); return; }
+        for (let port = start; port <= end; port++) ports.push(port);
+      } else if (/^\\d{1,5}$/.test(value)) ports.push(Number(value));
+      else { setScanStatus("Enter ports as comma-separated numbers or bounded ranges."); return; }
+    }
+    const unique = [...new Set(ports)];
+    if (!unique.length || unique.length > 100 || unique.some(port => port < 1 || port > 65535)) {
+      setScanStatus("Select between 1 and 100 unique TCP ports from 1 to 65535."); return;
+    }
+    setScanBusy(true); setScanStatus("Submitting approved scan to the paired local Kali bridge…");
+    try {
+      const response = await fetch("http://127.0.0.1:8765/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          target: scanRequest.target,
+          confirmationTarget: scanConfirmation.trim(),
+          authorizationReference: scanReference.trim(),
+          authorizationConfirmed: scanAuthorised,
+          ports: unique,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Local Kali bridge returned HTTP ${response.status}.`);
+      setScanResult(data as LocalScanResult);
+      setScanStatus("Local Nmap assessment completed. Review the evidence below; this is not a vulnerability verdict.");
+      setScanRequest(null);
+    } catch (cause) {
+      setScanStatus(cause instanceof Error ? cause.message : "Could not reach the local Kali bridge. Confirm that it is running and paired on this same computer.");
+    } finally { setScanBusy(false); }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const text = prompt.trim();
