@@ -1,62 +1,128 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Terminal, ShieldCheck, Github, Globe, Search, FileSearch, Network } from "lucide-react";
+import { ArrowLeft, Terminal, ShieldCheck, Github, Globe, Search, FileSearch, Network, Link2, Unplug, Radar, LoaderCircle, AlertTriangle, CheckCircle2, Copy } from "lucide-react";
 
 const modules = [
   { icon: Globe, title: "Domain OSINT", detail: "RDAP registration, certificate-transparency names and DNS records." },
   { icon: Search, title: "IP intelligence", detail: "Public IP network registration context through RDAP." },
   { icon: FileSearch, title: "CVE research", detail: "Search NIST's public vulnerability database by vendor, product or CVE." },
   { icon: Terminal, title: "File triage", detail: "SHA-256, file signature, entropy and selected printable-string indicators." },
-  { icon: Network, title: "Network evidence", detail: "Parse an existing Nmap XML report into hosts, ports and services." },
+  { icon: Network, title: "Network evidence", detail: "Parse existing Nmap XML reports into hosts, ports and services." },
 ];
 
+const ports = [21,22,25,53,80,110,143,443,445,3000,3306,3389,5000,5432,5900,6379,8000,8080,8443,9000];
+type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
+
 export default function KaliConnectionPage() {
+  const [token,setToken]=useState("");
+  const [connected,setConnected]=useState(false);
+  const [checking,setChecking]=useState(false);
+  const [target,setTarget]=useState("");
+  const [confirmationTarget,setConfirmationTarget]=useState("");
+  const [reference,setReference]=useState("");
+  const [confirmed,setConfirmed]=useState(false);
+  const [selectedPorts,setSelectedPorts]=useState<number[]>([22,80,443,8080,8443]);
+  const [running,setRunning]=useState(false);
+  const [error,setError]=useState("");
+  const [result,setResult]=useState<Result|null>(null);
+  const [copied,setCopied]=useState(false);
+
+  async function connectBridge(){
+    setChecking(true);setError("");setConnected(false);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
+      if(!data.nmap)throw new Error("Bridge is running, but Nmap is missing. Run: sudo apt install -y nmap");
+      setConnected(true);
+    }catch(e){setError(e instanceof Error?e.message:"Could not connect. Start the Kali bridge and try again.");}
+    finally{setChecking(false);}
+  }
+
+  async function runAssessment(event:React.FormEvent){
+    event.preventDefault();setRunning(true);setError("");setResult(null);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:selectedPorts})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Local assessment failed.");
+      setResult(data);
+    }catch(e){setError(e instanceof Error?e.message:"Local assessment failed. Check that the Kali bridge is running.");}
+    finally{setRunning(false);}
+  }
+
+  function togglePort(port:number){
+    setSelectedPorts(old=>old.includes(port)?old.filter(p=>p!==port):old.length<20?[...old,port]:old);
+  }
+
+  async function copyCommand(){
+    await navigator.clipboard.writeText("python3 kali-companion/bridge.py");
+    setCopied(true);setTimeout(()=>setCopied(false),1800);
+  }
+
   return <main className="agent-shell">
     <header className="agent-topbar">
-      <Link href="/" className="agent-back"><ArrowLeft size={14}/> Dashboard</Link>
+      <Link href="/" className="agent-back"><ArrowLeft size={14}/> Main dashboard</Link>
       <div className="agent-brand"><Terminal size={16}/> CYBERLAB AI <span className="agent-top-sep">/</span> KALI COMPANION</div>
-      <span className="agent-secure-label"><span/> KALI RESEARCH TOOLKIT</span>
+      <span className="agent-secure-label"><span/> LOCAL BRIDGE</span>
     </header>
     <section className="agent-main">
       <div className="agent-heading">
         <div className="agent-overline">LOCAL INTEGRATION / KALI LINUX</div>
-        <h1>Kali research companion</h1>
-        <p>Run passive OSINT and vulnerability lookups from your Kali terminal, then analyse local files and network evidence. No Python packages or API keys are required.</p>
+        <h1>Connect your Kali machine</h1>
+        <p>Pair this website with the CyberLab companion running on your Kali computer. The connection stays on your machine at 127.0.0.1; no inbound internet port or public tunnel is needed.</p>
       </div>
-      <div className="kali-status"><ShieldCheck size={16}/><div><strong>Companion source available</strong><span>Public-source lookups require an internet connection. File triage and XML parsing run locally.</span></div></div>
+
       <section className="kali-panel">
-        <h2>What it includes</h2>
-        <div className="kali-module-grid">
-          {modules.map(({icon: Icon, title, detail}) => <div className="kali-module" key={title}><Icon size={17}/><div><strong>{title}</strong><p>{detail}</p></div></div>)}
-        </div>
+        <h2>1. Install or update the companion</h2>
+        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}sudo apt update && sudo apt install -y nmap python3{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
+        <p>If you already cloned the repository, update it with <code>git pull origin main</code> from inside the repository folder.</p>
+        <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
+
       <section className="kali-panel">
-        <h2>1. Install on Kali</h2>
-        <p>Open a terminal and run these commands:</p>
-        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}python3 kali-companion/cyberlab.py doctor{"\n"}python3 kali-companion/cyberlab.py --help</pre>
-        <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source and guide</a>
+        <h2>2. Start the local bridge on Kali</h2>
+        <pre>python3 kali-companion/bridge.py</pre>
+        <button className="report-download" type="button" onClick={copyCommand}><Copy size={13}/>{copied?"Copied":"Copy bridge command"}</button>
+        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
       </section>
+
       <section className="kali-panel">
-        <h2>2. Passive OSINT examples</h2>
-        <p>Use a public domain or public IP you are researching:</p>
-        <pre>python3 kali-companion/cyberlab.py domain example.com{"\n"}python3 kali-companion/cyberlab.py dns example.com{"\n"}python3 kali-companion/cyberlab.py ip 8.8.8.8</pre>
-        <p>Domain research combines public RDAP data, certificate-transparency results and DNS. IP lookup returns network registration context, not a person's identity or exact location.</p>
+        <h2>3. Pair this browser with Kali</h2>
+        <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);}} placeholder="Paste the local pairing token"/></label>
+        <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Connect to Kali</>}</button>
+        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local Kali bridge. The pairing token is held only in this page's memory.</p>}
       </section>
+
+      {connected&&<section className="kali-panel">
+        <h2>4. Run an authorised Nmap assessment</h2>
+        <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This runs a TCP connect scan and light service-version detection; no NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
+        <form className="report-editor" onSubmit={runAssessment}>
+          <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
+          <label>Retype exact target to confirm scope<input value={confirmationTarget} onChange={e=>setConfirmationTarget(e.target.value)} placeholder="Type the same target again" required maxLength={253}/></label>
+          <label>Authorisation / ticket reference<input value={reference} onChange={e=>setReference(e.target.value)} placeholder="Your approval or engagement reference" required maxLength={160}/></label>
+          <div className="scope-checks"><h2>TCP ports · up to 20</h2><div className="port-choice-grid">{ports.map(port=><label key={port}><input type="checkbox" checked={selectedPorts.includes(port)} onChange={()=>togglePort(port)}/><span>{port}</span></label>)}</div><small>Selected: {selectedPorts.length}/20. This scan is limited to the selected common TCP ports and one target.</small></div>
+          <div className="scope-checks"><label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I own this target or have explicit written authorisation for this exact assessment and confirm it is in scope.</label></div>
+          <button className="report-download" type="submit" disabled={running||!confirmed||!reference.trim()||target.trim().toLowerCase()!==confirmationTarget.trim().toLowerCase()||selectedPorts.length<1}>{running?<><LoaderCircle size={14}/> Running on Kali…</>:<><Radar size={14}/> Run Nmap assessment locally</>}</button>
+        </form>
+      </section>}
+
+      {error&&<div className="agent-error"><AlertTriangle size={14}/>{error}</div>}
+      {result&&<section className="network-results">
+        <h2>Local Nmap results</h2>
+        <p><strong>{result.target}</strong> · {result.duration_seconds}s · {result.method}</p>
+        <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Service</th><th>State</th><th>Product / version</th></tr></thead><tbody>{result.hosts.flatMap((host,i)=>host.ports.map(p=><tr key={i+"-"+p.port}><td>{host.addresses[0]?.address||result.target}</td><td>{p.port}</td><td>{p.service}</td><td>{p.state}</td><td>{[p.product,p.version].filter(Boolean).join(" ")||"—"}</td></tr>))}</tbody></table></div>
+        <p>{result.note}</p>
+      </section>}
+
       <section className="kali-panel">
-        <h2>3. Vulnerability intelligence</h2>
-        <p>Search NIST's public NVD catalogue:</p>
-        <pre>python3 kali-companion/cyberlab.py cve "OpenSSH" --limit 10</pre>
+        <h2>Other local companion modules</h2>
+        <div className="kali-module-grid">{modules.map(({icon:Icon,title,detail})=><div className="kali-module" key={title}><Icon size={17}/><div><strong>{title}</strong><p>{detail}</p></div></div>)}</div>
       </section>
-      <section className="kali-panel">
-        <h2>4. Local file and network evidence</h2>
-        <pre>python3 kali-companion/cyberlab.py triage ./sample.bin{"\n"}python3 kali-companion/cyberlab.py nmap-xml ./authorised-scan.xml</pre>
-        <p>File triage is static only. Nmap XML is parsed from a report you already have; the companion does not launch scans.</p>
-      </section>
-      <section className="kali-panel">
-        <h2>5. Save results as JSON</h2>
-        <pre>python3 kali-companion/cyberlab.py domain example.com --output domain-report.json{"\n"}python3 kali-companion/cyberlab.py cve "OpenSSH" -o cve-report.json</pre>
-      </section>
-      <div className="kali-warning"><ShieldCheck size={14}/>Scope and safety: the companion makes read-only requests to public data providers. It does not perform active scanning, brute-force enumeration, exploitation, credential attacks, shell execution or malware execution. Use any separate assessment tools only on systems you own or are explicitly authorised to test.</div>
-      <div className="agent-disclaimer"><ShieldCheck size={12}/> Python 3.9+ required. The current Kali companion is a research CLI, not yet an AI-driven local agent or a synchronised website client.</div>
+
+      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. The pairing token is not saved by the website. Scan results are returned to this browser session.</div>
+      <div className="agent-disclaimer"><Unplug size={12}/> To disconnect, close this page or clear the token and press Ctrl+C in the Kali terminal. The main dashboard remains available via the top-left link.</div>
     </section>
   </main>;
 }
