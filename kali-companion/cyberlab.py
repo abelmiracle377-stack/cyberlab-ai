@@ -335,7 +335,7 @@ def main() -> int:
     domain.add_argument("domain")
     ip = sub.add_parser("ip", help="Look up public IP network registration context")
     ip.add_argument("address")
-    scan = sub.add_parser("port-scan", help="Scan selected TCP ports on one authorised IP or domain using Nmap")
+    scan = sub.add_parser("port-scan", aliases=["nmap", "nmap-scan"], help="Run an Nmap TCP port scan on one authorised IP or domain (aliases: nmap, nmap-scan)")
     scan.add_argument("target", help="One IP address or domain name")
     scan.add_argument("--ports", default="1-100", help="Up to 100 TCP ports, e.g. 22,80,443 or 1-100")
     scan.add_argument("--scan-timeout", type=int, default=60, help="Scan timeout in seconds (10–120)")
@@ -355,7 +355,7 @@ def main() -> int:
                       "dependencies": "Python standard library only"}
             save_or_print(result, None)
             return 0
-        if args.command == "port-scan":
+        if args.command in ("port-scan", "nmap", "nmap-scan"):
             if args.scan_timeout < 10 or args.scan_timeout > 120:
                 raise ValueError("Scan timeout must be between 10 and 120 seconds.")
             result = port_scan(args.target, args.ports, args.scan_timeout)
