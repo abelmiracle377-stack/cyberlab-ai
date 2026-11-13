@@ -59,6 +59,14 @@ python -m unittest discover -s kali-companion -p "test_*.py" -v
 
 The GitHub Actions workflow runs those tests and builds the Next.js application on pushes and pull requests to `main`.
 
+
+### Domain and privacy verification
+
+- `/verification` adds passive domain mail/DNS posture checks: SPF, DMARC, common DKIM selectors, MX and CAA.
+- Historical URL discovery queries the Internet Archive CDX API for public captures under a validated domain. Archived URLs are not proof of current availability or safety.
+- Browser fingerprint transparency reads browser-exposed attributes locally in the browser; it does not submit them to CyberLab's server.
+- This first verification slice does not claim to perform a full DNS leak test, WebRTC STUN test, TLS fingerprint test, global DNS propagation test, or anonymity verification. Those require dedicated controlled infrastructure and explicit privacy handling.
+
 ## Kali companion
 
 The Kali companion now includes passive domain OSINT (RDAP, certificate transparency and DNS), public IP RDAP context, NIST NVD CVE search, static file triage and existing Nmap XML parsing. It uses Python's standard library and requires no pip packages or API keys.
