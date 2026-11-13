@@ -55,12 +55,12 @@ export default function AgentPage() {
     const ports: number[] = [];
     for (const part of scanRequest.ports.split(",")) {
       const value = part.trim();
-      const range = value.match(/^(\\d{1,5})-(\\d{1,5})$/);
+      const range = value.match(/^(\d{1,5})-(\d{1,5})$/);
       if (range) {
         const start = Number(range[1]), end = Number(range[2]);
         if (end < start || end - start > 99) { setScanStatus("Each port range must be ascending and contain at most 100 ports."); return; }
         for (let port = start; port <= end; port++) ports.push(port);
-      } else if (/^\\d{1,5}$/.test(value)) ports.push(Number(value));
+      } else if (/^\d{1,5}$/.test(value)) ports.push(Number(value));
       else { setScanStatus("Enter ports as comma-separated numbers or bounded ranges."); return; }
     }
     const unique = [...new Set(ports)];
