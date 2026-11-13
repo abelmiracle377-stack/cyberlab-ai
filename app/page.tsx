@@ -33,6 +33,7 @@ const groups = [
   ]},
   { title: "OPERATIONS", items: [
     { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
+    { label: "SOC Host Telemetry", icon: Activity, href: "/kali-connection" },
     { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
     { label: "Settings", icon: Settings2, href: "/settings" },
   ]},
@@ -53,6 +54,7 @@ const modules = [
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
   { name:"Evidence Vault", desc:"Keep investigation notes in a browser-local encrypted vault.", icon:FileLock2, state:"LOCAL", href:"/evidence-vault" },
+  { name:"SOC Host Telemetry", desc:"Read-only, on-demand health metrics from a paired local Kali host.", icon:Activity, state:"LOCAL / ON DEMAND", href:"/kali-connection" },
 ];
 
 type Cockpit = "COMMAND" | "SOC" | "VITALS";
