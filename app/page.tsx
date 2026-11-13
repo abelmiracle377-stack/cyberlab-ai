@@ -15,6 +15,7 @@ const navigation = [
   { label: "Penetration Testing", icon: Radar, group: "security" },
   { label: "Active Security Lab", icon: Radar, group: "security" },
   { label: "Live Research", icon: Globe, group: "intelligence" },
+  { label: "Website Assessment", icon: Globe2, group: "intelligence" },
   { label: "Vulnerability Lab", icon: Bug, group: "security" },
   { label: "Malware Lab", icon: Shield, group: "research" },
   { label: "Reverse Engineering", icon: Code2, group: "research" },
@@ -32,6 +33,7 @@ const modules = [
   { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Available" },
   { name: "Active Security Lab", description: "Run limited TCP reachability checks against explicitly authorised public targets.", icon: Radar, status: "Controlled" },
   { name: "Live Research", description: "Search current public advisories, CVEs, vendor bulletins and technical references.", icon: Globe, status: "Available" },
+  { name: "Website Assessment", description: "Review public website security headers, HTTPS and cookie settings from a URL.", icon: Globe2, status: "Available" },
   { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Available" },
   { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Available" },
   { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Available" },
@@ -55,7 +57,7 @@ export default function Home() {
   const SelectedIcon = selectedModule?.icon ?? Bot;
 
   function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Active Security Lab": "/active-security-lab", "Live Research": "/research", "Kali Connection": "/kali-connection" };
+    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Active Security Lab": "/active-security-lab", "Live Research": "/research", "Website Assessment": "/website-assessment", "Kali Connection": "/kali-connection" };
     if (routes[name]) { window.location.href = routes[name]; return; }
     setActive(name);
     setNotice("");
