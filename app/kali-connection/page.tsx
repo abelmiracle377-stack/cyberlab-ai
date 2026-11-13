@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Activity, Terminal, ShieldCheck, Github, Globe, Search, FileSearch, Network, Link2, Unplug, Radar, LoaderCircle, AlertTriangle, CheckCircle2, Copy } from "lucide-react";
+import InvestigationLink from "@/components/investigation-link";
 
 const modules = [
   { icon: Globe, title: "Domain OSINT", detail: "RDAP registration, certificate-transparency names and DNS records." },
@@ -130,6 +131,7 @@ export default function KaliConnectionPage() {
             <div className="kali-module"><Activity size={16}/><div><strong>Nmap</strong><p>{snapshot.nmap_available?"Installed":"Not found"}</p></div></div>
           </div>
           <p className="network-note">{snapshot.scope}</p>
+          <InvestigationLink source="kali-soc-telemetry" eventType="host-snapshot" title={`Kali host snapshot: ${snapshot.platform} ${snapshot.release}`} severity="informational" details={{ ...snapshot }} />
         </div>}
       </section>}
 
