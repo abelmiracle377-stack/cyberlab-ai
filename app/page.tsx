@@ -1,212 +1,118 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  Activity, ArrowLeft, ArrowRight, Bell, Bot, Bug, Cable, CircleHelp, Code2, Database, Globe,
-  FileSearch, Fingerprint, Globe2, Layers3, Network, FileLock2, Radar, Shield, ShieldCheck, Terminal, Workflow,
+  Activity, ArrowRight, Bell, Bot, Bug, Cable, ChevronDown, CircleHelp, Code2, Command,
+  Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
+  Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
 } from "lucide-react";
 
-const navigation = [
-  { label: "Overview", icon: Layers3, group: "workspace" },
-  { label: "AI Agent", icon: Bot, group: "workspace" },
-  { label: "IP Intelligence", icon: Globe2, group: "intelligence" },
-  { label: "OSINT", icon: Fingerprint, group: "intelligence" },
-  { label: "Network Analysis", icon: Network, group: "security" },
-  { label: "Penetration Testing", icon: Radar, group: "security" },
-  { label: "Active Security Lab", icon: Radar, group: "security" },
-  { label: "Live Research", icon: Globe, group: "intelligence" },
-  { label: "Website Assessment", icon: Globe2, group: "intelligence" },
-  { label: "Vulnerability Lab", icon: Bug, group: "security" },
-  { label: "Malware Lab", icon: Shield, group: "research" },
-  { label: "Reverse Engineering", icon: Code2, group: "research" },
-  { label: "Reports", icon: FileSearch, group: "research" },
-  { label: "Evidence Vault", icon: FileLock2, group: "research" },
-  { label: "Kali Connection", icon: Terminal, group: "system" },
-  { label: "Settings", icon: Workflow, group: "system" },
+const groups = [
+  { title: "COMMAND CENTER", items: [
+    { label: "Overview", icon: Layers3, href: "/" },
+    { label: "AI Agent", icon: Bot, href: "/agent" },
+  ]},
+  { title: "INTELLIGENCE", items: [
+    { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
+    { label: "OSINT", icon: Fingerprint, href: "/osint" },
+    { label: "Live Research", icon: Globe, href: "/research" },
+    { label: "Website Assessment", icon: Globe2, href: "/website-assessment" },
+  ]},
+  { title: "ASSESSMENT", items: [
+    { label: "Network Analysis", icon: Network, href: "/network-analysis" },
+    { label: "Penetration Testing", icon: Radar, href: "/penetration-testing" },
+    { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
+    { label: "Vulnerability Lab", icon: Bug, href: "/vulnerability-lab" },
+  ]},
+  { title: "ANALYSIS & EVIDENCE", items: [
+    { label: "Malware Lab", icon: Shield, href: "/malware-lab" },
+    { label: "Reverse Engineering", icon: Code2, href: "/reverse-engineering" },
+    { label: "Reports", icon: FileSearch, href: "/reports" },
+    { label: "Evidence Vault", icon: FileLock2, href: "/evidence-vault" },
+  ]},
+  { title: "OPERATIONS", items: [
+    { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
+    { label: "Settings", icon: Settings2, href: "/settings" },
+  ]},
 ];
 
 const modules = [
-  { name: "AI Agent", description: "Coordinate scoped security workflows with tool-assisted analysis.", icon: Bot, status: "Foundation" },
-  { name: "IP Intelligence", description: "Inspect IP, ASN, DNS, hosting and network ownership signals.", icon: Globe2, status: "Available" },
-  { name: "OSINT", description: "Organise public-source findings with provenance and confidence.", icon: Fingerprint, status: "Available" },
-  { name: "Network Analysis", description: "Review network evidence and interpret authorised scan results.", icon: Network, status: "Available" },
-  { name: "Penetration Testing", description: "Plan and document assessments within an explicit scope.", icon: Radar, status: "Available" },
-  { name: "Active Security Lab", description: "Run limited TCP reachability checks against explicitly authorised public targets.", icon: Radar, status: "Controlled" },
-  { name: "Live Research", description: "Search current public advisories, CVEs, vendor bulletins and technical references.", icon: Globe, status: "Available" },
-  { name: "Website Assessment", description: "Review public website security headers, HTTPS and cookie settings from a URL.", icon: Globe2, status: "Available" },
-  { name: "Vulnerability Lab", description: "Research CVEs, assess impact and prioritise remediation.", icon: Bug, status: "Available" },
-  { name: "Malware Lab", description: "Triage suspicious files through safe, isolated analysis workflows.", icon: Shield, status: "Available" },
-  { name: "Reverse Engineering", description: "Inspect software behaviour, formats and application components.", icon: Code2, status: "Available" },
-  { name: "Reports", description: "Turn verified evidence into structured technical reports.", icon: FileSearch, status: "Available" },
-  { name: "Evidence Vault", description: "Store investigation notes in a passphrase-encrypted local vault.", icon: FileLock2, status: "Available" },
+  { name:"AI Agent", desc:"Coordinate scoped security workflows with tool-assisted analysis.", icon:Bot, state:"CONFIG CHECK", href:"/agent" },
+  { name:"IP Intelligence", desc:"Inspect public IP, ASN, DNS, hosting and ownership signals.", icon:Globe2, state:"AVAILABLE", href:"/ip-intelligence" },
+  { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
+  { name:"Network Analysis", desc:"Import and interpret Nmap XML evidence.", icon:Network, state:"IMPORT / ANALYSE", href:"/network-analysis" },
+  { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
+  { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
+  { name:"Live Research", desc:"Research current CVEs, advisories and technical references.", icon:Globe, state:"PROVIDER REQUIRED", href:"/research" },
+  { name:"Website Assessment", desc:"Passive HTTPS, headers and cookie security review.", icon:Globe2, state:"AVAILABLE", href:"/website-assessment" },
+  { name:"Vulnerability Lab", desc:"Research CVEs, impact and remediation guidance.", icon:Bug, state:"AVAILABLE", href:"/vulnerability-lab" },
+  { name:"Malware Lab", desc:"Static triage of supplied files or supported sample URLs.", icon:Shield, state:"ANALYSIS", href:"/malware-lab" },
+  { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
+  { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
+  { name:"Evidence Vault", desc:"Keep investigation notes in a browser-local encrypted vault.", icon:FileLock2, state:"LOCAL", href:"/evidence-vault" },
 ];
 
-const capabilities = [
-  "Evidence-first analysis and source attribution",
-  "Human approval for sensitive operations",
-  "Provider and model selection",
-  "Scoped, authorised assessment workflows",
-  "Reproducible findings and audit history",
-  "Kali Linux companion integration",
-];
+type Cockpit = "COMMAND" | "SOC" | "VITALS";
 
 export default function Home() {
-  const [active, setActive] = useState("Overview");
-  const [notice, setNotice] = useState("");
-  const selectedModule = modules.find((module) => module.name === active);
-  const SelectedIcon = selectedModule?.icon ?? Bot;
+  const [activeCockpit,setActiveCockpit]=useState<Cockpit>("COMMAND");
+  const [query,setQuery]=useState("");
+  const [mobileNav,setMobileNav]=useState(false);
+  const [navCollapsed,setNavCollapsed]=useState(false);
+  const [notice,setNotice]=useState("");
+  const filtered=useMemo(()=>modules.filter(m=>(m.name+" "+m.desc).toLowerCase().includes(query.toLowerCase())),[query]);
+  const activeLabel=groups.flatMap(g=>g.items).find(i=>i.href==="/")?.label ?? "Overview";
 
-  function selectModule(name: string) {
-    const routes: Record<string, string> = { "AI Agent": "/agent", "IP Intelligence": "/ip-intelligence", "Network Analysis": "/network-analysis", "OSINT": "/osint", "Malware Lab": "/malware-lab", "Reverse Engineering": "/reverse-engineering", "Vulnerability Lab": "/vulnerability-lab", "Reports": "/reports", "Evidence Vault": "/evidence-vault", "Penetration Testing": "/penetration-testing", "Active Security Lab": "/active-security-lab", "Live Research": "/research", "Website Assessment": "/website-assessment", "Kali Connection": "/kali-connection" };
-    if (routes[name]) { window.location.href = routes[name]; return; }
-    setActive(name);
-    setNotice("");
-  }
-
-  return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><ShieldCheck size={19} /></div>
-          <div>
-            <div className="brand-name">CyberLab AI</div>
-            <div className="brand-sub">SECURITY RESEARCH WORKSPACE</div>
-          </div>
+  return <div className={`shell command-shell ${mobileNav?"nav-open":""} ${navCollapsed?"nav-collapsed":""}`}>
+    <aside className="sidebar command-sidebar">
+      <div className="brand command-brand">
+        <div className="brand-mark"><ShieldCheck size={20}/></div>
+        <div className="brand-copy"><div className="brand-name">CYBERLAB<span className="brand-ai">/AI</span></div><div className="brand-sub">SECURITY OPERATIONS SYSTEM</div></div>
+        <button className="mobile-close" onClick={()=>setMobileNav(false)} aria-label="Close navigation"><X size={17}/></button>
+      </div>
+      <div className="command-status"><span className="status-led amber-led"/><span>LOCAL WORKSPACE</span><b>EARLY ACCESS</b></div>
+      <div className="nav-search"><Search size={14}/><input aria-label="Search tools" placeholder="Search modules..." value={query} onChange={e=>setQuery(e.target.value)}/><kbd>/</kbd></div>
+      <nav className="command-nav" aria-label="Main navigation">
+        {groups.map(group=><section className="nav-group" key={group.title}>
+          <div className="workspace-label">{group.title}</div>
+          {group.items.map(item=>{const Icon=item.icon;return <a key={item.href} href={item.href} className={`nav-item ${item.href==="/"?"active":""}`} onClick={()=>setMobileNav(false)}><span className="nav-icon"><Icon size={15}/></span><span className="nav-label">{item.label}</span>{item.href==="/agent"&&<span className="nav-tag">AI</span>}</a>})}
+        </section>)}
+      </nav>
+      <div className="sidebar-bottom">
+        <div className="connection-card">
+          <div className="connection-head"><span>LOCAL KALI BRIDGE</span><span className="connection-state">PAIR TO CHECK</span></div>
+          <div className="connection-copy">Nmap execution is available only through the paired local companion and explicit scan approval.</div>
+          <a className="connection-link" href="/kali-connection">Open connection <ArrowRight size={11}/></a>
         </div>
-
-        <div className="workspace-label">WORKSPACE</div>
-        <nav className="nav-list" aria-label="Main navigation">
-          {navigation.filter((item) => item.group === "workspace").map((item) => {
-            const Icon = item.icon;
-            return <button key={item.label} className={`nav-item ${active === item.label ? "active" : ""}`} onClick={() => selectModule(item.label)}><span className="nav-icon"><Icon size={15} /></span>{item.label}</button>;
-          })}
-        </nav>
-        <div className="workspace-label">INTELLIGENCE</div>
-        <nav className="nav-list" aria-label="Intelligence">
-          {navigation.filter((item) => item.group === "intelligence").map((item) => {
-            const Icon = item.icon;
-            return <button key={item.label} className={`nav-item ${active === item.label ? "active" : ""}`} onClick={() => selectModule(item.label)}><span className="nav-icon"><Icon size={15} /></span>{item.label}</button>;
-          })}
-        </nav>
-        <div className="workspace-label">SECURITY OPERATIONS</div>
-        <nav className="nav-list" aria-label="Security operations">
-          {navigation.filter((item) => item.group === "security").map((item) => {
-            const Icon = item.icon;
-            return <button key={item.label} className={`nav-item ${active === item.label ? "active" : ""}`} onClick={() => selectModule(item.label)}><span className="nav-icon"><Icon size={15} /></span>{item.label}</button>;
-          })}
-        </nav>
-        <div className="workspace-label">RESEARCH & OUTPUT</div>
-        <nav className="nav-list" aria-label="Research and output">
-          {navigation.filter((item) => item.group === "research").map((item) => {
-            const Icon = item.icon;
-            return <button key={item.label} className={`nav-item ${active === item.label ? "active" : ""}`} onClick={() => selectModule(item.label)}><span className="nav-icon"><Icon size={15} /></span>{item.label}</button>;
-          })}
-        </nav>
-        <div className="nav-divider" />
-        <div className="workspace-label">SYSTEM</div>
-        <nav className="nav-list" aria-label="System">
-          {navigation.filter((item) => item.group === "system").map((item) => {
-            const Icon = item.icon;
-            return <button key={item.label} className={`nav-item ${active === item.label ? "active" : ""}`} onClick={() => selectModule(item.label)}><span className="nav-icon"><Icon size={15} /></span>{item.label}</button>;
-          })}
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="connection-card">
-            <div className="connection-head"><span>AI model service</span><span className="connection-state">CHECK IN AGENT</span></div>
-            <div className="connection-copy">Open the agent console to check model availability and send a test message.</div>
-            <button className="connection-link" onClick={() => selectModule("Settings")}>Configure providers <ArrowRight size={11} style={{ verticalAlign: "middle", marginLeft: 3 }} /></button>
-          </div>
-          <div className="profile">
-            <div className="avatar">AM</div>
-            <div><div className="profile-name">Local workspace</div><div className="profile-role">Authentication not configured</div></div>
-          </div>
+        <div className="profile"><div className="avatar">CL</div><div><div className="profile-name">Research workspace</div><div className="profile-role">Authentication optional</div></div></div>
+      </div>
+    </aside>
+    {mobileNav&&<button className="nav-scrim" aria-label="Close navigation" onClick={()=>setMobileNav(false)}/>}
+    <main className="main command-main">
+      <header className="topbar command-topbar">
+        <div className="topbar-left"><button className="mobile-menu" onClick={()=>setMobileNav(true)} aria-label="Open navigation"><Menu size={18}/></button><div className="breadcrumb">CYBERLAB <span>/</span> <strong>COMMAND CENTER</strong></div></div>
+        <div className="top-actions"><div className="environment"><span className="dot amber-dot"/>RESEARCH ENVIRONMENT</div><button className="icon-button" aria-label="Notifications" onClick={()=>setNotice("No notifications have been generated in this session.")}><Bell size={15}/></button><button className="icon-button" aria-label="Help" onClick={()=>setNotice("Select a module to open its dedicated workspace. Tool availability is shown only when verified.")}><CircleHelp size={15}/></button></div>
+      </header>
+      <div className="content command-content">
+        <div className="command-hero">
+          <div><div className="eyebrow">CONTROL PLANE // 001</div><h1>Security Operations<span className="heading-cursor">_</span></h1><p>Intelligence. Assessment. Analysis. Evidence.</p></div>
+          <div className="hero-stamp"><span className="status-led amber-led"/>SYSTEM STATE: PARTIAL CONFIGURATION<br/><small>NO BACKGROUND SCANS RUNNING</small></div>
         </div>
-      </aside>
-
-      <main className="main">
-        <header className="topbar">
-          <div className="breadcrumb">CyberLab AI <span style={{ color: "#526057", margin: "0 8px" }}>/</span> <strong>{active}</strong></div>
-          <div className="top-actions">
-            <div className="environment"><span className="dot" /> RESEARCH WORKSPACE</div><a href="/account" className="connection-link">Account</a>
-            <button className="icon-button" aria-label="Help" onClick={() => setNotice("Choose an available workspace below. Each tool reports its own live lookup or service status.")}><CircleHelp size={14} /></button>
-            <button className="icon-button" aria-label="Notifications" onClick={() => setNotice("No system notifications yet.")}><Bell size={14} /></button>
-          </div>
-        </header>
-
-        <div className="content">
-          {active === "Overview" ? (
-            <>
-              <div className="eyebrow">CONTROL CENTER / 001</div>
-              <div className="page-heading">
-                <div><h1>Security workspace</h1><div className="subtitle">A focused environment for intelligence, analysis and authorised security research.</div></div>
-                <div className="date-stamp">CYBERLAB AI <span style={{ color: "#4d5b52" }}>/</span> EARLY ACCESS</div>
-              </div>
-
-              {notice && <div className="notice"><CircleHelp size={15} className="notice-icon" /><div><div className="notice-title">Workspace message</div><div className="notice-text">{notice}</div></div></div>}
-              <div className="notice">
-                <ShieldCheck size={16} className="notice-icon" />
-                <div><div className="notice-title">Start an investigation</div><div className="notice-text">Choose an operational tool. Live Research uses Perplexity Sonar through OpenRouter. Active Security Lab offers limited TCP reachability checks only after exact target and authorisation confirmation.</div></div>
-              </div>
-
-              <div className="section-heading"><h2>Workspace status</h2><span className="section-meta">CURRENT CAPABILITIES</span></div>
-              <div className="metrics">
-                <div className="metric"><div className="metric-top"><span>AI runtime</span><Bot size={14} className="metric-symbol" /></div><div className="metric-value" style={{ color: "#d7b77b" }}>Check in Agent</div><div className="metric-note">Live provider status appears in chat</div></div>
-                <div className="metric"><div className="metric-top"><span>Connected tools</span><Cable size={14} className="metric-symbol" /></div><div className="metric-value">3</div><div className="metric-note">Passive intelligence routes</div></div>
-                <div className="metric"><div className="metric-top"><span>Saved projects</span><Database size={14} className="metric-symbol" /></div><div className="metric-value">Local</div><div className="metric-note">Evidence vault stays in browser</div></div>
-                <div className="metric"><div className="metric-top"><span>Security events</span><Activity size={14} className="metric-symbol" /></div><div className="metric-value">Manual</div><div className="metric-note">No background monitoring</div></div>
-              </div>
-
-              <div className="dashboard-grid">
-                <section>
-                  <div className="section-heading"><h2>AI research agent</h2><span className="section-meta">CORE SERVICE</span></div>
-                  <div className="panel">
-                    <div className="panel-header"><span className="panel-title">Agent workspace</span><span className="panel-kicker">AGENT / 00</span></div>
-                    <div className="agent-placeholder">
-                      <div className="agent-orb"><Bot size={22} /></div>
-                      <div className="agent-title">Open the AI research agent</div>
-                      <div className="agent-desc">Select a supported model, send a question, and receive a streamed response with public research and passive intelligence tools when available.</div>
-                      <a className="connection-link" href="/agent">Launch AI Agent <ArrowRight size={12} /></a>
-                    </div>
-                  </div>
-                </section>
-                <section>
-                  <div className="section-heading"><h2>System activity</h2><span className="section-meta">RECENT</span></div>
-                  <div className="panel">
-                    <div className="panel-header"><span className="panel-title">Available tools</span><span className="panel-kicker">LOCAL STATUS</span></div>
-                    <div className="panel-body activity-list">
-                      <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">IP Intelligence</div><div className="activity-detail">User-entered public IP lookup</div></div><span className="activity-time">DONE</span></div>
-                      <div className="activity-row"><span className="activity-bullet" /><div><div className="activity-name">Domain OSINT</div><div className="activity-detail">RDAP and certificate transparency</div></div><span className="activity-time">DONE</span></div>
-                      <div className="activity-row"><span className="activity-bullet" style={{ background: "#b38d54" }} /><div><div className="activity-name">AI model</div><div className="activity-detail">Choose a model in the agent console</div></div><span className="activity-time">CHECK</span></div>
-                      <div className="activity-row"><span className="activity-bullet" style={{ background: "#b38d54" }} /><div><div className="activity-name">Network analysis</div><div className="activity-detail">Import an existing Nmap XML report</div></div><span className="activity-time">READY</span></div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <div className="section-heading"><h2>Research modules</h2><span className="section-meta">OPEN A WORKSPACE</span></div>
-              <div className="modules-grid">
-                {modules.filter((module) => module.name !== "AI Agent").map((module) => {
-                  const Icon = module.icon;
-                  return <button className="module-card" key={module.name} onClick={() => selectModule(module.name)}>
-                    <div className="module-top"><span className="module-icon"><Icon size={15} /></span><span className="module-status">{module.status}</span></div>
-                    <div className="module-name">{module.name}</div><div className="module-desc">{module.description}</div>
-                  </button>;
-                })}
-              </div>
-            </>
-          ) : (
-            <div className="module-page">
-              <button className="back-link" onClick={() => selectModule("Overview")}><ArrowLeft size={12} style={{ verticalAlign: "middle", marginRight: 5 }} /> Back to overview</button>
-              <div className="eyebrow">WORKSPACE</div>
-              <div className="page-heading"><div><h1>{active}</h1><div className="subtitle">Open the corresponding tool to run a real lookup or analysis.</div></div></div>
-              <div className="panel module-page-panel"><h2 style={{ fontSize: 16, margin: "18px 0 7px" }}>{active}</h2><p>Use the dedicated workspace to submit your own target or evidence. No target is pre-filled and no investigation runs automatically.</p><div className="capability-list"><a className="connection-link" href={active === "AI Agent" ? "/agent" : active === "IP Intelligence" ? "/ip-intelligence" : active === "OSINT" ? "/osint" : active === "Network Analysis" ? "/network-analysis" : "/reports"}>Open {active} <ArrowRight size={12} /></a></div></div>
-            </div>
-
-          )}
-          <div className="footer-note">CYBERLAB AI · OPEN-SOURCE SECURITY RESEARCH WORKSPACE · USE ONLY ON SYSTEMS YOU OWN OR ARE AUTHORISED TO ASSESS</div>
+        <div className="cockpit-bar"><div className="cockpit-label"><Command size={13}/> COCKPIT MODE</div><div className="cockpit-switch">{(["COMMAND","SOC","VITALS"] as Cockpit[]).map(mode=><button key={mode} className={activeCockpit===mode?"selected":""} onClick={()=>setActiveCockpit(mode)}>{mode}</button>)}</div><button className="collapse-nav" onClick={()=>setNavCollapsed(v=>!v)}><ChevronDown size={13}/> {navCollapsed?"EXPAND NAV":"COMPACT NAV"}</button></div>
+        {notice&&<div className="notice command-notice"><CircleHelp size={15}/>{notice}<button onClick={()=>setNotice("")}>DISMISS</button></div>}
+        <div className="section-heading"><h2>{activeCockpit==="COMMAND"?"OPERATIONAL SNAPSHOT":activeCockpit==="SOC"?"SOC / TELEMETRY READINESS":"SYSTEM VITALS / CONNECTIVITY"}</h2><span className="section-meta">LIVE STATE · NO SIMULATED METRICS</span></div>
+        <div className="metrics command-metrics">
+          <div className="metric"><div className="metric-top"><span>AI RUNTIME</span><Bot size={14}/></div><div className="metric-value warning-value">NOT VERIFIED</div><div className="metric-note">Check provider in AI Agent</div></div>
+          <div className="metric"><div className="metric-top"><span>LOCAL TOOL BRIDGE</span><Cable size={14}/></div><div className="metric-value warning-value">NOT PAIRED</div><div className="metric-note">Kali companion connection required</div></div>
+          <div className="metric"><div className="metric-top"><span>EVIDENCE STORAGE</span><Database size={14}/></div><div className="metric-value">BROWSER LOCAL</div><div className="metric-note">Encrypted vault workspace</div></div>
+          <div className="metric"><div className="metric-top"><span>MONITORING</span><Activity size={14}/></div><div className="metric-value">MANUAL</div><div className="metric-note">No continuous host telemetry</div></div>
         </div>
-      </main>
-    </div>
-  );
+        <div className="section-heading module-section-heading"><h2>MODULE DIRECTORY</h2><span className="section-meta">{filtered.length} MODULES · SELECT TO OPEN</span></div>
+        <div className="module-search-mobile"><Search size={14}/><input placeholder="Filter operational modules..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
+        <div className="modules-grid command-modules">{filtered.map(module=>{const Icon=module.icon;return <a className="module-card command-module" key={module.name} href={module.href}><div className="module-top"><span className="module-icon"><Icon size={16}/></span><span className="module-status">{module.state}</span></div><div className="module-name">{module.name}</div><div className="module-desc">{module.desc}</div><div className="module-open">OPEN MODULE <ArrowRight size={12}/></div></a>})}</div>
+        {filtered.length===0&&<div className="empty-search">NO MODULE MATCHES THAT QUERY. TRY ANOTHER TERM.</div>}
+        <div className="command-footer"><span>CYBERLAB AI // SECURITY RESEARCH WORKSPACE</span><span>AUTHORISED SYSTEMS ONLY · HUMAN APPROVAL REQUIRED</span></div>
+      </div>
+    </main>
+  </div>;
 }
