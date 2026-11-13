@@ -7,6 +7,7 @@ import hmac
 import ipaddress
 import json
 import os
+import platform
 import re
 import secrets
 import shutil
@@ -111,6 +112,44 @@ def parse_report(xml_text: str) -> dict:
     }
 
 
+def system_snapshot() -> dict:
+    """Return bounded, non-sensitive host health metrics; never process args or user data."""
+    memory = {}
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            key, value = line.split(":", 1)
+            if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
+                memory[key] = int(value.strip().split()[0]) * 1024
+    except (OSError, ValueError, IndexError):
+        memory = {}
+    try:
+        uptime_seconds = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
+    except (OSError, ValueError, IndexError):
+        uptime_seconds = None
+    try:
+        process_count = sum(1 for entry in Path("/proc").iterdir() if entry.name.isdigit())
+    except OSError:
+        process_count = None
+    disk = shutil.disk_usage("/")
+    try:
+        load_average = list(os.getloadavg())
+    except (AttributeError, OSError):
+        load_average = None
+    return {
+        "platform": platform.system(),
+        "release": platform.release(),
+        "architecture": platform.machine(),
+        "uptime_seconds": round(uptime_seconds) if uptime_seconds is not None else None,
+        "load_average_1_5_15": load_average,
+        "memory_bytes": memory,
+        "disk_root_bytes": {"total": disk.total, "used": disk.used, "free": disk.free},
+        "process_count": process_count,
+        "nmap_available": bool(shutil.which("nmap")),
+        "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "scope": "Local host health summary only; no usernames, process names, command lines, files or network payloads are collected.",
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CyberLabKaliBridge/1.0"
 
@@ -152,10 +191,13 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin", "")
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
-        if urlparse(self.path).path != "/health":
+        path = urlparse(self.path).path
+        if path not in {"/health", "/system"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
+        if path == "/system":
+            return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
         self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
 
     def do_POST(self):
