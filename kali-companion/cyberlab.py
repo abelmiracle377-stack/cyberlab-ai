@@ -320,7 +320,7 @@ def main() -> int:
     print_banner()
     parser = argparse.ArgumentParser(
         description="CyberLab AI: passive OSINT, vulnerability intelligence and local evidence analysis.",
-        epilog="No port scanning, exploitation, sample execution, brute-force enumeration or private-data lookup is performed."
+        epilog="Port scanning is limited to one explicitly authorised IP/domain and up to 100 selected TCP ports. No exploitation, sample execution, brute-force enumeration or private-data lookup is performed."
     )
     parser.add_argument("--timeout", type=int, default=12, help="HTTP timeout in seconds (default: 12)")
     sub = parser.add_subparsers(dest="command", required=True)
