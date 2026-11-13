@@ -20,14 +20,14 @@ npm run dev
 
 Open http://localhost:3000.
 
-For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `.env.local` and Vercel Project Settings → Environment Variables. Configure the Supabase Auth Site URL and redirect URL as `https://cyberlab-ai.vercel.app/auth/callback` (and your local callback for development). Once both variables are present, `proxy.ts` protects workspace pages and API routes, and `/login` supports email/password sign-in and account creation. Use Supabase Row Level Security for any future user-owned database tables. Do not use a service-role key in the browser.\n\nFor AI Gateway access, add `AI_GATEWAY_API_KEY` to `.env.local` only if Vercel OIDC is not available in your runtime. Open-weight mode uses models available through the configured AI Gateway catalogue; it does not guarantee a model is refusal-free or remove CyberLab safety controls. Never commit secrets or place keys in browser code. On Vercel, use Project Settings → Environment Variables, mark credentials Sensitive, and scope them only to required environments.
+For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `.env.local` and Vercel Project Settings → Environment Variables. Configure the Supabase Auth Site URL and redirect URL as `https://cyberlab-ai.vercel.app/auth/callback` (and your local callback for development). Once both variables are present, `proxy.ts` protects workspace pages and API routes, and `/login` supports email/password sign-in and account creation. Use Supabase Row Level Security for any future user-owned database tables. Do not use a service-role key in the browser.\n\nFor AI access, create an OpenRouter API key and add `OPENROUTER_API_KEY` to `.env.local` or Vercel Project Settings → Environment Variables. Never commit secrets or place keys in browser code. Open-weight mode filters the OpenRouter catalogue for models with tool support and likely open-weight provenance; this classification is best-effort, does not guarantee a model is refusal-free, and does not remove CyberLab safety controls.
 
 ## Implemented features
 
 - Responsive security research dashboard and streaming AI agent
-- Dynamic model catalogue via Vercel AI Gateway
-- Open-weight research mode filters on Gateway `open-weights` and `tool-use` tags, with deeper technical response style; safety boundaries remain enabled
-- Public web research through AI Gateway search, with source links for current advisories and technical references
+- Dynamic model catalogue via OpenRouter
+- Open-weight research mode filters OpenRouter models by open-weight provenance heuristics and tool support, with deeper technical response style; safety boundaries remain enabled
+- Public NVD CVE research with source references; live web search is not currently integrated
 - Passive public IP intelligence, ASN/ISP context and reverse DNS
 - Passive DNS resolution for A, AAAA, MX, NS and TXT records
 - Public domain RDAP metadata and certificate-transparency research
