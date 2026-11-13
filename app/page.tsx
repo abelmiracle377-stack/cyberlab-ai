@@ -109,10 +109,18 @@ export default function Home() {
         {notice&&<div className="notice command-notice"><CircleHelp size={15}/>{notice}<button onClick={()=>setNotice("")}>DISMISS</button></div>}
         <div className="section-heading"><h2>{activeCockpit==="COMMAND"?"OPERATIONAL SNAPSHOT":activeCockpit==="SOC"?"SOC / TELEMETRY READINESS":"SYSTEM VITALS / CONNECTIVITY"}</h2><span className="section-meta">LIVE STATE · NO SIMULATED METRICS</span></div>
         <div className="metrics command-metrics">
-          <div className="metric"><div className="metric-top"><span>AI RUNTIME</span><Bot size={14}/></div><div className="metric-value warning-value">NOT VERIFIED</div><div className="metric-note">Check provider in AI Agent</div></div>
-          <div className="metric"><div className="metric-top"><span>LOCAL TOOL BRIDGE</span><Cable size={14}/></div><div className="metric-value warning-value">NOT PAIRED</div><div className="metric-note">Kali companion connection required</div></div>
-          <div className="metric"><div className="metric-top"><span>EVIDENCE STORAGE</span><Database size={14}/></div><div className="metric-value">BROWSER LOCAL</div><div className="metric-note">Encrypted vault workspace</div></div>
-          <div className="metric"><div className="metric-top"><span>MONITORING</span><Activity size={14}/></div><div className="metric-value">MANUAL</div><div className="metric-note">No continuous host telemetry</div></div>
+          <a className="metric metric-link metric-state-red" href="/agent" aria-label="Open AI Agent configuration">
+            <div className="metric-top"><span>AI RUNTIME</span><Bot size={14}/></div><div className="metric-value warning-value">NOT VERIFIED</div><div className="metric-note">Open AI Agent to configure provider</div><div className="metric-action">OPEN CONFIG <ArrowRight size={11}/></div>
+          </a>
+          <a className="metric metric-link metric-state-red" href="/kali-connection" aria-label="Open local tool bridge connection">
+            <div className="metric-top"><span>LOCAL TOOL BRIDGE</span><Cable size={14}/></div><div className="metric-value warning-value">NOT PAIRED</div><div className="metric-note">Pair your Kali companion</div><div className="metric-action">PAIR BRIDGE <ArrowRight size={11}/></div>
+          </a>
+          <a className="metric metric-link metric-state-green" href="/evidence-vault" aria-label="Open evidence vault">
+            <div className="metric-top"><span>EVIDENCE STORAGE</span><Database size={14}/></div><div className="metric-value">BROWSER LOCAL</div><div className="metric-note">Encrypted vault workspace</div><div className="metric-action">OPEN VAULT <ArrowRight size={11}/></div>
+          </a>
+          <a className="metric metric-link metric-state-gray" href="/investigations" aria-label="Open monitoring and investigations">
+            <div className="metric-top"><span>MONITORING</span><Activity size={14}/></div><div className="metric-value">MANUAL</div><div className="metric-note">No continuous host telemetry</div><div className="metric-action">OPEN CASES <ArrowRight size={11}/></div>
+          </a>
         </div>
         <div className="section-heading module-section-heading"><h2>MODULE DIRECTORY</h2><span className="section-meta">{filtered.length} MODULES · SELECT TO OPEN</span></div>
         <div className="module-search-mobile"><Search size={14}/><input placeholder="Filter operational modules..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
