@@ -7,6 +7,7 @@ alter table public.user_profiles enable row level security; alter table public.s
 create policy "read own profile" on public.user_profiles for select using(auth.uid()=user_id);
 create policy "read own subscriptions" on public.subscriptions for select using(auth.uid()=user_id);
 create policy "read own payments" on public.payments for select using(auth.uid()=user_id);
+insert into public.user_profiles(user_id,email) select id,coalesce(email,'') from auth.users on conflict(user_id) do update set email=excluded.email;
 create or replace function public.handle_cyberlab_signup() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.user_profiles(user_id,email) values(new.id,coalesce(new.email,'')) on conflict(user_id) do update set email=excluded.email; return new; end; $$;
 drop trigger if exists cyberlab_user_signup on auth.users;
 create trigger cyberlab_user_signup after insert on auth.users for each row execute procedure public.handle_cyberlab_signup();
