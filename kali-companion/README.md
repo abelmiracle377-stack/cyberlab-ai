@@ -1,13 +1,13 @@
 # CyberLab AI Kali Companion
 
-A command-line research companion for Kali Linux and other Linux distributions. It adds passive OSINT and public vulnerability intelligence to the original local evidence tools. Python 3.9+; Python standard library only; no pip packages or API keys. Optional `figlet` and `chafa` packages provide the large coloured startup lettering and terminal mascot artwork.
+A command-line research companion for Kali Linux and other Linux distributions. It adds passive OSINT, public vulnerability intelligence, and an optional authenticated loopback bridge that lets the hosted CyberLab dashboard request explicitly authorised local Nmap checks. Python 3.9+; Python standard library only; no pip packages or API keys. Optional `figlet` and `chafa` packages provide the large coloured startup lettering and terminal mascot artwork.
 
 ## Install
 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-sudo apt update && sudo apt install -y figlet chafa
+sudo apt update && sudo apt install -y figlet chafa nmap
 python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py --help
 ```
@@ -66,3 +66,19 @@ RDAP identifies the organisation/network associated with an address range, not a
 ## Limits
 
 HTTP timeout defaults to 12 seconds and can be changed with `--timeout 20`. JSON output can be saved with `-o report.json` or `--output report.json`. Public data providers can rate-limit or be temporarily unavailable. No API keys are required.
+
+
+## Hosted dashboard ↔ local Kali bridge
+
+The optional bridge pairs the CyberLab website with Nmap running on your Kali machine. It binds only to `127.0.0.1` and does not open an inbound internet port or require a VPS/tunnel.
+
+1. Install Nmap: `sudo apt update && sudo apt install -y nmap`.
+2. Start the bridge from the repository root: `python3 kali-companion/bridge.py`.
+3. Copy the pairing token printed in the terminal into CyberLab → Kali Connection → Connect to Kali.
+4. Keep the terminal open while using the dashboard. Press `Ctrl+C` in that terminal to stop the bridge.
+
+The token is generated locally and stored at `~/.config/cyberlab/bridge-token` with owner-only file permissions (0600). Do not share it. The bridge accepts browser requests only from `https://cyberlab-ai.vercel.app`, requires the token, and listens on loopback only. The website holds the pasted token in page memory and does not persist it.
+
+The dashboard can request a single-target TCP connect scan with light service-version detection on up to 20 selected common ports. The bridge uses fixed Nmap arguments; it does not accept arbitrary command-line options, NSE scripts, exploit checks, credentials, stealth/evasion flags, or shell commands. Each run requires an exact target confirmation, an authorisation reference and an explicit ownership/permission confirmation. Loopback, link-local, multicast and reserved targets are blocked. Private LAN targets may be assessed only when they are in your authorised scope.
+
+Browser access to localhost can depend on browser private-network access policies. If the browser blocks the request, check its site permissions and keep the official CyberLab origin unchanged. The bridge is optional; existing CLI commands continue to work without it.
