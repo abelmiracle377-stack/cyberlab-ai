@@ -112,7 +112,7 @@ export default function Home() {
           <a className="metric metric-link metric-state-red" href="/agent" aria-label="Open AI Agent configuration">
             <div className="metric-top"><span>AI RUNTIME</span><Bot size={14}/></div><div className="metric-value warning-value">NOT VERIFIED</div><div className="metric-note">Open AI Agent to configure provider</div><div className="metric-action">OPEN CONFIG <ArrowRight size={11}/></div>
           </a>
-          <a className="metric metric-link metric-state-red" href="/kali-connection" aria-label="Open local tool bridge connection">
+          <a className="metric metric-link metric-state-blue" href="/kali-connection" aria-label="Open local tool bridge connection">
             <div className="metric-top"><span>LOCAL TOOL BRIDGE</span><Cable size={14}/></div><div className="metric-value warning-value">NOT PAIRED</div><div className="metric-note">Pair your Kali companion</div><div className="metric-action">PAIR BRIDGE <ArrowRight size={11}/></div>
           </a>
           <a className="metric metric-link metric-state-green" href="/evidence-vault" aria-label="Open evidence vault">
