@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard,
   Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
@@ -9,9 +9,7 @@ import {
 
 const groups = [
   { title: "COMMAND CENTER", items: [
-    { label: "Overview", icon: Layers3, href: "/" },\n    { label: "Billing", icon: CreditCard, href: "/billing" },\n    { label: "Admin Panel", icon: ShieldCheck, href: "/admin" },
-    { label: "AI Agent", icon: Bot, href: "/agent" },
-    { label: "Learning Centre", icon: BookOpen, href: "/learning" },
+    { label: "Overview", icon: Layers3, href: "/" },\n    { label: "Billing", icon: CreditCard, href: "/billing" },\n    { label: "AI Agent", icon: Bot, href: "/agent" },
   ]},
   { title: "INTELLIGENCE", items: [
     { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
@@ -43,7 +41,6 @@ const groups = [
 
 const modules = [
   { name:"AI Agent", desc:"Coordinate scoped security workflows with tool-assisted analysis.", icon:Bot, state:"CONFIG CHECK", href:"/agent" },
-  { name:"Learning Centre", desc:"Curate, review and approve knowledge that the agent can use alongside web research.", icon:BookOpen, state:"HUMAN APPROVAL", href:"/learning" },
   { name:"IP Intelligence", desc:"Inspect public IP, ASN, DNS, hosting and ownership signals.", icon:Globe2, state:"AVAILABLE", href:"/ip-intelligence" },
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
   { name:"Domain & Privacy Verification", desc:"Review SPF, DMARC, DKIM, CAA, historical URLs and local browser attributes.", icon:ShieldCheck, state:"NEW", href:"/verification" },
@@ -69,6 +66,8 @@ export default function Home() {
   const [mobileNav,setMobileNav]=useState(false);
   const [navCollapsed,setNavCollapsed]=useState(false);
   const [notice,setNotice]=useState("");
+  const [isAdmin,setIsAdmin]=useState(false);
+  useEffect(()=>{fetch("/api/admin/auth",{cache:"no-store"}).then(r=>setIsAdmin(r.ok)).catch(()=>setIsAdmin(false));},[]);
   const filtered=useMemo(()=>modules.filter(m=>(m.name+" "+m.desc).toLowerCase().includes(query.toLowerCase())),[query]);
   const activeLabel=groups.flatMap(g=>g.items).find(i=>i.href==="/")?.label ?? "Overview";
 
@@ -82,6 +81,7 @@ export default function Home() {
       <div className="command-status"><span className="status-led amber-led"/><span>LOCAL WORKSPACE</span><b>EARLY ACCESS</b></div>
       <div className="nav-search"><Search size={14}/><input aria-label="Search tools" placeholder="Search modules..." value={query} onChange={e=>setQuery(e.target.value)}/><kbd>/</kbd></div>
       <nav className="command-nav" aria-label="Main navigation">
+        {isAdmin&&<section className="nav-group"><div className="workspace-label">ADMINISTRATION</div><a href="/admin" className="nav-item"><span className="nav-icon"><ShieldCheck size={15}/></span><span className="nav-label">Admin Panel</span></a><a href="/learning" className="nav-item"><span className="nav-icon"><BookOpen size={15}/></span><span className="nav-label">AI Knowledge</span></a></section>}
         {groups.map(group=><section className="nav-group" key={group.title}>
           <div className="workspace-label">{group.title}</div>
           {group.items.map(item=>{const Icon=item.icon;return <a key={item.href} href={item.href} className={`nav-item ${item.href==="/"?"active":""}`} onClick={()=>setMobileNav(false)}><span className="nav-icon"><Icon size={15}/></span><span className="nav-label">{item.label}</span>{item.href==="/agent"&&<span className="nav-tag">AI</span>}</a>})}
