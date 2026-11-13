@@ -103,3 +103,8 @@ MIT. See [LICENSE](./LICENSE).
 - **Active Security Lab** performs a deliberately limited TCP connection check against a public IPv4 address or domain after the operator confirms the exact target, provides an authorisation reference and retypes the target. It permits up to five selected common TCP ports and blocks private, loopback, link-local and reserved IPv4 ranges.
 - The hosted TCP check is not Nmap, a full port scan, service fingerprinting, a vulnerability scan or proof of exploitability. Use the Kali companion locally for a fuller assessment within a verified written scope.
 - Never test assets without explicit permission. Respect third-party/cloud-provider rules, engagement windows, exclusions and stop conditions.
+
+
+### Local SOC host telemetry
+
+The paired Kali companion exposes an authenticated `GET /system` endpoint for an on-demand, read-only host health snapshot. The Kali Connection workspace displays platform/release, uptime, load average, available memory, root-disk capacity, process count and Nmap availability. It does not collect usernames, process names, command lines, file contents, network payloads or authentication logs. It is not a continuous SIEM, EDR, intrusion-detection or ATT&CK event pipeline. The bridge remains bound to `127.0.0.1`, requires the existing pairing token and official-site origin, and must run on the same machine as the browser using it.
