@@ -69,11 +69,12 @@ def valid_target(value: str) -> str:
         addresses = sorted({item[4][0] for item in socket.getaddrinfo(value, None, socket.AF_INET, socket.SOCK_STREAM)})
     except OSError as exc:
         raise ValueError("Target could not be resolved to IPv4.") from exc
-    if len(addresses) != 1:
-        raise ValueError("Target must resolve to exactly one IPv4 address. Use the exact IP for multi-address hosts.")
-    ip = ipaddress.ip_address(addresses[0])
-    if ip.is_unspecified or ip.is_multicast or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-        raise ValueError("Resolved target is loopback, link-local, multicast or reserved.")
+    if not addresses or len(addresses) > 4:
+        raise ValueError("Domain must resolve to between one and four IPv4 addresses. For larger/CDN domains, use an explicitly authorised single IP.")
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if ip.is_unspecified or ip.is_multicast or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError("Resolved target includes loopback, link-local, multicast or reserved addresses.")
     return value
 
 
