@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileUp, Network, ShieldCheck, AlertTriangle } from "lucide-react";
+import InvestigationLink from "@/components/investigation-link";
 
 type Port = { protocol: string; port: number; state: string; service: string; product: string; version: string };
 type Host = { index: number; status: string; addresses: { address: string; type: string }[]; hostnames: string[]; ports: Port[] };
@@ -93,6 +94,7 @@ export default function NetworkAnalysisPage() {
         </section>
         <p className="network-note"><ShieldCheck size={13} /> {result.note}</p>
       </>}
+      {result && <InvestigationLink source="network-analysis" eventType="nmap-report" title={`Nmap report: ${fileName || result.summary.hosts + " hosts"}`} severity={result.summary.openPorts > 0 ? "medium" : "informational"} details={{ fileName, summary: result.summary, openPorts: result.openPorts, hosts: result.hosts, note: result.note }} />}
       <div className="agent-disclaimer"><ShieldCheck size={12} /> Use scan reports only when the underlying assessment was authorised. Parsed service/version data is evidence, not proof of vulnerability.</div>
     </section>
   </main>;
