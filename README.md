@@ -28,6 +28,10 @@ For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPA
 
 ## Implemented features
 
+- Live capability registry at `/tool-registry` and `/api/tool-registry`, with explicit operational/configured/partial/setup/planned states
+- Specialist routing in the AI Agent for reconnaissance, vulnerability intelligence, malware triage, reverse engineering, blue-team analysis, reporting and general research; this is a first orchestration layer, not yet independent parallel agents
+- Authenticated read-only MCP JSON-RPC endpoint at `/api/mcp` with `initialize`, `tools/list`, `tools/call`, and passive IP, DNS and NVD tools; disabled until `CYBERLAB_MCP_API_KEY` is configured
+
 - Responsive security research dashboard and streaming AI agent
 - Dynamic model catalogue via OpenRouter
 - Open-weight research mode filters OpenRouter models by open-weight provenance heuristics and tool support, with deeper technical response style; safety boundaries remain enabled
