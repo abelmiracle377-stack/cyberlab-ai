@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from "react";
 import {
-  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command,
+  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard,
   Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
 } from "lucide-react";
 
 const groups = [
   { title: "COMMAND CENTER", items: [
-    { label: "Overview", icon: Layers3, href: "/" },
+    { label: "Overview", icon: Layers3, href: "/" },\n    { label: "Billing", icon: CreditCard, href: "/billing" },\n    { label: "Admin Panel", icon: ShieldCheck, href: "/admin" },
     { label: "AI Agent", icon: Bot, href: "/agent" },
     { label: "Learning Centre", icon: BookOpen, href: "/learning" },
   ]},

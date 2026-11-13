@@ -127,3 +127,12 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - Apply `supabase/migrations/202611130001_investigation_cases.sql` in the Supabase SQL Editor before using this feature. Supabase URL/key configuration and user sign-in are required; without them, cases are not persisted.
 - The initial integration is analyst-triggered. It does not silently ingest or claim to correlate every module's findings. Additional integrations should retain source, timestamp, severity, provenance and explicit analyst approval.
 \n\n### Operator-curated Learning Centre\n\n- `/learning` provides a browser-local knowledge review queue. Analysts can submit notes, paste research, upload text-based files (TXT, Markdown, JSON, CSV, LOG, YAML and XML), tag and categorise entries, then approve or reject each item.\n- Only approved entries are sent as bounded reference context with AI Agent requests. The agent is instructed to treat them as untrusted reference material, preserve provenance and flag stale or conflicting claims.\n- Knowledge is stored in the current browser's local storage and can be exported/imported as JSON. Imported items return to pending review. Clearing browser storage can remove the local collection; keep backups.\n- This is retrieval-augmented context, not fine-tuning or a change to model weights. It does not yet synchronise across devices or users; persistent shared knowledge requires a later database integration.\n
+ 
+### Accounts, subscriptions and billing
+- Membership pricing is $10 USD per user per month.
+- Supabase Auth provides sign-up/login. Run `supabase/migrations/202611130002_billing_and_admin.sql` in Supabase SQL Editor.
+- Configure `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, and `PAYSTACK_PLAN_CODE` as server-only Vercel environment variables. Never expose the service-role key.
+- Create a Paystack plan in USD, amount 1000 (minor units), interval monthly. Register webhook URL `https://cyberlab-ai.vercel.app/api/paystack/webhook`.
+- After a user signs up, promote the owner account by setting `public.user_profiles.role='admin'` for that user's UUID in Supabase SQL Editor.
+- Admins use `/admin` to manage roles and grant, suspend, cancel or expire access. Customers use `/billing` for checkout and payment history. `/pricing` is public.
+- Test with Paystack test keys before going live and confirm your merchant account's USD recurring-card eligibility and settlement settings.
