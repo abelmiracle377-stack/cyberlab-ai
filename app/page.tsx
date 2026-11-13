@@ -9,7 +9,9 @@ import {
 
 const groups = [
   { title: "COMMAND CENTER", items: [
-    { label: "Overview", icon: Layers3, href: "/" },\n    { label: "Billing", icon: CreditCard, href: "/billing" },\n    { label: "AI Agent", icon: Bot, href: "/agent" },
+    { label: "Overview", icon: Layers3, href: "/" },
+    { label: "Billing", icon: CreditCard, href: "/billing" },
+    { label: "AI Agent", icon: Bot, href: "/agent" },
   ]},
   { title: "INTELLIGENCE", items: [
     { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
