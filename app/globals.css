@@ -534,3 +534,20 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .registry-foot{display:flex;align-items:center;gap:8px;color:#859276;border-top:1px solid #27321c;padding-top:14px;margin-top:20px;font:9px var(--mono)}
 .registry-foot svg{color:#a6f000;flex-shrink:0}.registry-error,.registry-loading{padding:14px;color:#d9b85b;font:10px var(--mono)}
 @media(max-width:600px){.registry-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.registry-heading{align-items:flex-start;flex-direction:column}.registry-item{padding:11px}.registry-item-title{font-size:10px}}
+
+
+/* SOC readiness cards: clickable destinations with Kodachi-like restrained status colours */
+.command-metrics .metric-link{display:block;position:relative;text-decoration:none;color:inherit;cursor:pointer;min-width:0;transition:border-color .16s ease,background .16s ease,transform .16s ease}
+.command-metrics .metric-link:hover{transform:translateY(-2px);background:#0d120d}
+.command-metrics .metric-link:focus-visible{outline:2px solid var(--acid);outline-offset:3px}
+.command-metrics .metric-link .metric-top svg{color:var(--state-accent)}
+.command-metrics .metric-link .metric-value{color:var(--state-accent);font-size:14px;letter-spacing:-.2px}
+.command-metrics .metric-link .metric-note{color:#899283;line-height:1.55;min-height:27px}
+.command-metrics .metric-link .metric-action{display:flex;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--state-accent) 22%,transparent);color:var(--state-accent);font:8px var(--mono);letter-spacing:1px}
+.command-metrics .metric-state-red{--state-accent:#e36b70;border-color:#583034;background:#100a0b}
+.command-metrics .metric-state-red:hover{border-color:#a84c52;background:#170d0e}
+.command-metrics .metric-state-green{--state-accent:#9bd66e;border-color:#3c5525;background:#0a1008}
+.command-metrics .metric-state-green:hover{border-color:#789f43;background:#101909}
+.command-metrics .metric-state-gray{--state-accent:#a4aaa2;border-color:#3a403a;background:#0b0e0c}
+.command-metrics .metric-state-gray:hover{border-color:#687168;background:#101411}
+@media(max-width:430px){.command-metrics .metric-link .metric-value{font-size:12px}.command-metrics .metric-link{min-height:145px}}
