@@ -122,6 +122,20 @@ export default function KaliConnectionPage() {
     finally{setCaseBusy(false);}
   }
 
+  async function verifyInvestigationArchive(){
+    if(!caseReport)return;
+    const caseData=caseReport.case as Record<string,unknown>|undefined;
+    const caseId=String(caseData?.case_id||"");
+    setCaseBusy(true);setError("");
+    try{
+      const response=await fetch("http://127.0.0.1:8765/evidence/case/verify",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseId})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Could not verify the local archive.");
+      setCaseReport({...caseReport,archive_verification:data});
+    }catch(e){setError(e instanceof Error?e.message:"Could not verify the local archive.");}
+    finally{setCaseBusy(false);}
+  }
+
   async function analyseArtifactEvidence(){
     setArtifactBusy(true);setError("");setArtifactReport(null);
     try{
@@ -312,7 +326,7 @@ export default function KaliConnectionPage() {
         <h2>10. Unified investigation case</h2>
         <p>Combine completed service/CVE analysis and static artifact/recovery analysis into one provenance report. The local audit ledger records evidence digests and case metadata, not raw samples, banners or recovered contents.</p>
         <button className="report-download" type="button" onClick={createInvestigationCase} disabled={caseBusy||(!evidenceReport&&!artifactReport)}>{caseBusy?<><LoaderCircle size={14}/> Creating case…</>:<><FileSearch size={14}/> Create unified case report</>}</button>
-        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><button className="report-download" type="button" onClick={exportInvestigationCase} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Preparing exports…</>:<><FileSearch size={14}/> Export JSON + HTML and archive locally</>}</button>{caseReport.export_archive&&<p className="network-note">Private archive: {String((caseReport.export_archive as Record<string,unknown>).directory)} · JSON and HTML downloads started. Verify the manifest hashes before relying on exported evidence.</p>}<pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
+        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><button className="report-download" type="button" onClick={exportInvestigationCase} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Preparing exports…</>:<><FileSearch size={14}/> Export JSON + HTML and archive locally</>}</button>{caseReport.export_archive&&<><p className="network-note">Private archive: {String((caseReport.export_archive as Record<string,unknown>).directory)} · JSON and HTML downloads started.</p><button className="report-download" type="button" onClick={verifyInvestigationArchive} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Verifying archive…</>:<><ShieldCheck size={14}/> Verify archived files</>}</button></>}{caseReport.archive_verification&&<div className="bridge-connected"><strong>{(caseReport.archive_verification as Record<string,unknown>).verified?"Archive integrity verified":"Archive verification failed"}</strong><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(caseReport.archive_verification,null,2)}</pre></div>}<pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
       </section>}
 
       {connected&&<section className="kali-panel">
