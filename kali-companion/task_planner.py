@@ -145,11 +145,20 @@ def plan_task(prompt: str) -> dict:
         except ValueError:
             if re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", target, flags=re.I):
                 passive_suggestion = {"action": "domain", "value": target}
+    service_suggestion = None
+    if "service_enumeration" in categories and target:
+        suggested_ports = []
+        for term, port in (("ftp", 21), ("ssh", 22), ("smtp", 25), ("http", 80), ("https", 443), ("smb", 445), ("imap", 143), ("pop3", 110)):
+            if term in lowered and port not in suggested_ports:
+                suggested_ports.append(port)
+        if suggested_ports:
+            service_suggestion = {"ports": suggested_ports[:8], "target": target}
     return {
         "status": "plan_only",
         "summary": "Detected task type(s): " + ", ".join(categories).replace("_", " "),
         "categories": categories,
         "passive_research_suggestion": passive_suggestion,
+        "service_enumeration_suggestion": service_suggestion,
         "target": target,
         "target_status": "candidate extracted; not yet validated or authorised" if target else "not provided",
         "requires_authorisation": needs_authorisation,
