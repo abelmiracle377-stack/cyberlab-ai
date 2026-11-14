@@ -85,6 +85,15 @@ class TaskPlannerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             task_planner.plan_task(None)
 
+    def test_domain_osint_plan_offers_passive_research_suggestion(self):
+        result = self.plan("Research DNS and domain registration for lab.example.org.")
+        self.assertEqual(result["passive_research_suggestion"], {"action": "domain", "value": "lab.example.org"})
+        self.assertFalse(result["execution_started"])
+
+    def test_no_passive_domain_suggestion_for_ip_or_missing_target(self):
+        self.assertIsNone(self.plan("Research DNS for 8.8.8.8.")["passive_research_suggestion"])
+        self.assertIsNone(self.plan("Explain DNS records.")["passive_research_suggestion"])
+
     def test_url_path_is_not_mistaken_for_hostname(self):
         result = self.plan("Check https://lab.example.org/login/admin for my web assessment.")
         self.assertEqual(result["target"], "lab.example.org")
