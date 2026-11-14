@@ -50,7 +50,7 @@ export default function ModelsPage() {
         if (active === id) setActive(next[0] || "");
         return next;
       }
-      if (current.length >= 4) return current;
+      if (current.length >= 3) return current;
       setActive(id);
       return [...current, id];
     });
@@ -128,7 +128,7 @@ export default function ModelsPage() {
         <div className="mw-title"><div><small>MODEL CONTROL</small><h1>Models</h1></div><b>{models.length}</b></div>
         <label className="mw-search"><Search size={14}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search models…"/></label>
         <div className="mw-filter"><button className={!openOnly ? "active" : ""} onClick={() => setOpenOnly(false)}>All models</button><button className={openOnly ? "active" : ""} onClick={() => setOpenOnly(true)}>Open-weight</button></div>
-        <div className="mw-label">AVAILABLE MODELS <span>MAX 4 SELECTED</span></div>
+        <div className="mw-label">AVAILABLE MODELS <span>MAX 3 SELECTED</span></div>
         {loading && <p className="mw-muted">Loading catalogue…</p>}
         {error && <p className="mw-error">{error}</p>}
         <div className="mw-model-list">{visible.slice(0, 180).map((m) => <button key={m.id} className={selected.includes(m.id) ? "mw-model selected" : "mw-model"} onClick={() => toggle(m.id)}>
@@ -138,7 +138,7 @@ export default function ModelsPage() {
       </aside>
       <section className="mw-centre">
         <div className="mw-heading"><small>EVALUATION & DISCOVERY</small><h2>Model intelligence centre</h2><p>Compare models using sourced benchmarks and reproducible CyberLab evaluations.</p></div>
-        <div className="mw-stats"><article><small>CATALOGUE MODELS</small><strong>{models.length || "—"}</strong><span>Provider catalogue</span></article><article><small>SELECTED MODELS</small><strong>{selected.length}/4</strong><span>For comparison</span></article><article><small>VERIFIED BENCHMARKS</small><strong>0</strong><span>No evaluation runs recorded</span></article></div>
+        <div className="mw-stats"><article><small>CATALOGUE MODELS</small><strong>{models.length || "—"}</strong><span>Provider catalogue</span></article><article><small>SELECTED MODELS</small><strong>{selected.length}/3</strong><span>For comparison</span></article><article><small>VERIFIED BENCHMARKS</small><strong>0</strong><span>No evaluation runs recorded</span></article></div>
         <section className="mw-panel"><div className="mw-panel-head"><div><h3>Selected model comparison</h3><p>Live provider metadata. Performance scores are not fabricated.</p></div><span>PROVIDER DATA</span></div>
           {!selected.length ? <p className="mw-muted">Select models from the left panel.</p> : <div className="mw-cards">{selected.map((id, i) => { const m = models.find((x) => x.id === id); if (!m) return null; return <article className={"mw-card tone-" + i} key={id}><small>MODEL 0{i + 1}</small><div className="mw-glyph">{m.provider.slice(0, 1).toUpperCase()}</div><h4>{m.name}</h4><p>{m.provider}</p><dl><dt>Context length</dt><dd>{m.contextLength ? m.contextLength.toLocaleString() : "Not supplied"}</dd><dt>Model type</dt><dd>{m.openWeight ? "Open-weight" : "Hosted"}</dd><dt>Benchmark score</dt><dd className="mw-unverified">Not evaluated</dd></dl><button onClick={() => setActive(id)}>{active === id ? "✓ Active chat model" : "Use in chat"}</button></article>; })}</div>}
         </section>
