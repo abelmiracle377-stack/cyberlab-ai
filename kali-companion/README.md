@@ -7,7 +7,7 @@ A command-line research companion for Kali Linux and other Linux distributions. 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-sudo apt update && sudo apt install -y figlet chafa nmap gddrescue testdisk foremost ntfs-3g
+sudo apt update && sudo apt install -y figlet chafa nmap gddrescue testdisk foremost ntfs-3g sleuth-kit
 python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py --help
 ```
@@ -99,18 +99,18 @@ The dashboard's **Digital Forensics → File & Picture Recovery** module can use
 - Verify that the image destination is a mounted filesystem on a different physical device.
 - Create a new image and ddrescue map file without overwriting existing output.
 - Run Foremost against a completed CyberLab acquisition image and write results to a new folder on the backup drive.
-- Probe a completed image with `blkid` to report recognised filesystem signatures without mounting or modifying the image.
+- Probe a completed image with `blkid` to report recognised filesystem signatures without mounting or modifying the image.\n- Enumerate allocated partition boundaries in a completed image with Sleuth Kit `mmls`, without mounting, repairing or modifying it.
 
 Install the tools with:
 
 ```bash
 sudo apt update
-sudo apt install -y gddrescue testdisk foremost ntfs-3g
+sudo apt install -y gddrescue testdisk foremost ntfs-3g sleuth-kit
 ```
 
 For best practice, boot Kali from a live USB, do not boot the installed OS on the affected disk, and do not mount the source partitions. Connect a separate backup drive, then pair the dashboard with the bridge. The acquisition endpoint is allow-listed; it does not accept arbitrary shell commands. It uses GNU ddrescue's first non-scraping pass (`ddrescue -f -n`) and retains the map file so the acquisition can be assessed. Do not disconnect either drive while the job is active. Preserve both the image and the ddrescue-created map file; the map records completed and unreadable regions and is required for a safe resume or follow-up pass. The source device is never an output path.
 
-After imaging, the dashboard can run a read-only `blkid -p` signature probe against the image. This reports recognised filesystem metadata when available; it does not mount the image, modify it, or guarantee that a filesystem is intact. A missing signature is inconclusive. The dashboard can also launch a bounded Foremost recovery job against the image. On successful completion, the companion creates `cyberlab-recovery-manifest.json` inside Foremost's output folder. The manifest records each regular recovered file's relative path, byte size and SHA-256 hash. Symlinks are skipped, enumeration is capped at 5,000 files, and the manifest is created with no-overwrite semantics. A `truncated: true` field means the cap was reached; preserve the Foremost `audit.txt` as well. Hashes document the recovered output as it existed when the manifest was generated; they do not prove authenticity or validate file contents.
+After imaging, the dashboard can run a read-only Sleuth Kit `mmls` partition-table analysis and a `blkid -p` signature probe against the image. Partition analysis reports slot, start/end sector, length and partition description for allocated entries; unallocated space and partition-table metadata are excluded. This is boundary discovery only: it does not mount, repair or write to the image, and it does not yet perform filesystem-aware undelete. Install `sleuth-kit` to enable this step.\n\nAfter imaging, the dashboard can run a read-only `blkid -p` signature probe against the image. This reports recognised filesystem metadata when available; it does not mount the image, modify it, or guarantee that a filesystem is intact. A missing signature is inconclusive. The dashboard can also launch a bounded Foremost recovery job against the image. On successful completion, the companion creates `cyberlab-recovery-manifest.json` inside Foremost's output folder. The manifest records each regular recovered file's relative path, byte size and SHA-256 hash. Symlinks are skipped, enumeration is capped at 5,000 files, and the manifest is created with no-overwrite semantics. A `truncated: true` field means the cap was reached; preserve the Foremost `audit.txt` as well. Hashes document the recovered output as it existed when the manifest was generated; they do not prove authenticity or validate file contents.
 
 PhotoRec remains an interactive recovery option in a separate Kali terminal:
 
