@@ -10,7 +10,7 @@ The additive capability-parity plan and Kodachi-inspired information architectur
 
 The application includes an AI agent interface, passive IP and DNS intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion. Not every navigation item represents a completed operational integration; use the dedicated tool pages and their returned status/errors to determine availability.
 
-The encrypted evidence vault is browser-local and passphrase protected. Supabase email/password authentication and route protection are implemented as an optional deployment integration; they remain inactive until Supabase environment variables are configured. Central multi-user project storage and authenticated website synchronisation for the offline companion remain future work. The companion intentionally does not expose a remote shell or run active scans.
+The encrypted evidence vault is browser-local and passphrase protected. Supabase email/password authentication and route protection are implemented as an optional deployment integration; they remain inactive until Supabase environment variables are configured. Central multi-user project storage and authenticated website synchronisation for the offline companion remain future work. The companion intentionally does not expose a remote shell. Its optional loopback bridge supports bounded, explicitly authorised local Nmap TCP scans.
 
 ## Run locally
 

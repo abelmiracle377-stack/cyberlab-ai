@@ -81,8 +81,8 @@ def triage_file(path: Path) -> dict:
         "note": "Static triage only. The sample was not executed, unpacked, uploaded or stored. Indicators are not a malware verdict."
     }
 
-def parse_nmap_xml(path: Path) -> dict:
-    raw = path.read_bytes()
+def parse_nmap_xml_text(raw: bytes) -> dict:
+    """Parse bounded Nmap XML and preserve port-state and service evidence."""
     if len(raw) > MAX_XML_BYTES:
         raise ValueError("Nmap XML exceeds the 2 MB limit.")
     if re.search(rb"<!DOCTYPE|<!ENTITY", raw, re.I):
@@ -96,41 +96,62 @@ def parse_nmap_xml(path: Path) -> dict:
     hosts = []
     for index, host in enumerate(root.findall("host"), 1):
         status = host.find("status")
-        addresses = [{"address": node.get("addr", ""), "type": node.get("addrtype", "unknown")} for node in host.findall("address")]
-        names = [node.get("name", "") for node in host.findall("./hostnames/hostname") if node.get("name")]
+        addresses = [{"address": n.get("addr", ""), "type": n.get("addrtype", "unknown")} for n in host.findall("address")]
+        names = [{"name": n.get("name", ""), "type": n.get("type", "unknown")} for n in host.findall("./hostnames/hostname") if n.get("name")]
         ports = []
         for node in host.findall("./ports/port"):
-            state = node.find("state")
-            service = node.find("service")
+            state, service = node.find("state"), node.find("service")
             try:
-                port_number = int(node.get("portid", "0"))
+                number = int(node.get("portid", "0"))
             except ValueError:
                 continue
-            if not 1 <= port_number <= 65535:
+            if not 1 <= number <= 65535:
                 continue
             ports.append({
-                "protocol": node.get("protocol", "unknown"), "port": port_number,
+                "protocol": node.get("protocol", "unknown"), "port": number,
                 "state": state.get("state", "unknown") if state is not None else "unknown",
+                "reason": state.get("reason", "") if state is not None else "",
+                "reason_ttl": state.get("reason_ttl") if state is not None else None,
                 "service": service.get("name", "unknown") if service is not None else "unknown",
                 "product": service.get("product", "") if service is not None else "",
                 "version": service.get("version", "") if service is not None else "",
+                "extra_info": service.get("extrainfo", "") if service is not None else "",
+                "tunnel": service.get("tunnel", "") if service is not None else "",
+                "method": service.get("method", "") if service is not None else "",
+                "confidence": service.get("conf") if service is not None else None,
             })
-        hosts.append({
-            "index": index, "status": status.get("state", "unknown") if status is not None else "unknown",
-            "addresses": addresses, "hostnames": names, "ports": ports,
-        })
+        hosts.append({"index": index, "status": status.get("state", "unknown") if status is not None else "unknown",
+                      "status_reason": status.get("reason", "") if status is not None else "",
+                      "addresses": addresses, "hostnames": names, "ports": ports})
+    all_ports = [p for h in hosts for p in h["ports"]]
+    states = ("open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "unknown")
+    scaninfo = [{"type": n.get("type", ""), "protocol": n.get("protocol", ""),
+                 "numservices": n.get("numservices", ""), "services": n.get("services", "")}
+                for n in root.findall("./scaninfo")]
+    runstats = root.find("runstats")
+    finished = runstats.find("finished") if runstats is not None else None
+    host_stats = runstats.find("hosts") if runstats is not None else None
     open_ports = []
     for host in hosts:
         address = host["addresses"][0]["address"] if host["addresses"] else "Host " + str(host["index"])
-        for port in host["ports"]:
-            if port["state"] == "open":
-                open_ports.append({"host": address, **port})
+        open_ports.extend({"host": address, **p} for p in host["ports"] if p["state"] == "open")
     return {
-        "summary": {"hosts": len(hosts), "hosts_up": sum(1 for host in hosts if host["status"] == "up"),
-                    "ports_parsed": sum(len(host["ports"]) for host in hosts), "open_ports": len(open_ports)},
-        "hosts": hosts, "open_ports": open_ports,
-        "note": "Parses an existing Nmap XML report only. It does not launch scans or contact hosts."
+        "summary": {"hosts": len(hosts), "hosts_up": sum(h["status"] == "up" for h in hosts),
+                    "ports_parsed": len(all_ports), "open_ports": len(open_ports),
+                    "state_counts": {s: sum(p["state"] == s for p in all_ports) for s in states}},
+        "hosts": hosts, "open_ports": open_ports, "scaninfo": scaninfo,
+        "completion": {"finished": finished.attrib if finished is not None else {},
+                       "hosts": host_stats.attrib if host_stats is not None else {},
+                       "scanner": root.get("scanner", ""), "version": root.get("version", ""),
+                       "args": root.get("args", ""), "start": root.get("start", ""),
+                       "startstr": root.get("startstr", "")},
+        "evidence_status": "completed" if finished is not None else ("partial" if hosts else "no_port_evidence"),
+        "note": "Parses an existing Nmap XML report only. It does not launch scans or contact hosts. Missing XML evidence is not interpreted as zero findings."
     }
+
+
+def parse_nmap_xml(path: Path) -> dict:
+    return parse_nmap_xml_text(path.read_bytes())
 
 def port_scan(target: str, port_spec: str, timeout: int = 60) -> dict:
     target = target.strip().lower().rstrip('.')
@@ -168,10 +189,10 @@ def port_scan(target: str, port_spec: str, timeout: int = 60) -> dict:
         rows = []
         for node in host.findall('./ports/port'):
             state, service = node.find('state'), node.find('service')
-            row = {'port': int(node.get('portid', '0')), 'protocol': node.get('protocol', 'tcp'), 'state': state.get('state', 'unknown') if state is not None else 'unknown', 'service': service.get('name', 'unknown') if service is not None else 'unknown', 'product': service.get('product', '') if service is not None else '', 'version': service.get('version', '') if service is not None else ''}
+            row = {'port': int(node.get('portid', '0')), 'protocol': node.get('protocol', 'tcp'), 'state': state.get('state', 'unknown') if state is not None else 'unknown', 'reason': state.get('reason', '') if state is not None else '', 'service': service.get('name', 'unknown') if service is not None else 'unknown', 'product': service.get('product', '') if service is not None else '', 'version': service.get('version', '') if service is not None else '', 'method': service.get('method', '') if service is not None else '', 'confidence': service.get('conf') if service is not None else None}
             rows.append(row); all_ports.append(row)
         hosts.append({'status': status.get('state', 'unknown') if status is not None else 'unknown', 'addresses': addresses, 'ports': rows})
-    return {'target': target, 'ports_checked': sorted(ports), 'hosts': hosts, 'state_summary': {s: sum(1 for p in all_ports if p['state'] == s) for s in ('open', 'closed', 'filtered')}, 'open_ports': [p for p in all_ports if p['state'] == 'open'], 'note': 'Selected TCP ports are classified as open, closed or filtered when determinable. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. Use only with explicit authorisation.'}
+    return {'target': target, 'ports_checked': sorted(ports), 'hosts': hosts, 'state_summary': {s: sum(1 for p in all_ports if p['state'] == s) for s in ('open', 'closed', 'filtered', 'unfiltered', 'open|filtered', 'closed|filtered', 'unknown')}, 'open_ports': [p for p in all_ports if p['state'] == 'open'], 'evidence_status': 'completed' if root.find('./runstats/finished') is not None else ('partial' if hosts else 'no_port_evidence'), 'stderr': completed.stderr[:2000], 'exit_code': completed.returncode, 'note': 'Selected TCP ports retain Nmap's reported state, including open, closed, filtered, unfiltered and ambiguous states. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. Use only with explicit authorisation.'}
 
 def http_json(url: str, timeout: int = 12):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})

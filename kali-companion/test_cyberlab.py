@@ -73,6 +73,24 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(result["open_ports"][0]["port"], 443)
         self.assertEqual(result["open_ports"][0]["service"], "https")
 
+    def test_nmap_xml_preserves_states_and_detection_metadata(self):
+        states = ("open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered")
+        ports = "".join(f'<port protocol="tcp" portid="{i+1}"><state state="{state}" reason="test-reason"/><service name="svc" method="probed" conf="10" product="Demo" version="1"/></port>' for i, state in enumerate(states))
+        xml = f'<nmaprun scanner="nmap" version="7.95" args="nmap -sT"><scaninfo type="connect" protocol="tcp" numservices="6" services="1-6"/><host><status state="up" reason="syn-ack"/><address addr="192.0.2.1" addrtype="ipv4"/><hostnames><hostname name="lab.example.test" type="user"/></hostnames><ports>{ports}</ports></host><runstats><finished time="1" elapsed="1.0" exit="success"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>'.encode()
+        result = cyberlab.parse_nmap_xml_text(xml)
+        self.assertEqual(result["summary"]["state_counts"], {**{s: 1 for s in states}, "unknown": 0})
+        self.assertEqual(result["hosts"][0]["ports"][0]["reason"], "test-reason")
+        self.assertEqual(result["hosts"][0]["ports"][0]["method"], "probed")
+        self.assertEqual(result["hosts"][0]["hostnames"][0]["name"], "lab.example.test")
+        self.assertEqual(result["scaninfo"][0]["protocol"], "tcp")
+        self.assertEqual(result["evidence_status"], "completed")
+
+    def test_nmap_xml_empty_report_has_explicit_evidence_status(self):
+        result = cyberlab.parse_nmap_xml_text(b'<nmaprun><runstats><finished exit="success"/></runstats></nmaprun>')
+        self.assertEqual(result["evidence_status"], "completed")
+        self.assertEqual(result["summary"]["ports_parsed"], 0)
+        self.assertEqual(result["summary"]["state_counts"]["unknown"], 0)
+
     def test_nmap_xml_rejects_entity_declarations(self):
         xml = b'<!DOCTYPE nmaprun [<!ENTITY x "expanded">]><nmaprun>&x;</nmaprun>'
         with tempfile.TemporaryDirectory() as directory:
