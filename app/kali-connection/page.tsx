@@ -44,6 +44,9 @@ export default function KaliConnectionPage() {
   const [researchValue,setResearchValue]=useState("");
   const [researchBusy,setResearchBusy]=useState(false);
   const [researchResult,setResearchResult]=useState<Record<string,unknown>|null>(null);
+  const [servicePorts,setServicePorts]=useState("21,22,25,80,443");
+  const [serviceBusy,setServiceBusy]=useState(false);
+  const [serviceResult,setServiceResult]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -73,6 +76,13 @@ export default function KaliConnectionPage() {
     try{const response=await fetch("http://127.0.0.1:8765/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Passive research failed.");}
     finally{setResearchBusy(false);}
+  }
+
+  async function runServiceEnumeration(event:React.FormEvent){
+    event.preventDefault();setServiceBusy(true);setError("");setServiceResult(null);
+    try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("http://127.0.0.1:8765/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
+    catch(e){setError(e instanceof Error?e.message:"Service identification failed.");}
+    finally{setServiceBusy(false);}
   }
 
   async function refreshToolInventory(){
@@ -214,7 +224,21 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>8. Run an authorised Nmap assessment</h2>
+        <h2>8. Safe service identification</h2>
+        <p>Identify common exposed services using bounded TCP connections and minimal protocol metadata. HTTP uses HEAD, TLS reads certificate metadata, and FTP/SSH/SMTP/POP3/IMAP read available banners. No login, credential attempts, file transfer or exploit payloads.</p>
+        <form className="report-editor" onSubmit={runServiceEnumeration}>
+          <label>Target IP or hostname<input value={target} onChange={e=>{setTarget(e.target.value);setServiceResult(null);}} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
+          <label>Retype exact target to confirm scope<input value={confirmationTarget} onChange={e=>setConfirmationTarget(e.target.value)} placeholder="Type the same target again" required maxLength={253}/></label>
+          <label>Authorisation / ticket reference<input value={reference} onChange={e=>setReference(e.target.value)} placeholder="Your approval or engagement reference" required maxLength={160}/></label>
+          <label>Service ports<input value={servicePorts} onChange={e=>setServicePorts(e.target.value)} placeholder="21,22,25,80,443" required/><small>Choose up to 8 reviewed ports: 21, 22, 25, 80, 110, 143, 443, 445, 587, 993, 995, 8080, 8443.</small></label>
+          <div className="scope-checks"><label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I own this target or have explicit written authorisation for this exact assessment and confirm it is in scope.</label></div>
+          <button className="report-download" type="submit" disabled={serviceBusy||!confirmed||!reference.trim()||target.trim().toLowerCase()!==confirmationTarget.trim().toLowerCase()}>{serviceBusy?<><LoaderCircle size={14}/> Identifying services…</>:<><Network size={14}/> Identify services locally</>}</button>
+        </form>
+        {serviceResult&&<div className="network-results"><h3>Service identification evidence</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:520,overflow:"auto"}}>{JSON.stringify(serviceResult,null,2)}</pre></div>}
+      </section>}
+
+      {connected&&<section className="kali-panel">
+        <h2>9. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
