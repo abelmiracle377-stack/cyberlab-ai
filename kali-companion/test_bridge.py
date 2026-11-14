@@ -310,6 +310,51 @@ class SolidityTestRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported import path"):
             bridge._validate_solidity_test_files(files, [])
 
+    def test_runner_builds_offline_podman_command_and_foundry_remapping(self):
+        import hashlib
+        import json
+        import tempfile
+        dependency_path = "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"
+        dependency_content = "pragma solidity ^0.8.20; interface IERC20 {}"
+        lock = [{
+            "name": "@openzeppelin/contracts", "version": "5.4.0",
+            "source": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+            "commit": "f" * 40,
+            "files": [{"path": dependency_path, "sha256": hashlib.sha256(dependency_content.encode()).hexdigest()}],
+        }]
+        files = [
+            {"path": "src/Token.sol", "content": 'import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; contract Token {}'},
+            {"path": "test/Token.t.sol", "content": "contract TokenTest {}"},
+            {"path": dependency_path, "content": dependency_content},
+        ]
+        captured = {}
+        def fake_run(command, **kwargs):
+            captured["command"] = command
+            volume = command[command.index("--volume") + 1]
+            workspace = Path(volume.split(":/workspace", 1)[0])
+            captured["config"] = (workspace / "foundry.toml").read_text(encoding="utf-8")
+            kwargs["stdout"].write(json.dumps({"test_results": {}}).encode())
+            return type("Completed", (), {"returncode": 0})()
+        with patch.object(bridge, "solidity_test_runner_status", return_value={"available": True}), \
+             patch.object(bridge.shutil, "which", return_value="/usr/bin/podman"), \
+             patch.dict(os.environ, {"CYBERLAB_FOUNDRY_IMAGE": "registry.example/foundry@sha256:" + "a" * 64}), \
+             patch.object(bridge.subprocess, "run", side_effect=fake_run):
+            result = bridge.run_solidity_tests(files, lock)
+        self.assertEqual(result["status"], "passed")
+        self.assertIn('libs = ["lib"]', captured["config"])
+        self.assertIn('@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/', captured["config"])
+        command = captured["command"]
+        self.assertIn("--pull=never", command)
+        self.assertIn("--network=none", command)
+        self.assertIn("--read-only", command)
+        self.assertEqual(command[-4:], ["forge", "test", "--offline", "--json"])
+
+    def test_runner_rejects_multiple_dependency_lock_entries(self):
+        with self.assertRaisesRegex(ValueError, "at most one reviewed package"):
+            bridge._validate_solidity_project([
+                {"path": "src/A.sol", "content": "contract A {}"},
+            ], [{}, {}])
+
     def test_runner_fails_closed_when_rootless_runtime_is_missing(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(bridge.shutil, "which", return_value=None):
             status = bridge.solidity_test_runner_status()
