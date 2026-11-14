@@ -75,7 +75,6 @@ export async function POST(request: Request) {
   const scaninfo = tags(xml, "scaninfo").map((tag) => attributes(tag));
   const finishedTag = tags(xml.match(/<runstats\\b[^>]*>([\\s\\S]*?)<\\/runstats>/i)?.[1] || "", "finished")[0];
   const hostStatsTag = tags(xml.match(/<runstats\\b[^>]*>([\\s\\S]*?)<\\/runstats>/i)?.[1] || "", "hosts")[0];
-  const runstatsBlock = xml.match(/<runstats\\b[^>]*>([\\s\\S]*?)<\\/runstats>/i)?.[1] || "";
   const completion = {
     finished: attributes(finishedTag || ""),
     hosts: attributes(hostStatsTag || ""),
