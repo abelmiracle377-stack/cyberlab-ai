@@ -164,14 +164,22 @@ def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
     available = {item["name"] for item in ollama_models()}
     if model not in available:
         raise ValueError("Selected model is not installed in local Ollama.")
+    # Bound the aggregate conversation, not just each message, so the JSON body
+    # remains comfortably below MAX_OLLAMA_BODY even with a full history.
     messages = []
+    history_budget = 32000
     if isinstance(history, list):
         for item in history[-12:]:
             if not isinstance(item, dict) or item.get("role") not in {"user", "assistant"}:
                 continue
             content = item.get("content")
-            if isinstance(content, str) and content.strip() and len(content) <= 8000:
-                messages.append({"role": item["role"], "content": content})
+            if not isinstance(content, str) or not content.strip():
+                continue
+            remaining = history_budget - sum(len(message["content"]) for message in messages)
+            if remaining <= 0:
+                break
+            bounded = content[:min(4000, remaining)]
+            messages.append({"role": item["role"], "content": bounded})
     messages.append({"role": "user", "content": prompt})
     result = ollama_request("/api/chat", {
         "model": model,
@@ -300,6 +308,8 @@ class Handler(BaseHTTPRequestHandler):
             if length < 2 or length > limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
+            if not isinstance(data, dict):
+                raise ValueError("Request body must be a JSON object.")
             if path == "/ollama/chat":
                 result = ollama_chat(str(data.get("model", "")), str(data.get("prompt", "")), data.get("history"))
                 return self.send_json(200, result, origin)
