@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; uncensored?: boolean };
+type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; uncensored?: boolean; supportsTools?: boolean };
 type Message = { role: "user" | "assistant"; content: string };
 type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
 
@@ -113,7 +113,9 @@ export default function AgentPage() {
     try {
       if (model.startsWith("uncensored:")) {
         const specialistMode = executionMode === "specialists";
-        const response = await fetch(specialistMode ? "/api/agent/uncensored/orchestrate" : "/api/agent/uncensored", {
+        const selectedModel = models.find((item) => item.id === model);
+        const useReadOnlyTools = !specialistMode && selectedModel?.supportsTools === true;
+        const response = await fetch(specialistMode ? "/api/agent/uncensored/orchestrate" : useReadOnlyTools ? "/api/agent/uncensored/tools" : "/api/agent/uncensored", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -134,6 +136,18 @@ export default function AgentPage() {
             ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\\n")).join("\\n\\n")
             : "";
           output = [data.synthesis || "The coordinator could not produce a synthesis.", specialistSummary, data.note || ""].filter(Boolean).join("\\n\\n---\\n\\n");
+        } else if (useReadOnlyTools) {
+          const data = await response.json();
+          const evidenceText = Array.isArray(data.evidence) && data.evidence.length
+            ? data.evidence.map((item: any) => [
+                "### Evidence · " + String(item.tool || "tool"),
+                "Observed: " + String(item.observedAt || "timestamp unavailable"),
+                "Source: " + String(item.source || "unspecified"),
+                String(item.summary || ""),
+                "Evidence payload: " + JSON.stringify(item.data || {}).slice(0, 5000),
+              ].join("\\n")).join("\\n\\n")
+            : "No external tool evidence was retrieved.";
+          output = [data.text || "The model returned an empty response.", "## Tool evidence and provenance", evidenceText, "_Analysis is model-generated; tool results are read-only evidence snapshots._"].join("\\n\\n");
         } else {
           output = await response.text();
         }
