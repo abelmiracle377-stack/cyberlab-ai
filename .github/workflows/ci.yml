@@ -35,7 +35,7 @@ jobs:
         run: npm install --prefer-offline --no-audit --no-fund
       - name: Test Solidity static analyzer
         run: |
-          npx tsc --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-build lib/solidity-static-analysis.ts lib/chain-registry.ts tests/solidity-static-analysis.test.ts
+          npx tsc --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-build lib/solidity-static-analysis.ts lib/chain-registry.ts lib/dex-registry.ts tests/solidity-static-analysis.test.ts
           node --test .test-build/tests/solidity-static-analysis.test.js
       - name: Build Next.js application
         run: npm run build

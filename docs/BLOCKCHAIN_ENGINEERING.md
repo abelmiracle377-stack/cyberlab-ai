@@ -179,3 +179,17 @@ Until those stages are implemented and verified, use the current Solidity Lab fo
 The local Foundry test runner now accepts the same explicit dependency lock used by multi-file compilation. It can stage a bounded source/test project and locally supplied OpenZeppelin Contracts 5.x files, verify every package file against the lock's SHA-256 digest, generate a Foundry remapping, and run tests in the preloaded digest-pinned rootless Podman image with network access disabled. The runner rejects unpinned dependency files, unknown package names, unresolved imports and forge-std imports. It does not pull images, install dependencies or fall back to executing tests on the host.
 
 The Foundry image must already contain a compatible Foundry version and the exact solc version required by the project. Because the container has no network, a missing compiler cannot be downloaded at test time. The source lock proves consistency with its submitted digests but does not independently attest the original source's repository provenance. Independently verify the OpenZeppelin release, commit and image contents before use. The test runner is not a security audit; it currently supports only OpenZeppelin Contracts 5.x and does not yet support forge-std, arbitrary libraries, linked libraries, fuzzing campaigns or invariant-testing configuration.
+
+
+## Read-only DEX deployment reference registry
+
+GET /api/network/dex-registry exposes a small, source-linked initial set of Uniswap v2 and v3 factory/router references for Ethereum Mainnet and Base Mainnet. The entries are transcribed from the official protocol deployment pages and include the exact chain ID, version, contract role, address, source URL and review date.
+
+**Evidence boundary:** the evidence label means the address appears in official protocol documentation. CyberLab has not independently queried each chain, checked deployed bytecode, inspected proxy state, or confirmed current operational status. The registry must never be presented as on-chain verified. No entry is included for a chain/version/role where the reviewed primary documentation did not establish the exact mapping. The registry is read-only and does not enable approvals, swaps, liquidity actions or deployment.
+
+Before any future transaction feature is enabled, independently query the selected chain, validate non-empty contract code and expected interface behavior, inspect proxy implementation where applicable, and require a fresh chain-ID match plus explicit user approval. Router addresses are version-specific and chain-specific; do not infer compatibility from matching ABIs.
+
+Primary deployment references:
+- Uniswap v2 deployments: https://developers.uniswap.org/docs/protocols/v2/deployments
+- Uniswap v3 Ethereum deployments: https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments
+- Uniswap v3 Base deployments: https://developers.uniswap.org/docs/protocols/v3/deployments/v3-base-deployments

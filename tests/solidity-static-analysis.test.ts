@@ -121,3 +121,22 @@ test("curated EVM chain registry has unique positive IDs and documented sources"
  assert.equal(getChainById(84532)?.name, "Base Sepolia");
  assert.equal(getChainById(999999), undefined);
 });
+
+
+import { DEX_REGISTRY, getDexDeploymentsByChain } from "../lib/dex-registry";
+
+test("DEX registry contains only uniquely identified, source-linked EVM deployments", () => {
+ const ids = DEX_REGISTRY.map(entry => entry.id);
+ assert.ok(DEX_REGISTRY.length >= 4);
+ assert.equal(new Set(ids).size, ids.length);
+ for (const entry of DEX_REGISTRY) {
+  assert.ok(entry.chainId > 0);
+  assert.match(entry.address, /^0x[0-9a-fA-F]{40}$/);
+  assert.ok(entry.sourceUrl.startsWith("https://"));
+  assert.equal(entry.evidence, "official-documentation");
+  assert.equal(entry.reviewedAt, "2026-11-14");
+ }
+ assert.equal(getDexDeploymentsByChain(1).length, 4);
+ assert.equal(getDexDeploymentsByChain(8453).length, 4);
+ assert.equal(getDexDeploymentsByChain(11155111).length, 0);
+});
