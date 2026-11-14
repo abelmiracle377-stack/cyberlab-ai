@@ -11,6 +11,15 @@ Project root: examples/solidity/nft
 
 This is deliberately not a complete ERC-721 implementation: it omits standard interface support, operator approvals, metadata, burn, pause, royalties and full conformance. It is a test fixture, not deployable NFT code.
 
+## Capped ERC-1155-style multi-token fixture
+
+Project root: examples/solidity/erc1155
+
+- src/CappedMultiToken.sol: per-ID supply caps, owner minting, batch minting, operator approvals, safe single/batch transfers and pause controls.
+- test/CappedMultiToken.t.sol: covers per-ID caps, unauthorized minting, batch balances, approved operator transfers, pause enforcement, receiver callbacks and rollback when a receiver rejects.
+
+This is an educational ERC-1155-style fixture, not a complete standard implementation. It omits interface discovery, URI/metadata policy, burn operations, role-based administration and comprehensive conformance. Callback and pause behavior need independent review before any real use; it is not deployable production code.
+
 ## Constant-product AMM fixture
 
 Project root: examples/solidity/amm
