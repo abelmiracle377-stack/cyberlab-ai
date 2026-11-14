@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard,
-  Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
+  Database, FileLock2, FileSearch, Fingerprint, HardDriveDownload, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
 } from "lucide-react";
 
@@ -31,6 +31,7 @@ const groups = [
     { label: "Reverse Engineering", icon: Code2, href: "/reverse-engineering" },
     { label: "Reports", icon: FileSearch, href: "/reports" },
     { label: "Evidence Vault", icon: FileLock2, href: "/evidence-vault" },
+    { label: "File & Picture Recovery", icon: HardDriveDownload, href: "/forensics-recovery" },
   ]},
   { title: "OPERATIONS", items: [
     { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
@@ -56,6 +57,7 @@ const modules = [
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
   { name:"Evidence Vault", desc:"Keep investigation notes in a browser-local encrypted vault.", icon:FileLock2, state:"LOCAL", href:"/evidence-vault" },
+  { name:"File & Picture Recovery", desc:"Carve contiguous JPEG, PNG, GIF and PDF candidates from a supplied evidence image without modifying the source.", icon:HardDriveDownload, state:"LIMITED / LOCAL", href:"/forensics-recovery" },
   { name:"SOC Host Telemetry", desc:"Read-only, on-demand health metrics from a paired local Kali host.", icon:Activity, state:"LOCAL / ON DEMAND", href:"/kali-connection" },
   { name:"Investigations", desc:"Persistent case records and analyst-authored event timelines across security modules.", icon:FileSearch, state:"SUPABASE REQUIRED", href:"/investigations" },
 ];
