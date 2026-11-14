@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, FileImage, FileSearch, HardDriveDownload, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, FileSearch, HardDriveDownload, ShieldCheck } from "lucide-react";
 
 type Kind = "JPEG" | "PNG" | "GIF" | "PDF";
 type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; name:string };
@@ -40,12 +40,13 @@ function carve(data:Uint8Array):Recovered[]{
 function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).toFixed(1)} KB`:`${(n/1024/1024).toFixed(2)} MB`;}
 
 export default function ForensicsRecoveryPage(){
-  const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
+  const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
+  useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
-  async function choose(e:ChangeEvent<HTMLInputElement>){setSource(e.target.files?.[0]??null);setItems([]);setHash("");setMessage("");}
+  async function choose(e:ChangeEvent<HTMLInputElement>){setSource(e.target.files?.[0]??null);setItems([]);setPreviewUrls({});setHash("");setMessage("");}
   async function scan(){if(!source)return;if(source.size>MAX_BYTES){setMessage("This browser-based scanner is limited to 256 MB per source image. Use a dedicated forensic workstation for larger images.");return;}
-    setBusy(true);setItems([]);setMessage("Reading source image locally…");
-    try{const buffer=await source.arrayBuffer();const data=new Uint8Array(buffer);const digest=await crypto.subtle.digest("SHA-256",buffer);const hex=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");const results=carve(data);setHash(hex);setItems(results);setMessage(results.length?`Found ${results.length} signature-bounded candidate(s). Preview and validate each file before relying on it.`:"No supported contiguous file signatures were found.");}
+    setBusy(true);setItems([]);setPreviewUrls({});setMessage("Reading source image locally…");
+    try{const buffer=await source.arrayBuffer();const data=new Uint8Array(buffer);const digest=await crypto.subtle.digest("SHA-256",buffer);const hex=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");const results=carve(data);const previews:Record<string,string>={};for(const item of results){if(item.kind!=="PDF"){const mime=item.kind==="JPEG"?"image/jpeg":item.kind==="PNG"?"image/png":"image/gif";previews[item.id]=URL.createObjectURL(new Blob([data.slice(item.start,item.end)],{type:mime}));}}setPreviewUrls(previews);setHash(hex);setItems(results);setMessage(results.length?`Found ${results.length} signature-bounded candidate(s). Preview and validate each file before relying on it.`:"No supported contiguous file signatures were found.");}
     catch{setMessage("The source could not be read. Try a supported raw image or smaller evidence file.");}
     finally{setBusy(false);}
   }
@@ -67,7 +68,7 @@ export default function ForensicsRecoveryPage(){
       <section className="panel" style={{marginTop:14}}>
         <div className="panel-header"><div className="panel-title">2 / Recovery candidates</div><span className="panel-kicker">{items.length} FOUND · {formatBytes(total)}</span></div>
         <div className="panel-body">
-          {!items.length?<div className="empty-state">No candidates yet. Select an evidence image and run a scan.</div>:<div className="activity-list">{items.map(item=><div className="activity-row" key={item.id}><div className="activity-bullet"/><div style={{minWidth:0,flex:1}}><div className="activity-name">{item.name} · {item.kind}</div><div className="activity-detail">Offset {item.start.toLocaleString()}–{item.end.toLocaleString()} · {formatBytes(item.size)}</div></div><button className="icon-button" type="button" aria-label={`Download ${item.name}`} onClick={()=>download(item)}><Download size={14}/></button></div>)}</div>}
+          {!items.length?<div className="empty-state">No candidates yet. Select an evidence image and run a scan.</div>:<div className="activity-list">{items.map(item=><div className="activity-row" key={item.id}>{previewUrls[item.id]?<img src={previewUrls[item.id]} alt={`Preview of ${item.name}`} style={{width:72,height:56,objectFit:"contain",borderRadius:5,border:"1px solid var(--line)"}}/>:<div className="activity-bullet"/>}<div style={{minWidth:0,flex:1}}><div className="activity-name">{item.name} · {item.kind}</div><div className="activity-detail">Offset {item.start.toLocaleString()}–{item.end.toLocaleString()} · {formatBytes(item.size)}</div></div><button className="icon-button" type="button" aria-label={`Download ${item.name}`} onClick={()=>download(item)}><Download size={14}/></button></div>)}</div>}
         </div>
       </section>
       <section className="panel" style={{marginTop:14}}><div className="panel-header"><div className="panel-title"><FileSearch size={14} style={{display:"inline",marginRight:7}}/>Scope and limitations</div></div><div className="panel-body">
