@@ -50,6 +50,7 @@ def _append_audit(case_id, created_at, sources):
     fd = os.open(str(LEDGER_FILE), flags, 0o600)
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
+            os.close(fd)
             raise ValueError("The case audit ledger must be a regular file.")
         with os.fdopen(fd, "a+", encoding="utf-8") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
