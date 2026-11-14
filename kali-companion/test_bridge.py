@@ -160,9 +160,7 @@ class SolidityCompilerTests(unittest.TestCase):
             {"path": "src/Token.sol", "content": 'pragma solidity ^0.8.20; import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; contract Token {}'},
             {"path": dependency_path, "content": dependency_content},
         ]
-        with patch.object(bridge, "solidity_compiler_status", return_value={"available": True, "version": "0.8.20"}), \\
-             patch.object(bridge.shutil, "which", return_value="/usr/bin/solc"), \\
-             patch.object(bridge.subprocess, "run", return_value=type("Completed", (), {"stdout": fake_output, "stderr": b"", "returncode": 0})()) as run:
+        with patch.object(bridge, "solidity_compiler_status", return_value={"available": True, "version": "0.8.20"}) as status, patch.object(bridge.shutil, "which", return_value="/usr/bin/solc") as which, patch.object(bridge.subprocess, "run", return_value=type("Completed", (), {"stdout": fake_output, "stderr": b"", "returncode": 0})()) as run:
             result = bridge.compile_solidity_project(files, lock, "0.8.20")
         payload = json.loads(run.call_args.kwargs["input"])
         self.assertIn("src/Token.sol", payload["sources"])
