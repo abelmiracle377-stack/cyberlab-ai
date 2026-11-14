@@ -37,7 +37,14 @@ def main() -> int:
             print(f"  {key}. {label}")
         print("  8. Show command-line help")
         print("  0. Exit")
-        choice = ask("Select an option: ")
+        try:
+            choice = ask("Select an option: ")
+        except EOFError:
+            print("\\nInput closed; exiting.")
+            return 0
+        except KeyboardInterrupt:
+            print("\\nInterrupted; exiting.")
+            return 130
         if choice == "0":
             return 0
         if choice == "8":
