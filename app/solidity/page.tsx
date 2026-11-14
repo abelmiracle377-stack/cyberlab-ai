@@ -50,6 +50,14 @@ export default function SolidityLabPage() {
   const [compilerBusy, setCompilerBusy] = useState(false);
   const [compileResult, setCompileResult] = useState<{status:string;version:string;diagnostics:{severity:string;code:string;message:string;file:string;line:number|null}[];contracts:{name:string;file:string;abi:unknown[];bytecode:string}[];note:string}|null>(null);
   const [compilerError, setCompilerError] = useState("");
+  const [testRunnerStatus, setTestRunnerStatus] = useState<{available:boolean;message:string;runtime?:string;image?:string}|null>(null);
+  const [testFilesJson, setTestFilesJson] = useState(JSON.stringify([
+    { path: "src/Vault.sol", content: "pragma solidity ^0.8.20; contract Vault { uint256 public value; function set(uint256 next) external { value = next; } }" },
+    { path: "test/Vault.t.sol", content: "pragma solidity ^0.8.20; import disabled; contract VaultTest { function testPlaceholder() public pure { assert(true); } }" }
+  ], null, 2));
+  const [testRunnerBusy, setTestRunnerBusy] = useState(false);
+  const [testRunnerError, setTestRunnerError] = useState("");
+  const [testResult, setTestResult] = useState<{status:string;exit_code:number;result:Record<string,unknown>;sandbox:string;note:string}|null>(null);
 
   useEffect(() => {
     let active = true;
@@ -94,6 +102,38 @@ export default function SolidityLabPage() {
       setCompilerStatus({ available: true, version: data.version, message: "Local solc compiler completed." });
     } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compilation failed."); }
     finally { setCompilerBusy(false); }
+  }
+
+  async function checkTestRunner() {
+    setTestRunnerBusy(true); setTestRunnerError("");
+    try {
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/solidity/tests/status", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not check the local test runner.");
+      setTestRunnerStatus(data);
+    } catch (cause) { setTestRunnerError(cause instanceof Error ? cause.message : "Test runner check failed."); }
+    finally { setTestRunnerBusy(false); }
+  }
+
+  async function runLocalTests() {
+    setTestRunnerBusy(true); setTestRunnerError(""); setTestResult(null);
+    try {
+      if (language !== "Solidity") throw new Error("The local Foundry runner currently supports Solidity only.");
+      const files = JSON.parse(testFilesJson);
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/solidity/tests/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ files }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Local test execution failed.");
+      setTestResult(data);
+    } catch (cause) { setTestRunnerError(cause instanceof Error ? cause.message : "Local test execution failed."); }
+    finally { setTestRunnerBusy(false); }
   }
 
   async function runAnalysis(event: React.FormEvent) {
@@ -184,6 +224,20 @@ export default function SolidityLabPage() {
             {compileResult.contracts.map(item=><div key={item.file+"-"+item.name}><strong>{item.name}</strong><p>ABI entries: {item.abi.length} · Bytecode characters: {item.bytecode.length}</p></div>)}
             <p>{compileResult.note}</p>
           </div>}
+        </section>
+
+        <section className="solidity-results" aria-labelledby="local-tests-title">
+          <div className="solidity-result-head"><div><div className="agent-overline">OFFLINE EXECUTION / ROOTLESS CONTAINER</div><h2 id="local-tests-title">Run Solidity tests locally</h2></div><ShieldCheck size={18}/></div>
+          <p className="agent-disclaimer">Tests execute only when rootless Podman and a locally preloaded Foundry image pinned by SHA-256 are configured on your paired machine. No image is downloaded, no network is available inside the container, and there is no host-execution fallback. Review test code before running it.</p>
+          <div className="solidity-actions">
+            <small>{testRunnerStatus ? testRunnerStatus.message : "Check for the required rootless Podman sandbox."}</small>
+            <button type="button" onClick={checkTestRunner} disabled={testRunnerBusy || language !== "Solidity"}><Search size={13}/>{testRunnerBusy ? "Checking…" : "Check test sandbox"}</button>
+          </div>
+          <label htmlFor="solidity-test-files">PROJECT FILES (JSON ARRAY · src/*.sol AND test/*.t.sol)</label>
+          <textarea id="solidity-test-files" value={testFilesJson} onChange={event => setTestFilesJson(event.target.value)} spellCheck={false} autoCapitalize="off" autoCorrect="off" />
+          <div className="solidity-actions"><small>2–20 files, 100 KB combined. Imports and external dependencies are disabled.</small><button type="button" onClick={runLocalTests} disabled={testRunnerBusy || language !== "Solidity"}><Code2 size={13}/>{testRunnerBusy ? "Running tests…" : "Run in sandbox"}</button></div>
+          {testRunnerError && <div className="agent-error"><AlertTriangle size={14}/>{testRunnerError}</div>}
+          {testResult && <div className="solidity-limitations"><h3>Test result: {testResult.status.toUpperCase()}</h3><p>{testResult.sandbox}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(testResult.result,null,2)}</pre><p>{testResult.note}</p></div>}
         </section>
 
         <div className="solidity-warning"><AlertTriangle size={15} /> Heuristic source analysis only. Pattern matches are review leads, not proof of exploitability or safety.</div>
