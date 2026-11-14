@@ -135,8 +135,9 @@ def verify_case_archive(case_id):
     try:
         root_info = root.lstat()
         directory_info = case_dir.lstat()
-    except OSError as exc:
-        raise ValueError("Case archive does not exist or cannot be inspected.") from exc
+    except OSError:
+        return {"status": "failed", "case_id": case_id, "verified": False,
+                "errors": ["Case archive does not exist or cannot be inspected."], "checked_files": []}
     if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
         raise ValueError("The configured export root is not a regular directory.")
     if stat.S_ISLNK(directory_info.st_mode) or not stat.S_ISDIR(directory_info.st_mode):
