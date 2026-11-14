@@ -62,6 +62,21 @@ class BridgeHttpBoundaryTests(unittest.TestCase):
 
 
 class CyberLabOsCapabilityTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from http.server import ThreadingHTTPServer
+        import threading
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), bridge.Handler)
+        cls.server.bridge_token = "test-token-for-cyberlab-bridge"
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=2)
     def test_capability_discovery_is_read_only_and_reports_runtime_presence(self):
         with patch.object(bridge.shutil, "which", side_effect=lambda name: {
             "docker": "/usr/bin/docker",

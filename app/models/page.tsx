@@ -135,7 +135,7 @@ export default function ModelsPage() {
         if (!response.ok) throw new Error(data.error || "Local Ollama request failed.");
         const answer = typeof data.response === "string" ? data.response : "The local model returned an empty response.";
         setReply(answer);
-        setHistoryByModel((current) => ({ ...current, [active]: [...(current[active] || []), { role: "user", content: submittedPrompt }, { role: "assistant", content: answer }].slice(-12) }));
+        setHistoryByModel((current) => ({ ...current, [active]: [...(current[active] || []), { role: "user" as const, content: submittedPrompt }, { role: "assistant" as const, content: answer }].slice(-12) }));
         setPrompt("");
         return;
       }
