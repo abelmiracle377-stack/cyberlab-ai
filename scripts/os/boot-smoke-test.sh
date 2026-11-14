@@ -18,11 +18,11 @@ cleanup() {
 trap cleanup EXIT
 
 set +e
-timeout --signal=TERM --kill-after=10s 180s qemu-system-x86_64 \\
-  -machine accel=tcg \\
-  -m 2048 -smp 2 \\
-  -cdrom "$ISO" -boot order=d,menu=off \\
-  -display none -serial "file:$LOG" -monitor none \\
+timeout --signal=TERM --kill-after=10s 180s qemu-system-x86_64 \
+  -machine accel=tcg \
+  -m 2048 -smp 2 \
+  -cdrom "$ISO" -boot order=d,menu=off \
+  -display none -serial "file:$LOG" -monitor none \
   -no-reboot -no-shutdown
 QEMU_STATUS=$?
 set -e
