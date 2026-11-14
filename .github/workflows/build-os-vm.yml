@@ -15,13 +15,17 @@ jobs:
       - name: Install Debian live-build toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y live-build debootstrap xorriso squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools isolinux syslinux-common
+          sudo apt-get install -y live-build debootstrap xorriso squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools isolinux syslinux-common qemu-system-x86
       - name: Build desktop ISO
         run: |
           chmod +x scripts/os/*.sh
           sudo ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
       - name: Build lightweight terminal ISO
         run: sudo ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
+      - name: Boot-test desktop ISO in QEMU
+        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop
+      - name: Boot-test terminal ISO in QEMU
+        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal
       - name: Publish ISO checksums
         run: |
           cd "$RUNNER_TEMP/cyberlab-dist"
