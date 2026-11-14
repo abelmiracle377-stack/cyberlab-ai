@@ -79,12 +79,7 @@ def _validate_acquisition(source: str, destination_dir: str, filename: str) -> t
     # Reserve both output paths atomically before starting ddrescue; never overwrite prior evidence.
     fd = os.open(str(image_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     os.close(fd)
-    try:
-        fd = os.open(str(map_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        os.close(fd)
-    except Exception:
-        image_path.unlink(missing_ok=True)
-        raise
+    # ddrescue creates and updates its own map file; do not pre-create an invalid empty map.
     return str(source_path), image_path, map_path
 
 
@@ -150,10 +145,10 @@ def start_foremost_recovery(image_job_id: str, output_directory: str, confirmati
     source_ancestors = _ancestors(str(source_job["source"]))
     if source_ancestors.intersection(dest_ancestors):
         raise ValueError("Recovery output is on the original source device. Choose a different physical drive.")
-    output = parent / ("cyberlab-foremost-" + time.strftime("%Y%m%d-%H%M%S"))
-    output.mkdir(mode=0o700, exist_ok=False)
+    output = parent / ("cyberlab-foremost-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8])
+    if output.exists():
+        raise ValueError("The selected recovery output directory already exists.")
     if not _acquisition_lock.acquire(blocking=False):
-        output.rmdir()
         raise ValueError("Another forensic acquisition or recovery job is already running.")
     job_id = uuid.uuid4().hex
     record = {"id": job_id, "kind": "foremost", "state": "running", "source": str(source_job["source"]), "image": str(image), "output": str(output), "started_at": time.time(), "message": "Foremost recovery started from the verified disk image."}
