@@ -18,6 +18,13 @@ contract NFTMintAttacker {
     }
 }
 
+contract NFTTransferActor {
+    function transfer(CappedCollectionFixture collection, address from, address to, uint256 tokenId) external returns (bool) {
+        (bool ok,) = address(collection).call(abi.encodeCall(collection.transferFrom, (from, to, tokenId)));
+        return ok;
+    }
+}
+
 contract CappedCollectionTest {
     function testOwnerCanMintAndSupplyNeverExceedsCap() public {
         CappedCollectionFixture collection = new CappedCollectionFixture(1);
@@ -40,8 +47,9 @@ contract CappedCollectionTest {
         CappedCollectionFixture collection = new CappedCollectionFixture(2);
         collection.mint(address(this), 7);
         collection.approve(address(0xBEEF), 7);
-        (bool ok,) = address(collection).call(abi.encodeCall(collection.transferFrom, (address(this), address(0xCAFE), 7)));
-        assert(ok);
+        NFTTransferActor approved = new NFTTransferActor();
+        collection.approve(address(approved), 7);
+        assert(approved.transfer(collection, address(this), address(0xCAFE), 7));
         assert(collection.ownerOf(7) == address(0xCAFE));
         assert(collection.getApproved(7) == address(0));
     }
