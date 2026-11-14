@@ -40,7 +40,7 @@ def _append_audit(case_id, created_at, sources):
         os.chmod(LEDGER_DIR, 0o700)
     except OSError:
         pass
-    fd = os.open(str(LEDGER_FILE), os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600)
+    fd = os.open(str(LEDGER_FILE), os.O_CREAT | os.O_APPEND | os.O_RDWR, 0o600)
     try:
         with os.fdopen(fd, "a+", encoding="utf-8") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
@@ -67,7 +67,7 @@ def _append_audit(case_id, created_at, sources):
                 "case_id": case_id,
                 "created_at": created_at,
                 "event": "case_created",
-                "sources": sources,
+                "sources": [{key: source[key] for key in ("type", "sha256", "observation_count", "reference_candidate_count") if key in source} for source in sources],
                 "previous_record_hash": previous_hash,
             }
             record["record_hash"] = _digest(record)
