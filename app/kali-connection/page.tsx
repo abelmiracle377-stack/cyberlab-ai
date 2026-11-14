@@ -17,6 +17,7 @@ type Snapshot = { platform:string; release:string; architecture:string; uptime_s
 
 type KaliTool = {name:string;category:string;binary:string;package:string|null;mode:string;purpose:string;installed:boolean;path:string|null;install_hint:string|null};
 type ToolInventory = {categories:{name:string;tools:KaliTool[]}[];tool_count:number;installed_count:number;missing_count:number;note:string};
+type TaskPlan = {status:string;summary:string;categories:string[];target:string|null;target_status:string;requires_authorisation:boolean;missing_information:string[];suggested_tools:{name:string;installed:boolean;mode:string;purpose:string;install_hint:string|null}[];safety_notes:string[];steps:string[];execution_started:boolean;note:string};
 type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; state_summary:{open:number;closed:number;filtered:number}; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
 
 export default function KaliConnectionPage() {
@@ -35,7 +36,7 @@ export default function KaliConnectionPage() {
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [telemetryBusy,setTelemetryBusy]=useState(false);
   const [toolInventory,setToolInventory]=useState<ToolInventory|null>(null);
-  const [toolsBusy,setToolsBusy]=useState(false);
+  const [toolsBusy,setToolsBusy]=useState(false);\n  const [taskPrompt,setTaskPrompt]=useState("");\n  const [taskPlan,setTaskPlan]=useState<TaskPlan|null>(null);\n  const [planning,setPlanning]=useState(false);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -54,7 +55,7 @@ export default function KaliConnectionPage() {
     finally{setChecking(false);}
   }
 
-  async function refreshToolInventory(){
+  async function createTaskPlan(event:React.FormEvent){\n    event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);\n    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}\n    catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}\n    finally{setPlanning(false);}\n  }\n\n  async function refreshToolInventory(){
     setToolsBusy(true);setError("");
     try{const response=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
     catch(e){setError(e instanceof Error?e.message:"Tool inventory request failed.");}
@@ -151,6 +152,27 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
+        <h2>5. Describe any authorised cybersecurity task</h2>
+        <p>Ask a question in plain language: network or service enumeration, web security, DNS/OSINT, vulnerability research, FTP/SMB/SSH analysis, Metasploit module research, offline password-hash auditing, wireless lab assessment, packet analysis, Active Directory, digital forensics, malware triage or reverse engineering. You do not need to write Kali commands.</p>
+        <form className="report-editor" onSubmit={createTaskPlan}>
+          <label>Task, question, scan objective or lab prompt<textarea value={taskPrompt} onChange={e=>{setTaskPrompt(e.target.value);setTaskPlan(null);}} placeholder="Example: I have written permission to assess lab.example.org. Identify exposed services and explain what evidence to collect next. Or paste a TryHackMe / HTB question." required maxLength={4000} rows={5}/></label>
+          <small>Up to 4,000 characters. A target mentioned in the text is only a candidate; it is not treated as proof of permission.</small>
+          <button className="report-download" type="submit" disabled={planning||!taskPrompt.trim()}>{planning?<><LoaderCircle size={14}/> Planning task…</>:<><Activity size={14}/> Analyse task and build plan</>}</button>
+        </form>
+        {taskPlan&&<div className="network-results">
+          <h3>{taskPlan.summary}</h3>
+          <p><strong>Target:</strong> {taskPlan.target||"Not supplied"} · {taskPlan.target_status}</p>
+          <p><strong>Execution:</strong> {taskPlan.execution_started?"Started":"Not started — planning only"}</p>
+          {taskPlan.missing_information.length>0&&<><strong>Information still needed</strong><ul>{taskPlan.missing_information.map((item,i)=><li key={i}>{item}</li>)}</ul></>}
+          {taskPlan.safety_notes.length>0&&<><strong>Safety boundaries</strong><ul>{taskPlan.safety_notes.map((item,i)=><li key={i}>{item}</li>)}</ul></>}
+          <strong>Suggested local tools</strong>
+          <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Tool</th><th>Availability</th><th>Mode</th><th>Purpose / install guidance</th></tr></thead><tbody>{taskPlan.suggested_tools.map(tool=><tr key={tool.name}><td>{tool.name}</td><td>{tool.installed?"Installed":"Missing"}</td><td>{tool.mode.replaceAll("_"," ")}</td><td>{tool.purpose}{!tool.installed&&tool.install_hint?<><br/><code>{tool.install_hint}</code></>:null}</td></tr>)}</tbody></table></div>
+          <strong>Proposed workflow</strong><ol>{taskPlan.steps.map((step,i)=><li key={i}>{step}</li>)}</ol>
+          <p className="network-note">{taskPlan.note}</p>
+        </div>}
+      </section>}
+
+      {connected&&<section className="kali-panel">
         <h2>4. SOC host telemetry</h2>
         <p>Read-only health snapshot from the paired Kali machine. It does not collect usernames, process names, command lines, files or network payloads.</p>
         <button className="report-download" type="button" onClick={refreshTelemetry} disabled={telemetryBusy}>{telemetryBusy?<><LoaderCircle size={14}/> Reading local metrics…</>:<><Activity size={14}/> Refresh host telemetry</>}</button>
@@ -170,7 +192,7 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>6. Run an authorised Nmap assessment</h2>
+        <h2>7. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
