@@ -20,23 +20,10 @@ if command -v xfce4-terminal >/dev/null 2>&1; then
 Type=Application
 Name=CyberLab Terminal
 Comment=Open the CyberLab command-line companion
-Exec=xfce4-terminal --title=CyberLab --command=cyberlab --help
+Exec=xfce4-terminal --title=CyberLab --command=cyberlab
 Icon=utilities-terminal
 Terminal=false
 Categories=System;Security;
-DESKTOP
-fi
-
-if command -v firefox-esr >/dev/null 2>&1; then
-  cat >/usr/share/applications/cyberlab-workspace.desktop <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=CyberLab AI Workspace
-Comment=Open the hosted CyberLab AI research workspace
-Exec=firefox-esr https://cyberlab-ai.vercel.app
-Icon=web-browser
-Terminal=false
-Categories=Network;Security;
 DESKTOP
 fi
 
