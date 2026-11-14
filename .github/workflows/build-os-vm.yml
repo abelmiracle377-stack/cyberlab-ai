@@ -1,4 +1,4 @@
-name: Build CyberLab AI OS VM
+name: Build CyberLab AI OS Live ISOs
 
 on:
   workflow_dispatch:
@@ -7,31 +7,29 @@ permissions:
   contents: read
 
 jobs:
-  build-vm:
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
+  build-live-isos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
-      - name: Install VM build tools
+      - name: Install Debian live-build toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y libguestfs-tools qemu-utils
-      - name: Build Debian-based CyberLab OS disk
-        env:
-          CYBERLAB_VM_PASSWORD: ${{ secrets.CYBERLAB_VM_PASSWORD }}
+          sudo apt-get install -y live-build debootstrap xorriso squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools isolinux syslinux-common
+      - name: Build desktop ISO
         run: |
-          if [ -z "$CYBERLAB_VM_PASSWORD" ]; then
-            echo "Add CYBERLAB_VM_PASSWORD as a repository Actions secret before running this workflow."
-            exit 1
-          fi
           chmod +x scripts/os/*.sh
-          ./scripts/os/build-vm.sh
-      - name: Verify QCOW2 structure
-        run: ./scripts/os/verify-vm.sh dist/cyberlab-ai-os-amd64.qcow2
-      - name: Upload VM image
+          sudo ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
+      - name: Build lightweight terminal ISO
+        run: sudo ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
+      - name: Publish ISO checksums
+        run: |
+          cd "$RUNNER_TEMP/cyberlab-dist"
+          sha256sum *.iso > SHA256SUMS
+      - name: Upload CyberLab AI OS images
         uses: actions/upload-artifact@v4
         with:
-          name: cyberlab-ai-os-amd64-qcow2
-          path: dist/cyberlab-ai-os-amd64.qcow2
+          name: cyberlab-ai-os-live-isos-amd64
+          path: ${{ runner.temp }}/cyberlab-dist/
           if-no-files-found: error
           retention-days: 7
