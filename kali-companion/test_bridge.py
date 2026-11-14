@@ -355,6 +355,19 @@ class SolidityTestRunnerTests(unittest.TestCase):
                 {"path": "src/A.sol", "content": "contract A {}"},
             ], [{}, {}])
 
+    def test_nft_and_amm_fixtures_pass_project_import_validation(self):
+        fixture_root = Path(__file__).resolve().parent.parent / "examples" / "solidity"
+        for project in ("nft", "amm"):
+            files = []
+            for relative in ("src", "test"):
+                for source_path in sorted((fixture_root / project / relative).glob("*.sol")):
+                    project_path = source_path.relative_to(fixture_root / project).as_posix()
+                    files.append({"path": project_path, "content": source_path.read_text(encoding="utf-8")})
+            cleaned, remappings = bridge._validate_solidity_test_files(files, [])
+            self.assertEqual(len(cleaned), 2)
+            self.assertEqual(remappings, [])
+            self.assertTrue(any(item["path"].startswith("test/") for item in cleaned))
+
     def test_runner_fails_closed_when_rootless_runtime_is_missing(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(bridge.shutil, "which", return_value=None):
             status = bridge.solidity_test_runner_status()
