@@ -36,6 +36,24 @@ class CyberLabMenuTests(unittest.TestCase):
                 self.assertEqual(cyberlab_menu.main(), 0)
         run.assert_called_once_with(["doctor"])
 
+    def test_eof_at_main_prompt_exits_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            companion = Path(directory) / "cyberlab.py"
+            companion.write_text("# test fixture\\n", encoding="utf-8")
+            with patch.object(cyberlab_menu, "COMPANION", companion), patch(
+                "builtins.input", side_effect=EOFError
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cyberlab_menu.main(), 0)
+
+    def test_keyboard_interrupt_at_main_prompt_returns_interrupt_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            companion = Path(directory) / "cyberlab.py"
+            companion.write_text("# test fixture\\n", encoding="utf-8")
+            with patch.object(cyberlab_menu, "COMPANION", companion), patch(
+                "builtins.input", side_effect=KeyboardInterrupt
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cyberlab_menu.main(), 130)
+
     def test_passive_domain_option_dispatches_domain_argument(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             companion = Path(directory) / "cyberlab.py"
