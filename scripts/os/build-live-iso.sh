@@ -20,16 +20,22 @@ WORK_ROOT="${CYBERLAB_OS_WORKDIR:-/var/tmp/cyberlab-ai-os-build}"
 WORK_DIR="${WORK_ROOT}/${PROFILE}"
 OUTPUT_NAME="cyberlab-ai-os-${PROFILE}-amd64.iso"
 mkdir -p "$WORK_ROOT" "$OUTPUT_DIR"
-# Resolve caller-supplied relative output paths before changing into the live-build tree.
+# Resolve caller-supplied paths before changing into the live-build tree.
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 WORK_ROOT="$(cd "$WORK_ROOT" && pwd)"
 WORK_DIR="${WORK_ROOT}/${PROFILE}"
-# This script runs as root: only clean a dedicated profile directory, never a
-# filesystem root, the repository, or a directory that contains build outputs.
+# This script runs as root: only clean a dedicated work tree outside the
+# repository and output directory. Reject nested paths, not just exact matches.
 if [[ "$WORK_ROOT" == "/" || "$WORK_ROOT" == "$ROOT_DIR" || "$WORK_ROOT" == "$OUTPUT_DIR" ]]; then
   echo "Unsafe build work directory: $WORK_ROOT" >&2
   exit 2
 fi
+case "$WORK_ROOT/" in
+  "$ROOT_DIR/"*)
+    echo "Build work directory must not be inside the repository: $WORK_ROOT" >&2
+    exit 2
+    ;;
+esac
 case "$OUTPUT_DIR/" in
   "$WORK_DIR/"*)
     echo "Output directory must not be inside the profile work directory: $OUTPUT_DIR" >&2
