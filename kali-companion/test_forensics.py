@@ -17,6 +17,15 @@ class ForensicsSafetyTests(unittest.TestCase):
         self.assertIn("Inventory only", result["note"])
         self.assertEqual(run.call_args.args[0][0], "lsblk")
 
+    def test_only_inventoried_disk_or_partition_is_accepted(self):
+        inventory = [{"path": "/dev/sda", "type": "disk", "children": [
+            {"path": "/dev/sda1", "type": "part", "children": []}
+        ]}]
+        self.assertEqual(forensics._find_inventory_device(inventory, "/dev/sda1")["type"], "part")
+        self.assertIsNone(forensics._find_inventory_device(inventory, "/dev/loop0"))
+        virtual = [{"path": "/dev/mapper/cryptroot", "type": "crypt", "children": []}]
+        self.assertIsNone(forensics._find_inventory_device(virtual, "/dev/mapper/cryptroot"))
+
     def test_unknown_job_is_not_retrievable(self):
         self.assertIsNone(forensics.get_image_job("0" * 32))
 
