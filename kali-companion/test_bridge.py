@@ -34,6 +34,20 @@ class OllamaBridgeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not installed"):
                 bridge.ollama_chat("unknown:latest", "Explain DNS")
 
+    def test_chat_caps_aggregate_history_size(self):
+        history = [
+            {"role": "user" if index % 2 == 0 else "assistant", "content": "x" * 8000}
+            for index in range(12)
+        ]
+        with patch.object(bridge, "ollama_models", return_value=[{"name": "qwen2.5:0.5b"}]), \
+             patch.object(bridge, "ollama_request", return_value={
+                 "message": {"content": "ok"}, "done": True
+             }) as request:
+            bridge.ollama_chat("qwen2.5:0.5b", "Final prompt", history)
+        messages = request.call_args.args[1]["messages"]
+        self.assertLessEqual(sum(len(item["content"]) for item in messages[:-1]), 32000)
+        self.assertEqual(messages[-1]["content"], "Final prompt")
+
     def test_chat_sends_bounded_history_and_non_streaming_request(self):
         with patch.object(bridge, "ollama_models", return_value=[{"name": "qwen2.5:0.5b"}]), \
              patch.object(bridge, "ollama_request", return_value={
