@@ -281,7 +281,7 @@ def solidity_compiler_status() -> dict:
         )
         if completed.returncode != 0:
             return {"available": False, "compiler": "solc", "version": None, "message": "The installed solc executable did not report a version."}
-        match = re.search(r"Version:\s*([0-9]+\\.[0-9]+\\.[0-9]+)", completed.stdout)
+        match = re.search(r"Version:\s*([0-9]+\.[0-9]+\.[0-9]+)", completed.stdout)
         if not match:
             return {"available": False, "compiler": "solc", "version": None, "message": "Could not parse the installed solc version."}
         return {"available": True, "compiler": "solc", "version": match.group(1), "message": "Local compiler detected. Compilation runs on this machine."}
@@ -293,9 +293,9 @@ def compile_solidity(source: str, expected_version: str = "") -> dict:
     """Compile one import-free source via fixed solc standard JSON, with strict resource bounds."""
     if not isinstance(source, str) or not source.strip() or len(source.encode("utf-8")) > MAX_SOLIDITY_SOURCE:
         raise ValueError("Provide Solidity source between 1 and 100,000 UTF-8 bytes.")
-    if re.search(r"(?m)^\\s*import\\b", source):
+    if re.search(r"(?m)^\s*import\b", source):
         raise ValueError("Imports are not supported in this first local compiler stage. Resolve dependencies explicitly before compiling.")
-    if expected_version and not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", expected_version):
+    if expected_version and not re.fullmatch(r"\d+\.\d+\.\d+", expected_version):
         raise ValueError("Expected compiler version must use the exact x.y.z format.")
     status = solidity_compiler_status()
     if not status["available"]:
