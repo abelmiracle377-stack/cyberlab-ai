@@ -46,6 +46,31 @@ class CaseExportTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             case_export.export_case_bundle(self.report)
 
+    def test_archive_verification_detects_valid_archive_and_tampering(self):
+        result = case_export.export_case_bundle(self.report)
+        case_id = self.report["case"]["case_id"]
+        verified = case_export.verify_case_archive(case_id)
+        self.assertTrue(verified["verified"])
+        case_file = Path(result["archive"]["directory"]) / "case.json"
+        case_file.write_text('{"altered":true}', encoding="utf-8")
+        tampered = case_export.verify_case_archive(case_id)
+        self.assertFalse(tampered["verified"])
+        self.assertTrue(any("SHA-256 mismatch" in item for item in tampered["errors"]))
+
+    def test_verification_rejects_symlink_and_extra_files(self):
+        case_export.export_case_bundle(self.report)
+        folder = self.root / self.report["case"]["case_id"]
+        (folder / "extra.txt").write_text("unexpected")
+        result = case_export.verify_case_archive(self.report["case"]["case_id"])
+        self.assertFalse(result["verified"])
+        self.assertIn("file set", result["errors"][0])
+        with self.assertRaises(ValueError):
+            case_export.verify_case_archive("../outside")
+
+    def test_verification_reports_missing_archive(self):
+        result = case_export.verify_case_archive("c" * 32)
+        self.assertEqual(result["status"], "failed")
+
     def test_invalid_case_and_oversized_report_rejected(self):
         invalid = dict(self.report, case={"case_id": "../bad", "sources": [{}]})
         with self.assertRaises(ValueError):
