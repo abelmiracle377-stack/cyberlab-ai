@@ -96,6 +96,28 @@ The Solidity Lab is intended to grow into a full Web3 engineering workspace. The
 
 **This is an active recovery-engineering workstream, not a guidance-only feature.** CyberLab AI's coordinator should be able to select, configure and run approved recovery utilities through the Kali companion or CyberLab OS sandbox, collect structured results, and help the user validate recovered access. It must not simply tell the user to go elsewhere and run a tool manually when the supported operation can safely be executed in CyberLab.
 
+#### Wallet-format compatibility reference (implementation input)
+
+The recovery UI should begin with wallet-type selection, then identify the actual backup format/version before choosing an extractor. Treat hash-mode numbers as compatibility hints only: they are not proof that a particular file can be extracted or cracked. The worker must check its pinned Hashcat/John/BTCRecover version, detect the extracted hash format, validate the extractor output, and refuse unsupported or ambiguous formats rather than guessing.
+
+| Wallet / backup family | Candidate extraction or recovery path | Hashcat mode reference | Important qualification |
+|---|---|---:|---|
+| Bitcoin Core `wallet.dat` | John `bitcoin2john.py`; BTCRecover for supported wallet/password/seed workflows | 11300 | Confirm wallet version and extractor compatibility first |
+| Electrum | John `electrum2john.py`; BTCRecover where the exact wallet version is supported | 16600, 21700, 21800 | Electrum salt/version variants use different modes; never assume 16600 fits every wallet |
+| Ethereum UTC keystore JSON | John `ethereum2john.py` or a validated keystore adapter | 15600 (PBKDF2-HMAC-SHA256), 15700 (scrypt) | Identify KDF from the keystore JSON; scrypt can be resource-intensive |
+| Ethereum presale wallet | Format-specific extractor | 16300 | Do not confuse presale wallets with modern UTC keystores |
+| MetaMask | Version-aware extraction from a user-supplied, locally obtained vault/extension backup; BTCRecover support only where documented | No generic mode asserted here | Do not scrape browser logs or collect extension state remotely; vault formats and derivation context vary |
+| Blockchain.com / legacy Blockchain My Wallet | John `blockchain2john.py` or validated adapter | 12700; 15200 (V2); 18800 (second-password SHA-256) | Distinguish wallet generation and second-password formats |
+| Exodus | Version-aware local extraction/adapter | 18900 (Exodus Desktop scrypt) | The mode must match the extracted format; do not reuse Blockchain.com or MultiBit modes |
+| MultiBit Classic / MultiBit HD | John `multibit2john.py` where supported | 22500 (Classic key), 22700 (Classic wallet / HD) | Mode depends on the exact MultiBit product and backup file |
+| BIP39 seed with missing/incorrect words | BTCRecover `seedrecover.py` / supported mnemonic recovery flow | Not a general Hashcat hash mode | Requires useful known words, positions, passphrase clues or a known address; validate derived public addresses |
+| Ledger / Trezor and other hardware wallets | Recover or repair the owner's backup seed using compatible BIP39/BIP39-passphrase tooling | Not an off-device device-PIN cracking mode | Do not attack device firmware/PIN; a Trezor-style optional passphrase is a separate recovery search |
+| KeePass database containing wallet material | John `keepass2john` | 13400 (KeePass 1/2 AES formats supported by the mode) | This recovers the database password, not a wallet key directly |
+
+**Important corrections to the supplied quick-reference draft:** the commonly documented Exodus Desktop scrypt mode is 18900, not 28200; MultiBit uses 22500/22700 variants rather than assuming 12700; Ethereum presale wallets use 16300, distinct from UTC keystore modes 15600/15700. Do not ship the proposed MetaMask mode 26600 as a supported mapping without a verified current extractor/hashcat example. The same caution applies to any tool/version-specific mapping.
+
+For any future adapter, maintain a checked-in compatibility manifest containing wallet family, exact file/version signature, extractor name and pinned version, emitted hash signature, supported Hashcat mode(s) or BTCRecover workflow, fixture provenance, and test result. A mapping remains **planned/unverified** until it passes a local fixture test using synthetic or public test data. The runtime should also query the installed tool's own mode list (for example, `hashcat --help` / `hashcat --example-hashes`) instead of relying solely on this documentation.
+
 #### Recovery capabilities
 - **Bitcoin and other wallet recovery:** integrate maintained, reviewed tools such as BTCRecover where their supported wallet formats and recovery modes match the user's backup. Add format adapters for supported Bitcoin Core, Electrum, hardware-wallet backup and other documented formats as validation establishes compatibility; do not claim universal wallet support.
 - **Password/passphrase recovery:** run user-authorised candidate-based and typo-tolerant recovery against a supplied wallet backup, encrypted keystore or user-provided recovery material. Support bounded masks, known fragments and user-supplied candidate lists. Allow the user to configure time, memory, CPU/GPU and attempt budgets, and stop/cancel immediately.
