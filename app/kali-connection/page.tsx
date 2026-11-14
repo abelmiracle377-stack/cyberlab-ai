@@ -97,16 +97,16 @@ export default function KaliConnectionPage() {
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
-        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}sudo apt update && sudo apt install -y nmap python3{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
+        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
         <p>If you already cloned the repository, update it with <code>git pull origin main</code> from inside the repository folder.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
 
       <section className="kali-panel">
         <h2>2. Start the local bridge on Kali</h2>
-        <pre>python3 kali-companion/bridge.py</pre>
+        <pre>sudo python3 kali-companion/bridge.py</pre>
         <button className="report-download" type="button" onClick={copyCommand}><Copy size={13}/>{copied?"Copied":"Copy bridge command"}</button>
-        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
+        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Running with sudo enables explicitly approved disk imaging; it gives the local bridge elevated privileges, so keep the token private and stop the bridge when finished. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
       </section>
 
       <section className="kali-panel">
