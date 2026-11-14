@@ -43,7 +43,7 @@ def render_case_html(report):
     safe_title = html.escape(title)
     body = html.escape(json.dumps(report, ensure_ascii=False, indent=2))
     created = html.escape(str(case.get("created_at", "Unknown")))
-    return ("<!doctype html><nhtml>" if False else "<!doctype html><html lang=\"en\">"
+    return ("<!doctype html><html lang=\"en\">"
             "<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">"
             "<title>" + safe_title + "</title><style>body{font:15px/1.55 system-ui,sans-serif;max-width:1000px;margin:40px auto;padding:0 20px;background:#10151d;color:#e8edf4}"
