@@ -1,0 +1,74 @@
+export type GatewayMessage = { role: "system" | "user" | "assistant"; content: string };
+export type GatewayResult = { text: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number }; provider: string; model: string };
+
+const DEFAULT_BASE_URL = "https://api.uncensoredllm.ai/v1";
+
+function getProviderConfig() {
+  const apiKey = process.env.CYBERLAB_UNCENSORED_API_KEY || process.env.UNCENSOREDLLM_API_KEY;
+  const baseUrl = (process.env.CYBERLAB_UNCENSORED_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  return { apiKey, baseUrl };
+}
+
+export function getUnfilteredModels(): Array<{ id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; uncensored: boolean }> {
+  const raw = process.env.CYBERLAB_UNCENSORED_MODELS;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry: unknown) => {
+      if (!entry || typeof entry !== "object") return [];
+      const item = entry as { id?: unknown; name?: unknown; contextLength?: unknown };
+      if (typeof item.id !== "string" || !/^[a-zA-Z0-9._:/-]{3,180}$/.test(item.id)) return [];
+      return [{
+        id: `uncensored:${item.id}`,
+        name: typeof item.name === "string" ? item.name.slice(0, 120) : item.id,
+        provider: "Unfiltered inference",
+        contextLength: typeof item.contextLength === "number" && Number.isFinite(item.contextLength) ? item.contextLength : null,
+        openWeight: true,
+        uncensored: true,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function runUnfilteredCompletion(input: {
+  model: string;
+  messages: GatewayMessage[];
+  maxTokens?: number;
+}): Promise<GatewayResult> {
+  const { apiKey, baseUrl } = getProviderConfig();
+  if (!apiKey) throw new Error("Unfiltered model provider is not configured. Add CYBERLAB_UNCENSORED_API_KEY as a server-only secret.");
+  const configured = getUnfilteredModels().find((item) => item.id === `uncensored:${input.model}`);
+  if (!configured) throw new Error("This model is not in CyberLab's server-approved unfiltered model catalogue.");
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Title": "CyberLab AI" },
+    body: JSON.stringify({
+      model: input.model,
+      messages: input.messages,
+      temperature: 0.25,
+      max_tokens: Math.min(Math.max(input.maxTokens ?? 1800, 128), 4096),
+      stream: false,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(90000),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const providerMessage = typeof payload?.error?.message === "string" ? payload.error.message : `Provider returned HTTP ${response.status}.`;
+    throw new Error(providerMessage.slice(0, 500));
+  }
+  const text = payload?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) throw new Error("The selected model returned an empty response.");
+  const usage = payload?.usage || {};
+  const promptTokens = Number.isFinite(usage.prompt_tokens) ? Math.max(0, Number(usage.prompt_tokens)) : 0;
+  const completionTokens = Number.isFinite(usage.completion_tokens) ? Math.max(0, Number(usage.completion_tokens)) : 0;
+  return {
+    text: text.slice(0, 30000),
+    usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens },
+    provider: "uncensoredllm-compatible",
+    model: input.model,
+  };
+}

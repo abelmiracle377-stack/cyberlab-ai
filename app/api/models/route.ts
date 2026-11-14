@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getUnfilteredModels } from "@/lib/ai-gateway";
 
 export const runtime = "nodejs";
 export const revalidate = 300;
@@ -22,7 +23,8 @@ export async function GET() {
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) {
-      return NextResponse.json({ models: [], error: "OpenRouter model catalogue is temporarily unavailable." }, { status: 502 });
+      const unfiltered = getUnfilteredModels();
+      return NextResponse.json({ models: unfiltered, error: unfiltered.length ? undefined : "Model catalogues are temporarily unavailable." }, { status: unfiltered.length ? 200 : 502 });
     }
     const payload = (await response.json()) as { data?: OpenRouterModel[] };
     const models = (payload.data ?? [])
@@ -39,10 +41,12 @@ export async function GET() {
         };
       })
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
-    return NextResponse.json({ models }, {
-      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
+    const combined = [...getUnfilteredModels(), ...models];
+    return NextResponse.json({ models: combined }, {
+      headers: { "Cache-Control": "private, no-store" },
     });
   } catch {
-    return NextResponse.json({ models: [], error: "Could not reach the OpenRouter model catalogue." }, { status: 502 });
+    const unfiltered = getUnfilteredModels();
+    return NextResponse.json({ models: unfiltered, error: unfiltered.length ? undefined : "Could not reach an available model catalogue." }, { status: unfiltered.length ? 200 : 502 });
   }
 }

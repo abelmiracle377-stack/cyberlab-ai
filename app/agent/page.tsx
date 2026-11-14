@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
+type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; uncensored?: boolean };
 type Message = { role: "user" | "assistant"; content: string };
 type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
 
@@ -111,7 +111,23 @@ export default function AgentPage() {
     setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "" }]);
     setBusy(true);
     try {
-      if (executionMode === "specialists") {
+      if (model.startsWith("uncensored:")) {
+        const response = await fetch("/api/agent/uncensored", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: text, model: model.slice("uncensored:".length), history: messages.filter((item) => item.content.trim()).slice(-12) }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Unfiltered model request failed.");
+        }
+        const output = await response.text();
+        setMessages((current) => {
+          const next = [...current];
+          next[next.length - 1] = { role: "assistant", content: output || "The model returned an empty response." };
+          return next;
+        });
+      } else if (executionMode === "specialists") {
         const response = await fetch("/api/agent/orchestrate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -191,11 +207,11 @@ export default function AgentPage() {
             <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); if (!models.some((item) => item.id === model)) setModel(models.find((item) => item.id === "openai/gpt-5.5")?.id || models[0]?.id || "openai/gpt-5.5"); }} disabled={busy}>Standard</button>
             <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight); setAgentMode("open-weight"); if (first) setModel(first.id); }} disabled={busy}>Open-weight research mode</button>
           </div>
-          <div className="agent-model-label"><span className="agent-live-dot" /> {agentMode === "open-weight" ? "OPEN-WEIGHT MODEL ROUTING" : "MODEL ROUTING"}</div>
+          <div className="agent-model-label"><span className="agent-live-dot" /> {model.startsWith("uncensored:") ? "UNFILTERED MODEL ROUTING" : agentMode === "open-weight" ? "OPEN-WEIGHT MODEL ROUTING" : "MODEL ROUTING"}</div>
           <label className="agent-select-wrap">
             <span className="sr-only">Select model</span>
             <select value={model} onChange={(event) => setModel(event.target.value)} disabled={busy}>
-              {availableModels.length ? availableModels.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.provider}</option>) : <option value="">{agentMode === "open-weight" ? "No recognised open-weight models available" : model}</option>}
+              {availableModels.length ? availableModels.map((item) => <option value={item.id} key={item.id}>{item.name}{item.uncensored ? " · UNFILTERED" : ""} · {item.provider}</option>) : <option value="">{agentMode === "open-weight" ? "No recognised open-weight models available" : model}</option>}
             </select>
             <ChevronDown size={13} />
           </label>
@@ -241,7 +257,7 @@ export default function AgentPage() {
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
           <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
         </form>
-        <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
+        <div className="agent-disclaimer"><Sparkles size={12} /> Unfiltered models are separately configured hosted checkpoints; the label does not certify model behaviour. Outputs are AI-generated and must be verified against primary evidence. Tool execution and real-world actions remain separately permissioned.</div>
       </section>
     </main>
   );
