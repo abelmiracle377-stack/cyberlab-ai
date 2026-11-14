@@ -24,11 +24,16 @@ HOST = "127.0.0.1"
 PORT = 8765
 MAX_BODY = 8192
 MAX_PORTS = 100
-MAX_RUNTIME = 55
+MAX_RUNTIME = 180
+JOB_TTL_SECONDS = 900
+MAX_RETAINED_JOBS = 8
+SCAN_PROFILES = {"quick": [22, 80, 443], "standard": list(range(1, 101))}
 ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"}
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
+job_lock = threading.Lock()
+scan_jobs: dict[str, dict] = {}
 
 
 def load_token() -> str:
@@ -231,13 +236,54 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system"}:
-            return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
-        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
+        if path == "/health":
+            return self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
+        match = re.fullmatch(r"/scan/([A-Za-z0-9_-]{20,100})", path)
+        if match:
+            job_id = match.group(1)
+            with job_lock:
+                job = scan_jobs.get(job_id)
+                if not job or time.time() - job["created_at"] > JOB_TTL_SECONDS:
+                    scan_jobs.pop(job_id, None)
+                    return self.send_json(404, {"error": "Scan job not found or expired."}, origin)
+                snapshot = {key: value for key, value in job.items() if key != "created_at"}
+            return self.send_json(200, snapshot, origin)
+        return self.send_json(404, {"error": "Not found."}, origin)
+
+    def run_scan_job(self, job_id: str, target: str, ports: list[int], profile: str):
+        started = time.time()
+        try:
+            command = ["nmap", "-n", "-sT", "-sV", "--version-light", "-T2", "--max-retries", "1", "--host-timeout", "150s", "-p", ",".join(map(str, ports)), "-oX", "-", target]
+            completed = subprocess.run(command, capture_output=True, text=True, timeout=MAX_RUNTIME, check=False)
+            if completed.returncode not in (0, 1) or not completed.stdout.strip():
+                raise RuntimeError((completed.stderr or "Nmap did not return a report.")[:700])
+            report = parse_report(completed.stdout)
+            payload = {
+                "status": "completed" if report["evidence_status"] == "completed" else "partial",
+                "target": target, "profile": profile, "ports_checked": ports,
+                "duration_seconds": round(time.time() - started, 1),
+                "method": "Nmap TCP connect scan with light service version detection",
+                "exit_code": completed.returncode, "stderr": completed.stderr[:2000],
+                "ports_checked_count": len(ports), **report,
+                "note": "Nmap reports selected TCP ports as open, closed or filtered when determinable. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. No NSE scripts, exploit checks, credentials, evasion or denial-of-service options are used. Assess only systems explicitly in scope.",
+            }
+            with job_lock:
+                scan_jobs[job_id].update(payload)
+        except subprocess.TimeoutExpired:
+            with job_lock:
+                scan_jobs[job_id].update({"status": "timeout", "error": "Assessment exceeded the 180-second time limit."})
+        except Exception as exc:
+            with job_lock:
+                scan_jobs[job_id].update({"status": "failed", "error": str(exc)[:700]})
+        finally:
+            with job_lock:
+                if job_id in scan_jobs:
+                    scan_jobs[job_id]["finished_at"] = time.time()
+            scan_lock.release()
 
     def do_POST(self):
         origin = self.headers.get("Origin", "")
@@ -257,45 +303,44 @@ class Handler(BaseHTTPRequestHandler):
             reference = str(data.get("authorizationReference", "")).strip()
             if data.get("authorizationConfirmed") is not True or confirmation != str(data.get("target", "")).strip().lower().rstrip(".") or not reference or len(reference) > 160:
                 raise ValueError("Confirm ownership or written permission, provide an approval reference and retype the exact target.")
+            profile = str(data.get("profile", "custom")).lower()
+            if profile not in {"quick", "standard", "custom"}:
+                raise ValueError("Choose the quick, standard or custom scan profile.")
             ports_raw = data.get("ports", [])
-            if not isinstance(ports_raw, list) or not ports_raw or len(ports_raw) > MAX_PORTS or any(type(p) is not int or not 1 <= p <= 65535 for p in ports_raw):
-                raise ValueError("Select between 1 and 100 unique TCP ports in the range 1–65535.")
-            ports = sorted(set(ports_raw))
-            if len(ports) != len(ports_raw):
-                raise ValueError("Duplicate ports are not accepted.")
+            if profile in SCAN_PROFILES:
+                ports = SCAN_PROFILES[profile]
+                if ports_raw and (not isinstance(ports_raw, list) or sorted(set(ports_raw)) != ports):
+                    raise ValueError("Selected ports do not match the chosen scan profile.")
+            else:
+                if not isinstance(ports_raw, list) or not ports_raw or len(ports_raw) > MAX_PORTS or any(type(p) is not int or not 1 <= p <= 65535 for p in ports_raw):
+                    raise ValueError("Select between 1 and 100 unique TCP ports in the range 1–65535.")
+                ports = sorted(set(ports_raw))
+                if len(ports) != len(ports_raw):
+                    raise ValueError("Duplicate ports are not accepted.")
             if not shutil.which("nmap"):
                 return self.send_json(503, {"error": "Nmap is not installed. Install it with: sudo apt install nmap"}, origin)
             if not scan_lock.acquire(blocking=False):
                 return self.send_json(409, {"error": "A local assessment is already running."}, origin)
-            try:
-                command = [
-                    "nmap", "-n", "-sT", "-sV", "--version-light", "-T2",
-                    "--max-retries", "1", "--host-timeout", "45s",
-                    "-p", ",".join(map(str, ports)), "-oX", "-", target,
-                ]
-                started = time.time()
-                completed = subprocess.run(command, capture_output=True, text=True, timeout=MAX_RUNTIME, check=False)
-                if completed.returncode not in (0, 1) or not completed.stdout.strip():
-                    raise RuntimeError((completed.stderr or "Nmap did not return a report.")[:700])
-                report = parse_report(completed.stdout)
-                return self.send_json(200, {
-                    "status": "completed" if report["evidence_status"] == "completed" else "partial",
-                    "target": target,
-                    "ports_checked": ports,
-                    "duration_seconds": round(time.time() - started, 1),
-                    "method": "Nmap TCP connect scan with light service version detection",
-                    "exit_code": completed.returncode,
-                    "stderr": completed.stderr[:2000],
-                    "ports_checked_count": len(ports),
-                    **report,
-                    "note": "Nmap reports selected TCP ports as open, closed or filtered when determinable. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. No NSE scripts, exploit checks, credentials, evasion or denial-of-service options are used. Assess only systems explicitly in scope.",
-                }, origin)
-            finally:
-                scan_lock.release()
+            job_id = secrets.token_urlsafe(24)
+            now = time.time()
+            with job_lock:
+                expired = [key for key, value in scan_jobs.items() if now - value["created_at"] > JOB_TTL_SECONDS]
+                for key in expired:
+                    scan_jobs.pop(key, None)
+                if len(scan_jobs) >= MAX_RETAINED_JOBS:
+                    oldest = sorted(scan_jobs, key=lambda key: scan_jobs[key]["created_at"])[0]
+                    if scan_jobs[oldest]["status"] in {"queued", "running"}:
+                        scan_lock.release()
+                        return self.send_json(503, {"error": "Local scan history is full. Wait for the active job to finish."}, origin)
+                    scan_jobs.pop(oldest, None)
+                scan_jobs[job_id] = {"job_id": job_id, "status": "queued", "target": target, "profile": profile, "created_at": now}
+            worker = threading.Thread(target=self.run_scan_job, args=(job_id, target, ports, profile), daemon=True)
+            worker.start()
+            with job_lock:
+                scan_jobs[job_id]["status"] = "running"
+            return self.send_json(202, {"job_id": job_id, "status": "running", "target": target, "profile": profile, "poll": "/scan/" + job_id}, origin)
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json(400, {"error": str(exc)}, origin)
-        except subprocess.TimeoutExpired:
-            self.send_json(504, {"error": "Assessment exceeded the 55-second time limit."}, origin)
         except Exception as exc:
             self.send_json(502, {"error": str(exc)[:700]}, origin)
 

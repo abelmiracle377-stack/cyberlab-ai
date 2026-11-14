@@ -6,7 +6,8 @@ import Link from "next/link";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
 type Message = { role: "user" | "assistant"; content: string };
-type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
+type LocalScanResult = { target: string; profile: string; duration_seconds: number; method: string; state_summary: Record<string, number>; summary: { hosts: number; up: number; ports: number; open_ports: number; state_counts: Record<string, number> }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; open_ports: { host: string; port: number; protocol: string; state: string; service: string; product: string; version: string }[]; note: string };
+type ScanProfile = "quick" | "standard" | "custom";
 
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
@@ -16,7 +17,7 @@ export default function AgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [scanRequest, setScanRequest] = useState<{ target: string; ports: string } | null>(null);
+  const [scanRequest, setScanRequest] = useState<{ target: string; ports: string; profile: ScanProfile } | null>(null);
   const [scanConfirmation, setScanConfirmation] = useState("");
   const [scanReference, setScanReference] = useState("");
   const [scanAuthorised, setScanAuthorised] = useState(false);
@@ -48,43 +49,58 @@ export default function AgentPage() {
     event.preventDefault();
     if (!scanRequest || scanBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) {
-      setScanStatus("Kali bridge is not paired in this browser session. Open Kali Connection and pair the local companion first.");
-      return;
-    }
+    if (!token) { setScanStatus("Kali bridge is not paired in this browser session. Open Kali Connection and pair the local companion first."); return; }
     const ports: number[] = [];
     for (const part of scanRequest.ports.split(",")) {
       const value = part.trim();
       const range = value.match(/^(\d{1,5})-(\d{1,5})$/);
       if (range) {
-        const start = Number(range[1]), end = Number(range[2]);
-        if (end < start || end - start > 99) { setScanStatus("Each port range must be ascending and contain at most 100 ports."); return; }
-        for (let port = start; port <= end; port++) ports.push(port);
+        const first = Number(range[1]), last = Number(range[2]);
+        if (last < first || last - first > 99) { setScanStatus("Each custom port range must be ascending and contain at most 100 ports."); return; }
+        for (let port = first; port <= last; port++) ports.push(port);
       } else if (/^\d{1,5}$/.test(value)) ports.push(Number(value));
-      else { setScanStatus("Enter ports as comma-separated numbers or bounded ranges."); return; }
+      else { setScanStatus("Enter custom ports as comma-separated numbers or bounded ranges."); return; }
     }
     const unique = [...new Set(ports)];
-    if (!unique.length || unique.length > 100 || unique.some(port => port < 1 || port > 65535)) {
+    if (scanRequest.profile === "custom" && (!unique.length || unique.length > 100 || unique.some(port => port < 1 || port > 65535))) {
       setScanStatus("Select between 1 and 100 unique TCP ports from 1 to 65535."); return;
     }
-    setScanBusy(true); setScanStatus("Submitting approved scan to the paired local Kali bridge…");
+    setScanBusy(true);
+    setScanStatus("Submitting the approved " + scanRequest.profile + " profile to Kali…");
     try {
       const response = await fetch("http://127.0.0.1:8765/scan", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
         body: JSON.stringify({
-          target: scanRequest.target,
-          confirmationTarget: scanConfirmation.trim(),
-          authorizationReference: scanReference.trim(),
-          authorizationConfirmed: scanAuthorised,
-          ports: unique,
+          target: scanRequest.target, confirmationTarget: scanConfirmation.trim(),
+          authorizationReference: scanReference.trim(), authorizationConfirmed: scanAuthorised,
+          profile: scanRequest.profile, ports: scanRequest.profile === "custom" ? unique : [],
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Local Kali bridge returned HTTP ${response.status}.`);
-      setScanResult(data as LocalScanResult);
-      setScanStatus("Local Nmap assessment completed. Review the evidence below; this is not a vulnerability verdict.");
-      setScanRequest(null);
+      const submitted = await response.json();
+      if (!response.ok) throw new Error(submitted.error || "Local Kali bridge returned HTTP " + response.status + ".");
+      const jobId = submitted.job_id as string;
+      if (!jobId) throw new Error("Kali bridge did not return a scan job identifier.");
+      setScanStatus("Nmap is running locally. Results will appear when the scan finishes.");
+      const startedAt = Date.now();
+      const deadline = startedAt + 190000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        const poll = await fetch("http://127.0.0.1:8765/scan/" + encodeURIComponent(jobId), {
+          headers: { "Authorization": "Bearer " + token },
+        });
+        const job = await poll.json();
+        if (!poll.ok) throw new Error(job.error || "Could not retrieve the local scan result.");
+        if (job.status === "completed" || job.status === "partial") {
+          setScanResult(job as LocalScanResult);
+          setScanStatus("Local Nmap assessment finished. Review the evidence below; this is not a vulnerability verdict.");
+          setScanRequest(null);
+          return;
+        }
+        if (job.status === "failed" || job.status === "timeout") throw new Error(job.error || "The local scan did not complete.");
+        setScanStatus("Nmap is running locally… " + Math.round((Date.now() - startedAt) / 1000) + "s elapsed");
+      }
+      throw new Error("The scan is still running on Kali. The bridge retains recent job status for 15 minutes; reconnect and check again rather than launching a duplicate scan.");
     } catch (cause) {
       setScanStatus(cause instanceof Error ? cause.message : "Could not reach the local Kali bridge. Confirm that it is running and paired on this same computer.");
     } finally { setScanBusy(false); }
@@ -103,7 +119,7 @@ export default function AgentPage() {
     if (scanMatch) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
       setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can prepare a bounded Nmap TCP scan on your paired local Kali machine. Before anything runs, confirm the exact target, authorisation reference and scope below. No scan has started." }]);
-      setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\s+/g, "") || "1-100" });
+      setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\s+/g, "") || "1-100", profile: "standard" });
       setBusy(false);
       return;
     }
