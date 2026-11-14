@@ -53,7 +53,7 @@ export default function SolidityLabPage() {
   const [testRunnerStatus, setTestRunnerStatus] = useState<{available:boolean;message:string;runtime?:string;image?:string}|null>(null);
   const [testFilesJson, setTestFilesJson] = useState(JSON.stringify([
     { path: "src/Vault.sol", content: "pragma solidity ^0.8.20; contract Vault { uint256 public value; function set(uint256 next) external { value = next; } }" },
-    { path: "test/Vault.t.sol", content: "pragma solidity ^0.8.20; import disabled; contract VaultTest { function testPlaceholder() public pure { assert(true); } }" }
+    { path: "test/Vault.t.sol", content: "pragma solidity ^0.8.20; contract VaultTest { function testPlaceholder() public pure { assert(true); } }" }
   ], null, 2));
   const [testRunnerBusy, setTestRunnerBusy] = useState(false);
   const [testRunnerError, setTestRunnerError] = useState("");
