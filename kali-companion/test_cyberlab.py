@@ -54,6 +54,45 @@ class CompanionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "public global"):
             cyberlab.ip_intelligence("127.0.0.1")
 
+    def test_port_scan_rejects_url_targets_before_invoking_nmap(self):
+        with patch.object(cyberlab.shutil, "which") as which:
+            with self.assertRaisesRegex(ValueError, "single IP address|fully-qualified"):
+                cyberlab.port_scan("https://example.org", "80")
+        which.assert_not_called()
+
+    def test_port_scan_rejects_ranges_over_one_hundred_ports(self):
+        with patch.object(cyberlab.shutil, "which") as which:
+            with self.assertRaisesRegex(ValueError, "1–100"):
+                cyberlab.port_scan("example.org", "1-101")
+        which.assert_not_called()
+
+    def test_port_scan_rejects_more_than_one_hundred_unique_ports(self):
+        ports = ",".join(str(port) for port in range(1, 102))
+        with patch.object(cyberlab.shutil, "which") as which:
+            with self.assertRaisesRegex(ValueError, "no more than 100"):
+                cyberlab.port_scan("example.org", ports)
+        which.assert_not_called()
+
+    def test_port_scan_uses_argument_vector_and_bounded_safe_flags(self):
+        completed = type("Result", (), {
+            "returncode": 0,
+            "stdout": '<nmaprun><host><status state="up"/><address addr="192.0.2.5" addrtype="ipv4"/><ports><port protocol="tcp" portid="443"><state state="open"/><service name="https"/></port></ports></host></nmaprun>',
+            "stderr": "",
+        })()
+        with patch.object(cyberlab.shutil, "which", return_value="/usr/bin/nmap"), patch.object(
+            cyberlab.subprocess, "run", return_value=completed
+        ) as run:
+            result = cyberlab.port_scan("example.org", "443", timeout=30)
+        command = run.call_args.args[0]
+        self.assertIsInstance(command, list)
+        self.assertIn("-sT", command)
+        self.assertIn("-sV", command)
+        self.assertIn("--version-light", command)
+        self.assertIn("--max-retries", command)
+        self.assertIn("1", command)
+        self.assertEqual(run.call_args.kwargs["timeout"], 30)
+        self.assertEqual(result["open_ports"][0]["port"], 443)
+
     def test_invalid_ip_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "valid IPv4 or IPv6"):
             cyberlab.ip_intelligence("999.999.999.999")
