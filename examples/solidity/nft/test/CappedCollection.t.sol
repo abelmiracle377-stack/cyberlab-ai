@@ -11,6 +11,12 @@ contract AcceptingNFTReceiver is IERC721ReceiverFixture {
     }
 }
 
+contract RejectingNFTReceiver is IERC721ReceiverFixture {
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return bytes4(0);
+    }
+}
+
 contract NFTMintAttacker {
     function attemptMint(CappedCollectionFixture collection) external returns (bool) {
         (bool ok,) = address(collection).call(abi.encodeCall(collection.mint, (address(this), 99)));
@@ -52,6 +58,15 @@ contract CappedCollectionTest {
         assert(approved.transfer(collection, address(this), address(0xCAFE), 7));
         assert(collection.ownerOf(7) == address(0xCAFE));
         assert(collection.getApproved(7) == address(0));
+    }
+
+    function testSafeMintRejectsInvalidReceiverAndRollsBackMint() public {
+        CappedCollectionFixture collection = new CappedCollectionFixture(2);
+        RejectingNFTReceiver receiver = new RejectingNFTReceiver();
+        (bool ok,) = address(collection).call(abi.encodeCall(collection.safeMint, (address(receiver), 10, "")));
+        assert(!ok);
+        assert(collection.totalSupply() == 0);
+        assert(collection.ownerOf(10) == address(0));
     }
 
     function testSafeMintCallsReceiverAfterOwnershipIsRecorded() public {

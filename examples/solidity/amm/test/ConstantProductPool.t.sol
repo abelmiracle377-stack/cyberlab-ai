@@ -19,6 +19,24 @@ contract ConstantProductPoolTest {
         assert(afterProduct >= beforeProduct);
     }
 
+    function testSequentialSwapsKeepReserveProductNondecreasing() public {
+        FixtureToken token0 = new FixtureToken("A");
+        FixtureToken token1 = new FixtureToken("B");
+        ConstantProductPoolFixture pool = new ConstantProductPoolFixture(address(token0), address(token1));
+        token0.mint(address(this), 30_000);
+        token1.mint(address(this), 30_000);
+        token0.approve(address(pool), type(uint256).max);
+        token1.approve(address(pool), type(uint256).max);
+        pool.addLiquidity(20_000, 20_000, 1, block.timestamp);
+        uint256 previousProduct = pool.reserve0() * pool.reserve1();
+        for (uint256 i = 1; i <= 5; i++) {
+            pool.swapExact0For1(i * 100, 1, block.timestamp);
+            uint256 currentProduct = pool.reserve0() * pool.reserve1();
+            assert(currentProduct >= previousProduct);
+            previousProduct = currentProduct;
+        }
+    }
+
     function testMinimumOutputRejectsExcessiveSlippage() public {
         FixtureToken token0 = new FixtureToken("A");
         FixtureToken token1 = new FixtureToken("B");
