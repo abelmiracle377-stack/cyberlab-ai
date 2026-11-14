@@ -167,10 +167,10 @@ Slot      Start        End          Length       Description
             image.write_bytes(b"image")
             job_id = "e" * 32
             sample = "002: 000:000 0000002048 0000206847 0000204800 NTFS / exFAT (0x07)"
-            with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}), \\
-                 patch.object(forensics.shutil, "which", return_value="/usr/bin/mmls"), \\
-                 patch.object(forensics.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": sample, "stderr": ""})()) as run:
-                result = forensics.inspect_image_partitions(job_id, str(image))
+            with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}):
+                with patch.object(forensics.shutil, "which", return_value="/usr/bin/mmls"):
+                    with patch.object(forensics.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": sample, "stderr": ""})()) as run:
+                        result = forensics.inspect_image_partitions(job_id, str(image))
             self.assertEqual(result["partition_count"], 1)
             self.assertEqual(run.call_args.args[0][0], "mmls")
             self.assertIn("not mounted", result["note"])
