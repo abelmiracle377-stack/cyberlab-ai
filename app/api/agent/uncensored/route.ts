@@ -18,6 +18,11 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const contentLength = Number(request.headers.get("content-length") || "0");
+    if (contentLength > 40000) return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 40000) return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+    const requestBody = JSON.parse(rawBody);
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
@@ -26,8 +31,11 @@ export async function POST(request: Request) {
       .select("status").eq("user_id", user.id).in("status", ["active", "comped"]).maybeSingle();
     if (!subscription) return NextResponse.json({ error: "An active subscription is required." }, { status: 402 });
 
-    const parsed = schema.safeParse(await request.json());
+    const parsed = schema.safeParse(requestBody);
     if (!parsed.success) return NextResponse.json({ error: "Invalid model or message. Prompts are limited to 8,000 characters." }, { status: 400 });
+
+    const historyChars = parsed.data.history.reduce((total, item) => total + item.content.length, 0);
+    if (historyChars > 24000) return NextResponse.json({ error: "Conversation history is too large." }, { status: 413 });
 
     const db = adminDb();
     const reservation = await db.rpc("reserve_cyberlab_ai_usage", {
@@ -40,7 +48,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "AI usage accounting is unavailable. Try again later." }, { status: 503 });
     }
     const usageReservation = Array.isArray(reservation.data) ? reservation.data[0] : reservation.data;
-    if (!usageReservation?.allowed) {
+    if (!usageReservation?.allowed || !usageReservation.reservation_id) {
       return NextResponse.json({ error: "Your monthly AI usage allowance has been reached. Contact the workspace administrator for a higher allowance." }, { status: 429 });
     }
 
@@ -52,7 +60,7 @@ export async function POST(request: Request) {
       });
       await db.rpc("settle_cyberlab_ai_usage", {
         p_reservation_id: usageReservation.reservation_id,
-        p_actual_tokens: result.usage.totalTokens,
+        p_actual_tokens: Math.min(result.usage.totalTokens, 10000),
         p_provider: result.provider,
         p_model: result.model,
         p_status: "completed",

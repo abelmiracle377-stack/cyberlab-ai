@@ -1,7 +1,7 @@
 export type GatewayMessage = { role: "system" | "user" | "assistant"; content: string };
 export type GatewayResult = { text: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number }; provider: string; model: string };
 
-const DEFAULT_BASE_URL = "https://api.uncensoredllm.ai/v1";
+
 
 function getProviderConfig() {
   const apiKey = process.env.CYBERLAB_UNCENSORED_API_KEY || process.env.UNCENSOREDLLM_API_KEY;
@@ -39,7 +39,7 @@ export async function runUnfilteredCompletion(input: {
   maxTokens?: number;
 }): Promise<GatewayResult> {
   const { apiKey, baseUrl } = getProviderConfig();
-  if (!apiKey) throw new Error("Unfiltered model provider is not configured. Add CYBERLAB_UNCENSORED_API_KEY as a server-only secret.");
+  if (!apiKey || !baseUrl) throw new Error("Unfiltered model provider is not configured. Add CYBERLAB_UNCENSORED_API_KEY and CYBERLAB_UNCENSORED_BASE_URL as server-only secrets.");
   const configured = getUnfilteredModels().find((item) => item.id === `uncensored:${input.model}`);
   if (!configured) throw new Error("This model is not in CyberLab's server-approved unfiltered model catalogue.");
   const response = await fetch(`${baseUrl}/chat/completions`, {
