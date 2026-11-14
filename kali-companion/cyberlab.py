@@ -7,8 +7,10 @@ import hashlib
 import ipaddress
 import json
 import math
+import os
 import re
 import socket
+import stat
 import sys
 import shutil
 import subprocess
@@ -60,11 +62,29 @@ def calculate_entropy(data: bytes) -> float:
     counts = Counter(data)
     return round(-sum((count / len(data)) * math.log2(count / len(data)) for count in counts.values()), 3)
 
+def _read_regular_file(path: Path, limit: int, label: str) -> bytes:
+    """Read a bounded regular file without following symlinks or blocking on FIFOs."""
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("This operation requires a platform with no-follow file opening.")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError(f"{label} must be a regular file, not a device, pipe or socket.")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            data = source.read(limit + 1)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if len(data) > limit:
+        raise ValueError(f"{label} exceeds the {limit // (1024 * 1024)} MB limit.")
+    return data
+
+
 def triage_file(path: Path) -> dict:
-    # Read at most one byte beyond the limit so oversized inputs cannot exhaust
-    # memory before the size check is reached.
-    with path.open("rb") as source:
-        data = source.read(MAX_FILE_BYTES + 1)
+    # Bound the read and reject symlinks/special files before inspecting evidence.
+    data = _read_regular_file(path, MAX_FILE_BYTES, "File")
     if len(data) > MAX_FILE_BYTES:
         raise ValueError("File exceeds the 10 MB limit.")
     if not data:
@@ -85,12 +105,9 @@ def triage_file(path: Path) -> dict:
     }
 
 def parse_nmap_xml(path: Path) -> dict:
-    # Bound the read itself, rather than allocating an arbitrarily large XML
-    # report and checking its size only after it is already in memory.
-    with path.open("rb") as source:
-        raw = source.read(MAX_XML_BYTES + 1)
-    if len(raw) > MAX_XML_BYTES:
-        raise ValueError("Nmap XML exceeds the 2 MB limit.")
+    # Parse only a bounded regular report; do not follow symlinks or block on
+    # attacker-controlled special files supplied as report paths.
+    raw = _read_regular_file(path, MAX_XML_BYTES, "Nmap XML")
     if re.search(rb"<!DOCTYPE|<!ENTITY", raw, re.I):
         raise ValueError("DOCTYPE and entity declarations are not accepted.")
     try:
