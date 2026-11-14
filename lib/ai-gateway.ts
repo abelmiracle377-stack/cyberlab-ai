@@ -10,7 +10,7 @@ function getProviderConfig() {
   try {
     const parsed = new URL(configuredUrl);
     if (parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) {
-      baseUrl = parsed.toString().replace(/\\/+$/, "");
+      baseUrl = parsed.toString().replace(/\/+$/, "");
     }
   } catch {
     // Missing or invalid configuration remains unavailable; never guess a provider endpoint.
