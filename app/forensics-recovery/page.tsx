@@ -9,7 +9,8 @@ type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; 
 type BlockDevice = {name:string;path:string;type:string;size:number;ro:boolean;tran?:string;model?:string;fstype?:string;mountpoints?:Array<string|null>};
 type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number;manifest?:{path:string;files_hashed:number;total_bytes_hashed:number;truncated:boolean}};
 type ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};
-type ImagePartitions = {partitions:Array<{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string}>;partition_count:number;method:string;note:string};\ntype FilesystemDetails = {partition:{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string};metadata:string;truncated:boolean;method:string;note:string};
+type ImagePartitions = {partitions:Array<{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string}>;partition_count:number;method:string;note:string};
+type FilesystemDetails = {partition:{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string};metadata:string;truncated:boolean;method:string;note:string};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
