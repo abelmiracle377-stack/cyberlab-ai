@@ -1,0 +1,115 @@
+"""Non-destructive, allow-listed disk acquisition helpers for the Kali bridge."""
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import threading
+import time
+import uuid
+from pathlib import Path
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+_acquisition_lock = threading.Lock()
+
+
+def _run(args: list[str], timeout: int = 15) -> str:
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+    if result.returncode:
+        raise ValueError((result.stderr or result.stdout or "Command failed.")[:500])
+    return result.stdout
+
+
+def list_block_devices() -> dict:
+    if not shutil.which("lsblk"):
+        raise ValueError("lsblk is not installed.")
+    raw = _run(["lsblk", "--json", "-b", "-o", "NAME,PATH,TYPE,SIZE,RO,TRAN,MODEL,FSTYPE,MOUNTPOINTS,PKNAME"])
+    data = json.loads(raw)
+    return {"devices": data.get("blockdevices", []), "note": "Inventory only. No device has been mounted, changed or scanned for recoverable content."}
+
+
+def _ancestors(device: str) -> set[str]:
+    output = _run(["lsblk", "--inverse", "--noheadings", "--raw", "--output", "MAJ:MIN", device])
+    return {line.strip() for line in output.splitlines() if line.strip()}
+
+
+def _mount_device(path: Path) -> tuple[str, str]:
+    raw = _run(["findmnt", "--json", "--target", str(path), "--output", "SOURCE,TARGET,MAJ:MIN"])
+    filesystems = json.loads(raw).get("filesystems", [])
+    if not filesystems:
+        raise ValueError("Destination directory is not on a mounted filesystem.")
+    fs = filesystems[0]
+    return str(fs.get("maj:min", "")), str(fs.get("target", ""))
+
+
+def _validate_acquisition(source: str, destination_dir: str, filename: str) -> tuple[str, Path, Path]:
+    if os.geteuid() != 0:
+        raise ValueError("Disk imaging requires root privileges. Start the local companion with sudo after verifying the repository and script.")
+    source_path = Path(source)
+    if not re.fullmatch(r"/dev/[A-Za-z0-9._/-]+", source) or not source_path.exists():
+        raise ValueError("Choose a device path returned by the device inventory.")
+    if not source_path.is_block_device():
+        raise ValueError("The selected source is not a block device.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.img", filename):
+        raise ValueError("Image filename must be a simple name ending in .img.")
+    dest_dir = Path(destination_dir).expanduser().resolve(strict=True)
+    if not dest_dir.is_dir():
+        raise ValueError("Destination must be an existing directory on a separate mounted drive.")
+    dest_majmin, mountpoint = _mount_device(dest_dir)
+    if not dest_majmin or not mountpoint:
+        raise ValueError("Could not verify the destination filesystem device.")
+    source_ancestors = _ancestors(str(source_path))
+    dest_ancestors = _ancestors("/dev/block/" + dest_majmin) if Path("/dev/block/" + dest_majmin).exists() else {dest_majmin}
+    if source_ancestors.intersection(dest_ancestors):
+        raise ValueError("Destination storage is on the same physical device as the source. Choose a different drive.")
+    image_path = dest_dir / filename
+    map_path = dest_dir / (filename + ".log")
+    if image_path.exists() or map_path.exists():
+        raise ValueError("Image or ddrescue map file already exists. Choose a new filename; existing files are never overwritten.")
+    return str(source_path), image_path, map_path
+
+
+def start_image_acquisition(source: str, destination_dir: str, filename: str, confirmation: str) -> dict:
+    source_path, image_path, map_path = _validate_acquisition(source, destination_dir, filename)
+    if confirmation.strip() != source_path:
+        raise ValueError("Retype the exact source device path to confirm acquisition.")
+    if not shutil.which("ddrescue"):
+        raise ValueError("GNU ddrescue is required. Install it with: sudo apt install -y gddrescue")
+    if not _acquisition_lock.acquire(blocking=False):
+        raise ValueError("Another disk acquisition is already running.")
+    job_id = uuid.uuid4().hex
+    record = {"id": job_id, "state": "running", "source": source_path, "image": str(image_path), "map": str(map_path), "started_at": time.time(), "message": "Acquisition started. Source is opened read-only by ddrescue."}
+    with _jobs_lock:
+        _jobs[job_id] = record
+
+    def worker():
+        try:
+            # -n skips the scraping phase on the first pass. No write is issued to the source.
+            command = ["ddrescue", "-f", "-n", source_path, str(image_path), str(map_path)]
+            completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            with _jobs_lock:
+                record["state"] = "completed" if completed.returncode == 0 else "failed"
+                record["return_code"] = completed.returncode
+                record["message"] = "Image acquisition completed." if completed.returncode == 0 else (completed.stderr or "ddrescue failed.")[-1200:]
+                record["finished_at"] = time.time()
+        except Exception as exc:
+            with _jobs_lock:
+                record["state"] = "failed"
+                record["message"] = str(exc)[:1200]
+                record["finished_at"] = time.time()
+        finally:
+            _acquisition_lock.release()
+
+    threading.Thread(target=worker, name="cyberlab-ddrescue", daemon=True).start()
+    return {"job": {key: value for key, value in record.items() if key not in {"started_at"}}, "note": "Do not disconnect either drive while acquisition is running. Preserve the original source and ddrescue map file."}
+
+
+def get_image_job(job_id: str) -> dict | None:
+    with _jobs_lock:
+        record = _jobs.get(job_id)
+        if not record:
+            return None
+        return {"job": dict(record)}
