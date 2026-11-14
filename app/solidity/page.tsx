@@ -67,7 +67,34 @@ export default function SolidityLabPage() {
     return () => { active = false; };
   }, []);
 
-  async function checkLocalCompiler() {\n    setCompilerBusy(true); setCompilerError("");\n    try {\n      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");\n      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");\n      const response = await fetch("http://127.0.0.1:8765/solidity/compiler", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });\n      const data = await response.json();\n      if (!response.ok) throw new Error(data.error || "Could not check the local compiler.");\n      setCompilerStatus(data);\n    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compiler check failed."); }\n    finally { setCompilerBusy(false); }\n  }\n\n  async function compileLocally() {\n    setCompilerBusy(true); setCompilerError(""); setCompileResult(null);\n    try {\n      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");\n      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");\n      const response = await fetch("http://127.0.0.1:8765/solidity/compile", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ source, expectedCompilerVersion: compilerVersion.trim() }) });\n      const data = await response.json();\n      if (!response.ok) throw new Error(data.error || "Local compilation failed.");\n      setCompileResult(data);\n      setCompilerStatus({ available: true, version: data.version, message: "Local solc compiler completed." });\n    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compilation failed."); }\n    finally { setCompilerBusy(false); }\n  }\n\n  async function runAnalysis(event: React.FormEvent) {
+  async function checkLocalCompiler() {
+    setCompilerBusy(true); setCompilerError("");
+    try {
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/solidity/compiler", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not check the local compiler.");
+      setCompilerStatus(data);
+    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compiler check failed."); }
+    finally { setCompilerBusy(false); }
+  }
+
+  async function compileLocally() {
+    setCompilerBusy(true); setCompilerError(""); setCompileResult(null);
+    try {
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/solidity/compile", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ source, expectedCompilerVersion: compilerVersion.trim() }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Local compilation failed.");
+      setCompileResult(data);
+      setCompilerStatus({ available: true, version: data.version, message: "Local solc compiler completed." });
+    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compilation failed."); }
+    finally { setCompilerBusy(false); }
+  }
+
+  async function runAnalysis(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true); setError(""); setAnalysis(null);
     try {
