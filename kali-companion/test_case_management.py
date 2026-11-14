@@ -65,7 +65,7 @@ class CaseManagementTests(unittest.TestCase):
         self.assertTrue(any("unsupported audit event" in error or "record hash mismatch" in error for error in result["errors"]))
 
     def test_read_only_verifier_rejects_malformed_and_blank_lines(self):
-        self.ledger.write_text('not-json\\n\\n')
+        self.ledger.write_text('not-json\n\n')
         result = case_management.verify_audit_ledger()
         self.assertFalse(result["verified"])
         self.assertTrue(any("malformed JSON" in error for error in result["errors"]))
