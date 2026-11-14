@@ -77,7 +77,7 @@ HTTP timeout defaults to 12 seconds and can be changed with `--timeout 20`. JSON
 
 ## Hosted dashboard ↔ local Kali bridge
 
-The optional bridge pairs the CyberLab website with Nmap running on your Kali machine. It binds only to `127.0.0.1` and does not open an inbound internet port or require a VPS/tunnel.
+The optional bridge pairs the CyberLab website with the local Kali/CyberLab AI OS runner. It exposes an authenticated tool inventory and a growing set of fixed, safety-reviewed workflows. It binds only to `127.0.0.1` and does not open an inbound internet port or require a VPS/tunnel.
 
 1. Install Nmap: `sudo apt update && sudo apt install -y nmap`.
 2. Start the bridge from the repository root: `sudo python3 kali-companion/bridge.py` when you need disk imaging. Running the bridge as root grants it elevated local privileges; keep the token private and stop the bridge when finished.
@@ -85,6 +85,8 @@ The optional bridge pairs the CyberLab website with Nmap running on your Kali ma
 4. Keep the terminal open while using the dashboard. Press `Ctrl+C` in that terminal to stop the bridge.
 
 The token is generated locally and stored at `~/.config/cyberlab/bridge-token` with owner-only file permissions (0600). Do not share it. The bridge accepts browser requests only from the production CyberLab origin plus `http://localhost:3000` / `http://127.0.0.1:3000` for self-hosted development, requires the token, and listens on loopback only. To permit a specific Vercel preview or custom self-hosted origin, set `CYBERLAB_ALLOWED_ORIGINS` to a comma-separated list of exact HTTPS origins before starting the bridge (for example, `sudo env CYBERLAB_ALLOWED_ORIGINS=https://your-preview.example python3 kali-companion/bridge.py`). No wildcard origins are accepted. The website holds the pasted token in page memory and does not persist it.
+
+The authenticated `GET /tools` endpoint inventories the curated Kali tool catalogue (information gathering, vulnerability analysis, web testing, password auditing, wireless, Metasploit, traffic analysis, Active Directory, forensics, reverse engineering and network utilities). It detects installed executables and returns package-specific `apt` install suggestions for missing tools. Inventory is read-only: it does not install packages or execute discovered binaries. The catalogue marks each tool as passive, safe-scan, local-audit, local-analysis, manual-only or blocked for unattended automation. CamPhish is deliberately excluded from automation; online password-guessing tools are not launched unattended. Metasploit is initially limited to safe module metadata and non-destructive checks.
 
 The dashboard can request a single-target TCP connect scan with light service-version detection on up to 100 selected TCP ports (custom comma-separated lists or ranges such as `22,80,443` or `1-100`). Results distinguish open, closed and filtered ports when determinable; filtered means no definitive response was possible. The bridge uses fixed Nmap arguments; it does not accept arbitrary command-line options, NSE scripts, exploit checks, credentials, stealth/evasion flags, or shell commands. Each run requires an exact target confirmation, an authorisation reference and an explicit ownership/permission confirmation. Loopback, link-local, multicast and reserved targets are blocked. Private LAN targets may be assessed only when they are in your authorised scope.
 
@@ -125,3 +127,10 @@ sudo photorec /mnt/backup/cyberlab-disk.img
 In PhotoRec, select the image/partition, configure File Opt for the required formats, and choose a recovery directory on the backup drive. NTFS undelete and extundelete workflows are not automated by the dashboard in this release; they require filesystem-specific assessment and an unmounted source. Do not run them against the original disk as a substitute for imaging.
 
 A hosted Vercel deployment cannot directly access the browser user's physical disks. A self-hosted CyberLab AI OS running on a Linux machine can use the same local runner and bridge directly on that machine, provided it has the required OS permissions and tools; no remote web process is given raw-disk access.
+
+
+## Kali tool catalogue and workflow expansion
+
+The dashboard can query the paired local runner's authenticated `GET /tools` endpoint to see which curated Kali tools are installed and how to install missing packages. The inventory is deliberately separate from execution: detecting a binary never causes it to run, and CyberLab never invokes `apt` automatically. The first catalogue covers information gathering, vulnerability analysis, web application analysis, password auditing, wireless security, Metasploit research, traffic analysis, Active Directory, forensics, reverse engineering and network utilities including FTP.
+
+This is the foundation for a natural-language task planner: translate a user's authorised lab question into a bounded plan, verify target/scope, check required tools, ask before package installation, execute only reviewed fixed workflows, collect outputs, and explain the evidence. Tool availability does not imply that every feature is safe for unattended use. CamPhish and comparable phishing/camera-capture workflows are intentionally blocked; online credential guessing, exploit payloads, persistence, interception and post-exploitation are not part of unattended execution. Metasploit integration starts with module search, `info`, option review and safe `check` operations only. A targetless HTB prompt can be analysed for what evidence is needed, but a scan requires a target supplied by the user or a clearly identified in-scope lab endpoint.
