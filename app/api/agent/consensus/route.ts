@@ -3,6 +3,8 @@ import { z } from "zod";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const MAX_REQUEST_BYTES = 16 * 1024;
+
 const requestSchema = z.object({
   prompt: z.string().trim().min(4).max(6000),
   models: z.array(z.string().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:-]+$/).max(160)).min(2).max(3),
@@ -19,6 +21,56 @@ const openWeightPrefixes = [
   "qwen/", "deepseek/", "mistralai/", "meta-llama/", "nousresearch/",
   "cognitivecomputations/", "google/", "microsoft/", "tii/", "01-ai/", "internlm/",
 ];
+
+async function readBoundedJson(request: Request): Promise<
+  | { ok: true; value: unknown }
+  | { ok: false; status: 400 | 413; error: string }
+> {
+  const declaredLength = request.headers.get("content-length");
+  if (declaredLength !== null) {
+    const length = Number(declaredLength);
+    if (Number.isFinite(length) && length > MAX_REQUEST_BYTES) {
+      return { ok: false, status: 413, error: "Request body is too large." };
+    }
+  }
+
+  if (!request.body) {
+    return { ok: false, status: 400, error: "A JSON request body is required." };
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        return { ok: false, status: 413, error: "Request body is too large." };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+  } catch {
+    return { ok: false, status: 400, error: "Request body must contain valid JSON." };
+  }
+}
 
 async function verifyOpenWeightModels(models: string[]) {
   const response = await fetch("https://openrouter.ai/api/v1/models", {
@@ -69,7 +121,12 @@ async function callModel(model: string, prompt: string, system: string) {
 
 export async function POST(request: Request) {
   try {
-    const parsed = requestSchema.safeParse(await request.json());
+    const body = await readBoundedJson(request);
+    if (!body.ok) {
+      return Response.json({ error: body.error }, { status: body.status });
+    }
+
+    const parsed = requestSchema.safeParse(body.value);
     if (!parsed.success) {
       return Response.json({ error: "Provide a prompt and select two or three valid, distinct models." }, { status: 400 });
     }
