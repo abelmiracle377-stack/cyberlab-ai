@@ -153,6 +153,8 @@ def get_image_job(job_id: str) -> dict | None:
 
 def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dict:
     """Hash regular recovered files without following symlinks; cap work for safety."""
+    if type(max_files) is not int or not 1 <= max_files <= 5000:
+        raise ValueError("Manifest file limit must be between 1 and 5000.")
     root = Path(output_directory).resolve(strict=True)
     if not root.is_dir():
         raise ValueError("Recovery output directory is not available.")
