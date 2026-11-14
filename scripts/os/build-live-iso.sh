@@ -20,6 +20,10 @@ WORK_ROOT="${CYBERLAB_OS_WORKDIR:-/var/tmp/cyberlab-ai-os-build}"
 WORK_DIR="${WORK_ROOT}/${PROFILE}"
 OUTPUT_NAME="cyberlab-ai-os-${PROFILE}-amd64.iso"
 mkdir -p "$WORK_ROOT" "$OUTPUT_DIR"
+# Resolve caller-supplied relative output paths before changing into the live-build tree.
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
+WORK_ROOT="$(cd "$WORK_ROOT" && pwd)"
+WORK_DIR="${WORK_ROOT}/${PROFILE}"
 if [[ -e "${OUTPUT_DIR}/${OUTPUT_NAME}" ]]; then
   echo "Refusing to overwrite existing ISO: ${OUTPUT_DIR}/${OUTPUT_NAME}" >&2
   exit 2
