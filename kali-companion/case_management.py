@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -163,3 +164,115 @@ def validate_case_payload(data):
     if len(_canonical({"serviceReport": service, "artifactReport": artifact})) > MAX_CASE_BYTES:
         raise ValueError("Combined case evidence exceeds the 120 KB limit.")
     return service, artifact
+
+
+def verify_audit_ledger():
+    """Verify the fixed local audit ledger without modifying it."""
+    result = {
+        "status": "failed",
+        "verified": False,
+        "record_count": 0,
+        "final_record_hash": None,
+        "path": str(LEDGER_FILE),
+        "bytes": 0,
+        "errors": [],
+        "note": "Hash-chain verification detects accidental or unsophisticated alteration; the ledger is not digitally signed or tamper-proof.",
+    }
+    try:
+        directory_info = os.lstat(LEDGER_DIR)
+        if stat.S_ISLNK(directory_info.st_mode) or not stat.S_ISDIR(directory_info.st_mode):
+            raise ValueError("Audit ledger directory is not a real directory.")
+        file_info = os.lstat(LEDGER_FILE)
+        if stat.S_ISLNK(file_info.st_mode) or not stat.S_ISREG(file_info.st_mode):
+            raise ValueError("Audit ledger is not a regular, non-symlink file.")
+        if file_info.st_size > MAX_LEDGER_BYTES:
+            raise ValueError("Audit ledger exceeds the 5 MB verification limit.")
+        result["bytes"] = file_info.st_size
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(str(LEDGER_FILE), flags)
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            opened_info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened_info.st_mode):
+                raise ValueError("Opened audit ledger is not a regular file.")
+            if opened_info.st_size > MAX_LEDGER_BYTES:
+                raise ValueError("Audit ledger exceeds the 5 MB verification limit.")
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
+            previous_hash = "GENESIS"
+            for line_number, line in enumerate(handle, 1):
+                if not line.strip():
+                    result["errors"].append(f"Line {line_number}: blank records are not permitted.")
+                    continue
+                try:
+                    record = json.loads(line)
+                except (json.JSONDecodeError, TypeError):
+                    result["errors"].append(f"Line {line_number}: malformed JSON.")
+                    continue
+                if not isinstance(record, dict):
+                    result["errors"].append(f"Line {line_number}: record must be a JSON object.")
+                    continue
+                claimed_hash = record.get("record_hash")
+                claimed_previous = record.get("previous_record_hash")
+                required = {"case_id", "created_at", "event", "sources", "previous_record_hash", "record_hash"}
+                if not required.issubset(record):
+                    result["errors"].append(f"Line {line_number}: required record fields are missing.")
+                    continue
+                if not isinstance(record.get("case_id"), str) or not re.fullmatch(r"[a-f0-9]{32}", record["case_id"]):
+                    result["errors"].append(f"Line {line_number}: invalid case identifier.")
+                    continue
+                if not isinstance(record.get("created_at"), str) or not record["created_at"]:
+                    result["errors"].append(f"Line {line_number}: invalid creation timestamp.")
+                    continue
+                if record.get("event") != "case_created":
+                    result["errors"].append(f"Line {line_number}: unsupported audit event.")
+                    continue
+                sources = record.get("sources")
+                if not isinstance(sources, list) or not sources or len(sources) > 2:
+                    result["errors"].append(f"Line {line_number}: invalid source metadata list.")
+                    continue
+                valid_sources = True
+                for source in sources:
+                    if not isinstance(source, dict):
+                        valid_sources = False
+                        break
+                    if source.get("type") not in {"network_service_evidence", "static_artifact_evidence"}:
+                        valid_sources = False
+                        break
+                    if not isinstance(source.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", source["sha256"]):
+                        valid_sources = False
+                        break
+                    for count_key in ("observation_count", "reference_candidate_count"):
+                        if count_key in source and (type(source[count_key]) is not int or source[count_key] < 0):
+                            valid_sources = False
+                            break
+                    if not valid_sources:
+                        break
+                    if set(source) - {"type", "sha256", "observation_count", "reference_candidate_count"}:
+                        valid_sources = False
+                        break
+                if not valid_sources:
+                    result["errors"].append(f"Line {line_number}: source metadata contains invalid or unexpected fields.")
+                    continue
+                if claimed_previous != previous_hash:
+                    result["errors"].append(f"Line {line_number}: previous-record hash does not match the chain.")
+                    continue
+                if not isinstance(claimed_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", claimed_hash):
+                    result["errors"].append(f"Line {line_number}: invalid record hash.")
+                    continue
+                unhashed = dict(record)
+                unhashed.pop("record_hash", None)
+                if _digest(unhashed) != claimed_hash:
+                    result["errors"].append(f"Line {line_number}: record hash mismatch.")
+                    continue
+                previous_hash = claimed_hash
+                result["record_count"] += 1
+            if result["record_count"] == 0 and not result["errors"]:
+                result["errors"].append("Audit ledger is empty.")
+            result["final_record_hash"] = previous_hash if result["record_count"] else None
+        if not result["errors"]:
+            result["status"] = "completed"
+            result["verified"] = True
+    except FileNotFoundError:
+        result["errors"].append("Audit ledger is missing.")
+    except (OSError, UnicodeError, ValueError) as exc:
+        result["errors"].append(str(exc))
+    return result
