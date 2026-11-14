@@ -2,10 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Search, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Search, Send, Sparkles, GitCompareArrows } from "lucide-react";
 import "./models.css";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
+type ConsensusResult = { model: string; answer?: string; error?: string };
 
 export default function ModelsPage() {
   const [models, setModels] = useState<Model[]>([]);
@@ -18,6 +19,7 @@ export default function ModelsPage() {
   const [prompt, setPrompt] = useState("");
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const [responseMode, setResponseMode] = useState<"single" | "comparison">("single");
 
   useEffect(() => {
     let alive = true;
@@ -39,6 +41,7 @@ export default function ModelsPage() {
   ), [models, openOnly, query]);
 
   const activeModel = models.find((m) => m.id === active);
+  const selectedModels = selected.map((id) => models.find((m) => m.id === id)).filter((m): m is Model => Boolean(m));
 
   function toggle(id: string) {
     setSelected((current) => {
@@ -56,7 +59,7 @@ export default function ModelsPage() {
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!prompt.trim() || !active || busy) return;
-    setBusy(true); setReply(""); setError("");
+    setBusy(true); setReply(""); setError(""); setResponseMode("single");
     try {
       const response = await fetch("/api/agent", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -79,6 +82,40 @@ export default function ModelsPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Unexpected model error."); }
     finally { setBusy(false); }
   }
+
+  async function compareSelectedModels() {
+    const question = prompt.trim();
+    if (!question || busy || selected.length < 2 || selected.length > 3) return;
+    setBusy(true); setReply(""); setError(""); setResponseMode("comparison");
+    try {
+      const allOpenWeight = selectedModels.length === selected.length && selectedModels.every((model) => model.openWeight);
+      const response = await fetch("/api/agent/consensus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: question, models: selected, agentMode: allOpenWeight ? "open-weight" : "standard" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Multi-model comparison failed.");
+      const results = (data.results || []) as ConsensusResult[];
+      const sections = results.map((item) =>
+        "### " + item.model + "\n" + (item.answer || "Model error: " + (item.error || "No response"))
+      );
+      const output = [
+        "## Independent model analyses",
+        ...sections,
+        data.synthesis ? "## Evidence & Reporting synthesis\n" + data.synthesis : "## Synthesis unavailable\nReview the individual model responses; no consolidated synthesis was returned.",
+        "> " + (data.note || "Model agreement is not independent verification."),
+      ].join("\n\n");
+      setReply(output);
+      setPrompt("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Multi-model comparison failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canCompare = selected.length >= 2 && selected.length <= 3;
 
   return <main className="model-workspace">
     <header className="mw-topbar">
@@ -112,10 +149,13 @@ export default function ModelsPage() {
       </section>
       <aside className="mw-chat"><div className="mw-chat-head"><small>ASSISTANT PANEL</small><h2>Research chat</h2></div>
         <div className="mw-active"><i/><span><small>ACTIVE MODEL</small><strong>{activeModel?.name || "Select a model"}</strong><small>{activeModel?.id || "No model selected"}</small></span></div>
-        <div className="mw-chat-body">{reply ? <p>{reply}</p> : <div className="mw-chat-empty"><Sparkles size={24}/><h3>Research with your models</h3><p>Ask a question using the selected model. Parallel multi-model execution will be enabled when the consensus endpoint is integrated.</p></div>}</div>
+        <div className="mw-chat-body">{reply ? <pre className="mw-reply">{reply}</pre> : <div className="mw-chat-empty"><Sparkles size={24}/><h3>Research with your models</h3><p>Ask one model or compare two or three selected models in parallel, followed by an evidence-focused synthesis.</p></div>}</div>
         {error && <p className="mw-error">{error}</p>}
-        <form className="mw-composer" onSubmit={sendMessage}><textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask CyberLab AI…" disabled={!active || busy}/><div><small>{activeModel?.provider || "Choose a model"} · single-model request</small><button disabled={!prompt.trim() || !active || busy}>{busy ? "…" : <Send size={15}/>}</button></div></form>
-        <p className="mw-chat-note">Uses the existing CyberLab agent API.</p>
+        <form className="mw-composer" onSubmit={sendMessage}><textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask CyberLab AI…" disabled={!active || busy}/><div><small>{responseMode === "comparison" ? "Parallel model comparison" : (activeModel?.provider || "Choose a model") + " · single-model request"}</small><button type="submit" disabled={!prompt.trim() || !active || busy}>{busy ? "…" : <Send size={15}/>}</button></div>
+          <button type="button" className="mw-compare" onClick={compareSelectedModels} disabled={!prompt.trim() || !canCompare || busy}><GitCompareArrows size={14}/> Compare {selected.length} selected models</button>
+          {!canCompare && <small className="mw-compare-hint">Select two or three models to enable parallel comparison.</small>}
+        </form>
+        <p className="mw-chat-note">Uses the CyberLab agent API and parallel consensus API. Model agreement is not independent verification.</p>
       </aside>
     </div>
   </main>;
