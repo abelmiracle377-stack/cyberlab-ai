@@ -52,6 +52,8 @@ export default function KaliConnectionPage() {
   const [artifactEvidence,setArtifactEvidence]=useState("");
   const [artifactBusy,setArtifactBusy]=useState(false);
   const [artifactReport,setArtifactReport]=useState<Record<string,unknown>|null>(null);
+  const [caseBusy,setCaseBusy]=useState(false);
+  const [caseReport,setCaseReport]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -88,6 +90,20 @@ export default function KaliConnectionPage() {
     try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("http://127.0.0.1:8765/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Service identification failed.");}
     finally{setServiceBusy(false);}
+  }
+
+  async function createInvestigationCase(){
+    setCaseBusy(true);setError("");setCaseReport(null);
+    try{
+      const serviceReport=evidenceReport;
+      const artifactReport=artifactReport;
+      if(!serviceReport&&!artifactReport)throw new Error("Analyse network or artifact evidence before creating a case.");
+      const response=await fetch("http://127.0.0.1:8765/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Could not create the investigation case.");
+      setCaseReport(data as Record<string,unknown>);
+    }catch(e){setError(e instanceof Error?e.message:"Could not create the investigation case.");}
+    finally{setCaseBusy(false);}
   }
 
   async function analyseArtifactEvidence(){
@@ -277,7 +293,14 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>10. Run an authorised Nmap assessment</h2>
+        <h2>10. Unified investigation case</h2>
+        <p>Combine completed service/CVE analysis and static artifact/recovery analysis into one provenance report. The local audit ledger records evidence digests and case metadata, not raw samples, banners or recovered contents.</p>
+        <button className="report-download" type="button" onClick={createInvestigationCase} disabled={caseBusy||(!evidenceReport&&!artifactReport)}>{caseBusy?<><LoaderCircle size={14}/> Creating case…</>:<><FileSearch size={14}/> Create unified case report</>}</button>
+        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
+      </section>}
+
+      {connected&&<section className="kali-panel">
+        <h2>11. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
