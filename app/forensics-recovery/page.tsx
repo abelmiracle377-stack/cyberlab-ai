@@ -8,7 +8,7 @@ type Kind = "JPEG" | "PNG" | "GIF" | "PDF";
 type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; name:string };
 type BlockDevice = {name:string;path:string;type:string;size:number;ro:boolean;tran?:string;model?:string;fstype?:string;mountpoints?:Array<string|null>};
 type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number;manifest?:{path:string;files_hashed:number;total_bytes_hashed:number;truncated:boolean}};
-type ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};
+type ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};\ntype ImagePartitions = {partitions:Array<{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string}>;partition_count:number;method:string;note:string};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
@@ -78,7 +78,7 @@ function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).to
 
 export default function ForensicsRecoveryPage(){
   const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
-  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false);
+  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false),[imagePartitions,setImagePartitions]=useState<ImagePartitions|null>(null),[partitionsBusy,setPartitionsBusy]=useState(false);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
   async function pairKali(){
@@ -108,6 +108,16 @@ export default function ForensicsRecoveryPage(){
       setImageProbe(data);setBridgeMessage(data.note||"Read-only image inspection completed.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Image inspection failed.");}
     finally{setProbeBusy(false);}
+  }
+  async function inspectPartitions(){
+    if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before partition analysis.");return;}
+    setPartitionsBusy(true);setImagePartitions(null);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/partitions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Partition analysis failed.");
+      setImagePartitions(data);setBridgeMessage(data.note||"Read-only partition analysis completed.");
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Partition analysis failed.");}
+    finally{setPartitionsBusy(false);}
   }
   async function runForemost(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before starting recovery.");return;}
@@ -181,6 +191,8 @@ export default function ForensicsRecoveryPage(){
             <label className="vault-field"><span>Retype exact acquired image path</span><input value={confirmImage} onChange={e=>setConfirmImage(e.target.value)} placeholder={job.image}/></label>
             <button className="network-run" type="button" onClick={runForemost} disabled={bridgeBusy||confirmImage!==job.image}>Run Foremost on image</button>
             <button className="network-run" type="button" onClick={inspectImage} disabled={probeBusy||confirmImage!==job.image} style={{marginTop:8}}>{probeBusy?"Inspecting image…":"Identify filesystem (read-only)"}</button>
+            <button className="network-run" type="button" onClick={inspectPartitions} disabled={partitionsBusy||confirmImage!==job.image} style={{marginTop:8}}>{partitionsBusy?"Analysing partitions…":"Analyse partition table (read-only)"}</button>
+            {imagePartitions&&<><div className="malware-kv"><span>Allocated partitions</span><strong>{imagePartitions.partition_count}</strong></div>{imagePartitions.partitions.map(part=><div className="malware-kv" key={part.slot}><span>Slot {part.slot} · sectors {part.start_sector.toLocaleString()}–{part.end_sector.toLocaleString()} · {part.length_sectors.toLocaleString()} sectors</span><strong>{part.description}</strong></div>)}<p className="network-note">{imagePartitions.note}</p></>}
             {imageProbe&&<><div className="malware-kv"><span>Filesystem signature</span><strong>{imageProbe.recognized?"RECOGNISED":"NO SIGNATURE RECOGNISED"}</strong></div>{Object.entries(imageProbe.metadata).map(([key,value])=><div className="malware-kv" key={key}><span>{key.toUpperCase()}</span><strong>{value}</strong></div>)}<p className="network-note">{imageProbe.note}</p></>}
             {recoveryJob&&<div className="malware-kv"><span>Foremost job · {recoveryJob.state}</span><strong>{recoveryJob.message}</strong></div>}
             {recoveryJob?.output&&<div className="malware-kv"><span>Recovered files folder</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.output}</strong></div>}
