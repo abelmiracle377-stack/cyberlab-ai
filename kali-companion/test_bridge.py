@@ -246,7 +246,7 @@ class SolidityTestRunnerTests(unittest.TestCase):
         cleaned, remappings = bridge._validate_solidity_test_files(valid, [])
         self.assertEqual(len(cleaned), 2)
         self.assertEqual(remappings, [])
-        with self.assertRaisesRegex(ValueError, "at least one src"):
+        with self.assertRaisesRegex(ValueError, "project files"):
             bridge._validate_solidity_test_files([valid[0]])
         with self.assertRaisesRegex(ValueError, "Imports"):
             bridge._validate_solidity_test_files([
@@ -254,7 +254,7 @@ class SolidityTestRunnerTests(unittest.TestCase):
             ])
 
     def test_file_validation_rejects_path_traversal_and_duplicates(self):
-        with self.assertRaisesRegex(ValueError, "flat src"):
+        with self.assertRaisesRegex(ValueError, "Include at least one src"):
             bridge._validate_solidity_test_files([
                 {"path": "src/../Vault.sol", "content": "contract Vault {}"},
                 {"path": "test/Vault.t.sol", "content": "contract VaultTest {}"},
