@@ -6,6 +6,7 @@ import html
 import json
 import os
 import re
+import stat
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -122,4 +123,83 @@ def export_case_bundle(report):
         "json_export": json_bytes.decode("utf-8"),
         "html_export": html_bytes.decode("utf-8"),
         "note": "A private local archive was written without overwriting existing files. Original samples and forensic images are not copied into this report archive.",
+    }
+
+
+def verify_case_archive(case_id):
+    """Verify one archive selected by identifier, never by caller-supplied path."""
+    if not isinstance(case_id, str) or not re.fullmatch(r"[a-f0-9]{32}", case_id):
+        raise ValueError("Enter a valid case identifier.")
+    root = EXPORT_ROOT
+    case_dir = root / case_id
+    try:
+        root_info = root.lstat()
+        directory_info = case_dir.lstat()
+    except OSError as exc:
+        raise ValueError("Case archive does not exist or cannot be inspected.") from exc
+    if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
+        raise ValueError("The configured export root is not a regular directory.")
+    if stat.S_ISLNK(directory_info.st_mode) or not stat.S_ISDIR(directory_info.st_mode):
+        raise ValueError("Case archive path is not a regular directory.")
+    expected = {"case.json", "case.html", "manifest.json"}
+    try:
+        actual = {entry.name for entry in case_dir.iterdir()}
+    except OSError as exc:
+        raise ValueError("Case archive directory could not be listed.") from exc
+    if actual != expected:
+        return {"status": "failed", "case_id": case_id, "verified": False,
+                "errors": ["Archive file set differs from the expected three files."], "checked_files": sorted(actual)}
+    errors = []
+    checked = []
+    contents = {}
+    for name in sorted(expected):
+        path = case_dir / name
+        try:
+            info = path.lstat()
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                errors.append(name + " is not a regular file.")
+                continue
+            if info.st_size > MAX_EXPORT_BYTES * 2:
+                errors.append(name + " exceeds the permitted verification size.")
+                continue
+            data = path.read_bytes()
+            contents[name] = data
+            checked.append(name)
+        except OSError:
+            errors.append(name + " could not be read.")
+    manifest = None
+    if "manifest.json" in contents:
+        try:
+            manifest = json.loads(contents["manifest.json"])
+            if not isinstance(manifest, dict) or manifest.get("schema") != "cyberlab.case-export-manifest.v1":
+                errors.append("Manifest schema is missing or unsupported.")
+            elif manifest.get("case_id") != case_id:
+                errors.append("Manifest case identifier does not match the requested archive.")
+            files = manifest.get("files")
+            if not isinstance(files, dict) or set(files) != {"case.json", "case.html"}:
+                errors.append("Manifest file inventory is invalid.")
+            else:
+                for name in ("case.json", "case.html"):
+                    if name not in contents:
+                        errors.append(name + " is unavailable for verification.")
+                        continue
+                    record = files.get(name)
+                    if not isinstance(record, dict):
+                        errors.append(name + " manifest entry is invalid.")
+                        continue
+                    data = contents[name]
+                    if record.get("sha256") != _sha(data):
+                        errors.append(name + " SHA-256 mismatch.")
+                    if type(record.get("size_bytes")) is not int or record["size_bytes"] != len(data):
+                        errors.append(name + " byte-size mismatch.")
+        except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+            errors.append("Manifest JSON is malformed.")
+    return {
+        "status": "completed" if not errors else "failed",
+        "case_id": case_id,
+        "verified": not errors and len(checked) == 3,
+        "checked_files": checked,
+        "errors": errors,
+        "manifest_sha256": _sha(contents["manifest.json"]) if "manifest.json" in contents else None,
+        "note": "Verification checks local file presence, regular-file type, manifest schema, byte sizes and SHA-256 digests. It does not establish authenticity, trusted time or chain of custody.",
     }
