@@ -11,6 +11,56 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(bridge)
 
 
+class BridgeHttpBoundaryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from http.server import ThreadingHTTPServer
+        import threading
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), bridge.Handler)
+        cls.server.bridge_token = "test-token-for-cyberlab-bridge"
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=2)
+
+    def test_health_requires_pairing_token(self):
+        import urllib.error
+        from urllib.request import Request, urlopen
+        request = Request(self.base + "/health", headers={"Origin": "http://localhost:3000"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urlopen(request, timeout=2)
+        self.assertEqual(caught.exception.code, 401)
+
+    def test_disallowed_origin_is_rejected(self):
+        import urllib.error
+        from urllib.request import Request, urlopen
+        request = Request(self.base + "/health", headers={
+            "Origin": "https://untrusted.example",
+            "Authorization": "Bearer test-token-for-cyberlab-bridge",
+        })
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urlopen(request, timeout=2)
+        self.assertEqual(caught.exception.code, 403)
+
+    def test_health_returns_cors_for_allowed_origin_after_pairing(self):
+        import json
+        from urllib.request import Request, urlopen
+        request = Request(self.base + "/health", headers={
+            "Origin": "http://localhost:3000",
+            "Authorization": "Bearer test-token-for-cyberlab-bridge",
+        })
+        with urlopen(request, timeout=2) as response:
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "http://localhost:3000")
+            self.assertEqual(payload["status"], "connected")
+
+
 class OllamaBridgeTests(unittest.TestCase):
     def test_ollama_request_rejects_arbitrary_paths(self):
         with patch.object(bridge.urllib.request, "urlopen") as urlopen:
