@@ -36,7 +36,14 @@ export default function KaliConnectionPage() {
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [telemetryBusy,setTelemetryBusy]=useState(false);
   const [toolInventory,setToolInventory]=useState<ToolInventory|null>(null);
-  const [toolsBusy,setToolsBusy]=useState(false);\n  const [taskPrompt,setTaskPrompt]=useState("");\n  const [taskPlan,setTaskPlan]=useState<TaskPlan|null>(null);\n  const [planning,setPlanning]=useState(false);\n  const [researchAction,setResearchAction]=useState("domain");\n  const [researchValue,setResearchValue]=useState("");\n  const [researchBusy,setResearchBusy]=useState(false);\n  const [researchResult,setResearchResult]=useState<Record<string,unknown>|null>(null);
+  const [toolsBusy,setToolsBusy]=useState(false);
+  const [taskPrompt,setTaskPrompt]=useState("");
+  const [taskPlan,setTaskPlan]=useState<TaskPlan|null>(null);
+  const [planning,setPlanning]=useState(false);
+  const [researchAction,setResearchAction]=useState("domain");
+  const [researchValue,setResearchValue]=useState("");
+  const [researchBusy,setResearchBusy]=useState(false);
+  const [researchResult,setResearchResult]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -54,7 +61,21 @@ export default function KaliConnectionPage() {
     finally{setChecking(false);}
   }
 
-  async function createTaskPlan(event:React.FormEvent){\n    event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);\n    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}\n    catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}\n    finally{setPlanning(false);}\n  }\n\n  async function runPassiveResearch(event:React.FormEvent){\n    event.preventDefault();setResearchBusy(true);setError("");setResearchResult(null);\n    try{const response=await fetch("http://127.0.0.1:8765/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}\n    catch(e){setError(e instanceof Error?e.message:"Passive research failed.");}\n    finally{setResearchBusy(false);}\n  }\n\n  async function refreshToolInventory(){
+  async function createTaskPlan(event:React.FormEvent){
+    event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);
+    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}
+    catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}
+    finally{setPlanning(false);}
+  }
+
+  async function runPassiveResearch(event:React.FormEvent){
+    event.preventDefault();setResearchBusy(true);setError("");setResearchResult(null);
+    try{const response=await fetch("http://127.0.0.1:8765/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}
+    catch(e){setError(e instanceof Error?e.message:"Passive research failed.");}
+    finally{setResearchBusy(false);}
+  }
+
+  async function refreshToolInventory(){
     setToolsBusy(true);setError("");
     try{const response=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
     catch(e){setError(e instanceof Error?e.message:"Tool inventory request failed.");}
@@ -112,7 +133,11 @@ export default function KaliConnectionPage() {
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
-        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}git checkout feature/additive-forensics-recovery{"\n"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
+        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"
+"}cd cyberlab-ai{"
+"}git checkout feature/additive-forensics-recovery{"
+"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"
+"}python3 kali-companion/cyberlab.py doctor</pre>
         <p>For this preview build, check out <code>feature/additive-forensics-recovery</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>main</code> and pull the latest changes.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
