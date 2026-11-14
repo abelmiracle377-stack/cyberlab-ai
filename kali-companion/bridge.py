@@ -25,6 +25,7 @@ from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
 from task_planner import plan_task
 from research_workflows import run_research_action
+from service_enumeration import enumerate_services
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -36,6 +37,7 @@ CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
 research_lock = threading.Lock()
+service_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -222,7 +224,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
+        if path not in {"/plan", "/research", "/services", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -242,6 +244,24 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, run_research_action(data), origin)
                 finally:
                     research_lock.release()
+            if path == "/services":
+                target_value = data.get("target")
+                if not isinstance(target_value, str):
+                    raise ValueError("Enter one IP address or hostname.")
+                target = valid_target(target_value)
+                confirmation = data.get("confirmationTarget")
+                reference = data.get("authorizationReference")
+                if (data.get("authorizationConfirmed") is not True or not isinstance(confirmation, str)
+                        or confirmation.strip().lower().rstrip(".") != target_value.strip().lower().rstrip(".")
+                        or not isinstance(reference, str) or not reference.strip() or len(reference) > 160):
+                    raise ValueError("Confirm ownership or written permission, provide an approval reference and retype the exact target.")
+                if not service_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A service-identification request is already running."}, origin)
+                try:
+                    result = enumerate_services(target, data.get("ports"))
+                    return self.send_json(200, result, origin)
+                finally:
+                    service_lock.release()
             if path == "/forensics/fsstat":
                 result = inspect_partition_filesystem(
                     str(data.get("imageJobId", "")),
