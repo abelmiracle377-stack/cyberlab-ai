@@ -357,7 +357,7 @@ class SolidityTestRunnerTests(unittest.TestCase):
 
     def test_nft_and_amm_fixtures_pass_project_import_validation(self):
         fixture_root = Path(__file__).resolve().parent.parent / "examples" / "solidity"
-        for project in ("nft", "amm"):
+        for project in ("nft", "erc1155", "amm"):
             files = []
             for relative in ("src", "test"):
                 for source_path in sorted((fixture_root / project / relative).glob("*.sol")):
