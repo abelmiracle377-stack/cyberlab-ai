@@ -68,6 +68,7 @@ export default function SolidityLabPage() {
   }, []);
 
   async function checkLocalCompiler() {
+    if (language !== "Solidity") { setCompilerError("The local compiler integration currently supports Solidity only."); return; }
     setCompilerBusy(true); setCompilerError("");
     try {
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
@@ -81,6 +82,7 @@ export default function SolidityLabPage() {
   }
 
   async function compileLocally() {
+    if (language !== "Solidity") { setCompilerError("The local compiler integration currently supports Solidity only."); return; }
     setCompilerBusy(true); setCompilerError(""); setCompileResult(null);
     try {
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
@@ -167,12 +169,12 @@ export default function SolidityLabPage() {
         </section>
 
         <section className="solidity-results" aria-labelledby="local-compile-title">
-          <div className="solidity-result-head"><div><div className="agent-overline">LOCAL TOOLCHAIN / PAIRED COMPANION</div><h2 id="local-compile-title">Compile on your machine</h2></div><Code2 size={18}/></div>
+          <div className="solidity-result-head"><div><div className="agent-overline">LOCAL TOOLCHAIN / PAIRED COMPANION</div><h2 id="local-compile-title">Compile Solidity on your machine</h2></div><Code2 size={18}/></div>
           <p className="agent-disclaimer">The Solidity source is sent directly from this browser to your paired 127.0.0.1 companion, not to CyberLab's hosted API. This first stage supports one import-free source file. It does not run tests, audit code or deploy contracts.</p>
           <div className="solidity-actions">
-            <small>{compilerStatus ? (compilerStatus.available ? "solc " + compilerStatus.version + " detected" : compilerStatus.message) : "Check whether a local solc compiler is installed."}</small>
-            <button type="button" onClick={checkLocalCompiler} disabled={compilerBusy}><Search size={13}/>{compilerBusy ? "Working…" : "Check local solc"}</button>
-            <button type="button" onClick={compileLocally} disabled={compilerBusy || !source.trim()}><Code2 size={13}/>{compilerBusy ? "Compiling…" : "Compile locally"}</button>
+            <small>{compilerStatus ? (compilerStatus.available ? "solc " + compilerStatus.version + " detected" : compilerStatus.message) : (language !== "Solidity" ? "Local solc is available for Solidity projects only." : "Check whether a local solc compiler is installed.")}</small>
+            <button type="button" onClick={checkLocalCompiler} disabled={compilerBusy || language !== "Solidity"}><Search size={13}/>{compilerBusy ? "Working…" : "Check local solc"}</button>
+            <button type="button" onClick={compileLocally} disabled={compilerBusy || language !== "Solidity" || !source.trim()}><Code2 size={13}/>{compilerBusy ? "Compiling…" : "Compile locally"}</button>
           </div>
           {compilerError && <div className="agent-error"><AlertTriangle size={14}/>{compilerError}</div>}
           {compileResult && <div className="solidity-limitations">
