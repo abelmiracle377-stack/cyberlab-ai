@@ -1,70 +1,92 @@
-# CyberLab AI OS (VM edition)
+# CyberLab AI OS
 
-CyberLab AI OS is a dedicated, bootable workstation image built on Debian 13. It is a separate delivery target: it does not replace the hosted CyberLab application or the existing Kali companion.
+CyberLab AI OS is being developed as a Debian-based security distribution, not merely a desktop VM image. It has two install/live profiles built from the same source tree:
 
-## Current implementation status
+- **Desktop** — XFCE graphical workstation, browser, terminal, CyberLab companion and curated security/forensics utilities.
+- **Terminal** — lighter command-line environment for lower-resource computers, with the same CyberLab command entry point and a focused set of CLI security/forensics tools.
 
-- VM build definition: `scripts/os/build-vm.sh`
-- Guest provisioning: `scripts/os/provision-vm.sh`
-- Image validation: `scripts/os/verify-vm.sh`
-- Reproducible build workflow: `.github/workflows/build-os-vm.yml`
-- Default output: `dist/cyberlab-ai-os-amd64.qcow2`
+Both profiles are amd64 hybrid ISOs intended for bootable USB media and virtual machines. The existing hosted CyberLab web application and Kali companion remain separate, preserved products integrated into this OS build.
 
-The build uses the official Debian 13 libguestfs appliance template and produces a QEMU/KVM QCOW2 disk. It installs an XFCE desktop, Firefox ESR, Python, Git and a curated set of security/forensics tools, then places the repository's existing Kali companion under `/opt/cyberlab-ai`. The companion is not automatically started, and the bridge remains loopback-only and token-paired.
+## Build architecture
 
-**A successful build is not proof of a successful boot.** The build workflow validates the disk structure and guest configuration. A real QEMU boot smoke test is a separate acceptance gate and must be recorded before calling the VM boot-verified.
+- Debian 13 (Trixie) base, built with Debian `live-build`.
+- Profile package manifests: `os/profiles/desktop.packages` and `os/profiles/terminal.packages`.
+- Shared guest customisation: `scripts/os/live-configure.chroot`.
+- Reproducible ISO builder: `scripts/os/build-live-iso.sh`.
+- Manual GitHub Actions build: [Build CyberLab AI OS Live ISOs](../.github/workflows/build-os-vm.yml).
 
-## Build locally (Debian/Ubuntu host)
+The ISO build uses Debian package repositories. No credentials, API keys, host directories or personal data are embedded. The local companion bridge is not enabled as a service and never starts automatically.
 
-Requirements: QEMU utilities, libguestfs tools, and a Debian 13 template supported by `virt-builder`.
+## Build locally
+
+Use a Debian/Ubuntu amd64 build host with internet access and sufficient disk space (allow at least 25 GB free for build working files and outputs).
 
 ```bash
 sudo apt update
-sudo apt install -y libguestfs-tools qemu-utils
+sudo apt install -y live-build debootstrap xorriso squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools isolinux syslinux-common
+chmod +x scripts/os/*.sh
+sudo ./scripts/os/build-live-iso.sh desktop ./dist
+sudo ./scripts/os/build-live-iso.sh terminal ./dist
 ```
 
-Set a strong local password for the non-root `cyberlab` desktop account. The build script reads it from the environment and writes it to a temporary owner-only file; it is not committed to the repository.
+Expected outputs:
+
+- `dist/cyberlab-ai-os-desktop-amd64.iso`
+- `dist/cyberlab-ai-os-desktop-amd64.iso.sha256`
+- `dist/cyberlab-ai-os-terminal-amd64.iso`
+- `dist/cyberlab-ai-os-terminal-amd64.iso.sha256`
+
+The builder refuses to overwrite existing output ISOs. It uses an isolated working directory under `/var/tmp/cyberlab-ai-os-build` by default; set `CYBERLAB_OS_WORKDIR` to change it.
+
+## Build through GitHub Actions
+
+Open the repository Actions page, select **Build CyberLab AI OS Live ISOs**, and choose **Run workflow**. The workflow builds both profiles and uploads the ISO files and checksums as a short-retention artifact.
+
+This workflow is manual so normal web/companion CI does not incur the cost of building multi-gigabyte operating-system images.
+
+## Boot from USB or in a VM
+
+Verify the downloaded ISO against its SHA-256 file before use. To test with QEMU:
 
 ```bash
-read -rsp "CyberLab VM password: " CYBERLAB_VM_PASSWORD
-export CYBERLAB_VM_PASSWORD
-echo
-./scripts/os/build-vm.sh
-unset CYBERLAB_VM_PASSWORD
+qemu-system-x86_64 -m 4096 -smp 2 -boot d \
+  -cdrom dist/cyberlab-ai-os-desktop-amd64.iso \
+  -nic user,model=virtio-net-pci
 ```
 
-The script refuses to overwrite an existing image. Output is a sparse QCOW2 image; actual allocated size depends on installed packages and filesystem use.
+For the terminal profile, replace the ISO filename. For a persistent USB, use a dedicated USB-writing utility and select the correct removable drive carefully; writing an ISO destroys existing contents on the selected USB device.
 
-## Run with QEMU
+## Boot acceptance checklist
 
-```bash
-qemu-system-x86_64 \
-  -enable-kvm -m 4096 -smp 2 \
-  -drive file=dist/cyberlab-ai-os-amd64.qcow2,if=virtio,format=qcow2 \
-  -nic user,model=virtio-net-pci \
-  -display gtk
-```
+A successful ISO build is not the same as a boot-tested OS. Before marking a release boot-verified, test both profiles in QEMU/KVM:
 
-On hosts without KVM, remove `-enable-kvm` (performance will be slower). The default account is `cyberlab`; use the password supplied at build time. Change it after first login.
+1. ISO boots to the expected desktop or terminal login.
+2. Live user `cyberlab` is created by live-config.
+3. Network interface can be brought up.
+4. `cyberlab --help` runs and lists companion commands.
+5. Desktop profile launches its graphical session.
+6. Terminal profile remains usable without a graphical desktop.
+7. No bridge, scan, exploit, capture or other active assessment starts automatically.
+8. Reboot and shutdown work cleanly.
 
-## Verify
+Record the QEMU version, host architecture, ISO SHA-256, boot profile and test result. Do not call an image boot-verified until these checks have actually passed.
 
-```bash
-./scripts/os/verify-vm.sh dist/cyberlab-ai-os-amd64.qcow2
-```
+## Resource targets
 
-The verifier checks the QCOW2 container and its virtual disk metadata. It does not boot the VM or prove every installed application works.
+- Desktop profile: target 4 GB RAM, 2 vCPUs and 20 GB virtual disk.
+- Terminal profile: target 1–2 GB RAM, 1 vCPU and 12 GB virtual disk.
 
-## Safety and boundaries
+These are initial design targets, not benchmark guarantees. A host with only 4 GB total physical RAM should prefer the terminal profile or boot the desktop ISO directly rather than running a desktop VM alongside its own desktop.
 
-- No inbound network service is enabled by the image build.
-- The local bridge is not enabled as a system service and is not started automatically.
-- No generic unrestricted shell or unattended exploitation workflow is added.
-- Tools are installed as workstation utilities; use active assessment only with explicit written authorisation and the existing CyberLab scope/approval controls.
-- No credentials, API keys, personal data or host directories are baked into the image.
-- The VM uses QEMU user-mode networking by default; do not expose guest services to untrusted networks.
-- This is a Debian-based CyberLab workstation, not an anonymity OS and not an official Kali Linux distribution.
+## Safety and limitations
 
-## Resource guidance
+- CyberLab AI OS is a Debian-based security distribution, not an official Kali or Parrot release.
+- No anonymity, VPN, anti-forensics or endpoint-protection claims are made.
+- Security utilities are provided for authorised research; the OS does not grant permission to assess third-party systems.
+- The companion bridge is opt-in, loopback-only and token-paired.
+- No generic unrestricted shell is exposed to a hosted model; local actions remain governed by companion allowlists and approval gates.
+- The desktop currently opens the existing hosted CyberLab workspace through a browser; a fully offline native agent UI is a separate development milestone.
 
-The initial VM profile targets 4 GB RAM, 2 vCPUs and a 24 GB virtual disk. The guest can be adjusted in QEMU to suit the host. A machine with 4 GB total physical RAM may struggle to run both the host desktop and this guest simultaneously; use a lighter host workload or increase memory where possible.
+## Secondary VM disk prototype
+
+The earlier `build-vm.sh` / `build-os-vm.yml` QCOW2 path is retained as a secondary prototype, not the primary OS distribution. The live ISO is the canonical distribution target. A QCOW2 image should be generated from and boot-tested against the same released ISO in a later packaging phase.
