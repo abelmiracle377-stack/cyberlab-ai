@@ -36,6 +36,12 @@ The local test runner is optional and fails closed if rootless Podman or the con
 
 The repository now includes self-contained capped-NFT and constant-product AMM teaching fixtures with focused Foundry test contracts. CI checks their source paths and import graphs, but CI does not execute the Solidity tests: a real run still requires the operator's local, preloaded Foundry image and compatible compiler. The fixtures are deliberately incomplete examples, not production contracts or evidence of security.
 
+## Repository NFT and AMM fixtures
+
+Two self-contained teaching projects now live under examples/solidity. The capped NFT fixture tests owner-only minting, supply-cap enforcement, approved transfer and safe-receiver callback ordering. The constant-product AMM fixture tests the fee-adjusted reserve product, minimum-output rejection, expired-action rejection and pro-rata liquidity withdrawal. They use Solidity's built-in assert-based Foundry tests and project-relative imports, without forge-std.
+
+These fixtures are intentionally incomplete: the NFT is not full ERC-721 conformance, and the pool omits production-grade reentrancy protections, robust token compatibility, oracle/TWAP, protocol fees and economic/MEV protections. CI validates file/import structure only; it does not run solc or Foundry. A local run requires the operator's independently verified, digest-pinned image with matching solc and Foundry versions. Do not deploy these fixtures or treat passing tests as an audit.
+
 ## NFT engineering review matrix
 
 Use the matrix as a minimum test plan, not a complete audit checklist.
