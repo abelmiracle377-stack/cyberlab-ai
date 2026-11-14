@@ -142,7 +142,19 @@ For any future adapter, maintain a checked-in compatibility manifest containing 
 - Include scam/phishing detection, malicious approval review, revoke-approval guidance, address poisoning warnings and transaction simulation where the chain/tooling supports it.
 - The user must explicitly export any recovered secret into their own wallet. Never automatically sweep, transfer or consolidate recovered funds.
 
-### File and digital-evidence recovery workstream (after wallet recovery)
+### File, photo and digital-evidence recovery workstream (after wallet recovery)
+
+**Status: planned workstream, not yet an operational deleted-file recovery feature.** Existing file triage, hashing or metadata extraction must not be labelled file recovery.
+
+- Build a dedicated recovery workflow for user-owned or explicitly authorised disks, removable media, memory cards and disk images. Identify partitions/filesystems and estimate recoverability before recovery begins.
+- **Photo and image recovery:** explicitly support deleted or damaged image recovery where the source format and carving tool are validated. Prioritise JPEG/JPG and PNG, then add HEIC/HEIF, TIFF, GIF, WebP and camera RAW families only after fixture-based validation. Preserve recoverable EXIF/IPTC/XMP metadata where possible, report when metadata or original filenames are lost, and distinguish thumbnails/previews from full-resolution originals.
+- **Video and media recovery:** add common video/container formats only after validated carving and fragment-reassembly support; do not promise playable output from fragmented or overwritten media.
+- Recover deleted files through filesystem-aware undelete where supported and signature-based carving where filesystem metadata is unavailable. Report the recovery method and confidence separately; carving may lose original filenames, folder paths and timestamps.
+- Preserve originals: read-only acquisition, verified working copies, SHA-256 hashes, chain-of-custody events, timestamps and examiner notes. Never write recovered output back to the source device.
+- Run parsers and carving tools in isolated, resource-limited workers; never execute recovered files automatically. Flag encrypted, overwritten, fragmented, damaged and unsupported data rather than promising recovery.
+- Add synthetic and public test fixtures for intact, deleted, fragmented, truncated and corrupt image files. Test byte-for-byte integrity, false-positive handling, metadata preservation, cancellation, output quotas and source immutability before marking a format supported.
+- Support exports and evidence reports with source image, tool/version, parameters, hashes, findings and limitations. Do not overwrite source media or write recovered output back to the source device.
+
 
 - Build a dedicated recovery and forensics workflow for user-owned or explicitly authorised media: disk/image intake, filesystem and partition identification, deleted-file carving where supported, metadata/timeline analysis, hash manifests and recoverability estimates.
 - Preserve originals: read-only acquisition, verified working copies, SHA-256 hashes, chain-of-custody events, timestamps and examiner notes.
