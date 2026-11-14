@@ -76,7 +76,7 @@ export const CHAIN_REGISTRY: readonly ChainRegistryEntry[] = [
     name: "OP Mainnet",
     networkType: "mainnet",
     nativeCurrency: "ETH",
-    sourceUrls: ["https://eips.ethereum.org/EIPS/eip-5094"],
+    sourceUrls: ["https://docs.optimism.io/rust/kona/sdk/examples/load-a-rollup-config"],
     reviewedAt: CHAIN_REGISTRY_REVIEWED_AT,
   },
   {
