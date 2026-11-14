@@ -2,7 +2,7 @@
 
 An open-source AI-assisted cybersecurity research workspace for passive OSINT, IP intelligence, authorised assessment planning, vulnerability research, safe malware triage, binary inspection, network evidence analysis and Kali Linux workflows.
 
-## Product roadmap
+## CyberLab AI OS VM\n\nA separate Debian-based bootable workstation VM build is being added under [os/](./os/). The reproducible QCOW2 build, provisioning scripts, structural verifier and manual image-build workflow are documented there. The VM is not yet represented as boot-verified; image generation and a real QEMU boot acceptance test are separate gates.\n\n## Product roadmap
 
 The additive capability-parity plan and Kodachi-inspired information architecture are documented in [docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md](./docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md). This plan preserves all existing routes, tools and workflows; planned capabilities are not represented as implemented until verified.
 
