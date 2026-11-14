@@ -94,12 +94,31 @@ The Solidity Lab is intended to grow into a full Web3 engineering workspace. The
 
 ### Wallet security and recovery workstream (after Web3 engineering)
 
-- Support wallet inventory and chain/address identification, public-address diagnostics, derivation-path education, backup validation guidance, encrypted keystore format identification, and recovery checklists.
-- Recovery helpers must operate locally where secrets are involved. Seed phrases, private keys, keystore passwords and signing material must never be submitted to CyberLab AI chat, model providers, logs, analytics or hosted APIs.
-- A connected wallet should expose public account information and request signatures/transactions through the wallet's own approval UI. CyberLab must not silently sign, export keys or bypass wallet protections.
-- Explain recovery limits honestly: if the required secret material and backups are irretrievably lost, blockchain account control generally cannot be recreated by software or support staff.
+**This is an active recovery-engineering workstream, not a guidance-only feature.** CyberLab AI's coordinator should be able to select, configure and run approved recovery utilities through the Kali companion or CyberLab OS sandbox, collect structured results, and help the user validate recovered access. It must not simply tell the user to go elsewhere and run a tool manually when the supported operation can safely be executed in CyberLab.
+
+#### Recovery capabilities
+- **Bitcoin and other wallet recovery:** integrate maintained, reviewed tools such as BTCRecover where their supported wallet formats and recovery modes match the user's backup. Add format adapters for supported Bitcoin Core, Electrum, hardware-wallet backup and other documented formats as validation establishes compatibility; do not claim universal wallet support.
+- **Password/passphrase recovery:** run user-authorised candidate-based and typo-tolerant recovery against a supplied wallet backup, encrypted keystore or user-provided recovery material. Support bounded masks, known fragments and user-supplied candidate lists. Allow the user to configure time, memory, CPU/GPU and attempt budgets, and stop/cancel immediately.
+- **Wallet discovery and validation:** identify backup/keystore formats, inspect non-secret metadata, test known derivation paths and account discovery, derive public addresses in the isolated worker, and compare them with addresses supplied by the owner. Validate a recovered wallet by deriving expected public addresses or checking a signed challenge; never ask the user to reveal the seed phrase in chat.
+- **Other ecosystems:** add tool adapters only after format-specific support, tool licensing, test fixtures and security review. Prioritise Bitcoin first, then Ethereum-compatible keystores and other requested ecosystems according to verified tooling.
+- **Outcome reporting:** report the exact backup format, tool/version, recovery mode, constraints, elapsed time, whether a candidate was recovered, validation evidence and limitations. Never fabricate a recovered secret or report success merely because a tool exited with code zero.
+
+#### Sandbox and secret-handling architecture
+- Run recovery tools in an isolated, disposable worker/container with a read-only input mount, encrypted ephemeral scratch storage, no inbound network, and outbound network disabled by default. Apply CPU, memory, disk, process, wall-clock and output-size limits. Destroy ephemeral scratch material after the user exports the result or the job expires.
+- The AI coordinator may plan jobs and inspect redacted status/results, but must not receive raw seed phrases, private keys, keystore passwords or recovered secrets in model prompts, tool traces, telemetry, logs, analytics or hosted inference requests.
+- Secret-bearing input is transferred directly from the user's local client or an explicitly trusted encrypted upload channel to the recovery worker, never through model context. Prefer local CyberLab OS execution when available; hosted recovery workers must require an explicit opt-in and disclose where encrypted data is processed.
+- Provide a secret-safe result handoff: deliver recovered material directly to a user-controlled local vault/download channel protected by encryption and user authentication, never echo it into chat. Let the user verify and move funds using their own wallet software.
+- Do not retain seed phrases, candidate passwords, recovered keys or plaintext wallet files. Redact command arguments and process output before audit logging. Record job metadata, tool version, timestamps, input hashes and outcome—not secrets.
+- Use a strict tool registry with fixed executable paths, typed arguments, allowlisted operations, signed/pinned tool versions and per-tool permission tiers. No unrestricted shell, arbitrary downloads, or model-generated command execution.
+- Require an ownership/authorisation declaration, explicit selection of the target backup and recovery scope, and a separate confirmation before starting expensive or long-running recovery. Show estimated resource use and let the user cancel.
+- Keep recovery operations offline unless the user explicitly enables a separately justified public-chain lookup. Never broadcast transactions, move funds or sign on the user's behalf as part of recovery.
+
+#### Safety and honest limits
+- Support only wallets and backups the user owns or is explicitly authorised to recover. Refuse recovery attempts against third-party targets, stolen files or arbitrary addresses.
+- This is not a promise to crack a wallet without adequate information. If the secret material is irretrievably lost and no useful backup, password clues or recoverable entropy remains, software cannot recreate it.
+- A connected wallet exposes public account information and requests signatures/transactions through the wallet's own approval UI. CyberLab must not silently sign, export keys or bypass wallet protections.
 - Include scam/phishing detection, malicious approval review, revoke-approval guidance, address poisoning warnings and transaction simulation where the chain/tooling supports it.
-- Recovery of third-party wallets, bypassing authentication, brute-forcing secrets or extracting keys from devices without authority is out of scope.
+- The user must explicitly export any recovered secret into their own wallet. Never automatically sweep, transfer or consolidate recovered funds.
 
 ### File and digital-evidence recovery workstream (after wallet recovery)
 
