@@ -234,7 +234,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 2 or length > MAX_BODY:
+            body_limit = 65536 if path in {"/evidence/report", "/evidence/artifacts"} else MAX_BODY
+            if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
