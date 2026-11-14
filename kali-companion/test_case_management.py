@@ -48,6 +48,13 @@ class CaseManagementTests(unittest.TestCase):
     def artifact_report(self):
         return self.artifact
 
+    def test_modified_ledger_is_detected_before_append(self):
+        case_management.build_case_report(self.service)
+        content = self.ledger.read_text()
+        self.ledger.write_text(content.replace('"event":"case_created"', '"event":"altered"'))
+        with self.assertRaisesRegex(ValueError, "failed hash-chain verification"):
+            case_management.build_case_report(self.artifact, None)
+
     def test_uncompleted_reports_are_rejected(self):
         with self.assertRaises(ValueError):
             case_management.build_case_report({"status": "running"})
