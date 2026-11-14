@@ -36,6 +36,12 @@ The local test runner is optional and fails closed if rootless Podman or the con
 
 The repository now includes self-contained capped-NFT and constant-product AMM teaching fixtures with focused Foundry test contracts. CI checks their source paths and import graphs, but CI does not execute the Solidity tests: a real run still requires the operator's local, preloaded Foundry image and compatible compiler. The fixtures are deliberately incomplete examples, not production contracts or evidence of security.
 
+## ERC-1155 multi-token fixture
+
+The repository also includes an ERC-1155-style educational project under examples/solidity/erc1155. It demonstrates per-ID supply caps, owner-controlled single and batch minting, operator approvals, safe single/batch transfers and pause controls. Its tests cover unauthorized minting, batch balance reads, operator transfers, pause enforcement, receiver callbacks and state rollback after rejected batch minting.
+
+This fixture is not a complete ERC-1155 implementation. It omits interface discovery, metadata/URI policy, burn operations, role-based administration and comprehensive standard conformance. The callback surface and administrative model require independent review. CI checks the project import graph, not Solidity execution; do not deploy the fixture or treat its tests as a security assessment.
+
 ## Repository NFT and AMM fixtures
 
 Two self-contained teaching projects now live under examples/solidity. The capped NFT fixture tests owner-only minting, supply-cap enforcement, approved transfer and safe-receiver callback ordering. The constant-product AMM fixture tests the fee-adjusted reserve product, minimum-output rejection, expired-action rejection and pro-rata liquidity withdrawal. They use Solidity's built-in assert-based Foundry tests and project-relative imports, without forge-std.
