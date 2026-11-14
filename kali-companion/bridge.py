@@ -156,6 +156,23 @@ def parse_report(xml_text: str) -> dict:
         "scaninfo": scaninfo, "completion": completion, "evidence_status": evidence_status,
     }
 
+def resolve_scan_ports(profile: str, ports_raw) -> list[int]:
+    """Return a bounded TCP port selection for one named scan profile."""
+    if profile in SCAN_PROFILES:
+        expected = SCAN_PROFILES[profile]
+        if ports_raw and (not isinstance(ports_raw, list) or sorted(set(ports_raw)) != expected):
+            raise ValueError("Selected ports do not match the chosen scan profile.")
+        return list(expected)
+    if profile != "custom":
+        raise ValueError("Choose the quick, standard or custom scan profile.")
+    if not isinstance(ports_raw, list) or not ports_raw or len(ports_raw) > MAX_PORTS or any(type(port) is not int or not 1 <= port <= 65535 for port in ports_raw):
+        raise ValueError("Select between 1 and 100 unique TCP ports in the range 1–65535.")
+    selected = sorted(set(ports_raw))
+    if len(selected) != len(ports_raw):
+        raise ValueError("Duplicate ports are not accepted.")
+    return selected
+
+
 def system_snapshot() -> dict:
     """Return bounded, non-sensitive host health metrics; never process args or user data."""
     memory = {}
@@ -304,19 +321,7 @@ class Handler(BaseHTTPRequestHandler):
             if data.get("authorizationConfirmed") is not True or confirmation != str(data.get("target", "")).strip().lower().rstrip(".") or not reference or len(reference) > 160:
                 raise ValueError("Confirm ownership or written permission, provide an approval reference and retype the exact target.")
             profile = str(data.get("profile", "custom")).lower()
-            if profile not in {"quick", "standard", "custom"}:
-                raise ValueError("Choose the quick, standard or custom scan profile.")
-            ports_raw = data.get("ports", [])
-            if profile in SCAN_PROFILES:
-                ports = SCAN_PROFILES[profile]
-                if ports_raw and (not isinstance(ports_raw, list) or sorted(set(ports_raw)) != ports):
-                    raise ValueError("Selected ports do not match the chosen scan profile.")
-            else:
-                if not isinstance(ports_raw, list) or not ports_raw or len(ports_raw) > MAX_PORTS or any(type(p) is not int or not 1 <= p <= 65535 for p in ports_raw):
-                    raise ValueError("Select between 1 and 100 unique TCP ports in the range 1–65535.")
-                ports = sorted(set(ports_raw))
-                if len(ports) != len(ports_raw):
-                    raise ValueError("Duplicate ports are not accepted.")
+            ports = resolve_scan_ports(profile, data.get("ports", []))
             if not shutil.which("nmap"):
                 return self.send_json(503, {"error": "Nmap is not installed. Install it with: sudo apt install nmap"}, origin)
             if not scan_lock.acquire(blocking=False):
@@ -334,10 +339,16 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_json(503, {"error": "Local scan history is full. Wait for the active job to finish."}, origin)
                     scan_jobs.pop(oldest, None)
                 scan_jobs[job_id] = {"job_id": job_id, "status": "queued", "target": target, "profile": profile, "created_at": now}
-            worker = threading.Thread(target=self.run_scan_job, args=(job_id, target, ports, profile), daemon=True)
-            worker.start()
             with job_lock:
                 scan_jobs[job_id]["status"] = "running"
+            worker = threading.Thread(target=self.run_scan_job, args=(job_id, target, ports, profile), daemon=True)
+            try:
+                worker.start()
+            except Exception:
+                with job_lock:
+                    scan_jobs[job_id].update({"status": "failed", "error": "Could not start the local scan worker."})
+                scan_lock.release()
+                raise
             return self.send_json(202, {"job_id": job_id, "status": "running", "target": target, "profile": profile, "poll": "/scan/" + job_id}, origin)
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json(400, {"error": str(exc)}, origin)

@@ -134,5 +134,22 @@ class CompanionTests(unittest.TestCase):
             bridge.parse_report('<!DOCTYPE nmaprun [<!ENTITY x "x">]><nmaprun>&x;</nmaprun>')
 
 
+    def test_bridge_scan_profiles_are_bounded(self):
+        import importlib.util
+        bridge_path = MODULE_PATH.with_name("bridge.py")
+        spec = importlib.util.spec_from_file_location("cyberlab_bridge_profiles", bridge_path)
+        bridge = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(bridge)
+        self.assertEqual(bridge.resolve_scan_ports("quick", []), [22, 80, 443])
+        self.assertEqual(bridge.resolve_scan_ports("standard", []), list(range(1, 101)))
+        self.assertEqual(bridge.resolve_scan_ports("custom", [443, 22]), [22, 443])
+        with self.assertRaisesRegex(ValueError, "match"):
+            bridge.resolve_scan_ports("quick", [22, 80])
+        with self.assertRaisesRegex(ValueError, "unique"):
+            bridge.resolve_scan_ports("custom", [80, 80])
+        with self.assertRaisesRegex(ValueError, "profile"):
+            bridge.resolve_scan_ports("aggressive", [])
+
 if __name__ == "__main__":
     unittest.main()
