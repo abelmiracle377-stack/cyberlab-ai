@@ -100,7 +100,7 @@ The paired bridge exposes `GET /solidity/compiler` for read-only discovery and `
 
 The paired bridge exposes GET /solidity/tests/status and POST /solidity/tests/run. Execution requires rootless Podman and a locally preloaded Foundry image configured through CYBERLAB_FOUNDRY_IMAGE as a full image reference ending in @sha256:<64-hex-digest>. The bridge verifies rootless mode and local image presence, uses --pull=never, and never installs or downloads a runtime or image. Docker and direct host execution are not fallback options.
 
-The first test stage accepts only flat src/*.sol and test/*.t.sol files (2–20 files, 100 KB combined), rejects imports and external dependencies, and writes its own minimal foundry.toml. The fixed container invocation disables networking, uses a read-only image filesystem, drops capabilities, enables no-new-privileges, and caps memory (1 GiB), CPU (1 core), processes (64), execution time (120 seconds), and captured output (256 KB). Project files are mounted into a temporary workspace and removed after the run. This is a constrained local sandbox, not a formal isolation guarantee; use a trusted image and review tests before execution. Passing tests are not an audit or proof of correctness.
+The current test stage accepts 2–100 project files and 500 KB combined, including flat src/*.sol and test/*.t.sol files plus nested OpenZeppelin Contracts 5.x source files. It validates the exact same SHA-256 dependency lock used by multi-file compilation, generates a local Foundry remapping, and rejects unpinned dependencies, forge-std and unsupported imports. The fixed container invocation disables networking, uses a read-only image filesystem, drops capabilities, enables no-new-privileges, and caps memory (1 GiB), CPU (1 core), processes (64), execution time (120 seconds), and captured output (256 KB). Project files are mounted into a temporary workspace and removed after the run. This is a constrained local sandbox, not a formal isolation guarantee; use a trusted image and review tests before execution. The image must already contain the matching Foundry and solc versions; no compiler or dependency is downloaded. Passing tests are not an audit or proof of correctness.
 
 Example environment configuration (replace with a digest independently verified and loaded locally):
 
@@ -113,7 +113,7 @@ The paired bridge exposes POST /solidity/project/compile. It accepts 1–100 in-
 
 The SHA-256 check establishes that submitted source bytes match the submitted lock entries; it does not independently prove that the first downloaded source came from the declared Git commit or release. Obtain source from the official OpenZeppelin repository, independently verify its release tag/commit and file contents, and review/protect the lockfile before use. The UI's prefilled project text contains placeholders, not a complete OpenZeppelin package; replace them with the complete dependency closure and a matching lock before compiling.
 
-The Foundry test runner has not yet been upgraded to consume this dependency manifest. It remains import-free and flat-path only. Multi-file compilation is not a test run, audit, deployment or proof of correctness.
+Multi-file compilation is not a test run, audit, deployment or proof of correctness.
 
 
 ### Offline Foundry tests with pinned OpenZeppelin sources
