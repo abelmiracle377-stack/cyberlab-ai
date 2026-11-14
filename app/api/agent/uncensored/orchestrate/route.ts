@@ -15,13 +15,37 @@ const schema = z.object({
   maxSpecialists: z.number().int().min(1).max(4).default(4),
 });
 
-async function readBody(request: Request) {
-  const length = Number(request.headers.get("content-length") || "0");
-  if (length > 40000) return { error: "Request body is too large.", status: 413 as const };
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > 40000) return { error: "Request body is too large.", status: 413 as const };
-  try { return { value: JSON.parse(raw) as unknown }; }
-  catch { return { error: "Request body must be valid JSON.", status: 400 as const }; }
+async function readBody(request: Request): Promise<{ value: unknown } | { error: string; status: 400 | 413 }> {
+  const header = request.headers.get("content-length");
+  if (header !== null) {
+    const length = Number(header);
+    if (!Number.isFinite(length) || length < 0) return { error: "Invalid Content-Length header.", status: 400 };
+    if (length > 40000) return { error: "Request body is too large.", status: 413 };
+  }
+  if (!request.body) return { error: "A JSON request body is required.", status: 400 };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > 40000) {
+        await reader.cancel();
+        return { error: "Request body is too large.", status: 413 };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try { return { value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown }; }
+  catch { return { error: "Request body must be valid JSON.", status: 400 }; }
 }
 
 export async function POST(request: Request) {

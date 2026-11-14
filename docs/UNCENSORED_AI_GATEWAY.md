@@ -13,6 +13,26 @@ This is the first additive hosted-inference slice. It introduces a provider-inde
 - The route requires a signed-in Supabase user and an active/comped subscription.
 - Usage reservations and actual token settlements are stored in `ai_usage_events`; the initial default allowance is 200,000 tokens per user per calendar month, with a 4,096-token reservation per single-agent request and 10,000 tokens for specialist-team requests.
 
+## Recommended hosted deployment target
+
+The initial checkpoint under consideration is `huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2`. Its Hugging Face repository lists an Apache-2.0 licence, vLLM serving instructions and approximately 15.2 GB of model files. This is not suitable for a 4 GB local machine; serve it on hosted GPU infrastructure so every CyberLab user can access the same managed endpoint without installing Ollama or Kali.
+
+RunPod's vLLM Serverless worker exposes an OpenAI-compatible base URL in this form:
+
+```text
+https://api.runpod.ai/v2/<ENDPOINT_ID>/openai/v1
+```
+
+For this model, the planned server configuration is:
+
+- `CYBERLAB_UNCENSORED_API_KEY`: RunPod API key, stored only as a server-side secret
+- `CYBERLAB_UNCENSORED_BASE_URL`: the endpoint URL above
+- `CYBERLAB_UNCENSORED_MODELS`: JSON entry whose upstream ID is `huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2`
+
+This is a deployment target, not a claim that a RunPod endpoint has been created or tested. The operator must provision the GPU endpoint, validate vLLM compatibility and confirm cold-start, concurrency and cost behaviour before enabling it. Tool calling is model/parser-dependent and is not enabled in this gateway slice.
+
+References: [Hugging Face model card and files](https://huggingface.co/huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2), [RunPod vLLM worker documentation](https://github.com/runpod-workers/worker-vllm).
+
 ## Required environment configuration
 
 ```env
