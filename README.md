@@ -150,3 +150,12 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - After a user signs up, promote the owner account by setting `public.user_profiles.role='admin'` for that user's UUID in Supabase SQL Editor.
 - Admins use `/admin` to manage roles and grant, suspend, cancel or expire access. Customers use `/billing` for checkout and payment history. `/pricing` is public.
 - Test with Paystack test keys before going live and confirm your merchant account's USD recurring-card eligibility and settlement settings.
+
+
+### Kali companion case export and preservation
+
+- A completed unified investigation case can be exported as structured JSON and a standalone HTML report from the paired local bridge.
+- The bridge also writes a private local archive under `~/.local/state/cyberlab/exports/<case-id>/`, with `case.json`, `case.html` and `manifest.json`. The directory is restricted to mode 0700 and files to mode 0600 where supported; files are created exclusively and existing case archives are never overwritten.
+- The manifest records SHA-256 digests and byte sizes for the JSON and HTML exports, plus the source-report digests. Verify these hashes after transfer or storage.
+- HTML report fields are escaped and the document applies a restrictive Content Security Policy. The export contains report observations and metadata, not original samples, disk images or recovered file contents.
+- This is integrity-oriented local archiving, not a digital signature, immutable storage, trusted timestamp or formal chain-of-custody system. Preserve original media and acquisition maps separately under your evidence-retention policy.
