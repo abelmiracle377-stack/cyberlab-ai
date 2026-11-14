@@ -7,7 +7,8 @@ import { ArrowLeft, Download, FileSearch, HardDriveDownload, ShieldCheck } from 
 type Kind = "JPEG" | "PNG" | "GIF" | "PDF";
 type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; name:string };
 type BlockDevice = {name:string;path:string;type:string;size:number;ro:boolean;tran?:string;model?:string;fstype?:string;mountpoints?:Array<string|null>};
-type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number;manifest?:{path:string;files_hashed:number;total_bytes_hashed:number;truncated:boolean}};\ntype ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};
+type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number;manifest?:{path:string;files_hashed:number;total_bytes_hashed:number;truncated:boolean}};
+type ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
