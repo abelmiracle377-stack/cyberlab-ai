@@ -44,7 +44,6 @@ export default function KaliConnectionPage() {
       const response=await fetch("http://127.0.0.1:8765/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
-      if(!data.nmap)throw new Error("Bridge is running, but Nmap is missing. Run: sudo apt install -y nmap");
       const inventoryResponse=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const inventory=await inventoryResponse.json();
       if(!inventoryResponse.ok)throw new Error(inventory.error||"Connected, but the Kali tool inventory could not be loaded. Update the local companion.");
