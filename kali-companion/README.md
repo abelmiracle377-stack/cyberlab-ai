@@ -117,4 +117,4 @@ sudo photorec /mnt/backup/cyberlab-disk.img
 
 In PhotoRec, select the image/partition, configure File Opt for the required formats, and choose a recovery directory on the backup drive. NTFS undelete and extundelete workflows are not automated by the dashboard in this release; they require filesystem-specific assessment and an unmounted source. Do not run them against the original disk as a substitute for imaging.
 
-A hosted Vercel deployment cannot directly access the browser user's physical disks. Physical-drive access is provided only by the paired local Kali companion, or by a future self-hosted CyberLab OS runner on the same machine with the required OS permissions and tools.
+A hosted Vercel deployment cannot directly access the browser user's physical disks. A self-hosted CyberLab AI OS running on a Linux machine can use the same local runner and bridge directly on that machine, provided it has the required OS permissions and tools; no remote web process is given raw-disk access.
