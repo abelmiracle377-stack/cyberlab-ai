@@ -51,14 +51,14 @@ export async function POST(request: Request) {
     const { data: subscription } = await supabase.from("subscriptions").select("status").eq("user_id", user.id).in("status", ["active", "comped"]).maybeSingle();
     if (!subscription) return NextResponse.json({ error: "An active subscription is required." }, { status: 402 });
     db = adminDb();
-    const reserved = await db.rpc("reserve_cyberlab_ai_usage", { p_user_id: user.id, p_estimated_tokens: 10000, p_monthly_limit: 200000 });
+    const reserved = await db.rpc("reserve_cyberlab_ai_usage", { p_user_id: user.id, p_estimated_tokens: 60000, p_monthly_limit: 200000 });
     if (reserved.error) return NextResponse.json({ error: "AI usage accounting is unavailable. Try again later." }, { status: 503 });
     const reservation = Array.isArray(reserved.data) ? reserved.data[0] : reserved.data;
     if (!reservation?.allowed || !reservation.reservation_id) return NextResponse.json({ error: "Your monthly AI usage allowance has been reached." }, { status: 429 });
     reservationId = reservation.reservation_id;
     try {
       const result = await runReadOnlyResearch({ model, prompt: parsed.data.prompt, history: parsed.data.history });
-      const settled = await db.rpc("settle_cyberlab_ai_usage", { p_reservation_id: reservationId, p_actual_tokens: Math.min(result.usage.totalTokens, 10000), p_provider: result.provider, p_model: model, p_status: "completed" });
+      const settled = await db.rpc("settle_cyberlab_ai_usage", { p_reservation_id: reservationId, p_actual_tokens: result.usage.totalTokens, p_provider: result.provider, p_model: model, p_status: "completed" });
       if (settled.error) console.error("Research usage settlement failed:", settled.error.message);
       reservationId = null;
       return NextResponse.json({ text: result.text, evidence: result.evidence, usage: result.usage, toolCalls: result.toolCalls, provenance: { analysis: "model_generated", evidence: "read_only_tool_results" } }, { headers: { "Cache-Control": "private, no-store" } });

@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     if (!subscription) return NextResponse.json({ error: "An active subscription is required." }, { status: 402 });
 
     db = adminDb();
-    const reserved = await db.rpc("reserve_cyberlab_ai_usage", { p_user_id: user.id, p_estimated_tokens: 4096, p_monthly_limit: 200000 });
+    const reserved = await db.rpc("reserve_cyberlab_ai_usage", { p_user_id: user.id, p_estimated_tokens: 10000, p_monthly_limit: 200000 });
     if (reserved.error) {
       console.error("AI usage reservation failed:", reserved.error.message);
       return NextResponse.json({ error: "AI usage accounting is unavailable. Try again later." }, { status: 503 });
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       const result = await runUnfilteredCompletion({ model: modelId, messages: [...parsed.data.history, { role: "user", content: parsed.data.prompt }], maxTokens: 1800 });
       const settlement = await db.rpc("settle_cyberlab_ai_usage", {
         p_reservation_id: reservationId,
-        p_actual_tokens: Math.min(result.usage.totalTokens, 10000),
+        p_actual_tokens: result.usage.totalTokens,
         p_provider: result.provider,
         p_model: result.model,
         p_status: "completed",

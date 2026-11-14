@@ -22,7 +22,7 @@ The `/api/agent/uncensored/tools` route supports two allowlisted tools:
 - `dns_intelligence`: passive DNS-over-HTTPS lookups for A, AAAA, MX, NS and TXT records. It does not connect to the target or run a scan.
 - `cve_lookup`: public NIST NVD API v2 lookup by CVE ID or keyword.
 
-The server validates all arguments independently of model-provided JSON, limits each research turn to four calls and four provider rounds, bounds request and response sizes, applies network timeouts, and records source, observed timestamp and returned evidence separately from model-generated analysis. External tool output is treated as untrusted data, not instructions. The route is authenticated, subscription-gated and uses per-user token reservations/settlement.
+The server validates all arguments independently of model-provided JSON, limits each research turn to four calls and four provider rounds, bounds request and response sizes, applies network timeouts, and records source, observed timestamp and returned evidence separately from model-generated analysis. External tool output is treated as untrusted data, not instructions. The route is authenticated, subscription-gated and uses per-user token reservations/settlement. The per-request reservation ceiling is 60,000 tokens; standard inference reserves 10,000 and specialist orchestration reserves 30,000. Settlement records the provider-reported total without silently clamping it to the old 10,000-token ceiling. The monthly default remains 200,000 tokens.
 
 No active scanning, exploitation, credential access, file changes or host execution is exposed by this tool loop. Tool outputs are evidence snapshots, not proof of exploitability or a substitute for validating scope.
 

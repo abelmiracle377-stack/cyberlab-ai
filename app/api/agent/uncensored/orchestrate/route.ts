@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
     db = adminDb();
     const reserved = await db.rpc("reserve_cyberlab_ai_usage", {
-      p_user_id: user.id, p_estimated_tokens: 10000, p_monthly_limit: 200000,
+      p_user_id: user.id, p_estimated_tokens: 30000, p_monthly_limit: 200000,
     });
     if (reserved.error) return NextResponse.json({ error: "AI usage accounting is unavailable." }, { status: 503 });
     const reservation = Array.isArray(reserved.data) ? reserved.data[0] : reserved.data;
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
         synthesis = completed.map((item) => `## ${item.label}\\n${item.analysis}`).join("\\n\\n");
       }
     }
-    const actualTokens = Math.min(10000, results.reduce((sum, item) => sum + item.usage, 0) + synthesisTokens);
+    const actualTokens = results.reduce((sum, item) => sum + item.usage, 0) + synthesisTokens;
     const settled = await db.rpc("settle_cyberlab_ai_usage", {
       p_reservation_id: reservationId, p_actual_tokens: actualTokens,
       p_provider: "uncensoredllm-compatible", p_model: modelId, p_status: "completed",
