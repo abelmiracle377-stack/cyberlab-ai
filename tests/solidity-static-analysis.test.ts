@@ -82,3 +82,25 @@ contract Collection {
  assert.ok(result.findings.some(f=>f.id==="SOL-015"));
  assert.ok(result.findings.some(f=>f.id==="SOL-016"));
 });
+
+
+test("adds cautious DEX review leads for swaps, reserves, slippage, oracles, fees, callbacks and liquidity", () => {
+ const result=analyzeSoliditySource(`pragma solidity 0.8.24;
+contract ExampleDex {
+ function swapExactTokensForTokens(uint amountOutMin) external {}
+ function quote() external view returns(uint) { return reserve0 + reserve1; }
+ uint public reserve0;
+ uint public reserve1;
+ uint public kLast;
+ address public feeTo;
+ function consult(address token) external view returns(uint) { return token == address(0) ? price0CumulativeLast : 0; }
+ uint public price0CumulativeLast;
+ function uniswapV2Call(address sender, uint amount0, uint amount1, bytes calldata data) external {}
+ function addLiquidity(uint amount) external {}
+ function removeLiquidity(uint amount) external {}
+}`);
+ for (const id of ["SOL-017","SOL-018","SOL-019","SOL-020","SOL-021","SOL-022","SOL-023"]) {
+  assert.ok(result.findings.some(f=>f.id===id), `expected ${id}`);
+ }
+ assert.equal(result.findings.find(f=>f.id==="SOL-022")?.severity,"medium");
+});
