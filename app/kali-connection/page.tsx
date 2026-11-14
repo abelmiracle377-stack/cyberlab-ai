@@ -49,6 +49,9 @@ export default function KaliConnectionPage() {
   const [serviceResult,setServiceResult]=useState<Record<string,unknown>|null>(null);
   const [evidenceBusy,setEvidenceBusy]=useState(false);
   const [evidenceReport,setEvidenceReport]=useState<Record<string,unknown>|null>(null);
+  const [artifactEvidence,setArtifactEvidence]=useState("");
+  const [artifactBusy,setArtifactBusy]=useState(false);
+  const [artifactReport,setArtifactReport]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -85,6 +88,19 @@ export default function KaliConnectionPage() {
     try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("http://127.0.0.1:8765/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Service identification failed.");}
     finally{setServiceBusy(false);}
+  }
+
+  async function analyseArtifactEvidence(){
+    setArtifactBusy(true);setError("");setArtifactReport(null);
+    try{
+      const parsed=JSON.parse(artifactEvidence);
+      if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw new Error("Paste a JSON object containing triageResult or recoveryManifest.");
+      const response=await fetch("http://127.0.0.1:8765/evidence/artifacts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify(parsed)});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Artifact evidence analysis failed.");
+      setArtifactReport(data as Record<string,unknown>);
+    }catch(e){setError(e instanceof Error?e.message:"Artifact evidence analysis failed. Check the JSON.");}
+    finally{setArtifactBusy(false);}
   }
 
   async function analyseServiceEvidence(){
@@ -253,7 +269,15 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>9. Run an authorised Nmap assessment</h2>
+        <h2>9. Static artifact and recovery evidence</h2>
+        <p>Paste JSON from <code>python3 kali-companion/cyberlab.py triage /path/to/sample</code> as a <code>triageResult</code>, or paste a <code>cyberlab-recovery-manifest.json</code> as a <code>recoveryManifest</code>. This analysis is offline and non-executing; it does not upload samples or declare files malicious.</p>
+        <label className="bridge-label">Triage result or recovery manifest JSON<textarea value={artifactEvidence} onChange={e=>{setArtifactEvidence(e.target.value);setArtifactReport(null);}} placeholder='{"triageResult":{"file_name":"sample.bin","size_bytes":1024,"sha256":"...","entropy":6.2,"indicator_groups":[],"matched_strings":[]}}' rows={7}/></label>
+        <button className="report-download" type="button" onClick={analyseArtifactEvidence} disabled={artifactBusy||!artifactEvidence.trim()}>{artifactBusy?<><LoaderCircle size={14}/> Analysing artifact evidence…</>:<><FileSearch size={14}/> Analyse static artifact evidence</>}</button>
+        {artifactReport&&<div className="network-results"><h3>Artifact evidence report</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:520,overflow:"auto"}}>{JSON.stringify(artifactReport,null,2)}</pre></div>}
+      </section>}
+
+      {connected&&<section className="kali-panel">
+        <h2>10. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
