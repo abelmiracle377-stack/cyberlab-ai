@@ -97,9 +97,9 @@ export default function KaliConnectionPage() {
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
-        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}sudo apt update && sudo apt install -y nmap python3{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
-        <p>If you already cloned the repository, update it with <code>git pull origin main</code> from inside the repository folder.</p>
-        <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
+        <pre>git clone --branch feat/model-intelligence-workspace https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}sudo apt update && sudo apt install -y nmap python3{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
+        <p>If you already cloned the repository, switch to <code>feat/model-intelligence-workspace</code> and run <code>git pull origin feat/model-intelligence-workspace</code> from inside the repository folder. This keeps the companion version aligned with the dashboard branch being tested.</p>
+        <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/feat/model-intelligence-workspace/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
 
       <section className="kali-panel">
@@ -113,7 +113,7 @@ export default function KaliConnectionPage() {
         <h2>3. Pair this browser with Kali</h2>
         <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Paste the local pairing token"/></label>
         <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Connect to Kali</>}</button>
-        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local Kali bridge. The pairing token is held only in this page's memory.</p>}
+        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local Kali bridge. The token is stored in this browser tab's session storage so the Models workspace can access Ollama.</p>}
       </section>
 
       {connected&&<section className="kali-panel">
@@ -162,7 +162,7 @@ export default function KaliConnectionPage() {
         <div className="kali-module-grid">{modules.map(({icon:Icon,title,detail})=><div className="kali-module" key={title}><Icon size={17}/><div><strong>{title}</strong><p>{detail}</p></div></div>)}</div>
       </section>
 
-      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. The pairing token is not saved by the website. Scan results are returned to this browser session.</div>
+      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. The pairing token is kept in this browser tab's session storage for the paired local-model workspace; clear the tab session to remove it. Scan results are returned to this browser session.</div>
       <div className="agent-disclaimer"><Unplug size={12}/> To disconnect, close this page or clear the token and press Ctrl+C in the Kali terminal. The main dashboard remains available via the top-left link.</div>
     </section>
   </main>;
