@@ -242,7 +242,7 @@ def inspect_image_partitions(image_job_id: str, confirmation_image: str) -> dict
         "partitions": partitions,
         "partition_count": len(partitions),
         "method": "Sleuth Kit mmls partition-table analysis",
-        "note": "Read-only partition-boundary analysis of the acquired image. No partition was mounted, repaired or modified. An empty result can mean an unsupported, damaged or absent partition table; it does not prove that no recoverable data exists.",
+        "note": "Read-only partition-boundary analysis of the acquired image. The source image was not mounted; no partition was repaired or modified. An empty result can mean an unsupported, damaged or absent partition table; it does not prove that no recoverable data exists.",
     }
 
 def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dict:
