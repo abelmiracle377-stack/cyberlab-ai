@@ -265,6 +265,11 @@ export default function AgentPage() {
           <p>Research security questions, inspect network intelligence, analyse DNS evidence, and look up public CVE records. Open-weight research mode is selected by default.</p>
         </div>
         <div className="agent-config agent-config-stack">
+          <div className="agent-mode-switch" role="group" aria-label="Model source">
+            <button type="button" className={modelSource === "cloud" ? "selected" : ""} onClick={() => setModelSource("cloud")} disabled={busy}>Cloud providers</button>
+            <button type="button" className={modelSource === "ollama" ? "selected" : ""} onClick={() => setModelSource("ollama")} disabled={busy}>Local Ollama</button>
+          </div>
+          {modelSource === "cloud" ? <>
           <div className="agent-mode-switch" role="group" aria-label="Agent mode">
             <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); if (!models.some((item) => item.id === model)) setModel(models.find((item) => item.id === "openai/gpt-5.5")?.id || models[0]?.id || "openai/gpt-5.5"); }} disabled={busy}>Standard</button>
             <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight); setAgentMode("open-weight"); if (first) setModel(first.id); }} disabled={busy}>Open-weight research mode</button>
@@ -278,6 +283,18 @@ export default function AgentPage() {
             <ChevronDown size={13} />
           </label>
           <span className="agent-model-count">{agentMode === "open-weight" ? `${availableModels.length} OPEN-WEIGHT MODELS` : `${availableModels.length} MODELS AVAILABLE`}</span>
+        </div>
+          </> : <>
+            <div className="agent-model-label"><span className="agent-live-dot" /> LOCAL OLLAMA / KALI BRIDGE</div>
+            <label className="agent-select-wrap">
+              <span className="sr-only">Select installed local Ollama model</span>
+              <select value={localModel} onChange={(event) => setLocalModel(event.target.value)} disabled={busy || !localModels.length}>
+                {localModels.length ? localModels.map((item) => <option value={item.name} key={item.name}>{item.name} · {item.parameter_size || "local"} {item.quantization ? "· " + item.quantization : ""}</option>) : <option value="">No installed local models</option>}
+              </select>
+              <ChevronDown size={13} />
+            </label>
+            <span className="agent-model-count">{localProviderStatus.toUpperCase()}</span>
+          </>}
         </div>
         <div className="agent-chat">
           {messages.length === 0 ? (
@@ -319,7 +336,7 @@ export default function AgentPage() {
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
+          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> {modelSource === "ollama" ? "Local Ollama runs on Kali; cloud research tools are not called in this mode." : "Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval"}</span><button type="submit" disabled={busy || !prompt.trim() || (modelSource === "ollama" ? !localModel : !model)}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
