@@ -88,4 +88,14 @@ The token is generated locally and stored at `~/.config/cyberlab/bridge-token` w
 
 The dashboard offers a quick profile (TCP 22, 80 and 443), a standard profile (TCP 1–100), or a custom profile (up to 100 selected ports). Scans run as local background jobs; the dashboard polls the paired bridge for status and results. Jobs are retained in bridge memory for up to 15 minutes, with at most eight recent jobs. A scan has a 180-second hard runtime limit. Results distinguish open, closed and filtered ports when determinable; filtered means no definitive response was possible. The bridge uses fixed Nmap arguments; it does not accept arbitrary command-line options, NSE scripts, exploit checks, credentials, stealth/evasion flags, or shell commands. Each run requires an exact target confirmation, an authorisation reference and an explicit ownership/permission confirmation. Loopback, link-local, multicast and reserved targets are blocked. Private LAN targets may be assessed only when they are in your authorised scope.
 
+### Optional local Ollama integration
+
+If Ollama is installed and running on the same Kali/Linux machine, the paired bridge exposes three bounded endpoints to the CyberLab browser:
+
+- `GET /ollama/health` — local Ollama version and connection status.
+- `GET /ollama/models` — names, model sizes and quantisation metadata for models already installed.
+- `POST /ollama/chat` — one non-streaming chat completion using an installed model only.
+
+The bridge connects only to `127.0.0.1:11434`; callers cannot supply a remote Ollama URL. Chat requests are limited to 12 user/assistant messages, 4,000 characters per message, a 2,048-token context window and 512 generated tokens. System-role messages are rejected, and models are never downloaded automatically. The local pairing token is required. Ollama is optional; the Kali CLI and Nmap bridge continue to work without it. On low-memory machines, install and select a small quantised model that fits available RAM.
+
 Browser access to localhost can depend on browser private-network access policies. If the browser blocks the request, check its site permissions and keep the official CyberLab origin unchanged. The bridge is optional; existing CLI commands continue to work without it.
