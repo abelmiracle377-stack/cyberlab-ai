@@ -63,6 +63,7 @@ export default function SolidityLabPage() {
     { path: "src/Vault.sol", content: "pragma solidity ^0.8.20; contract Vault { uint256 public value; function set(uint256 next) external { value = next; } }" },
     { path: "test/Vault.t.sol", content: "pragma solidity ^0.8.20; contract VaultTest { function testPlaceholder() public pure { assert(true); } }" }
   ], null, 2));
+  const [testDependencyLockJson, setTestDependencyLockJson] = useState("[]");
   const [testRunnerBusy, setTestRunnerBusy] = useState(false);
   const [testRunnerError, setTestRunnerError] = useState("");
   const [testResult, setTestResult] = useState<{status:string;exit_code:number;result:Record<string,unknown>;sandbox:string;note:string}|null>(null);
@@ -176,7 +177,7 @@ export default function SolidityLabPage() {
       const response = await fetch("http://127.0.0.1:8765/solidity/tests/run", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ files }),
+        body: JSON.stringify({ files, dependencyLock: JSON.parse(testDependencyLockJson) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Local test execution failed.");
@@ -298,7 +299,9 @@ export default function SolidityLabPage() {
           </div>
           <label htmlFor="solidity-test-files">PROJECT FILES (JSON ARRAY · src/*.sol AND test/*.t.sol)</label>
           <textarea id="solidity-test-files" value={testFilesJson} onChange={event => setTestFilesJson(event.target.value)} spellCheck={false} autoCapitalize="off" autoCorrect="off" />
-          <div className="solidity-actions"><small>2–20 files, 100 KB combined. Imports and external dependencies are disabled.</small><button type="button" onClick={runLocalTests} disabled={testRunnerBusy || language !== "Solidity"}><Code2 size={13}/>{testRunnerBusy ? "Running tests…" : "Run in sandbox"}</button></div>
+          <label htmlFor="solidity-test-dependency-lock">Pinned OpenZeppelin dependency lock JSON</label>
+          <textarea id="solidity-test-dependency-lock" value={testDependencyLockJson} onChange={event => setTestDependencyLockJson(event.target.value)} rows={5} spellCheck={false} />
+          <div className="solidity-actions"><small>2–100 files, 500 KB combined. Only locally supplied, SHA-256-locked OpenZeppelin Contracts 5.x dependencies are accepted. forge-std and network dependencies remain disabled.</small><button type="button" onClick={runLocalTests} disabled={testRunnerBusy || language !== "Solidity"}><Code2 size={13}/>{testRunnerBusy ? "Running tests…" : "Run in sandbox"}</button></div>
           {testRunnerError && <div className="agent-error"><AlertTriangle size={14}/>{testRunnerError}</div>}
           {testResult && <div className="solidity-limitations"><h3>Test result: {testResult.status.toUpperCase()}</h3><p>{testResult.sandbox}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(testResult.result,null,2)}</pre><p>{testResult.note}</p></div>}
         </section>
