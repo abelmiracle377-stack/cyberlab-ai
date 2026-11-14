@@ -6,6 +6,8 @@ import { ArrowLeft, Download, FileSearch, HardDriveDownload, ShieldCheck } from 
 
 type Kind = "JPEG" | "PNG" | "GIF" | "PDF";
 type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; name:string };
+type BlockDevice = {name:string;path:string;type:string;size:number;ro:boolean;tran?:string;model?:string;fstype?:string;mountpoints?:Array<string|null>};
+type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;message:string;return_code?:number};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
@@ -41,8 +43,46 @@ function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).to
 
 export default function ForensicsRecoveryPage(){
   const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
+  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
+  async function pairKali(){
+    setBridgeBusy(true);setBridgeMessage("");setPaired(false);
+    try{
+      const headers={Authorization:"Bearer "+bridgeToken.trim()};
+      const health=await fetch("http://127.0.0.1:8765/health",{headers,cache:"no-store"});
+      const h=await health.json();if(!health.ok)throw new Error(h.error||"Could not connect to Kali.");
+      const inventory=await fetch("http://127.0.0.1:8765/forensics/devices",{headers,cache:"no-store"});
+      const d=await inventory.json();if(!inventory.ok)throw new Error(d.error||"Could not read block-device inventory.");
+      setDevices((d.devices||[]).flatMap((item:BlockDevice)=>[item,...((item as any).children||[])]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
+      setPaired(true);setBridgeMessage("Kali connected. Device inventory is read-only; no drive has been mounted or modified.");
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Kali connection failed.");}
+    finally{setBridgeBusy(false);}
+  }
+  async function refreshDevices(){
+    const response=await fetch("http://127.0.0.1:8765/forensics/devices",{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||"Device inventory failed.");
+    setDevices((data.devices||[]).flatMap((item:BlockDevice)=>[item,...((item as any).children||[])]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
+  }
+  async function acquireImage(){
+    if(!selectedDevice||confirmationSource!==selectedDevice){setBridgeMessage("Select a source and retype its exact device path to confirm.");return;}
+    setBridgeBusy(true);setBridgeMessage("Submitting protected imaging job…");
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({source:selectedDevice,destinationDirectory,filename:imageFilename,confirmationSource})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Disk imaging could not start.");
+      setJob(data.job);setBridgeMessage(data.note||"Disk imaging started.");
+      const jobId=data.job.id;
+      const poll=async():Promise<void>=>{
+        const status=await fetch("http://127.0.0.1:8765/forensics/jobs/"+jobId,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
+        const payload=await status.json();if(!status.ok)throw new Error(payload.error||"Could not read imaging status.");
+        setJob(payload.job);
+        if(payload.job.state==="running"){await new Promise(resolve=>setTimeout(resolve,3000));return poll();}
+        setBridgeMessage(payload.job.message||"Imaging job finished.");
+      };
+      void poll().catch(e=>setBridgeMessage(e instanceof Error?e.message:"Could not monitor imaging job."));
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Disk imaging failed.");}
+    finally{setBridgeBusy(false);}
+  }
   async function choose(e:ChangeEvent<HTMLInputElement>){setSource(e.target.files?.[0]??null);setItems([]);setPreviewUrls({});setHash("");setMessage("");}
   async function scan(){if(!source)return;if(source.size>MAX_BYTES){setMessage("This browser-based scanner is limited to 256 MB per source image. Use a dedicated forensic workstation for larger images.");return;}
     setBusy(true);setItems([]);setPreviewUrls({});setMessage("Reading source image locally…");
@@ -56,6 +96,24 @@ export default function ForensicsRecoveryPage(){
     <section className="agent-main">
       <div className="agent-heading"><div className="agent-overline">ANALYSIS & EVIDENCE / ADDITIVE MODULE</div><h1>File & picture recovery</h1><p>Carve contiguous JPEG, PNG, GIF and PDF candidates from a user-supplied disk image or forensic export. Source data is read locally and never modified or uploaded.</p></div>
       <div className="vault-security"><ShieldCheck size={16}/><div><strong>Non-destructive evidence handling</strong><p>CyberLab reads a copy you select, records its SHA-256 hash and exports recovered candidates as new files. It never writes to the source device.</p></div></div>
+      <section className="module-page-panel panel" style={{marginTop:18}}>
+        <h2 style={{marginTop:0}}>Kali-connected forensic acquisition</h2>
+        <p>Connect the local Kali bridge to inventory disks and create a ddrescue image on a separately mounted destination drive. This action requires the companion to run with root privileges. Inventory does not write to disks.</p>
+        <label className="vault-field"><span>Kali bridge pairing token</span><input type="password" autoComplete="off" value={bridgeToken} onChange={e=>{setBridgeToken(e.target.value);setPaired(false);}} placeholder="Paste token printed by the Kali bridge"/></label>
+        <button className="network-run" type="button" onClick={pairKali} disabled={!bridgeToken.trim()||bridgeBusy}>{bridgeBusy?"Connecting…":"Connect and list drives"}</button>
+        {paired&&<><div className="malware-kv"><span>Connection</span><strong>LOCAL KALI BRIDGE PAIRED</strong></div>
+          <label className="vault-field"><span>Source device (choose the disk, not a mounted file)</span><select value={selectedDevice} onChange={e=>{setSelectedDevice(e.target.value);setConfirmationSource("");}}><option value="">Select a detected device</option>{devices.map(d=><option key={d.path} value={d.path}>{d.path} · {d.type} · {(d.size/1024/1024/1024).toFixed(2)} GB · {d.model||d.fstype||"storage"}{d.ro?" · read-only":""}</option>)}</select></label>
+          <label className="vault-field"><span>Destination directory on a DIFFERENT physical drive</span><input value={destinationDirectory} onChange={e=>setDestinationDirectory(e.target.value)} placeholder="/mnt/backup"/></label>
+          <label className="vault-field"><span>New image filename</span><input value={imageFilename} onChange={e=>setImageFilename(e.target.value)} placeholder="disk.img"/></label>
+          <label className="vault-field"><span>Retype the exact source path to confirm</span><input value={confirmationSource} onChange={e=>setConfirmationSource(e.target.value)} placeholder="/dev/sdX"/></label>
+          <button className="network-run" type="button" onClick={acquireImage} disabled={bridgeBusy||!selectedDevice||confirmationSource!==selectedDevice||!destinationDirectory.trim()||!imageFilename.trim()}>Create forensic image with ddrescue</button>
+          {job&&<div className="malware-kv"><span>Acquisition job · {job.state}</span><strong>{job.message}</strong></div>}
+          {job?.image&&<div className="malware-kv"><span>Image output</span><strong style={{overflowWrap:"anywhere"}}>{job.image}</strong></div>}
+          {job?.map&&<div className="malware-kv"><span>ddrescue map</span><strong style={{overflowWrap:"anywhere"}}>{job.map}</strong></div>}
+        </>}
+        {bridgeMessage&&<p role="status" className="network-note">{bridgeMessage}</p>}
+        <p className="network-note">Safety checks: exact source-path confirmation, existing destination directory, destination filesystem verification, different-device ancestry check, no overwrite, and a dedicated ddrescue map file. The original device is never used as the output target. Keep both drives connected until the job finishes.</p>
+      </section>
       <section className="module-page-panel panel" style={{marginTop:18}}>
         <h2 style={{marginTop:0}}>1 / Select an evidence image</h2>
         <p>Choose a raw disk image, partition image or forensic export (maximum 256 MB for this browser-based first release). For physical media, create a forensic image using a write blocker before analysis.</p>
