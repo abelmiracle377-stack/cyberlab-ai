@@ -1,6 +1,7 @@
 """Unit tests for the CyberLab AI Kali companion."""
 import hashlib
 import importlib.util
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -38,6 +39,31 @@ class CompanionTests(unittest.TestCase):
             sample.write_bytes(b"x" * (cyberlab.MAX_FILE_BYTES + 1))
             with self.assertRaisesRegex(ValueError, "10 MB limit"):
                 cyberlab.triage_file(sample)
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires O_NOFOLLOW")
+    def test_triage_rejects_symlink_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sample = Path(directory) / "sample.bin"
+            link = Path(directory) / "sample-link.bin"
+            sample.write_bytes(b"ordinary evidence")
+            link.symlink_to(sample)
+            with self.assertRaises(OSError):
+                cyberlab.triage_file(link)
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires O_NOFOLLOW")
+    def test_nmap_xml_rejects_symlink_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "scan.xml"
+            link = Path(directory) / "scan-link.xml"
+            report.write_text("<nmaprun/>", encoding="utf-8")
+            link.symlink_to(report)
+            with self.assertRaises(OSError):
+                cyberlab.parse_nmap_xml(link)
+
+    def test_triage_rejects_non_regular_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "regular file"):
+                cyberlab.triage_file(Path(directory))
 
     def test_oversized_nmap_xml_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
