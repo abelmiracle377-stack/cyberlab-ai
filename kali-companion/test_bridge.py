@@ -144,6 +144,33 @@ class SolidityCompilerTests(unittest.TestCase):
         self.assertEqual(result["contracts"][0]["name"], "Example")
         self.assertEqual(result["version"], "0.8.20")
 
+    def test_project_compiler_passes_only_validated_sources_and_remappings_to_solc(self):
+        import json
+        fake_output = json.dumps({"errors": [], "contracts": {}}).encode()
+        dependency_path = "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"
+        dependency_content = "pragma solidity ^0.8.20; interface IERC20 {}"
+        import hashlib
+        lock = [{
+            "name": "@openzeppelin/contracts", "version": "5.4.0",
+            "source": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+            "commit": "c" * 40,
+            "files": [{"path": dependency_path, "sha256": hashlib.sha256(dependency_content.encode()).hexdigest()}],
+        }]
+        files = [
+            {"path": "src/Token.sol", "content": 'pragma solidity ^0.8.20; import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; contract Token {}'},
+            {"path": dependency_path, "content": dependency_content},
+        ]
+        with patch.object(bridge, "solidity_compiler_status", return_value={"available": True, "version": "0.8.20"}), \\
+             patch.object(bridge.shutil, "which", return_value="/usr/bin/solc"), \\
+             patch.object(bridge.subprocess, "run", return_value=type("Completed", (), {"stdout": fake_output, "stderr": b"", "returncode": 0})()) as run:
+            result = bridge.compile_solidity_project(files, lock, "0.8.20")
+        payload = json.loads(run.call_args.kwargs["input"])
+        self.assertIn("src/Token.sol", payload["sources"])
+        self.assertIn(dependency_path, payload["sources"])
+        self.assertEqual(payload["settings"]["remappings"], ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"])
+        self.assertEqual(result["source_files"], 2)
+        self.assertEqual(result["dependency_packages"], 1)
+
     def test_rejects_compiler_version_mismatch(self):
         with patch.object(bridge, "solidity_compiler_status", return_value={"available": True, "version": "0.8.19"}), \
              patch.object(bridge.subprocess, "run") as run:

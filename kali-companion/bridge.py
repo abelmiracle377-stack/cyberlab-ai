@@ -467,7 +467,11 @@ def compile_solidity_project(files: object, dependency_lock: object = None, expe
 
 
 def compile_solidity(source: str, expected_version: str = "") -> dict:
-    """Backward-compatible single-file compiler entry point."""
+    """Backward-compatible single-file, import-free compiler entry point."""
+    if not isinstance(source, str) or not source.strip() or len(source.encode("utf-8")) > MAX_SOLIDITY_SOURCE:
+        raise ValueError("Provide Solidity source between 1 and 100,000 UTF-8 bytes.")
+    if re.search(r"\\bimport\\b", source):
+        raise ValueError("Imports are not supported in the single-file compiler endpoint; use the locked multi-file project endpoint.")
     result = compile_solidity_project(
         [{"path": "src/Contract.sol", "content": source}], [], expected_version
     )
