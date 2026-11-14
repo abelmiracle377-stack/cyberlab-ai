@@ -234,13 +234,19 @@ def start_foremost_recovery(image_job_id: str, output_directory: str, confirmati
         try:
             command = ["foremost", "-t", "jpg,png,gif,bmp,tif,doc,pdf,xls,ppt,zip", "-i", str(image), "-o", str(output)]
             completed = subprocess.run(command, capture_output=True, text=True, check=False)
-            manifest = build_recovery_manifest(str(output)) if completed.returncode == 0 and output.is_dir() else None
+            manifest = None
+            manifest_error = None
+            if completed.returncode == 0 and output.is_dir():
+                try:
+                    manifest = build_recovery_manifest(str(output))
+                except Exception as exc:
+                    manifest_error = str(exc)[:500]
             with _jobs_lock:
                 record["state"] = "completed" if completed.returncode == 0 else "failed"
                 record["return_code"] = completed.returncode
                 if completed.returncode == 0:
                     record["manifest"] = manifest
-                    record["message"] = "Foremost finished. SHA-256 manifest created; review audit.txt and validate every recovered file."
+                    record["message"] = "Foremost finished. SHA-256 manifest created; review audit.txt and validate every recovered file." if manifest else "Foremost finished, but the SHA-256 manifest could not be created: " + (manifest_error or "output directory unavailable")
                 else:
                     record["message"] = (completed.stderr or "Foremost failed.")[-1200:]
                 record["finished_at"] = time.time()
