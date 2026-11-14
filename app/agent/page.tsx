@@ -12,6 +12,7 @@ export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState("");
   const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
+  const [executionMode, setExecutionMode] = useState<"single" | "specialists">("single");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
@@ -110,17 +111,35 @@ export default function AgentPage() {
     setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "" }]);
     setBusy(true);
     try {
-      const response = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
-      });
-      if (!response.ok) {
+      if (executionMode === "specialists") {
+        const response = await fetch("/api/agent/orchestrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: text, model, maxSpecialists: 4 }),
+        });
         const data = await response.json();
-        throw new Error(data.error || "Agent request failed.");
-      }
-      if (!response.body) throw new Error("Streaming response was not available.");
-      const reader = response.body.getReader();
+        if (!response.ok) throw new Error(data.error || "Specialist orchestration failed.");
+        const specialistSummary = Array.isArray(data.results)
+          ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\n")).join("\n\n")
+          : "";
+        const output = [data.synthesis || "The coordinator could not produce a synthesis.", specialistSummary, data.note || ""].filter(Boolean).join("\n\n---\n\n");
+        setMessages((current) => {
+          const next = [...current];
+          next[next.length - 1] = { role: "assistant", content: output };
+          return next;
+        });
+      } else {
+        const response = await fetch("/api/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: text, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Agent request failed.");
+        }
+        if (!response.body) throw new Error("Streaming response was not available.");
+        const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let output = "";
       while (true) {
@@ -133,12 +152,13 @@ export default function AgentPage() {
           return next;
         });
       }
-      output += decoder.decode();
-      setMessages((current) => {
-        const next = [...current];
-        next[next.length - 1] = { role: "assistant", content: output || "The model returned an empty response." };
-        return next;
-      });
+        output += decoder.decode();
+        setMessages((current) => {
+          const next = [...current];
+          next[next.length - 1] = { role: "assistant", content: output || "The model returned an empty response." };
+          return next;
+        });
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Unexpected agent error.";
       setError(message);
@@ -162,6 +182,11 @@ export default function AgentPage() {
           <p>Research security questions, inspect network intelligence, analyse DNS evidence, and look up public CVE records. Open-weight research mode is selected by default.</p>
         </div>
         <div className="agent-config agent-config-stack">
+          <div className="agent-mode-switch" role="group" aria-label="Execution mode">
+            <button type="button" className={executionMode === "single" ? "selected" : ""} onClick={() => setExecutionMode("single")} disabled={busy}>Single agent</button>
+            <button type="button" className={executionMode === "specialists" ? "selected" : ""} onClick={() => setExecutionMode("specialists")} disabled={busy}>Specialist team</button>
+          </div>
+          {executionMode === "specialists" && <p className="agent-disclaimer">Parallel role-conditioned analyses and coordinator synthesis use the selected model. These are not separate autonomous agents or independent evidence sources. Tool execution is not enabled in this mode.</p>}
           <div className="agent-mode-switch" role="group" aria-label="Agent mode">
             <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); if (!models.some((item) => item.id === model)) setModel(models.find((item) => item.id === "openai/gpt-5.5")?.id || models[0]?.id || "openai/gpt-5.5"); }} disabled={busy}>Standard</button>
             <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight); setAgentMode("open-weight"); if (first) setModel(first.id); }} disabled={busy}>Open-weight research mode</button>
