@@ -59,7 +59,7 @@ export default function ForensicsRecoveryPage(){
       <section className="module-page-panel panel" style={{marginTop:18}}>
         <h2 style={{marginTop:0}}>1 / Select an evidence image</h2>
         <p>Choose a raw disk image, partition image or forensic export (maximum 256 MB for this browser-based first release). For physical media, create a forensic image using a write blocker before analysis.</p>
-        <label className="network-field"><span>Source image / evidence file</span><input type="file" accept=".img,.dd,.raw,.bin,.dmg,.001,.e01,application/octet-stream" onChange={choose}/></label>
+        <label className="vault-field"><span>Source image / evidence file</span><input type="file" accept=".img,.dd,.raw,.bin,.dmg,.001,.e01,application/octet-stream" onChange={choose}/></label>
         {source&&<div className="malware-kv"><span>Selected source</span><strong>{source.name} · {formatBytes(source.size)}</strong></div>}
         <button className="network-run" type="button" onClick={scan} disabled={!source||busy}>{busy?"Scanning locally…":"Scan for recoverable signatures"}</button>
         {message&&<p role="status" className="network-note">{message}</p>}
