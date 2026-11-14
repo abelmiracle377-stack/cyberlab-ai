@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+install -d -m 0755 /opt/cyberlab-ai
+if [ -d /opt/cyberlab-ai/kali-companion ]; then
+  chown -R root:root /opt/cyberlab-ai/kali-companion
+  chmod -R go-w /opt/cyberlab-ai/kali-companion
+fi
+
+cat >/usr/local/bin/cyberlab <<'LAUNCHER'
+#!/bin/sh
+set -eu
+exec python3 /opt/cyberlab-ai/kali-companion/cyberlab.py "$@"
+LAUNCHER
+chmod 0755 /usr/local/bin/cyberlab
+
+cat >/etc/motd <<'MOTD'
+CyberLab AI OS — Debian Live Workstation
+
+Desktop profile: graphical XFCE environment.
+Terminal profile: lightweight command-line environment.
+
+Use only systems and evidence you are authorised to assess.
+The local companion bridge is opt-in and is never started automatically.
+MOTD
+
+if command -v lightdm >/dev/null 2>&1; then
+  systemctl enable lightdm
+fi
