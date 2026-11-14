@@ -5,7 +5,15 @@ import Link from "next/link";
 import { ArrowLeft, Check, Search, Send, Sparkles, GitCompareArrows } from "lucide-react";
 import "./models.css";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; local?: boolean };
+type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; local?: boolean; size?: number | null };
+type LocalHardware = { platform: string; architecture: string; totalMemory: number | null; availableMemory: number | null };
+function formatBytes(bytes: number | null | undefined) {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) return "Unavailable";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes, unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  return value.toFixed(unit >= 3 ? 1 : 0) + " " + units[unit];
+}
 type ConsensusResult = { model: string; answer?: string; error?: string };
 
 export default function ModelsPage() {
@@ -21,6 +29,7 @@ export default function ModelsPage() {
   const [busy, setBusy] = useState(false);
   const [responseMode, setResponseMode] = useState<"single" | "comparison">("single");
   const [localStatus, setLocalStatus] = useState("Pair your Kali companion to discover local Ollama models.");
+  const [localHardware, setLocalHardware] = useState<LocalHardware | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -59,12 +68,29 @@ export default function ModelsPage() {
         contextLength: null,
         openWeight: true,
         local: true,
+        size: item.size ?? null,
       } satisfies Model));
       setModels((current) => [...current.filter((item) => !item.local), ...localModels]);
       setLocalStatus(localModels.length ? `Connected · ${localModels.length} local models discovered` : "Ollama connected · no models installed yet.");
     }).catch((cause) => {
       if (alive) setLocalStatus(cause instanceof Error ? cause.message : "Could not reach the paired local Ollama service.");
     });
+    fetch("http://127.0.0.1:8765/system", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    }).then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Local hardware information unavailable.");
+      if (!alive) return;
+      const metrics = data.metrics || {};
+      setLocalHardware({
+        platform: String(metrics.platform || "Local host"),
+        architecture: String(metrics.architecture || "Unknown architecture"),
+        totalMemory: typeof metrics.memory_bytes?.MemTotal === "number" ? metrics.memory_bytes.MemTotal : null,
+        availableMemory: typeof metrics.memory_bytes?.MemAvailable === "number" ? metrics.memory_bytes.MemAvailable : null,
+      });
+    }).catch(() => { if (alive) setLocalHardware(null); });
     return () => { alive = false; };
   }, []);
 
@@ -181,7 +207,10 @@ export default function ModelsPage() {
         <div className="mw-model-list">{visible.slice(0, 180).map((m) => <button key={m.id} className={selected.includes(m.id) ? "mw-model selected" : "mw-model"} onClick={() => toggle(m.id)}>
           <span className="mw-provider">{m.provider.slice(0, 1).toUpperCase()}</span><span className="mw-model-name"><strong>{m.name}</strong><small>{m.provider} · {m.openWeight ? "Open-weight" : "Hosted"}</small></span>{selected.includes(m.id) && <Check size={14}/>}
         </button>)}</div>
-        <div className="mw-local"><strong>Local Ollama</strong><span>{localStatus}</span><b>{localStatus.startsWith("Connected") || localStatus.startsWith("Ollama connected") ? "CONNECTED" : "PAIR REQUIRED"}</b></div>
+        <div className="mw-local"><strong>Local Ollama</strong><span>{localStatus}</span><b>{localStatus.startsWith("Connected") || localStatus.startsWith("Ollama connected") ? "CONNECTED" : "PAIR REQUIRED"}</b>
+          {localHardware && <span>Hardware: {localHardware.platform} · {localHardware.architecture}<br/>RAM: {formatBytes(localHardware.availableMemory)} available / {formatBytes(localHardware.totalMemory)} total</span>}
+          {localHardware?.totalMemory && localHardware.totalMemory <= 6 * 1024 ** 3 && <span>Low-memory profile: start with the smallest installed model, keep context short and avoid loading multiple models at once. Model file size is not the same as peak runtime RAM.</span>}
+        </div>
       </aside>
       <section className="mw-centre">
         <div className="mw-heading"><small>EVALUATION & DISCOVERY</small><h2>Model intelligence centre</h2><p>Compare models using sourced benchmarks and reproducible CyberLab evaluations.</p></div>
