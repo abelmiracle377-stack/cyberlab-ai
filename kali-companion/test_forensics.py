@@ -126,5 +126,44 @@ class ForensicsSafetyTests(unittest.TestCase):
                 forensics._validate_acquisition("/dev/cyberlab-test-does-not-exist", "/tmp", "disk.img")
 
 
+    def test_mmls_parser_returns_allocated_partitions_only(self):
+        sample = """DOS Partition Table
+Slot      Start        End          Length       Description
+000: Meta 0000000000 0000000000 0000000001 Primary Table (#0)
+001: ----- 0000000000 0000002047 0000002048 Unallocated
+002: 000:000 0000002048 0000206847 0000204800 NTFS / exFAT (0x07)
+003: 000:001 0000206848 0000409599 0000202752 Linux (0x83)
+"""
+        result = forensics.parse_mmls_partitions(sample)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["start_sector"], 2048)
+        self.assertEqual(result[0]["length_sectors"], 204800)
+        self.assertIn("NTFS", result[0]["description"])
+        self.assertEqual(result[1]["slot"], "003")
+
+    def test_mmls_parser_rejects_inconsistent_partition_geometry(self):
+        sample = "002: 000:000 0000002048 0000206847 0000000002 NTFS (0x07)"
+        self.assertEqual(forensics.parse_mmls_partitions(sample), [])
+
+    def test_partition_analysis_requires_completed_job_and_exact_image_confirmation(self):
+        with patch.dict(forensics._jobs, {"d" * 32: {"id": "d" * 32, "state": "running", "image": "/tmp/disk.img"}}):
+            with self.assertRaisesRegex(ValueError, "completed"):
+                forensics.inspect_image_partitions("d" * 32, "/tmp/disk.img")
+
+    def test_partition_analysis_uses_read_only_mmls_on_confirmed_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "disk.img"
+            image.write_bytes(b"image")
+            job_id = "e" * 32
+            sample = "002: 000:000 0000002048 0000206847 0000204800 NTFS / exFAT (0x07)"
+            with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}), \\
+                 patch.object(forensics.shutil, "which", return_value="/usr/bin/mmls"), \\
+                 patch.object(forensics.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": sample, "stderr": ""})()) as run:
+                result = forensics.inspect_image_partitions(job_id, str(image))
+            self.assertEqual(result["partition_count"], 1)
+            self.assertEqual(run.call_args.args[0][0], "mmls")
+            self.assertIn("not mounted", result["note"])
+
+
 if __name__ == "__main__":
     unittest.main()
