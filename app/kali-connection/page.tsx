@@ -133,7 +133,7 @@ export default function KaliConnectionPage() {
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
-        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\\n"}cd cyberlab-ai{"\\n"}git checkout feature/additive-forensics-recovery{"\\n"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"\\n"}python3 kali-companion/cyberlab.py doctor</pre>
+        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\n"}cd cyberlab-ai{"\n"}git checkout feature/additive-forensics-recovery{"\n"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"\n"}python3 kali-companion/cyberlab.py doctor</pre>
         <p>For this preview build, check out <code>feature/additive-forensics-recovery</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>main</code> and pull the latest changes.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
@@ -184,6 +184,7 @@ export default function KaliConnectionPage() {
           <p><strong>Target:</strong> {taskPlan.target||"Not supplied"} · {taskPlan.target_status}</p>
           {taskPlan.passive_research_suggestion&&<button className="report-download" type="button" onClick={()=>{setResearchAction(taskPlan.passive_research_suggestion!.action);setResearchValue(taskPlan.passive_research_suggestion!.value);setResearchResult(null);}}>Prepare passive domain research for {taskPlan.passive_research_suggestion.value}</button>}
           <p><strong>Execution:</strong> {taskPlan.execution_started?"Started":"Not started — planning only"}</p>
+          {taskPlan.target&&taskPlan.requires_authorisation&&<button className="report-download" type="button" onClick={()=>{setTarget(taskPlan.target||"");setConfirmationTarget("");setConfirmed(false);setResult(null);}}>Use candidate target in authorised Nmap form</button>}
           {taskPlan.missing_information.length>0&&<><strong>Information still needed</strong><ul>{taskPlan.missing_information.map((item,i)=><li key={i}>{item}</li>)}</ul></>}
           {taskPlan.safety_notes.length>0&&<><strong>Safety boundaries</strong><ul>{taskPlan.safety_notes.map((item,i)=><li key={i}>{item}</li>)}</ul></>}
           <strong>Suggested local tools</strong>
