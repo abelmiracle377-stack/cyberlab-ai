@@ -22,10 +22,12 @@ jobs:
           sudo ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
       - name: Build lightweight terminal ISO
         run: sudo ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
+      - name: Record QEMU version
+        run: qemu-system-x86_64 --version | head -n 1 > "$RUNNER_TEMP/cyberlab-dist/QEMU-VERSION.txt"
       - name: Boot-test desktop ISO in QEMU
-        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop
+        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop "$RUNNER_TEMP/cyberlab-dist/desktop-boot.log"
       - name: Boot-test terminal ISO in QEMU
-        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal
+        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal "$RUNNER_TEMP/cyberlab-dist/terminal-boot.log"
       - name: Publish ISO checksums
         run: |
           cd "$RUNNER_TEMP/cyberlab-dist"
