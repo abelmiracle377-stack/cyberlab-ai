@@ -35,3 +35,12 @@ jobs:
         run: npm install --prefer-offline --no-audit --no-fund
       - name: Build Next.js application
         run: npm run build
+
+  os-vm-definition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate CyberLab AI OS VM build definition
+        run: |
+          chmod +x scripts/os/*.sh
+          ./scripts/os/test-build-definition.sh
