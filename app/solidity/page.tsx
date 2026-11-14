@@ -46,6 +46,10 @@ export default function SolidityLabPage() {
   const [generated, setGenerated] = useState("");
   const [generationBusy, setGenerationBusy] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [compilerStatus, setCompilerStatus] = useState<{available:boolean;version:string|null;message:string}|null>(null);
+  const [compilerBusy, setCompilerBusy] = useState(false);
+  const [compileResult, setCompileResult] = useState<{status:string;version:string;diagnostics:{severity:string;code:string;message:string;file:string;line:number|null}[];contracts:{name:string;file:string;abi:unknown[];bytecode:string}[];note:string}|null>(null);
+  const [compilerError, setCompilerError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -63,7 +67,7 @@ export default function SolidityLabPage() {
     return () => { active = false; };
   }, []);
 
-  async function runAnalysis(event: React.FormEvent) {
+  async function checkLocalCompiler() {\n    setCompilerBusy(true); setCompilerError("");\n    try {\n      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");\n      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");\n      const response = await fetch("http://127.0.0.1:8765/solidity/compiler", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });\n      const data = await response.json();\n      if (!response.ok) throw new Error(data.error || "Could not check the local compiler.");\n      setCompilerStatus(data);\n    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compiler check failed."); }\n    finally { setCompilerBusy(false); }\n  }\n\n  async function compileLocally() {\n    setCompilerBusy(true); setCompilerError(""); setCompileResult(null);\n    try {\n      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");\n      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");\n      const response = await fetch("http://127.0.0.1:8765/solidity/compile", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ source, expectedCompilerVersion: compilerVersion.trim() }) });\n      const data = await response.json();\n      if (!response.ok) throw new Error(data.error || "Local compilation failed.");\n      setCompileResult(data);\n      setCompilerStatus({ available: true, version: data.version, message: "Local solc compiler completed." });\n    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compilation failed."); }\n    finally { setCompilerBusy(false); }\n  }\n\n  async function runAnalysis(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true); setError(""); setAnalysis(null);
     try {
@@ -133,6 +137,24 @@ export default function SolidityLabPage() {
           {generationBusy && <div className="agent-thinking"><LoaderCircle size={14} /> Generating source and tests…</div>}
           {generationError && <div className="agent-error"><AlertTriangle size={14} />{generationError}</div>}
           {generated && <div className="solidity-limitations"><h3>AI-generated project draft</h3><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 13, lineHeight: 1.65 }}>{generated}</pre><p>Not compiled or audited. Next step: validate with a pinned compiler and isolated test runner.</p></div>}
+        </section>
+
+        <section className="solidity-results" aria-labelledby="local-compile-title">
+          <div className="solidity-result-head"><div><div className="agent-overline">LOCAL TOOLCHAIN / PAIRED COMPANION</div><h2 id="local-compile-title">Compile on your machine</h2></div><Code2 size={18}/></div>
+          <p className="agent-disclaimer">The Solidity source is sent directly from this browser to your paired 127.0.0.1 companion, not to CyberLab's hosted API. This first stage supports one import-free source file. It does not run tests, audit code or deploy contracts.</p>
+          <div className="solidity-actions">
+            <small>{compilerStatus ? (compilerStatus.available ? "solc " + compilerStatus.version + " detected" : compilerStatus.message) : "Check whether a local solc compiler is installed."}</small>
+            <button type="button" onClick={checkLocalCompiler} disabled={compilerBusy}><Search size={13}/>{compilerBusy ? "Working…" : "Check local solc"}</button>
+            <button type="button" onClick={compileLocally} disabled={compilerBusy || !source.trim()}><Code2 size={13}/>{compilerBusy ? "Compiling…" : "Compile locally"}</button>
+          </div>
+          {compilerError && <div className="agent-error"><AlertTriangle size={14}/>{compilerError}</div>}
+          {compileResult && <div className="solidity-limitations">
+            <h3>Compiler result: {compileResult.status.toUpperCase()} · solc {compileResult.version}</h3>
+            <p>{compileResult.contracts.length} contract artifact(s) · {compileResult.diagnostics.length} diagnostic(s)</p>
+            {compileResult.diagnostics.map((item,index)=><article className="solidity-finding" key={item.code+"-"+index}><div className="solidity-finding-head"><span>{item.code || "COMPILER"} · {item.file || "Contract.sol"}</span><b>{item.severity.toUpperCase()}</b></div><pre>{item.message}</pre></article>)}
+            {compileResult.contracts.map(item=><div key={item.file+"-"+item.name}><strong>{item.name}</strong><p>ABI entries: {item.abi.length} · Bytecode characters: {item.bytecode.length}</p></div>)}
+            <p>{compileResult.note}</p>
+          </div>}
         </section>
 
         <div className="solidity-warning"><AlertTriangle size={15} /> Heuristic source analysis only. Pattern matches are review leads, not proof of exploitability or safety.</div>
