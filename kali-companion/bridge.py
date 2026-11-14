@@ -225,6 +225,13 @@ class Handler(BaseHTTPRequestHandler):
             if length < 2 or length > MAX_BODY:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
+            if path == "/forensics/fsstat":
+                result = inspect_partition_filesystem(
+                    str(data.get("imageJobId", "")),
+                    str(data.get("confirmationImage", "")),
+                    data.get("startSector"),
+                )
+                return self.send_json(200, result, origin)
             if path == "/forensics/partitions":
                 result = inspect_image_partitions(
                     str(data.get("imageJobId", "")),
