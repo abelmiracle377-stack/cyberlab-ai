@@ -24,6 +24,7 @@ export default function AgentPage() {
   const [scanBusy, setScanBusy] = useState(false);
   const [scanStatus, setScanStatus] = useState("");
   const [scanResult, setScanResult] = useState<LocalScanResult | null>(null);
+  const [scanJobId, setScanJobId] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const availableModels = agentMode === "open-weight" ? models.filter((item) => item.openWeight) : models;
 
@@ -44,6 +45,41 @@ export default function AgentPage() {
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem("cyberlab.pendingNmapJob");
+    if (pending && /^[A-Za-z0-9_-]{20,100}$/.test(pending)) {
+      setScanJobId(pending);
+      setScanStatus("A previous local Nmap job is available. Check its status before starting another scan.");
+    }
+  }, []);
+
+  async function checkExistingScan() {
+    const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+    if (!token || !scanJobId) { setScanStatus("Pair the Kali bridge in this browser, then retry."); return; }
+    setScanBusy(true);
+    try {
+      const response = await fetch("http://127.0.0.1:8765/scan/" + encodeURIComponent(scanJobId), { headers: { "Authorization": "Bearer " + token } });
+      const job = await response.json();
+      if (!response.ok) throw new Error(job.error || "Could not retrieve the saved scan job.");
+      if (job.status === "completed" || job.status === "partial") {
+        setScanResult(job as LocalScanResult);
+        setScanStatus("Recovered the existing local Nmap result. No second scan was started.");
+        setScanJobId("");
+        sessionStorage.removeItem("cyberlab.pendingNmapJob");
+      } else if (job.status === "failed" || job.status === "timeout") {
+        throw new Error(job.error || "The saved local scan did not complete.");
+      } else {
+        setScanStatus("The existing Nmap job is still " + job.status + ". Check again shortly; no duplicate scan was started.");
+      }
+    } catch (cause) {
+      setScanStatus(cause instanceof Error ? cause.message : "Could not recover the existing scan.");
+      if (/not found|expired|failed|time limit/i.test(cause instanceof Error ? cause.message : "")) {
+        setScanJobId("");
+        sessionStorage.removeItem("cyberlab.pendingNmapJob");
+      }
+    } finally { setScanBusy(false); }
+  }
 
   async function runLocalScan(event: FormEvent) {
     event.preventDefault();
@@ -81,6 +117,8 @@ export default function AgentPage() {
       if (!response.ok) throw new Error(submitted.error || "Local Kali bridge returned HTTP " + response.status + ".");
       const jobId = submitted.job_id as string;
       if (!jobId) throw new Error("Kali bridge did not return a scan job identifier.");
+      setScanJobId(jobId);
+      sessionStorage.setItem("cyberlab.pendingNmapJob", jobId);
       setScanStatus("Nmap is running locally. Results will appear when the scan finishes.");
       const startedAt = Date.now();
       const deadline = startedAt + 190000;
@@ -94,10 +132,12 @@ export default function AgentPage() {
         if (job.status === "completed" || job.status === "partial") {
           setScanResult(job as LocalScanResult);
           setScanStatus("Local Nmap assessment finished. Review the evidence below; this is not a vulnerability verdict.");
+          setScanJobId("");
+          sessionStorage.removeItem("cyberlab.pendingNmapJob");
           setScanRequest(null);
           return;
         }
-        if (job.status === "failed" || job.status === "timeout") throw new Error(job.error || "The local scan did not complete.");
+        if (job.status === "failed" || job.status === "timeout") { sessionStorage.removeItem("cyberlab.pendingNmapJob"); setScanJobId(""); throw new Error(job.error || "The local scan did not complete."); }
         setScanStatus("Nmap is running locally… " + Math.round((Date.now() - startedAt) / 1000) + "s elapsed");
       }
       throw new Error("The scan is still running on Kali. The bridge retains recent job status for 15 minutes; reconnect and check again rather than launching a duplicate scan.");
@@ -226,7 +266,8 @@ export default function AgentPage() {
           </form>
           {scanStatus && <p role="status">{scanStatus}</p>}
         </section>}
-        {scanResult && <section className="network-results" style={{ marginTop: 16 }}><h2>Local Nmap results · {scanResult.target}</h2><p>{scanResult.duration_seconds}s · {scanResult.method}</p><p><strong>Open:</strong> {scanResult.state_summary.open} · <strong>Closed:</strong> {scanResult.state_summary.closed} · <strong>Filtered:</strong> {scanResult.state_summary.filtered}</p><div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Service</th><th>State</th><th>Product / version</th></tr></thead><tbody>{scanResult.hosts.flatMap((host, index) => host.ports.map(port => <tr key={index + "-" + port.port}><td>{host.addresses[0]?.address || scanResult.target}</td><td>{port.port}</td><td>{port.service}</td><td>{port.state}</td><td>{[port.product, port.version].filter(Boolean).join(" ") || "—"}</td></tr>))}</tbody></table></div><p>{scanResult.note}</p></section>}
+        {scanJobId && !scanResult && <section className="kali-panel" style={{ marginTop: 16 }}><h2>Existing local scan</h2><p>Job {scanJobId.slice(0, 8)}… is retained by the paired Kali bridge for up to 15 minutes. Check its status instead of launching a duplicate scan.</p><button className="report-download" type="button" onClick={checkExistingScan} disabled={scanBusy}>{scanBusy ? "Checking…" : "Check existing scan"}</button></section>}
+        {scanResult && <section className="network-results" style={{ marginTop: 16 }}><h2>Local Nmap results · {scanResult.target}</h2><p>{scanResult.duration_seconds}s · {scanResult.method}</p><p><strong>Open:</strong> {scanResult.state_summary.open ?? 0} · <strong>Closed:</strong> {scanResult.state_summary.closed ?? 0} · <strong>Filtered:</strong> {scanResult.state_summary.filtered ?? 0} · <strong>Unfiltered:</strong> {scanResult.state_summary.unfiltered ?? 0} · <strong>Open|filtered:</strong> {scanResult.state_summary["open|filtered"] ?? 0} · <strong>Closed|filtered:</strong> {scanResult.state_summary["closed|filtered"] ?? 0} · <strong>Unknown:</strong> {scanResult.state_summary.unknown ?? 0}</p><div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Service</th><th>State</th><th>Product / version</th></tr></thead><tbody>{scanResult.hosts.flatMap((host, index) => host.ports.map(port => <tr key={index + "-" + port.port}><td>{host.addresses[0]?.address || scanResult.target}</td><td>{port.port}</td><td>{port.service}</td><td>{port.state}</td><td>{[port.product, port.version].filter(Boolean).join(" ") || "—"}</td></tr>))}</tbody></table></div><p>{scanResult.note}</p></section>}
         {scanStatus && !scanRequest && !scanResult && <div className="agent-error">{scanStatus}</div>}
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
