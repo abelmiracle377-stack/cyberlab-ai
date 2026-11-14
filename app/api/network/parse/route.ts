@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   return Response.json({
     summary: { hosts: hosts.length, up: hosts.filter((host) => host.status === "up").length, ports: allPorts.length, openPorts: openPorts.length, stateCounts: Object.fromEntries(states.map((state) => [state, allPorts.filter((port) => port.state === state).length])) },
     hosts, openPorts, scaninfo, completion,
-    evidenceStatus: Object.keys(completion.finished).length ? "completed" : (hosts.length ? "partial" : "no_port_evidence"),
+    evidenceStatus: completion.finished.exit === "success" ? "completed" : (hosts.length || Object.keys(completion.finished).length ? "partial" : "no_port_evidence"),
     source: "User-supplied Nmap XML",
     note: "This tool parses an existing report only. It does not run Nmap, contact hosts, validate authorisation, or determine exploitability. Missing evidence is not interpreted as zero findings.",
   });

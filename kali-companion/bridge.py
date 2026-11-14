@@ -143,7 +143,7 @@ def parse_report(xml_text: str) -> dict:
         for host in hosts for port in host["ports"] if port["state"] == "open"
     ]
     state_counts = {state: sum(1 for port in all_ports if port["state"] == state) for state in states}
-    evidence_status = "completed" if completion["finished"] else ("partial" if hosts else "no_port_evidence")
+    evidence_status = "completed" if completion["finished"].get("exit") == "success" else ("partial" if hosts or completion["finished"] else "no_port_evidence")
     return {
         "hosts": hosts, "open_ports": open_ports, "state_summary": state_counts,
         "summary": {"hosts": len(hosts), "up": sum(1 for host in hosts if host["status"] == "up"),

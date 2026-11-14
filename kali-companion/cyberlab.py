@@ -145,7 +145,7 @@ def parse_nmap_xml_text(raw: bytes) -> dict:
                        "scanner": root.get("scanner", ""), "version": root.get("version", ""),
                        "args": root.get("args", ""), "start": root.get("start", ""),
                        "startstr": root.get("startstr", "")},
-        "evidence_status": "completed" if finished is not None else ("partial" if hosts else "no_port_evidence"),
+        "evidence_status": "completed" if finished is not None and finished.get("exit") == "success" else ("partial" if hosts or finished is not None else "no_port_evidence"),
         "note": "Parses an existing Nmap XML report only. It does not launch scans or contact hosts. Missing XML evidence is not interpreted as zero findings."
     }
 
