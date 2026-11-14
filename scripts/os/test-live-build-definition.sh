@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-for file in "$ROOT_DIR/scripts/os/build-live-iso.sh" "$ROOT_DIR/scripts/os/live-configure.chroot"; do
+for file in "$ROOT_DIR/scripts/os/build-live-iso.sh" "$ROOT_DIR/scripts/os/live-configure.chroot" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"; do
   bash -n "$file"
 done
 
@@ -40,4 +40,6 @@ grep -q 'username=cyberlab' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'cyberlab-menu.py' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'exec python3 /usr/local/lib/cyberlab/menu.py' "$ROOT_DIR/scripts/os/live-configure.chroot"
 grep -q 'never started automatically' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q "desktop) EXPECTED_MARKER='Reached target Graphical Interface'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
+grep -q "terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 echo "CyberLab AI OS live ISO definitions and profile manifests passed."
