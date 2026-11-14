@@ -28,7 +28,7 @@ from research_workflows import run_research_action
 from service_enumeration import enumerate_services
 from evidence_analysis import build_service_report, validate_report_payload
 from artifact_analysis import build_artifact_report, validate_artifact_payload
-from case_management import build_case_report, validate_case_payload
+from case_management import build_case_report, validate_case_payload, verify_audit_ledger
 from case_export import export_case_bundle, verify_case_archive
 
 HOST = "127.0.0.1"
@@ -209,12 +209,14 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
         if path == "/tools":
             return self.send_json(200, inspect_tool_catalog(), origin)
+        if path == "/evidence/case/ledger/verify":
+            return self.send_json(200, verify_audit_ledger(), origin)
         if path == "/forensics/devices":
             try:
                 return self.send_json(200, list_block_devices(), origin)
