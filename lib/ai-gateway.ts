@@ -14,7 +14,7 @@ function getProviderConfig() {
   return { apiKey, baseUrl };
 }
 
-type ConfiguredModel = { id: string; name: string; contextLength: number | null; supportsTools: boolean };
+type ConfiguredModel = { id: string; name: string; contextLength: number | null; openWeight: boolean; supportsTools: boolean };
 export function getUnfilteredModels(): Array<{ id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; uncensored: boolean; supportsTools: boolean }> {
   const raw = process.env.CYBERLAB_UNCENSORED_MODELS;
   if (!raw) return [];
@@ -23,7 +23,7 @@ export function getUnfilteredModels(): Array<{ id: string; name: string; provide
     if (!Array.isArray(parsed)) return [];
     return parsed.flatMap((entry: unknown) => {
       if (!entry || typeof entry !== "object") return [];
-      const item = entry as { id?: unknown; name?: unknown; contextLength?: unknown; tools?: unknown };
+      const item = entry as { id?: unknown; name?: unknown; contextLength?: unknown; openWeight?: unknown; tools?: unknown };
       if (typeof item.id !== "string" || !/^[a-zA-Z0-9._:/-]{3,180}$/.test(item.id)) return [];
       if (item.contextLength !== undefined && (typeof item.contextLength !== "number" || !Number.isInteger(item.contextLength) || item.contextLength < 256 || item.contextLength > 2000000)) return [];
       return [{
@@ -39,6 +39,32 @@ export function getUnfilteredModels(): Array<{ id: string; name: string; provide
   } catch { return []; }
 }
 
+async function readBoundedProviderResponse(response: Response, maxBytes = 128000): Promise<unknown> {
+  if (!response.body) throw new Error("Hosted model returned an empty response body.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let bytes = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel();
+        throw new Error("Hosted model response exceeded the 128 KB limit.");
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+  try { return JSON.parse(text); }
+  catch { throw new Error("Hosted model returned invalid JSON."); }
+}
+
 export async function runUnfilteredCompletion(input: { model: string; messages: GatewayMessage[]; maxTokens?: number }): Promise<GatewayResult> {
   const { apiKey, baseUrl } = getProviderConfig();
   if (!apiKey || !baseUrl) throw new Error("Unfiltered model provider is not configured. Add server-only provider secrets.");
@@ -49,7 +75,7 @@ export async function runUnfilteredCompletion(input: { model: string; messages: 
     body: JSON.stringify({ model: input.model, messages: input.messages, temperature: 0.25, max_tokens: Math.min(Math.max(input.maxTokens ?? 1800, 128), 4096), stream: false }),
     cache: "no-store", signal: AbortSignal.timeout(90000),
   });
-  const payload = await response.json().catch(() => ({}));
+  const payload = await readBoundedProviderResponse(response) as any;
   if (!response.ok) {
     const message = typeof payload?.error?.message === "string" ? payload.error.message : `Provider returned HTTP ${response.status}.`;
     throw new Error(message.slice(0, 500));
