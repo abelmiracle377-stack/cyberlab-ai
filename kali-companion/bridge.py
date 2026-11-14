@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 
 from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition
 from filesystem_analysis import inspect_partition_filesystem
+from tool_catalog import inspect_tool_catalog
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -195,10 +196,12 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
+        if path == "/tools":
+            return self.send_json(200, inspect_tool_catalog(), origin)
         if path == "/forensics/devices":
             try:
                 return self.send_json(200, list_block_devices(), origin)
