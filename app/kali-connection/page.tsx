@@ -17,7 +17,7 @@ type Snapshot = { platform:string; release:string; architecture:string; uptime_s
 
 type KaliTool = {name:string;category:string;binary:string;package:string|null;mode:string;purpose:string;installed:boolean;path:string|null;install_hint:string|null};
 type ToolInventory = {categories:{name:string;tools:KaliTool[]}[];tool_count:number;installed_count:number;missing_count:number;note:string};
-type TaskPlan = {status:string;summary:string;categories:string[];target:string|null;target_status:string;requires_authorisation:boolean;missing_information:string[];suggested_tools:{name:string;installed:boolean;mode:string;purpose:string;install_hint:string|null}[];safety_notes:string[];steps:string[];execution_started:boolean;note:string};
+type TaskPlan = {status:string;summary:string;categories:string[];passive_research_suggestion:{action:string;value:string}|null;target:string|null;target_status:string;requires_authorisation:boolean;missing_information:string[];suggested_tools:{name:string;installed:boolean;mode:string;purpose:string;install_hint:string|null}[];safety_notes:string[];steps:string[];execution_started:boolean;note:string};
 type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; state_summary:{open:number;closed:number;filtered:number}; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
 
 export default function KaliConnectionPage() {
@@ -182,6 +182,7 @@ export default function KaliConnectionPage() {
         {taskPlan&&<div className="network-results">
           <h3>{taskPlan.summary}</h3>
           <p><strong>Target:</strong> {taskPlan.target||"Not supplied"} · {taskPlan.target_status}</p>
+          {taskPlan.passive_research_suggestion&&<button className="report-download" type="button" onClick={()=>{setResearchAction(taskPlan.passive_research_suggestion!.action);setResearchValue(taskPlan.passive_research_suggestion!.value);setResearchResult(null);}}>Prepare passive domain research for {taskPlan.passive_research_suggestion.value}</button>}
           <p><strong>Execution:</strong> {taskPlan.execution_started?"Started":"Not started — planning only"}</p>
           {taskPlan.missing_information.length>0&&<><strong>Information still needed</strong><ul>{taskPlan.missing_information.map((item,i)=><li key={i}>{item}</li>)}</ul></>}
           {taskPlan.safety_notes.length>0&&<><strong>Safety boundaries</strong><ul>{taskPlan.safety_notes.map((item,i)=><li key={i}>{item}</li>)}</ul></>}
