@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Search, Send, Sparkles } from "lucide-react";
 import "./models.css";
@@ -53,7 +53,7 @@ export default function ModelsPage() {
     });
   }
 
-  async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!prompt.trim() || !active || busy) return;
     setBusy(true); setReply(""); setError("");
