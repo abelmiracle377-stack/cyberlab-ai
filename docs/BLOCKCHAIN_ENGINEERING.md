@@ -142,3 +142,10 @@ Never display "secure", "audited", "production-ready", "listed" or "liquidity lo
 7. Independently reviewed liquidity-lock integrations and production gates.
 
 Until those stages are implemented and verified, use the current Solidity Lab for bounded source review and the explicitly described local compiler/test capabilities only.
+
+
+### Dependency-aware offline Foundry test execution
+
+The local Foundry test runner now accepts the same explicit dependency lock used by multi-file compilation. It can stage a bounded source/test project and locally supplied OpenZeppelin Contracts 5.x files, verify every package file against the lock's SHA-256 digest, generate a Foundry remapping, and run tests in the preloaded digest-pinned rootless Podman image with network access disabled. The runner rejects unpinned dependency files, unknown package names, unresolved imports and forge-std imports. It does not pull images, install dependencies or fall back to executing tests on the host.
+
+The Foundry image must already contain a compatible Foundry version and the exact solc version required by the project. Because the container has no network, a missing compiler cannot be downloaded at test time. The source lock proves consistency with its submitted digests but does not independently attest the original source's repository provenance. Independently verify the OpenZeppelin release, commit and image contents before use. The test runner is not a security audit; it currently supports only OpenZeppelin Contracts 5.x and does not yet support forge-std, arbitrary libraries, linked libraries, fuzzing campaigns or invariant-testing configuration.
