@@ -243,7 +243,9 @@ class SolidityTestRunnerTests(unittest.TestCase):
             {"path": "src/Vault.sol", "content": "pragma solidity ^0.8.20; contract Vault {}"},
             {"path": "test/Vault.t.sol", "content": "pragma solidity ^0.8.20; contract VaultTest { function testBasic() public pure { assert(true); } }"},
         ]
-        self.assertEqual(len(bridge._validate_solidity_test_files(valid)), 2)
+        cleaned, remappings = bridge._validate_solidity_test_files(valid, [])
+        self.assertEqual(len(cleaned), 2)
+        self.assertEqual(remappings, [])
         with self.assertRaisesRegex(ValueError, "at least one src"):
             bridge._validate_solidity_test_files([valid[0]])
         with self.assertRaisesRegex(ValueError, "Imports"):
@@ -262,6 +264,51 @@ class SolidityTestRunnerTests(unittest.TestCase):
             bridge._validate_solidity_test_files([
                 item, item, {"path": "test/Vault.t.sol", "content": "contract VaultTest {}"},
             ])
+
+    def test_runner_accepts_sha256_locked_openzeppelin_dependencies(self):
+        import hashlib
+        dependency_path = "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"
+        dependency_content = "pragma solidity ^0.8.20; interface IERC20 {}"
+        lock = [{
+            "name": "@openzeppelin/contracts", "version": "5.4.0",
+            "source": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+            "commit": "d" * 40,
+            "files": [{"path": dependency_path, "sha256": hashlib.sha256(dependency_content.encode()).hexdigest()}],
+        }]
+        files = [
+            {"path": "src/Token.sol", "content": 'import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; contract Token {}'},
+            {"path": "test/Token.t.sol", "content": "contract TokenTest { function testBasic() public pure { assert(true); } }"},
+            {"path": dependency_path, "content": dependency_content},
+        ]
+        cleaned, remappings = bridge._validate_solidity_test_files(files, lock)
+        self.assertEqual(len(cleaned), 3)
+        self.assertEqual(remappings, ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"])
+
+    def test_runner_rejects_unpinned_or_modified_dependency_sources(self):
+        dependency_path = "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"
+        files = [
+            {"path": "src/Token.sol", "content": 'import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; contract Token {}'},
+            {"path": "test/Token.t.sol", "content": "contract TokenTest {}"},
+            {"path": dependency_path, "content": "interface IERC20 {}"},
+        ]
+        with self.assertRaisesRegex(ValueError, "covered by the dependency lock"):
+            bridge._validate_solidity_test_files(files, [])
+        lock = [{
+            "name": "@openzeppelin/contracts", "version": "5.4.0",
+            "source": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+            "commit": "e" * 40,
+            "files": [{"path": dependency_path, "sha256": "0" * 64}],
+        }]
+        with self.assertRaisesRegex(ValueError, "integrity check"):
+            bridge._validate_solidity_test_files(files, lock)
+
+    def test_runner_rejects_forge_std_and_unapproved_dependency_imports(self):
+        files = [
+            {"path": "src/Token.sol", "content": "contract Token {}"},
+            {"path": "test/Token.t.sol", "content": 'import "forge-std/Test.sol"; contract TokenTest {}'},
+        ]
+        with self.assertRaisesRegex(ValueError, "Unsupported import path"):
+            bridge._validate_solidity_test_files(files, [])
 
     def test_runner_fails_closed_when_rootless_runtime_is_missing(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(bridge.shutil, "which", return_value=None):
