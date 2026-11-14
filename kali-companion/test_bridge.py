@@ -123,7 +123,7 @@ class SolidityCompilerTests(unittest.TestCase):
 
     def test_rejects_imports_and_invalid_source_before_process(self):
         with patch.object(bridge.subprocess, "run") as run:
-            with self.assertRaisesRegex(ValueError, "Unsupported import path"):
+            with self.assertRaisesRegex(ValueError, "Imports"):
                 bridge.compile_solidity('pragma solidity ^0.8.20; import "https://example.com/X.sol";')
             with self.assertRaisesRegex(ValueError, "between 1 and 100,000"):
                 bridge.compile_solidity("")
@@ -248,7 +248,7 @@ class SolidityTestRunnerTests(unittest.TestCase):
         self.assertEqual(remappings, [])
         with self.assertRaisesRegex(ValueError, "project files"):
             bridge._validate_solidity_test_files([valid[0]])
-        with self.assertRaisesRegex(ValueError, "Imports"):
+        with self.assertRaisesRegex(ValueError, "Unsupported import path"):
             bridge._validate_solidity_test_files([
                 valid[0], {"path": "test/Vault.t.sol", "content": 'import "forge-std/Test.sol";'}
             ])
