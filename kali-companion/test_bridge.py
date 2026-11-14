@@ -61,6 +61,43 @@ class BridgeHttpBoundaryTests(unittest.TestCase):
             self.assertEqual(payload["status"], "connected")
 
 
+class CyberLabOsCapabilityTests(unittest.TestCase):
+    def test_capability_discovery_is_read_only_and_reports_runtime_presence(self):
+        with patch.object(bridge.shutil, "which", side_effect=lambda name: {
+            "docker": "/usr/bin/docker",
+            "podman": None,
+            "qemu-system-x86_64": None,
+            "qemu-system-aarch64": None,
+            "virsh": None,
+            "VBoxManage": None,
+        }.get(name)):
+            result = bridge.environment_capabilities()
+        self.assertEqual(result["runtimes"]["docker"]["installed"], True)
+        self.assertEqual(result["runtimes"]["podman"]["installed"], False)
+        self.assertIn("hardware_virtualization_device", result)
+        self.assertIn("scope", result)
+        self.assertIn("No packages were installed", result["scope"])
+
+    def test_capabilities_endpoint_requires_pairing_and_returns_discovery(self):
+        import json
+        import urllib.error
+        from urllib.request import Request, urlopen
+        unauthenticated = Request(self.base + "/capabilities", headers={"Origin": "http://localhost:3000"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urlopen(unauthenticated, timeout=2)
+        self.assertEqual(caught.exception.code, 401)
+
+        request = Request(self.base + "/capabilities", headers={
+            "Origin": "http://localhost:3000",
+            "Authorization": "Bearer test-token-for-cyberlab-bridge",
+        })
+        with urlopen(request, timeout=2) as response:
+            payload = json.loads(response.read())
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("runtimes", payload["capabilities"])
+        self.assertIn("scope", payload["capabilities"])
+
+
 class OllamaBridgeTests(unittest.TestCase):
     def test_ollama_request_rejects_arbitrary_paths(self):
         with patch.object(bridge.urllib.request, "urlopen") as urlopen:
