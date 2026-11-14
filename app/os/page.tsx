@@ -33,7 +33,7 @@ const runtimeLabels: Record<string, string> = {
 
 function formatBytes(value?: number) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "Unavailable";
-  const units = ["B", "KB", "GB", "TB"];
+  const units = ["B", "KB", "MB", "GB", "TB"];
   let amount = value;
   let unit = 0;
   while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit++; }
