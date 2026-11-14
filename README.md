@@ -163,3 +163,10 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - Verification checks the exact expected file set, rejects symlinks/non-regular files, validates the manifest schema and case ID, and recomputes SHA-256 and byte sizes for the JSON and HTML reports. It is read-only and reports missing or altered files without repairing them.
 - A successful check confirms consistency with the local manifest only. It does not prove who created the files, when they were created, or that the manifest itself is authentic.
 - This is integrity-oriented local archiving, not a digital signature, immutable storage, trusted timestamp or formal chain-of-custody system. Preserve original media and acquisition maps separately under your evidence-retention policy.
+
+
+### Kali companion audit-ledger verification
+
+- The paired local bridge exposes read-only `GET /evidence/case/ledger/verify` to verify the local append-only case audit ledger without creating a case.
+- Verification rejects missing, oversized, symlinked or non-regular ledger files; checks each JSONL record's required metadata, source-digest shape, record hash and previous-record hash; and reports line-numbered errors.
+- The verifier opens the fixed ledger read-only under a shared file lock and does not repair, rewrite or append to it. A valid result confirms the local hash chain is internally consistent, not that it is signed, immutable or tamper-proof.
