@@ -7,7 +7,7 @@ import { ArrowLeft, Download, FileSearch, HardDriveDownload, ShieldCheck } from 
 type Kind = "JPEG" | "PNG" | "GIF" | "PDF";
 type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; name:string };
 type BlockDevice = {name:string;path:string;type:string;size:number;ro:boolean;tran?:string;model?:string;fstype?:string;mountpoints?:Array<string|null>};
-type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number};
+type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number;manifest?:{path:string;files_hashed:number;total_bytes_hashed:number;truncated:boolean}};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
@@ -168,6 +168,7 @@ export default function ForensicsRecoveryPage(){
             <button className="network-run" type="button" onClick={runForemost} disabled={bridgeBusy||confirmImage!==job.image}>Run Foremost on image</button>
             {recoveryJob&&<div className="malware-kv"><span>Foremost job · {recoveryJob.state}</span><strong>{recoveryJob.message}</strong></div>}
             {recoveryJob?.output&&<div className="malware-kv"><span>Recovered files folder</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.output}</strong></div>}
+            {recoveryJob?.manifest&&<><div className="malware-kv"><span>SHA-256 manifest</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.manifest.path}</strong></div><p className="network-note">Manifest hashes {recoveryJob.manifest.files_hashed.toLocaleString()} recovered file(s), covering {formatBytes(recoveryJob.manifest.total_bytes_hashed)}.{recoveryJob.manifest.truncated?" File limit reached; manifest is partial.":" All enumerated regular files were hashed."}</p></>}
             <p className="network-note">For PhotoRec's interactive recovery workflow, open another Kali terminal and run: <code>sudo photorec {job.image}</code>. In PhotoRec, select the image/partition, use File Opt to select formats, and choose an output folder on the backup drive. Do not choose the source drive.</p>
           </div>}
         </>}
