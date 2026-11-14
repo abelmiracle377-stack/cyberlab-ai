@@ -89,7 +89,7 @@ class ForensicsSafetyTests(unittest.TestCase):
             job_id = "b" * 32
             with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}), \
                  patch.object(forensics.shutil, "which", return_value="/usr/sbin/blkid"), \
-                 patch.object(forensics.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": "TYPE=ext4\\nUUID=abc\\nUNSAFE=value\\n", "stderr": ""})()) as run:
+                 patch.object(forensics.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": "TYPE=ext4\nUUID=abc\nUNSAFE=value\n", "stderr": ""})()) as run:
                 result = forensics.inspect_image_filesystem(job_id, str(image))
             self.assertTrue(result["recognized"])
             self.assertEqual(result["metadata"], {"type": "ext4", "uuid": "abc"})
