@@ -31,6 +31,20 @@ class CompanionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "empty"):
                 cyberlab.triage_file(sample)
 
+    def test_oversized_file_is_rejected_before_full_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sample = Path(directory) / "oversized.bin"
+            sample.write_bytes(b"x" * (cyberlab.MAX_FILE_BYTES + 1))
+            with self.assertRaisesRegex(ValueError, "10 MB limit"):
+                cyberlab.triage_file(sample)
+
+    def test_oversized_nmap_xml_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "oversized.xml"
+            report.write_bytes(b" " * (cyberlab.MAX_XML_BYTES + 1))
+            with self.assertRaisesRegex(ValueError, "2 MB limit"):
+                cyberlab.parse_nmap_xml(report)
+
     def test_domain_validation(self):
         self.assertEqual(cyberlab.validate_domain("Example.COM."), "example.com")
         with self.assertRaisesRegex(ValueError, "valid public domain"):
