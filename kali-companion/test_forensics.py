@@ -26,6 +26,13 @@ class ForensicsSafetyTests(unittest.TestCase):
         virtual = [{"path": "/dev/mapper/cryptroot", "type": "crypt", "children": []}]
         self.assertIsNone(forensics._find_inventory_device(virtual, "/dev/mapper/cryptroot"))
 
+    def test_mounted_descendant_blocks_whole_disk_acquisition(self):
+        device_tree = {"path": "/dev/sda", "mountpoints": [None], "children": [
+            {"path": "/dev/sda1", "mountpoints": ["/mnt/source"], "children": []}
+        ]}
+        self.assertTrue(forensics._has_mounted_source(device_tree))
+        self.assertFalse(forensics._has_mounted_source({"path": "/dev/sdb", "mountpoints": [None], "children": []}))
+
     def test_unknown_job_is_not_retrievable(self):
         self.assertIsNone(forensics.get_image_job("0" * 32))
 
