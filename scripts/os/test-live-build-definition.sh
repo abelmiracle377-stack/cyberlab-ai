@@ -9,7 +9,6 @@ DESKTOP="$ROOT_DIR/os/profiles/desktop.packages"
 TERMINAL="$ROOT_DIR/os/profiles/terminal.packages"
 for manifest in "$DESKTOP" "$TERMINAL"; do
   test -s "$manifest"
-  # Package manifests must contain only unique Debian package names and comments.
   awk '
     /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
     !/^[a-z0-9][a-z0-9+.-]*$/ { print "Invalid package entry: " $0 > "/dev/stderr"; bad=1; next }
@@ -21,7 +20,6 @@ for manifest in "$DESKTOP" "$TERMINAL"; do
   done
 done
 
-# Desktop has the graphical shell; terminal intentionally stays headless.
 for package in xfce4 xfce4-terminal lightdm firefox-esr; do
   grep -qx "$package" "$DESKTOP" || { echo "Desktop profile missing $package" >&2; exit 1; }
 done
@@ -33,14 +31,17 @@ for package in xfce4 xfce4-terminal lightdm firefox-esr; do
 done
 
 test -s "$ROOT_DIR/scripts/os/cyberlab-menu.py"
+test -s "$ROOT_DIR/kali-companion/cyberlab.py"
 python3 -c "compile(open('$ROOT_DIR/scripts/os/cyberlab-menu.py', encoding='utf-8').read(), 'cyberlab-menu.py', 'exec')"
 grep -q 'lb config' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'Unsafe build work directory' "$ROOT_DIR/scripts/os/build-live-iso.sh"
+grep -q 'Build work directory must not be inside the repository' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'Output directory must not be inside the profile work directory' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'iso-hybrid' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'username=cyberlab' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'cyberlab-menu.py' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'exec python3 /usr/local/lib/cyberlab/menu.py' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'exec python3 /opt/cyberlab-ai/kali-companion/cyberlab.py' "$ROOT_DIR/scripts/os/live-configure.chroot"
 grep -q 'never started automatically' "$ROOT_DIR/scripts/os/live-configure.chroot"
 grep -q "desktop) EXPECTED_MARKER='Reached target Graphical Interface'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q "terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
