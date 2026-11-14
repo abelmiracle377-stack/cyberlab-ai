@@ -26,6 +26,12 @@ Open http://localhost:3000.
 
 For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `.env.local` and Vercel Project Settings → Environment Variables. Configure the Supabase Auth Site URL and redirect URL as `https://cyberlab-ai.vercel.app/auth/callback` (and your local callback for development). Once both variables are present, `proxy.ts` protects workspace pages and API routes, and `/login` supports email/password sign-in and account creation. Use Supabase Row Level Security for any future user-owned database tables. Do not use a service-role key in the browser.\n\nFor AI access, create an OpenRouter API key and add `OPENROUTER_API_KEY` to `.env.local` or Vercel Project Settings → Environment Variables. Never commit secrets or place keys in browser code. Open-weight mode filters the OpenRouter catalogue for models with tool support and likely open-weight provenance; this classification is best-effort, does not guarantee a model is refusal-free, and does not remove CyberLab safety controls.
 
+## CyberLab OS foundation
+
+CyberLab OS is a first-class project workstream. The initial foundation includes the dedicated `/os` environment workspace and read-only local host capability discovery through the existing paired Kali companion at `GET /capabilities`. It reports the host platform, distribution, architecture, CPU count, KVM device presence, WSL detection and installed Docker, Podman, QEMU, libvirt and VirtualBox executables. Discovery does not install software, create containers, start virtual machines or execute terminal commands.
+
+The existing Kali companion, authorised Nmap workflow, host telemetry and Ollama integration remain in place. CyberLab Terminal, managed container profiles, VM lifecycle management and a bootable CyberLab OS image are planned follow-on capabilities, not yet implemented. See [docs/CYBERLAB_OS_ARCHITECTURE.md](./docs/CYBERLAB_OS_ARCHITECTURE.md) and [the additive feature roadmap](./docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md).
+
 ## Implemented features
 
 - Live capability registry at `/tool-registry` and `/api/tool-registry`, with explicit operational/configured/partial/setup/planned states
