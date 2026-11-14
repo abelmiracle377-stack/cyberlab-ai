@@ -1,0 +1,4 @@
+import {createClient as createSupabaseClient} from "@supabase/supabase-js";
+import {createClient} from "@/lib/supabase/server";
+export function adminDb(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error("Supabase service configuration missing.");return createSupabaseClient(u,k,{auth:{autoRefreshToken:false,persistSession:false}});}
+export async function adminGate(){const s=await createClient();const {data:{user}}=await s.auth.getUser();if(!user)return {db:null,user:null,error:Response.json({error:"Sign in required."},{status:401})};const db=adminDb();const {data}=await db.from("user_profiles").select("role").eq("user_id",user.id).maybeSingle();if(data?.role!=="admin")return {db:null,user,error:new Response(null,{status:404})};return {db,user,error:null};}
