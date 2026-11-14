@@ -688,6 +688,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/solidity/compile":
                 result = compile_solidity(data.get("source"), str(data.get("expectedCompilerVersion", "")))
                 return self.send_json(200, result, origin)
+            if path == "/solidity/project/compile":
+                result = compile_solidity_project(data.get("files"), data.get("dependencyLock", []), str(data.get("expectedCompilerVersion", "")))
+                return self.send_json(200, result, origin)
             if path == "/solidity/tests/run":
                 result = run_solidity_tests(data.get("files"))
                 return self.send_json(200, result, origin)
