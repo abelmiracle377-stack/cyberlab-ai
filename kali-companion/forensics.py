@@ -47,6 +47,13 @@ def _find_inventory_device(nodes: list[dict], source: str) -> dict | None:
     return None
 
 
+def _has_mounted_source(node: dict) -> bool:
+    """Detect a mountpoint anywhere in a source disk's partition tree."""
+    if any(point for point in (node.get("mountpoints") or [])):
+        return True
+    return any(_has_mounted_source(child) for child in (node.get("children") or []))
+
+
 def _mount_device(path: Path) -> tuple[str, str]:
     raw = _run(["findmnt", "--json", "--target", str(path), "--output", "SOURCE,TARGET,MAJ:MIN"])
     filesystems = json.loads(raw).get("filesystems", [])
@@ -76,11 +83,7 @@ def _validate_acquisition(source: str, destination_dir: str, filename: str) -> t
     inventory_entry = _find_inventory_device(tree.get("blockdevices", []), str(source_path))
     if not inventory_entry:
         raise ValueError("Choose a whole disk or partition present in the current lsblk inventory; mapper, loop and other virtual devices are not accepted.")
-    def mounted(node):
-        if any(point for point in (node.get("mountpoints") or [])):
-            return True
-        return any(mounted(child) for child in node.get("children", []))
-    if any(mounted(node) for node in tree.get("blockdevices", [])):
+    if any(_has_mounted_source(node) for node in tree.get("blockdevices", [])):
         raise ValueError("A source partition is mounted. Boot from a live USB and unmount every source partition before imaging.")
     source_ancestors = _ancestors(str(source_path))
     dest_ancestors = _ancestors("/dev/block/" + dest_majmin) if Path("/dev/block/" + dest_majmin).exists() else {dest_majmin}
