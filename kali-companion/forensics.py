@@ -197,7 +197,7 @@ def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dic
     fd = os.open(str(manifest_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
-        handle.write("\\n")
+        handle.write("\n")
     return {"path": str(manifest_path), **{key: manifest[key] for key in ("files_hashed", "total_bytes_hashed", "truncated")}}
 
 
