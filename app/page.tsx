@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard,
+  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop,
   Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
 } from "lucide-react";
@@ -13,6 +13,7 @@ const groups = [
     { label: "Billing", icon: CreditCard, href: "/billing" },
     { label: "AI Agent", icon: Bot, href: "/agent" },
     { label: "Model Intelligence", icon: Workflow, href: "/models" },
+    { label: "CyberLab OS", icon: Laptop, href: "/os" },
   ]},
   { title: "INTELLIGENCE", items: [
     { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
@@ -43,6 +44,7 @@ const groups = [
 ];
 
 const modules = [
+  { name:"CyberLab OS", desc:"Manage local Linux environments, detect runtimes and prepare isolated security workspaces.", icon:Laptop, state:"FOUNDATION", href:"/os" },
   { name:"AI Agent", desc:"Coordinate scoped security workflows with tool-assisted analysis.", icon:Bot, state:"CONFIG CHECK", href:"/agent" },
   { name:"IP Intelligence", desc:"Inspect public IP, ASN, DNS, hosting and ownership signals.", icon:Globe2, state:"AVAILABLE", href:"/ip-intelligence" },
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
