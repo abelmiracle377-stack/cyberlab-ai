@@ -76,6 +76,26 @@ class ForensicsSafetyTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "between 1 and 5000"):
                         forensics.build_recovery_manifest(directory, max_files=limit)
 
+    def test_image_probe_requires_completed_job_and_exact_confirmation(self):
+        with patch.object(forensics, "_jobs_lock"):
+            with patch.dict(forensics._jobs, {"a" * 32: {"id": "a" * 32, "state": "running", "image": "/tmp/disk.img"}}):
+                with self.assertRaisesRegex(ValueError, "completed"):
+                    forensics.inspect_image_filesystem("a" * 32, "/tmp/disk.img")
+
+    def test_image_probe_returns_only_allowlisted_read_only_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "disk.img"
+            image.write_bytes(b"image")
+            job_id = "b" * 32
+            with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}), \
+                 patch.object(forensics.shutil, "which", return_value="/usr/sbin/blkid"), \
+                 patch.object(forensics.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": "TYPE=ext4\\nUUID=abc\\nUNSAFE=value\\n", "stderr": ""})()) as run:
+                result = forensics.inspect_image_filesystem(job_id, str(image))
+            self.assertTrue(result["recognized"])
+            self.assertEqual(result["metadata"], {"type": "ext4", "uuid": "abc"})
+            self.assertIn("not mounted or modified", result["note"])
+            self.assertEqual(run.call_args.args[0][:4], ["blkid", "-p", "-o", "export"])
+
     def test_unknown_job_is_not_retrievable(self):
         self.assertIsNone(forensics.get_image_job("0" * 32))
 
