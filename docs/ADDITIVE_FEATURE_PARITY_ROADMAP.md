@@ -67,6 +67,32 @@ Kodachi's public whitepaper describes three tiers: client/workstation services, 
 - Searchable tool catalogue, command builder, workflow queue, output formats, job history and cancellation.
 - System status, API docs, help center and guided remediation.
 
+## CyberLab OS — first-class platform workstream
+
+CyberLab OS is now a core product workstream, not a separate side project. It is the unified operating environment and local runtime management layer for CyberLab AI. It must preserve all existing web, agent, evidence, model and Kali companion functionality.
+
+The detailed architecture and acceptance criteria are maintained in [docs/CYBERLAB_OS_ARCHITECTURE.md](./CYBERLAB_OS_ARCHITECTURE.md).
+
+### CyberLab OS capabilities and delivery
+- OS control plane integrated into the existing CyberLab AI dashboard, with a dedicated additive `/os` workspace.
+- Read-only host and runtime capability discovery; report operating system, architecture, CPU, memory/disk headroom, hardware virtualisation and installed container/hypervisor runtimes.
+- Environment inventory and lifecycle status with explicit available/configured/running/unsupported/planned states.
+- CyberLab Terminal with a paired local runtime, bounded command execution, allowlists, audit trail and human approval for privileged, destructive or network-active actions. Never expose an unrestricted public shell.
+- First-class integration with the existing Kali companion, pairing token, Nmap workflow, telemetry and Ollama adapter; preserve existing endpoints and behaviour.
+- Optional Ubuntu, Kali-compatible and CyberLab Minimal/Security profiles using upstream images and package sources.
+- Container environments before VM management where host support permits; explicit resource previews, filesystem/network isolation and confirmation for lifecycle changes.
+- Local VM integration with QEMU/KVM, VirtualBox, VMware or Hyper-V only when detected and supported. Never attempt to run a hypervisor in the hosted web application.
+- Future reproducible and signed bootable CyberLab OS image based on a maintained upstream Linux distribution. A custom kernel is not an initial requirement.
+- Verify upstream distribution licensing, trademarks, image terms, package provenance, update and rollback strategy before redistributing images.
+
+### CyberLab OS compatibility invariants
+- Existing CyberLab AI pages, APIs, tools, Kali bridge routes, pairing and Ollama features remain available.
+- Capability discovery is read-only; no package installation, container creation or VM lifecycle operation during discovery.
+- No automatic scans, exploits, privileged commands, host mounts or network-enabled lab actions.
+- Low-resource hosts receive lightweight environment recommendations; full desktop VMs are never assumed to be viable.
+- Environment actions require explicit user initiation, clear scope/resource preview and approval where risk warrants it.
+- The OS workspace remains useful when no container runtime or hypervisor is installed.
+
 ## Kodachi-inspired information architecture
 
 Keep every existing route and page. Organize navigation into these additive sections:
