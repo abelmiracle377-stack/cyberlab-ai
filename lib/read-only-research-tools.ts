@@ -16,11 +16,35 @@ function validateDomain(value: unknown): string {
   return domain;
 }
 
+async function readBoundedText(response: Response, maxBytes: number, label: string): Promise<string> {
+  if (!response.body) throw new Error(`${label} returned an empty response body.`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let totalBytes = 0;
+  let output = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error(`${label} response exceeded the ${maxBytes}-byte limit.`);
+      }
+      output += decoder.decode(value, { stream: true });
+    }
+    output += decoder.decode();
+    return output;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 async function boundedJson(url: string, headers: Record<string, string> = {}) {
   const response = await fetch(url, { headers, cache: "no-store", signal: AbortSignal.timeout(12000) });
   if (!response.ok) throw new Error(`Research source returned HTTP ${response.status}.`);
-  const text = await response.text();
-  if (text.length > 18000) throw new Error("Research source response exceeded the evidence size limit.");
+  const text = await readBoundedText(response, 18000, "Research source");
   return JSON.parse(text);
 }
 
@@ -85,7 +109,10 @@ export async function runReadOnlyResearch(input: { model: string; prompt: string
       body: JSON.stringify({ model: input.model, messages, tools: toolDefinitions, tool_choice: "auto", temperature: 0.1, max_tokens: 1800, stream: false }),
       cache: "no-store", signal: AbortSignal.timeout(45000),
     });
-    const payload = await response.json().catch(() => ({}));
+    const responseText = await readBoundedText(response, 128000, "Hosted model");
+    let payload: any;
+    try { payload = JSON.parse(responseText); }
+    catch { throw new Error("Hosted model returned invalid JSON."); }
     if (!response.ok) throw new Error((typeof payload?.error?.message === "string" ? payload.error.message : `Provider returned HTTP ${response.status}.`).slice(0, 500));
     const u = payload?.usage || {};
     usage.promptTokens += Number.isFinite(u.prompt_tokens) ? Math.max(0, Number(u.prompt_tokens)) : 0;
