@@ -75,6 +75,25 @@ export default function SolidityLabPage() {
     return () => { active = false; };
   }, []);
 
+  function loadBlockchainBlueprint(kind: "erc721" | "erc1155" | "amm") {
+    if (kind === "erc721") {
+      setLanguage("Solidity"); setCompilerVersion("0.8.24"); setTargetChain("Ethereum-compatible EVM testnet first");
+      setStandard("ERC-721 + ERC-2981 (optional advisory royalties)");
+      setProjectName("MembershipNFT");
+      setRequirements("Create an ERC-721 NFT collection with capped supply, owner-controlled minting, role-separated administration, safe minting, pause/unpause emergency controls, and per-token metadata URI support. Include tests for unauthorized minting, supply cap, safe receiver behavior, transfers, burns if enabled, pause behavior, and role administration. Explain metadata mutability and off-chain hosting assumptions. If ERC-2981 is included, clearly state that royalty information is advisory and marketplace enforcement is not guaranteed. Provide a deployment checklist for a testnet only.");
+    } else if (kind === "erc1155") {
+      setLanguage("Solidity"); setCompilerVersion("0.8.24"); setTargetChain("Ethereum-compatible EVM testnet first");
+      setStandard("ERC-1155 + optional ERC-2981");
+      setProjectName("MultiTokenCollection");
+      setRequirements("Create an ERC-1155 multi-token collection with distinct token IDs, per-ID supply caps, role-controlled minting, safe batch transfers, pause controls and metadata URI strategy. Include tests for unauthorized minting, per-ID supply boundaries, batch operations, receiver callbacks, pause behavior and role administration. Explain URI mutability and royalty enforcement limitations. Provide testnet-only deployment steps.");
+    } else {
+      setLanguage("Solidity"); setCompilerVersion("0.8.24"); setTargetChain("Ethereum-compatible EVM testnet first");
+      setStandard("Constant-product AMM (educational V2-style)");
+      setProjectName("CyberLabAMM");
+      setRequirements("Create an educational constant-product AMM with a factory and one pair/pool, liquidity add/remove, swaps, explicit fee accounting, minimum-output and deadline checks, and reserve invariant protection. Include tests for rounding, zero amounts, reserve updates, slippage, deadline expiry, reentrancy surfaces, fee accounting and invariant properties. Discuss oracle manipulation, flash loans, MEV, token compatibility and why this must not hold real funds without independent audit and extensive fuzz/invariant testing. Do not implement a production exchange or claim safety.");
+    }
+  }
+
   async function checkLocalCompiler() {
     if (language !== "Solidity") { setCompilerError("The local compiler integration currently supports Solidity only."); return; }
     setCompilerBusy(true); setCompilerError("");
@@ -198,6 +217,12 @@ export default function SolidityLabPage() {
               <div><label htmlFor="contract-chain">TARGET CHAIN / VM</label><input id="contract-chain" value={targetChain} onChange={event => setTargetChain(event.target.value)} required maxLength={100} /></div>
               <div><label htmlFor="contract-standard">STANDARD / FRAMEWORK</label><input id="contract-standard" value={standard} onChange={event => setStandard(event.target.value)} maxLength={100} placeholder="e.g. ERC-721, OpenZeppelin" /></div>
               <div><label htmlFor="contract-project">PROJECT NAME</label><input id="contract-project" value={projectName} onChange={event => setProjectName(event.target.value)} required maxLength={80} /></div>
+            </div>
+            <div className="solidity-actions" aria-label="Blockchain project blueprints">
+              <small>Start from a scoped blueprint, then edit the requirements before generation.</small>
+              <button type="button" onClick={() => loadBlockchainBlueprint("erc721")}>ERC-721 NFT</button>
+              <button type="button" onClick={() => loadBlockchainBlueprint("erc1155")}>ERC-1155 NFT</button>
+              <button type="button" onClick={() => loadBlockchainBlueprint("amm")}>AMM / DEX</button>
             </div>
             <label htmlFor="contract-requirements">NATURAL-LANGUAGE REQUIREMENTS</label>
             <textarea id="contract-requirements" value={requirements} onChange={event => setRequirements(event.target.value)} required maxLength={8000} placeholder="Describe the contract, roles, functions, token economics, events, invariants and expected tests…" />
