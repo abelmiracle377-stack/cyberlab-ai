@@ -25,7 +25,7 @@ PORT = 8765
 MAX_BODY = 8192
 MAX_PORTS = 100
 MAX_RUNTIME = 55
-ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app"}
+ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"}
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
@@ -80,37 +80,76 @@ def valid_target(value: str) -> str:
 
 
 def parse_report(xml_text: str) -> dict:
-    root = ET.fromstring(xml_text)
+    """Parse Nmap XML with the same evidence fields as the CLI/browser parser."""
+    raw = xml_text.encode("utf-8")
+    if len(raw) > 2 * 1024 * 1024:
+        raise ValueError("Nmap XML exceeds the 2 MB limit.")
+    if re.search(rb"<!DOCTYPE|<!ENTITY", raw, re.I):
+        raise ValueError("DOCTYPE and entity declarations are not accepted.")
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError("Invalid Nmap XML: " + str(exc)) from exc
+    if root.tag != "nmaprun":
+        raise ValueError("XML root element is not nmaprun.")
     hosts = []
-    for host in root.findall("host"):
+    for index, host in enumerate(root.findall("host"), 1):
         status = host.find("status")
-        addresses = [{"address": n.get("addr", ""), "type": n.get("addrtype", "")} for n in host.findall("address")]
+        addresses = [{"address": n.get("addr", ""), "type": n.get("addrtype", "unknown")} for n in host.findall("address")]
+        hostnames = [{"name": n.get("name", ""), "type": n.get("type", "unknown")} for n in host.findall("./hostnames/hostname") if n.get("name")]
         ports = []
         for node in host.findall("./ports/port"):
-            state = node.find("state")
-            service = node.find("service")
+            state, service = node.find("state"), node.find("service")
+            try:
+                number = int(node.get("portid", "0"))
+            except ValueError:
+                continue
+            if not 1 <= number <= 65535:
+                continue
             ports.append({
-                "protocol": node.get("protocol", "tcp"),
-                "port": int(node.get("portid", "0")),
+                "protocol": node.get("protocol", "unknown"), "port": number,
                 "state": state.get("state", "unknown") if state is not None else "unknown",
+                "reason": state.get("reason", "") if state is not None else "",
+                "reason_ttl": state.get("reason_ttl") if state is not None else None,
                 "service": service.get("name", "unknown") if service is not None else "unknown",
                 "product": service.get("product", "") if service is not None else "",
                 "version": service.get("version", "") if service is not None else "",
+                "extra_info": service.get("extrainfo", "") if service is not None else "",
+                "tunnel": service.get("tunnel", "") if service is not None else "",
+                "method": service.get("method", "") if service is not None else "",
+                "confidence": service.get("conf") if service is not None else None,
             })
         hosts.append({
-            "status": status.get("state", "unknown") if status is not None else "unknown",
-            "addresses": addresses,
-            "ports": ports,
+            "index": index, "status": status.get("state", "unknown") if status is not None else "unknown",
+            "status_reason": status.get("reason", "") if status is not None else "",
+            "addresses": addresses, "hostnames": hostnames, "ports": ports,
         })
-    return {
-        "hosts": hosts,
-        "open_ports": [
-            {"address": (h["addresses"][0]["address"] if h["addresses"] else "unknown"), **p}
-            for h in hosts for p in h["ports"] if p["state"] == "open"
-        ],
-        "state_summary": {state: sum(1 for h in hosts for p in h["ports"] if p["state"] == state) for state in ("open", "closed", "filtered")},
+    all_ports = [port for host in hosts for port in host["ports"]]
+    states = ("open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "unknown")
+    scaninfo = [{"type": n.get("type", ""), "protocol": n.get("protocol", ""),
+                 "numservices": n.get("numservices", ""), "services": n.get("services", "")}
+                for n in root.findall("./scaninfo")]
+    runstats = root.find("runstats")
+    finished = runstats.find("finished") if runstats is not None else None
+    host_stats = runstats.find("hosts") if runstats is not None else None
+    completion = {
+        "finished": finished.attrib if finished is not None else {},
+        "hosts": host_stats.attrib if host_stats is not None else {},
+        "scanner": root.get("scanner", ""), "version": root.get("version", ""),
+        "args": root.get("args", ""), "start": root.get("start", ""),
     }
-
+    open_ports = [
+        {"host": host["addresses"][0]["address"] if host["addresses"] else f"Host {host['index']}", **port}
+        for host in hosts for port in host["ports"] if port["state"] == "open"
+    ]
+    state_counts = {state: sum(1 for port in all_ports if port["state"] == state) for state in states}
+    evidence_status = "completed" if completion["finished"] else ("partial" if hosts else "no_port_evidence")
+    return {
+        "hosts": hosts, "open_ports": open_ports, "state_summary": state_counts,
+        "summary": {"hosts": len(hosts), "up": sum(1 for host in hosts if host["status"] == "up"),
+                    "ports": len(all_ports), "open_ports": len(open_ports), "state_counts": state_counts},
+        "scaninfo": scaninfo, "completion": completion, "evidence_status": evidence_status,
+    }
 
 def system_snapshot() -> dict:
     """Return bounded, non-sensitive host health metrics; never process args or user data."""
@@ -240,11 +279,14 @@ class Handler(BaseHTTPRequestHandler):
                     raise RuntimeError((completed.stderr or "Nmap did not return a report.")[:700])
                 report = parse_report(completed.stdout)
                 return self.send_json(200, {
-                    "status": "completed",
+                    "status": "completed" if report["evidence_status"] == "completed" else "partial",
                     "target": target,
                     "ports_checked": ports,
                     "duration_seconds": round(time.time() - started, 1),
                     "method": "Nmap TCP connect scan with light service version detection",
+                    "exit_code": completed.returncode,
+                    "stderr": completed.stderr[:2000],
+                    "ports_checked_count": len(ports),
                     **report,
                     "note": "Nmap reports selected TCP ports as open, closed or filtered when determinable. Filtered means a firewall or network control prevented a definitive result. This is not a vulnerability verdict. No NSE scripts, exploit checks, credentials, evasion or denial-of-service options are used. Assess only systems explicitly in scope.",
                 }, origin)

@@ -78,8 +78,9 @@ export async function POST(request: Request) {
   const states = ["open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "unknown"];
   const openPorts = hosts.flatMap((host) => host.ports.filter((port) => port.state === "open").map((port) => ({ host: host.addresses[0]?.address || `Host ${host.index}`, ...port })));
   const scaninfo = tags(xml, "scaninfo").map((tag) => attributes(tag));
-  const finishedTag = tags(xml.match(/<runstats\\b[^>]*>([\\s\\S]*?)<\\/runstats>/i)?.[1] || "", "finished")[0];
-  const hostStatsTag = tags(xml.match(/<runstats\\b[^>]*>([\\s\\S]*?)<\\/runstats>/i)?.[1] || "", "hosts")[0];
+  const runstatsBlock = xml.match(/<runstats\b[^>]*>([\s\S]*?)<\/runstats>/i)?.[1] || "";
+  const finishedTag = tags(runstatsBlock, "finished")[0];
+  const hostStatsTag = tags(runstatsBlock, "hosts")[0];
   const completion = {
     finished: attributes(finishedTag || ""),
     hosts: attributes(hostStatsTag || ""),

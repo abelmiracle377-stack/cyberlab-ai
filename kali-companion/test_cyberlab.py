@@ -107,5 +107,32 @@ class CompanionTests(unittest.TestCase):
                 cyberlab.parse_nmap_xml(report)
 
 
+    def test_bridge_parser_preserves_nmap_evidence(self):
+        import importlib.util
+        bridge_path = MODULE_PATH.with_name("bridge.py")
+        bridge_spec = importlib.util.spec_from_file_location("cyberlab_bridge", bridge_path)
+        bridge = importlib.util.module_from_spec(bridge_spec)
+        assert bridge_spec and bridge_spec.loader
+        bridge_spec.loader.exec_module(bridge)
+        xml = '<nmaprun scanner="nmap" version="7.95"><scaninfo type="connect" protocol="tcp" numservices="2" services="22,443"/><host><status state="up" reason="syn-ack"/><address addr="192.0.2.8" addrtype="ipv4"/><hostnames><hostname name="lab.example.test" type="user"/></hostnames><ports><port protocol="tcp" portid="443"><state state="open" reason="syn-ack" reason_ttl="54"/><service name="https" product="Demo" version="1.2" method="probed" conf="10"/></port><port protocol="tcp" portid="22"><state state="open|filtered" reason="no-response"/></port></ports></host><runstats><finished exit="success"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>'
+        result = bridge.parse_report(xml)
+        self.assertEqual(result["evidence_status"], "completed")
+        self.assertEqual(result["summary"]["state_counts"]["open"], 1)
+        self.assertEqual(result["summary"]["state_counts"]["open|filtered"], 1)
+        self.assertEqual(result["hosts"][0]["hostnames"][0]["name"], "lab.example.test")
+        self.assertEqual(result["open_ports"][0]["method"], "probed")
+        self.assertEqual(result["completion"]["finished"]["exit"], "success")
+
+    def test_bridge_parser_rejects_entity_declarations(self):
+        import importlib.util
+        bridge_path = MODULE_PATH.with_name("bridge.py")
+        bridge_spec = importlib.util.spec_from_file_location("cyberlab_bridge", bridge_path)
+        bridge = importlib.util.module_from_spec(bridge_spec)
+        assert bridge_spec and bridge_spec.loader
+        bridge_spec.loader.exec_module(bridge)
+        with self.assertRaisesRegex(ValueError, "entity"):
+            bridge.parse_report('<!DOCTYPE nmaprun [<!ENTITY x "x">]><nmaprun>&x;</nmaprun>')
+
+
 if __name__ == "__main__":
     unittest.main()
