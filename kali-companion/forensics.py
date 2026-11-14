@@ -192,7 +192,7 @@ def inspect_image_filesystem(image_job_id: str, confirmation_image: str) -> dict
 def parse_mmls_partitions(output: str) -> list[dict]:
     """Parse Sleuth Kit mmls rows, returning allocated partition entries only."""
     partitions = []
-    row = re.compile(r"^\\s*(\\d{3}):\\s+(?:(?:\\d{3}:\\d{3}|Meta|-------)\\s+)?(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(.+?)\\s*$")
+    row = re.compile(r"^\s*(\d{3}):\s+(?:(?:\d{3}:\d{3}|Meta|-------)\s+)?(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$")
     for line in output.splitlines():
         match = row.match(line)
         if not match:
