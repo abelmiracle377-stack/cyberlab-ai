@@ -283,7 +283,6 @@ export default function AgentPage() {
             <ChevronDown size={13} />
           </label>
           <span className="agent-model-count">{agentMode === "open-weight" ? `${availableModels.length} OPEN-WEIGHT MODELS` : `${availableModels.length} MODELS AVAILABLE`}</span>
-        </div>
           </> : <>
             <div className="agent-model-label"><span className="agent-live-dot" /> LOCAL OLLAMA / KALI BRIDGE</div>
             <label className="agent-select-wrap">
