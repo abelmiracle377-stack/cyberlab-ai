@@ -12,6 +12,7 @@ const groups = [
     { label: "Overview", icon: Layers3, href: "/" },
     { label: "Billing", icon: CreditCard, href: "/billing" },
     { label: "AI Agent", icon: Bot, href: "/agent" },
+    { label: "Model Intelligence", icon: Workflow, href: "/models" },
   ]},
   { title: "INTELLIGENCE", items: [
     { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
