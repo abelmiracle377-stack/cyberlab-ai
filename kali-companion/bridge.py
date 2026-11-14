@@ -550,11 +550,7 @@ def run_solidity_tests(files: object) -> dict:
                 destination = root / item["path"]
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text(item["content"], encoding="utf-8")
-            (root / "foundry.toml").write_text(
-                '[profile.default]\nsrc = "src"\ntest = "test"\nout = "out"\ncache_path = "cache"\nlibs = []\nauto_detect_solc = true\noptimizer = false\n',
-                encoding="utf-8",
-            )
-            command = [
+            foundry_config = (\n                '[profile.default]\\nsrc = "src"\\ntest = "test"\\nout = "out"\\n'\n                'cache_path = "cache"\\nlibs = ["lib"]\\nauto_detect_solc = true\\noptimizer = false\\n'\n                'remappings = ' + json.dumps(remappings) + '\\n'\n            )\n            (root / "foundry.toml").write_text(foundry_config, encoding="utf-8")\n            command = [
                 executable, "run", "--rm", "--pull=never", "--network=none",
                 "--memory=1g", "--cpus=1", "--pids-limit=64", "--read-only",
                 "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
@@ -696,7 +692,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = compile_solidity_project(data.get("files"), data.get("dependencyLock", []), str(data.get("expectedCompilerVersion", "")))
                 return self.send_json(200, result, origin)
             if path == "/solidity/tests/run":
-                result = run_solidity_tests(data.get("files"))
+                result = run_solidity_tests(data.get("files"), data.get("dependencyLock", []))
                 return self.send_json(200, result, origin)
             target = valid_target(str(data.get("target", "")))
             confirmation = str(data.get("confirmationTarget", "")).strip().lower().rstrip(".")
