@@ -106,6 +106,22 @@ export default function KaliConnectionPage() {
     finally{setCaseBusy(false);}
   }
 
+  async function exportInvestigationCase(){
+    if(!caseReport)return;
+    setCaseBusy(true);setError("");
+    try{
+      const response=await fetch("http://127.0.0.1:8765/evidence/case/export",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseReport})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Could not export the investigation case.");
+      const caseId=String((caseReport.case as Record<string,unknown>)?.case_id||"cyberlab-case");
+      const download=(content:string,type:string,name:string)=>{const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const anchor=document.createElement("a");anchor.href=url;anchor.download=name;document.body.appendChild(anchor);anchor.click();anchor.remove();URL.revokeObjectURL(url);};
+      download(String(data.json_export||""),"application/json;charset=utf-8",caseId+".json");
+      download(String(data.html_export||""),"text/html;charset=utf-8",caseId+".html");
+      setCaseReport({...caseReport,export_archive:data.archive,export_note:data.note});
+    }catch(e){setError(e instanceof Error?e.message:"Could not export the investigation case.");}
+    finally{setCaseBusy(false);}
+  }
+
   async function analyseArtifactEvidence(){
     setArtifactBusy(true);setError("");setArtifactReport(null);
     try{
@@ -296,7 +312,7 @@ export default function KaliConnectionPage() {
         <h2>10. Unified investigation case</h2>
         <p>Combine completed service/CVE analysis and static artifact/recovery analysis into one provenance report. The local audit ledger records evidence digests and case metadata, not raw samples, banners or recovered contents.</p>
         <button className="report-download" type="button" onClick={createInvestigationCase} disabled={caseBusy||(!evidenceReport&&!artifactReport)}>{caseBusy?<><LoaderCircle size={14}/> Creating case…</>:<><FileSearch size={14}/> Create unified case report</>}</button>
-        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
+        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><button className="report-download" type="button" onClick={exportInvestigationCase} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Preparing exports…</>:<><FileSearch size={14}/> Export JSON + HTML and archive locally</>}</button>{caseReport.export_archive&&<p className="network-note">Private archive: {String((caseReport.export_archive as Record<string,unknown>).directory)} · JSON and HTML downloads started. Verify the manifest hashes before relying on exported evidence.</p>}<pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
       </section>}
 
       {connected&&<section className="kali-panel">
