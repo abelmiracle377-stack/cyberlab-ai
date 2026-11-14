@@ -47,6 +47,8 @@ export default function KaliConnectionPage() {
   const [servicePorts,setServicePorts]=useState("21,22,25,80,443");
   const [serviceBusy,setServiceBusy]=useState(false);
   const [serviceResult,setServiceResult]=useState<Record<string,unknown>|null>(null);
+  const [evidenceBusy,setEvidenceBusy]=useState(false);
+  const [evidenceReport,setEvidenceReport]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -83,6 +85,18 @@ export default function KaliConnectionPage() {
     try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("http://127.0.0.1:8765/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Service identification failed.");}
     finally{setServiceBusy(false);}
+  }
+
+  async function analyseServiceEvidence(){
+    if(!serviceResult)return;
+    setEvidenceBusy(true);setError("");setEvidenceReport(null);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/evidence/report",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceResult})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Evidence analysis failed.");
+      setEvidenceReport(data as Record<string,unknown>);
+    }catch(e){setError(e instanceof Error?e.message:"Evidence analysis failed.");}
+    finally{setEvidenceBusy(false);}
   }
 
   async function refreshToolInventory(){
@@ -235,7 +249,7 @@ export default function KaliConnectionPage() {
           <div className="scope-checks"><label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I own this target or have explicit written authorisation for this exact assessment and confirm it is in scope.</label></div>
           <button className="report-download" type="submit" disabled={serviceBusy||!confirmed||!reference.trim()||target.trim().toLowerCase()!==confirmationTarget.trim().toLowerCase()}>{serviceBusy?<><LoaderCircle size={14}/> Identifying services…</>:<><Network size={14}/> Identify services locally</>}</button>
         </form>
-        {serviceResult&&<div className="network-results"><h3>Service identification evidence</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:520,overflow:"auto"}}>{JSON.stringify(serviceResult,null,2)}</pre></div>}
+        {serviceResult&&<div className="network-results"><h3>Service identification evidence</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:520,overflow:"auto"}}>{JSON.stringify(serviceResult,null,2)}</pre><button className="report-download" type="button" onClick={analyseServiceEvidence} disabled={evidenceBusy}>{evidenceBusy?<><LoaderCircle size={14}/> Analysing evidence…</>:<><FileSearch size={14}/> Correlate evidence with NIST CVEs</>}</button>{evidenceReport&&<><h3>Evidence-led analysis</h3><p>{String(evidenceReport.note||"")}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:520,overflow:"auto"}}>{JSON.stringify(evidenceReport,null,2)}</pre></>}</div>}
       </section>}
 
       {connected&&<section className="kali-panel">
