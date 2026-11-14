@@ -27,6 +27,7 @@ from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
 from evidence_analysis import build_service_report, validate_report_payload
+from artifact_analysis import build_artifact_report, validate_artifact_payload
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -40,6 +41,7 @@ scan_lock = threading.Lock()
 research_lock = threading.Lock()
 service_lock = threading.Lock()
 evidence_lock = threading.Lock()
+artifact_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -226,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -246,6 +248,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, run_research_action(data), origin)
                 finally:
                     research_lock.release()
+            if path == "/evidence/artifacts":
+                triage_evidence, recovery_evidence = validate_artifact_payload(data)
+                if not artifact_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "An artifact analysis request is already running."}, origin)
+                try:
+                    report = build_artifact_report(triage_evidence, recovery_evidence)
+                    return self.send_json(200, report, origin)
+                finally:
+                    artifact_lock.release()
             if path == "/evidence/report":
                 scan_evidence, service_evidence = validate_report_payload(data)
                 if not evidence_lock.acquire(blocking=False):
