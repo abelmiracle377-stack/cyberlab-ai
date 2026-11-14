@@ -131,6 +131,21 @@ A hosted Vercel deployment cannot directly access the browser user's physical di
 
 ## Kali tool catalogue and workflow expansion
 
+The dashboard can submit a natural-language question or task to the authenticated `POST /plan` endpoint. The first-pass planner recognises network reconnaissance, web assessment, DNS/OSINT, vulnerability research, FTP/SSH/SMB and other service enumeration, Metasploit module research, offline password-hash auditing, wireless lab assessment, packet analysis, Active Directory, digital forensics, malware triage, reverse engineering and lab/challenge questions. It extracts at most one explicit URL hostname, IPv4 address or FQDN candidate, lists missing scope/evidence details, checks relevant tool availability, and returns a proposed workflow. It does not scan, connect to, or modify any target. It is deterministic classification, not an AI answer engine; the UI clearly labels it as plan-only.
+
 The dashboard can query the paired local runner's authenticated `GET /tools` endpoint to see which curated Kali tools are installed and how to install missing packages. The inventory is deliberately separate from execution: detecting a binary never causes it to run, and CyberLab never invokes `apt` automatically. The first catalogue covers information gathering, vulnerability analysis, web application analysis, password auditing, wireless security, Metasploit research, traffic analysis, Active Directory, forensics, reverse engineering and network utilities including FTP.
 
 This is the foundation for a natural-language task planner: translate a user's authorised lab question into a bounded plan, verify target/scope, check required tools, ask before package installation, execute only reviewed fixed workflows, collect outputs, and explain the evidence. Tool availability does not imply that every feature is safe for unattended use. CamPhish and comparable phishing/camera-capture workflows are intentionally blocked; online credential guessing, exploit payloads, persistence, interception and post-exploitation are not part of unattended execution. Metasploit integration starts with module search, `info`, option review and safe `check` operations only. A targetless HTB prompt can be analysed for what evidence is needed, but a scan requires a target supplied by the user or a clearly identified in-scope lab endpoint.
+
+
+### Natural-language task planning
+
+After pairing, open **Kali Connection → Describe any authorised cybersecurity task**. Paste a question, assessment objective, lab prompt or scan request in ordinary language. The planner:
+- Classifies the task across multiple security domains rather than being limited to Hack The Box.
+- Identifies one explicit candidate URL hostname, IPv4 address or fully-qualified domain name when present.
+- Lists the tools that match the task and whether each executable is installed.
+- Provides package installation suggestions for missing tools without installing them.
+- Identifies missing scope, authorisation, evidence or lab-target information.
+- Produces a reviewable workflow and explicitly reports that no execution has started.
+
+The current planner is deterministic and intentionally conservative. It does not infer targets from organisation names, scan broad networks, treat a named host as authorised, or turn pasted text into shell commands. A question without a target can still receive a useful classification and a list of what is needed next. A lab challenge can be analysed from its prompt, but host-specific conclusions require the assigned lab target and evidence from that environment. The next development stage is to add individual fixed workflows behind this plan, beginning with low-impact information gathering and service discovery.
