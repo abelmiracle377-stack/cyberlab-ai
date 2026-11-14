@@ -105,3 +105,12 @@ The first test stage accepts only flat src/*.sol and test/*.t.sol files (2–20 
 Example environment configuration (replace with a digest independently verified and loaded locally):
 
     export CYBERLAB_FOUNDRY_IMAGE='registry.example/foundry@sha256:REPLACE_WITH_VERIFIED_64_HEX_DIGEST'
+
+
+### Multi-file Solidity compilation and pinned OpenZeppelin source
+
+The paired bridge exposes POST /solidity/project/compile. It accepts 1–100 in-memory Solidity files (500 KB combined), source files under flat src/*.sol or test/*.sol paths, and OpenZeppelin package files under lib/openzeppelin-contracts/contracts/. It supports only @openzeppelin/contracts 5.x.y, with a dependency lock containing the exact version, canonical repository URL, a full commit identifier, and a SHA-256 digest for every supplied package source file. Every library file must be covered by the lock; unpinned or unknown dependency paths are rejected. Imports must resolve to supplied project files or the pinned OpenZeppelin package. The compiler uses standard JSON and a fixed local solc executable. No package is downloaded, installed or executed.
+
+The SHA-256 check establishes that submitted source bytes match the submitted lock entries; it does not independently prove that the first downloaded source came from the declared Git commit or release. Obtain source from the official OpenZeppelin repository, independently verify its release tag/commit and file contents, and review/protect the lockfile before use. The UI's prefilled project text contains placeholders, not a complete OpenZeppelin package; replace them with the complete dependency closure and a matching lock before compiling.
+
+The Foundry test runner has not yet been upgraded to consume this dependency manifest. It remains import-free and flat-path only. Multi-file compilation is not a test run, audit, deployment or proof of correctness.
