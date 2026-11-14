@@ -33,6 +33,21 @@ class ForensicsSafetyTests(unittest.TestCase):
         self.assertTrue(forensics._has_mounted_source(device_tree))
         self.assertFalse(forensics._has_mounted_source({"path": "/dev/sdb", "mountpoints": [None], "children": []}))
 
+    def test_recovery_manifest_hashes_regular_files_and_skips_symlinks(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "recovered"
+            root.mkdir()
+            payload = b"recovered evidence"
+            (root / "sample.bin").write_bytes(payload)
+            (root / "link.bin").symlink_to(root / "sample.bin")
+            result = forensics.build_recovery_manifest(str(root))
+            manifest = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest["files_hashed"], 1)
+            self.assertEqual(manifest["files"][0]["sha256"], hashlib.sha256(payload).hexdigest())
+            self.assertEqual(manifest["files"][0]["path"], "sample.bin")
+            self.assertFalse(manifest["truncated"])
+
     def test_unknown_job_is_not_retrievable(self):
         self.assertIsNone(forensics.get_image_job("0" * 32))
 
