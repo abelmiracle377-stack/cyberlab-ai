@@ -43,7 +43,7 @@ function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).to
 
 export default function ForensicsRecoveryPage(){
   const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
-  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null);
+  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
   async function pairKali(){
@@ -63,6 +63,25 @@ export default function ForensicsRecoveryPage(){
     const response=await fetch("http://127.0.0.1:8765/forensics/devices",{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
     const data=await response.json();if(!response.ok)throw new Error(data.error||"Device inventory failed.");
     setDevices((data.devices||[]).flatMap((item:BlockDevice)=>[item,...((item as any).children||[])]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
+  }
+  async function runForemost(){
+    if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before starting recovery.");return;}
+    setBridgeBusy(true);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/foremost",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,outputDirectory:recoveryParent,confirmationImage:confirmImage})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Foremost recovery could not start.");
+      setRecoveryJob(data.job);setBridgeMessage(data.note||"Foremost recovery started.");
+      const id=data.job.id;
+      const poll=async():Promise<void>=>{
+        const status=await fetch("http://127.0.0.1:8765/forensics/jobs/"+id,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
+        const payload=await status.json();if(!status.ok)throw new Error(payload.error||"Could not read recovery status.");
+        setRecoveryJob(payload.job);
+        if(payload.job.state==="running"){await new Promise(resolve=>setTimeout(resolve,3000));return poll();}
+        setBridgeMessage(payload.job.message||"Recovery job finished.");
+      };
+      void poll().catch(e=>setBridgeMessage(e instanceof Error?e.message:"Could not monitor recovery job."));
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Foremost recovery failed.");}
+    finally{setBridgeBusy(false);}
   }
   async function acquireImage(){
     if(!selectedDevice||confirmationSource!==selectedDevice){setBridgeMessage("Select a source and retype its exact device path to confirm.");return;}
@@ -110,6 +129,16 @@ export default function ForensicsRecoveryPage(){
           {job&&<div className="malware-kv"><span>Acquisition job · {job.state}</span><strong>{job.message}</strong></div>}
           {job?.image&&<div className="malware-kv"><span>Image output</span><strong style={{overflowWrap:"anywhere"}}>{job.image}</strong></div>}
           {job?.map&&<div className="malware-kv"><span>ddrescue map</span><strong style={{overflowWrap:"anywhere"}}>{job.map}</strong></div>}
+          {job?.state==="completed"&&<div style={{marginTop:18,borderTop:"1px solid var(--line)",paddingTop:14}}>
+            <h3>Recover files from the forensic image</h3>
+            <p>Foremost runs a fixed, allow-listed set of document, archive and picture signatures against the completed image. Output is written to a new folder on a drive separate from the original source.</p>
+            <label className="vault-field"><span>Existing output parent directory on backup drive</span><input value={recoveryParent} onChange={e=>setRecoveryParent(e.target.value)} placeholder="/mnt/backup"/></label>
+            <label className="vault-field"><span>Retype exact acquired image path</span><input value={confirmImage} onChange={e=>setConfirmImage(e.target.value)} placeholder={job.image}/></label>
+            <button className="network-run" type="button" onClick={runForemost} disabled={bridgeBusy||confirmImage!==job.image}>Run Foremost on image</button>
+            {recoveryJob&&<div className="malware-kv"><span>Foremost job · {recoveryJob.state}</span><strong>{recoveryJob.message}</strong></div>}
+            {recoveryJob?.output&&<div className="malware-kv"><span>Recovered files folder</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.output}</strong></div>}
+            <p className="network-note">For PhotoRec's interactive recovery workflow, open another Kali terminal and run: <code>sudo photorec {job.image}</code>. In PhotoRec, select the image/partition, use File Opt to select formats, and choose an output folder on the backup drive. Do not choose the source drive.</p>
+          </div>}
         </>}
         {bridgeMessage&&<p role="status" className="network-note">{bridgeMessage}</p>}
         <p className="network-note">Safety checks: exact source-path confirmation, existing destination directory, destination filesystem verification, different-device ancestry check, no overwrite, and a dedicated ddrescue map file. The original device is never used as the output target. Keep both drives connected until the job finishes.</p>
