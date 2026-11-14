@@ -28,7 +28,8 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR/config/package-lists" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab" "$WORK_DIR/config/hooks/normal"
 
 cp "${ROOT_DIR}/os/profiles/${PROFILE}.packages" "$WORK_DIR/config/package-lists/cyberlab.list.chroot"
-cp -a "${ROOT_DIR}/kali-companion" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai/"\ncp "${ROOT_DIR}/scripts/os/cyberlab-menu.py" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab/menu.py"
+cp -a "${ROOT_DIR}/kali-companion" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai/"
+cp "${ROOT_DIR}/scripts/os/cyberlab-menu.py" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab/menu.py"
 cp "${ROOT_DIR}/scripts/os/live-configure.chroot" "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
 chmod 0755 "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
 
