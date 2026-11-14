@@ -36,7 +36,7 @@ export default function KaliConnectionPage() {
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [telemetryBusy,setTelemetryBusy]=useState(false);
   const [toolInventory,setToolInventory]=useState<ToolInventory|null>(null);
-  const [toolsBusy,setToolsBusy]=useState(false);\n  const [taskPrompt,setTaskPrompt]=useState("");\n  const [taskPlan,setTaskPlan]=useState<TaskPlan|null>(null);\n  const [planning,setPlanning]=useState(false);
+  const [toolsBusy,setToolsBusy]=useState(false);\n  const [taskPrompt,setTaskPrompt]=useState("");\n  const [taskPlan,setTaskPlan]=useState<TaskPlan|null>(null);\n  const [planning,setPlanning]=useState(false);\n  const [researchAction,setResearchAction]=useState("domain");\n  const [researchValue,setResearchValue]=useState("");\n  const [researchBusy,setResearchBusy]=useState(false);\n  const [researchResult,setResearchResult]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -55,7 +55,7 @@ export default function KaliConnectionPage() {
     finally{setChecking(false);}
   }
 
-  async function createTaskPlan(event:React.FormEvent){\n    event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);\n    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}\n    catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}\n    finally{setPlanning(false);}\n  }\n\n  async function refreshToolInventory(){
+  async function createTaskPlan(event:React.FormEvent){\n    event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);\n    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}\n    catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}\n    finally{setPlanning(false);}\n  }\n\n  async function runPassiveResearch(event:React.FormEvent){\n    event.preventDefault();setResearchBusy(true);setError("");setResearchResult(null);\n    try{const response=await fetch("http://127.0.0.1:8765/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}\n    catch(e){setError(e instanceof Error?e.message:"Passive research failed.");}\n    finally{setResearchBusy(false);}\n  }\n\n  async function refreshToolInventory(){
     setToolsBusy(true);setError("");
     try{const response=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
     catch(e){setError(e instanceof Error?e.message:"Tool inventory request failed.");}
@@ -173,7 +173,7 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>4. SOC host telemetry</h2>
+        <h2>7. SOC host telemetry</h2>
         <p>Read-only health snapshot from the paired Kali machine. It does not collect usernames, process names, command lines, files or network payloads.</p>
         <button className="report-download" type="button" onClick={refreshTelemetry} disabled={telemetryBusy}>{telemetryBusy?<><LoaderCircle size={14}/> Reading local metrics…</>:<><Activity size={14}/> Refresh host telemetry</>}</button>
         {snapshot&&<div className="network-results">
@@ -192,7 +192,7 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>7. Run an authorised Nmap assessment</h2>
+        <h2>8. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
