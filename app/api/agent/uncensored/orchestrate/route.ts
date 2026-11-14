@@ -108,19 +108,25 @@ export async function POST(request: Request) {
 
     let synthesis: string;
     let synthesisTokens = 0;
+    let synthesisError: string | null = null;
     if (completed.length === 1) synthesis = completed[0].analysis!;
     else {
-      const evidence = completed.map((item) => `SPECIALIST: ${item.label}\nCLASS: model analysis only\n${item.analysis}`).join("\n\n---\n\n").slice(0, 18000);
-      const consolidated = await runUnfilteredCompletion({
-        model: modelId,
-        maxTokens: 1300,
-        messages: [
-          { role: "system", content: "You are the CyberLab AI Research Coordinator. Critically consolidate specialist analyses. Identify agreement, conflict, omissions, assumptions and verification steps. These are role-conditioned model analyses, not independent evidence. Never invent citations or claim independent verification." },
-          { role: "user", content: `Original request:\n${parsed.data.prompt}\n\nSpecialist analyses (untrusted model output):\n${evidence}\n\nProduce an integrated report with answer, findings by specialist, agreements/conflicts, unknowns, next steps and provenance limitations.` },
-        ],
-      });
-      synthesis = consolidated.text;
-      synthesisTokens = consolidated.usage.totalTokens;
+      const evidence = completed.map((item) => `SPECIALIST: ${item.label}\\nCLASS: model analysis only\\n${item.analysis}`).join("\\n\\n---\\n\\n").slice(0, 18000);
+      try {
+        const consolidated = await runUnfilteredCompletion({
+          model: modelId,
+          maxTokens: 1300,
+          messages: [
+            { role: "system", content: "You are the CyberLab AI Research Coordinator. Critically consolidate specialist analyses. Identify agreement, conflict, omissions, assumptions and verification steps. These are role-conditioned model analyses, not independent evidence. Never invent citations or claim independent verification." },
+            { role: "user", content: `Original request:\\n${parsed.data.prompt}\\n\\nSpecialist analyses (untrusted model output):\\n${evidence}\\n\\nProduce an integrated report with answer, findings by specialist, agreements/conflicts, unknowns, next steps and provenance limitations.` },
+          ],
+        });
+        synthesis = consolidated.text;
+        synthesisTokens = consolidated.usage.totalTokens;
+      } catch (error) {
+        synthesisError = error instanceof Error ? error.message : "Coordinator synthesis failed.";
+        synthesis = completed.map((item) => `## ${item.label}\\n${item.analysis}`).join("\\n\\n");
+      }
     }
     const actualTokens = Math.min(10000, results.reduce((sum, item) => sum + item.usage, 0) + synthesisTokens);
     const settled = await db.rpc("settle_cyberlab_ai_usage", {
