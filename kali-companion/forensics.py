@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -150,6 +151,56 @@ def get_image_job(job_id: str) -> dict | None:
         return {"job": dict(record)}
 
 
+def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dict:
+    """Hash regular recovered files without following symlinks; cap work for safety."""
+    root = Path(output_directory).resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("Recovery output directory is not available.")
+    entries = []
+    total_bytes = 0
+    truncated = False
+    for current, directories, filenames in os.walk(root, followlinks=False):
+        directories[:] = [name for name in directories if not (Path(current) / name).is_symlink()]
+        for filename in filenames:
+            path = Path(current) / filename
+            if path.is_symlink() or not path.is_file():
+                continue
+            if len(entries) >= max_files:
+                truncated = True
+                break
+            digest = hashlib.sha256()
+            size = 0
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    size += len(chunk)
+            entries.append({
+                "path": path.relative_to(root).as_posix(),
+                "size_bytes": size,
+                "sha256": digest.hexdigest(),
+            })
+            total_bytes += size
+        if truncated:
+            break
+    manifest = {
+        "schema": "cyberlab.recovery-manifest.v1",
+        "algorithm": "SHA-256",
+        "files_hashed": len(entries),
+        "total_bytes_hashed": total_bytes,
+        "truncated": truncated,
+        "files": entries,
+    }
+    manifest_path = root / "cyberlab-recovery-manifest.json"
+    fd = os.open(str(manifest_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+        handle.write("\\n")
+    return {"path": str(manifest_path), **{key: manifest[key] for key in ("files_hashed", "total_bytes_hashed", "truncated")}}
+
+
 def start_foremost_recovery(image_job_id: str, output_directory: str, confirmation_image: str) -> dict:
     with _jobs_lock:
         source_job = _jobs.get(image_job_id)
@@ -183,10 +234,15 @@ def start_foremost_recovery(image_job_id: str, output_directory: str, confirmati
         try:
             command = ["foremost", "-t", "jpg,png,gif,bmp,tif,doc,pdf,xls,ppt,zip", "-i", str(image), "-o", str(output)]
             completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            manifest = build_recovery_manifest(str(output)) if completed.returncode == 0 and output.is_dir() else None
             with _jobs_lock:
                 record["state"] = "completed" if completed.returncode == 0 else "failed"
                 record["return_code"] = completed.returncode
-                record["message"] = "Foremost finished. Review its audit.txt and validate every recovered file." if completed.returncode == 0 else (completed.stderr or "Foremost failed.")[-1200:]
+                if completed.returncode == 0:
+                    record["manifest"] = manifest
+                    record["message"] = "Foremost finished. SHA-256 manifest created; review audit.txt and validate every recovered file."
+                else:
+                    record["message"] = (completed.stderr or "Foremost failed.")[-1200:]
                 record["finished_at"] = time.time()
         except Exception as exc:
             with _jobs_lock:
