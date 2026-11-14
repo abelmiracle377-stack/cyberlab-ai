@@ -67,6 +67,16 @@ class CaseExportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             case_export.verify_case_archive("../outside")
 
+    def test_verification_rejects_symlinked_export(self):
+        case_export.export_case_bundle(self.report)
+        folder = self.root / self.report["case"]["case_id"]
+        target = folder / "case.html"
+        target.unlink()
+        target.symlink_to(folder / "case.json")
+        result = case_export.verify_case_archive(self.report["case"]["case_id"])
+        self.assertFalse(result["verified"])
+        self.assertTrue(any("regular file" in item for item in result["errors"]))
+
     def test_verification_reports_missing_archive(self):
         result = case_export.verify_case_archive("c" * 32)
         self.assertEqual(result["status"], "failed")
