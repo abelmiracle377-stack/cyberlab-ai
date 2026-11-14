@@ -112,16 +112,31 @@ export default function AgentPage() {
     setBusy(true);
     try {
       if (model.startsWith("uncensored:")) {
-        const response = await fetch("/api/agent/uncensored", {
+        const specialistMode = executionMode === "specialists";
+        const response = await fetch(specialistMode ? "/api/agent/uncensored/orchestrate" : "/api/agent/uncensored", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: text, model: model.slice("uncensored:".length), history: messages.filter((item) => item.content.trim()).slice(-12) }),
+          body: JSON.stringify({
+            prompt: text,
+            model: model.slice("uncensored:".length),
+            history: messages.filter((item) => item.content.trim()).slice(-12),
+            maxSpecialists: 4,
+          }),
         });
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error || "Unfiltered model request failed.");
         }
-        const output = await response.text();
+        let output = "";
+        if (specialistMode) {
+          const data = await response.json();
+          const specialistSummary = Array.isArray(data.results)
+            ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\\n")).join("\\n\\n")
+            : "";
+          output = [data.synthesis || "The coordinator could not produce a synthesis.", specialistSummary, data.note || ""].filter(Boolean).join("\\n\\n---\\n\\n");
+        } else {
+          output = await response.text();
+        }
         setMessages((current) => {
           const next = [...current];
           next[next.length - 1] = { role: "assistant", content: output || "The model returned an empty response." };

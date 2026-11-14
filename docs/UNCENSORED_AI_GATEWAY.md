@@ -17,7 +17,7 @@ This is the first additive hosted-inference slice. It introduces a provider-inde
 
 ```env
 CYBERLAB_UNCENSORED_API_KEY=server-side-secret
-CYBERLAB_UNCENSORED_BASE_URL=https://api.uncensoredllm.ai/v1
+CYBERLAB_UNCENSORED_BASE_URL=https://your-provider.example/v1
 CYBERLAB_UNCENSORED_MODELS=[{"id":"provider/model-id","name":"Unfiltered model","contextLength":32768}]
 ```
 
@@ -32,6 +32,6 @@ Apply `supabase/migrations/202611140001_ai_usage_gateway.sql` after the existing
 - This first slice supports non-streaming text completion only; it does not yet expose tool calling, image/audio input, or specialist orchestration through this provider.
 - The model catalogue is operator-configured. It does not automatically certify that a model is uncensored, safe, high quality, or actually available from the upstream provider.
 - The default provider URL and OpenAI-compatible protocol must be verified against the selected provider account before enabling it.
-- A failed request is settled at zero actual tokens. Provider-side billing may still occur for failed/aborted requests; reconcile provider invoices separately.
+- Abandoned usage reservations older than 20 minutes are expired during the next reservation for that user. A failed request is settled at zero recorded tokens; provider-side billing may still occur for failed/aborted requests, so reconcile provider invoices separately.
 - The monthly allowance is a starter platform control, not a financial billing meter. Add provider-cost accounting, team budgets, concurrency limits, abuse controls, and retention policy before public scale.
 - The route keeps ordinary platform authentication, subscription and execution authorisation boundaries. The model's response style is not a permission grant to operate on third-party systems.

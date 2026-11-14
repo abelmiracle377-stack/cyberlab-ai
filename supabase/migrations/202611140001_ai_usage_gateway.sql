@@ -38,6 +38,12 @@ begin
 
   perform pg_advisory_xact_lock(hashtextextended(p_user_id::text || date_trunc('month', now())::text, 0));
 
+  update public.ai_usage_events
+  set status = 'failed', actual_tokens = 0, settled_at = now()
+  where user_id = p_user_id
+    and status = 'reserved'
+    and created_at < now() - interval '20 minutes';
+
   select coalesce(sum(
     case when status = 'reserved' then reserved_tokens
          when status = 'completed' then actual_tokens

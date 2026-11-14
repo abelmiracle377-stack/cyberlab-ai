@@ -19,11 +19,12 @@ export function getUnfilteredModels(): Array<{ id: string; name: string; provide
       if (!entry || typeof entry !== "object") return [];
       const item = entry as { id?: unknown; name?: unknown; contextLength?: unknown };
       if (typeof item.id !== "string" || !/^[a-zA-Z0-9._:/-]{3,180}$/.test(item.id)) return [];
+      if (item.contextLength !== undefined && (typeof item.contextLength !== "number" || !Number.isInteger(item.contextLength) || item.contextLength < 256 || item.contextLength > 2000000)) return [];
       return [{
         id: `uncensored:${item.id}`,
         name: typeof item.name === "string" ? item.name.slice(0, 120) : item.id,
         provider: "Unfiltered inference",
-        contextLength: typeof item.contextLength === "number" && Number.isFinite(item.contextLength) ? item.contextLength : null,
+        contextLength: typeof item.contextLength === "number" ? item.contextLength : null,
         openWeight: true,
         uncensored: true,
       }];
