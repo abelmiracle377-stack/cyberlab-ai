@@ -2,7 +2,7 @@ name: CyberLab CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/model-intelligence-workspace]
   pull_request:
     branches: [main]
 
