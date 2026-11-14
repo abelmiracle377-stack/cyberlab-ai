@@ -96,9 +96,9 @@ export default function KaliConnectionPage() {
     setCaseBusy(true);setError("");setCaseReport(null);
     try{
       const serviceReport=evidenceReport;
-      const artifactReport=artifactReport;
-      if(!serviceReport&&!artifactReport)throw new Error("Analyse network or artifact evidence before creating a case.");
-      const response=await fetch("http://127.0.0.1:8765/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport})});
+      const artifactEvidenceReport=artifactReport;
+      if(!serviceReport&&!artifactEvidenceReport)throw new Error("Analyse network or artifact evidence before creating a case.");
+      const response=await fetch("http://127.0.0.1:8765/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport:artifactEvidenceReport})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not create the investigation case.");
       setCaseReport(data as Record<string,unknown>);
