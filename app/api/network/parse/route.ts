@@ -60,10 +60,15 @@ export async function POST(request: Request) {
         protocol: portAttr.protocol || "unknown",
         port: Number(portAttr.portid),
         state: stateAttr.state || "unknown",
-        reason: stateAttr.reason || "",\n        reason_ttl: stateAttr.reason_ttl || null,
+        reason: stateAttr.reason || "",
+        reason_ttl: stateAttr.reason_ttl || null,
         service: serviceAttr.name || "unknown",
         product: serviceAttr.product || "",
-        version: serviceAttr.version || "",\n        extra_info: serviceAttr.extrainfo || "",\n        tunnel: serviceAttr.tunnel || "",\n        method: serviceAttr.method || "",\n        confidence: serviceAttr.conf || null,
+        version: serviceAttr.version || "",
+        extra_info: serviceAttr.extrainfo || "",
+        tunnel: serviceAttr.tunnel || "",
+        method: serviceAttr.method || "",
+        confidence: serviceAttr.conf || null,
       };
     }).filter((item) => Number.isInteger(item.port) && item.port > 0 && item.port <= 65535);
     return { index: index + 1, status, status_reason: attributes(statusTag || "").reason || "", addresses, hostnames, ports };
