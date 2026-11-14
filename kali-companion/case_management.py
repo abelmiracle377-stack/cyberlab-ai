@@ -37,12 +37,20 @@ def _source_digest(report):
 
 def _append_audit(case_id, created_at, sources):
     LEDGER_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    directory_info = os.lstat(LEDGER_DIR)
+    if stat.S_ISLNK(directory_info.st_mode) or not stat.S_ISDIR(directory_info.st_mode):
+        raise ValueError("The case audit directory must be a regular directory, not a symlink or special file.")
     try:
         os.chmod(LEDGER_DIR, 0o700)
     except OSError:
         pass
-    fd = os.open(str(LEDGER_FILE), os.O_CREAT | os.O_APPEND | os.O_RDWR, 0o600)
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("This platform does not support safe no-follow audit ledger access.")
+    flags = os.O_CREAT | os.O_APPEND | os.O_RDWR | os.O_NOFOLLOW
+    fd = os.open(str(LEDGER_FILE), flags, 0o600)
     try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("The case audit ledger must be a regular file.")
         with os.fdopen(fd, "a+", encoding="utf-8") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             handle.seek(0, os.SEEK_END)
