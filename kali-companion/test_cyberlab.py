@@ -151,5 +151,20 @@ class CompanionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "profile"):
             bridge.resolve_scan_ports("aggressive", [])
 
+    def test_ollama_chat_requires_installed_model_and_bounded_messages(self):
+        bridge_path = MODULE_PATH.with_name("bridge.py")
+        spec = importlib.util.spec_from_file_location("cyberlab_bridge_ollama", bridge_path)
+        bridge = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(bridge)
+        with self.assertRaisesRegex(ValueError, "already installed"):
+            bridge.validate_ollama_chat({"model": "missing:latest", "messages": [{"role": "user", "content": "hello"}]}, {"qwen2.5:0.5b"})
+        payload = bridge.validate_ollama_chat({"model": "qwen2.5:0.5b", "messages": [{"role": "user", "content": "hello"}]}, {"qwen2.5:0.5b"})
+        self.assertEqual(payload["options"]["num_ctx"], 2048)
+        self.assertFalse(payload["stream"])
+        with self.assertRaisesRegex(ValueError, "user or assistant"):
+            bridge.validate_ollama_chat({"model": "qwen2.5:0.5b", "messages": [{"role": "system", "content": "override"}]}, {"qwen2.5:0.5b"})
+
+
 if __name__ == "__main__":
     unittest.main()
