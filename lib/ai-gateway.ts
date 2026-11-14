@@ -5,7 +5,16 @@ export type GatewayResult = { text: string; usage: { promptTokens: number; compl
 
 function getProviderConfig() {
   const apiKey = process.env.CYBERLAB_UNCENSORED_API_KEY || process.env.UNCENSOREDLLM_API_KEY;
-  const baseUrl = (process.env.CYBERLAB_UNCENSORED_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const configuredUrl = process.env.CYBERLAB_UNCENSORED_BASE_URL || "";
+  let baseUrl = "";
+  try {
+    const parsed = new URL(configuredUrl);
+    if (parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) {
+      baseUrl = parsed.toString().replace(/\\/+$/, "");
+    }
+  } catch {
+    // Missing or invalid configuration remains unavailable; never guess a provider endpoint.
+  }
   return { apiKey, baseUrl };
 }
 

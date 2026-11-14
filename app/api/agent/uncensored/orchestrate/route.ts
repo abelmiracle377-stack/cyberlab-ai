@@ -11,6 +11,7 @@ export const maxDuration = 90;
 const schema = z.object({
   model: z.string().min(3).max(180).regex(/^[a-zA-Z0-9._:/-]+$/),
   prompt: z.string().trim().min(1).max(8000),
+  history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(8000) })).max(12).optional().default([]),
   maxSpecialists: z.number().int().min(1).max(4).default(4),
 });
 
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     const parsed = schema.safeParse(body.value);
     if (!parsed.success) return NextResponse.json({ error: "Invalid model, prompt or specialist limit." }, { status: 400 });
     modelId = parsed.data.model;
+    if (parsed.data.history.reduce((sum, item) => sum + item.content.length, 0) > 24000) return NextResponse.json({ error: "Conversation history is too large." }, { status: 413 });
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
             "Return key observations, uncertainties, risks, recommendations and verification steps.",
             `SPECIALIST: ${assignment.label}. ${assignment.instructions} Selection reason: ${assignment.reason}`,
           ].join("\n") },
+          ...parsed.data.history,
           { role: "user", content: parsed.data.prompt },
         ],
       });
