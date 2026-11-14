@@ -35,6 +35,7 @@ ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app", "http://localhost:3000", "h
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
+research_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -235,7 +236,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/plan":
                 return self.send_json(200, plan_task(data.get("prompt", "")), origin)
             if path == "/research":
-                return self.send_json(200, run_research_action(data), origin)
+                if not research_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A passive research request is already running."}, origin)
+                try:
+                    return self.send_json(200, run_research_action(data), origin)
+                finally:
+                    research_lock.release()
             if path == "/forensics/fsstat":
                 result = inspect_partition_filesystem(
                     str(data.get("imageJobId", "")),
