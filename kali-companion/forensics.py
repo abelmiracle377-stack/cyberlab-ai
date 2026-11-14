@@ -151,6 +151,40 @@ def get_image_job(job_id: str) -> dict | None:
         return {"job": dict(record)}
 
 
+
+def inspect_image_filesystem(image_job_id: str, confirmation_image: str) -> dict:
+    """Probe a completed acquisition image for filesystem signatures without mounting it."""
+    with _jobs_lock:
+        source_job = _jobs.get(image_job_id)
+        source_job = dict(source_job) if source_job else None
+    if not source_job or source_job.get("state") != "completed":
+        raise ValueError("Choose a completed CyberLab ddrescue acquisition job.")
+    image = Path(str(source_job.get("image", ""))).resolve(strict=True)
+    if not image.is_file() or image.is_symlink():
+        raise ValueError("The acquired image is not a regular image file.")
+    if confirmation_image.strip() != str(image):
+        raise ValueError("Retype the exact acquired image path to confirm inspection.")
+    if not shutil.which("blkid"):
+        raise ValueError("blkid is required for read-only filesystem probing. Install util-linux.")
+    result = subprocess.run(
+        ["blkid", "-p", "-o", "export", str(image)],
+        capture_output=True, text=True, timeout=20, check=False,
+    )
+    if result.returncode not in (0, 2):
+        raise ValueError((result.stderr or "Filesystem probe failed.")[:500])
+    fields = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in {"TYPE", "USAGE", "VERSION", "LABEL", "UUID", "PTTYPE", "PART_ENTRY_TYPE", "PART_ENTRY_NAME"}:
+            fields[key.lower()] = value[:256]
+    return {
+        "image": str(image),
+        "recognized": result.returncode == 0 and bool(fields),
+        "metadata": fields,
+        "method": "blkid low-level signature probe",
+        "note": "Read-only signature probe only. The image was not mounted or modified. A missing signature does not prove that the image contains no recoverable data.",
+    }
+
 def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dict:
     """Hash regular recovered files without following symlinks; cap work for safety."""
     if type(max_files) is not int or not 1 <= max_files <= 5000:
