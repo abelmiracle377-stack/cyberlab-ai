@@ -36,6 +36,17 @@ def _ancestors(device: str) -> set[str]:
     return {line.strip() for line in output.splitlines() if line.strip()}
 
 
+def _find_inventory_device(nodes: list[dict], source: str) -> dict | None:
+    """Return only an exact disk/partition entry from lsblk's current inventory."""
+    for node in nodes:
+        if node.get("path") == source and node.get("type") in {"disk", "part"}:
+            return node
+        match = _find_inventory_device(node.get("children") or [], source)
+        if match:
+            return match
+    return None
+
+
 def _mount_device(path: Path) -> tuple[str, str]:
     raw = _run(["findmnt", "--json", "--target", str(path), "--output", "SOURCE,TARGET,MAJ:MIN"])
     filesystems = json.loads(raw).get("filesystems", [])
@@ -62,6 +73,9 @@ def _validate_acquisition(source: str, destination_dir: str, filename: str) -> t
     if not dest_majmin or not mountpoint:
         raise ValueError("Could not verify the destination filesystem device.")
     tree = json.loads(_run(["lsblk", "--json", "-o", "PATH,TYPE,MOUNTPOINTS", str(source_path)]))
+    inventory_entry = _find_inventory_device(tree.get("blockdevices", []), str(source_path))
+    if not inventory_entry:
+        raise ValueError("Choose a whole disk or partition present in the current lsblk inventory; mapper, loop and other virtual devices are not accepted.")
     def mounted(node):
         if any(point for point in (node.get("mountpoints") or [])):
             return True
