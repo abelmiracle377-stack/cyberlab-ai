@@ -24,6 +24,18 @@ mkdir -p "$WORK_ROOT" "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 WORK_ROOT="$(cd "$WORK_ROOT" && pwd)"
 WORK_DIR="${WORK_ROOT}/${PROFILE}"
+# This script runs as root: only clean a dedicated profile directory, never a
+# filesystem root, the repository, or a directory that contains build outputs.
+if [[ "$WORK_ROOT" == "/" || "$WORK_ROOT" == "$ROOT_DIR" || "$WORK_ROOT" == "$OUTPUT_DIR" ]]; then
+  echo "Unsafe build work directory: $WORK_ROOT" >&2
+  exit 2
+fi
+case "$OUTPUT_DIR/" in
+  "$WORK_DIR/"*)
+    echo "Output directory must not be inside the profile work directory: $OUTPUT_DIR" >&2
+    exit 2
+    ;;
+esac
 if [[ -e "${OUTPUT_DIR}/${OUTPUT_NAME}" ]]; then
   echo "Refusing to overwrite existing ISO: ${OUTPUT_DIR}/${OUTPUT_NAME}" >&2
   exit 2
