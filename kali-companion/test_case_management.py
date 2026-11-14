@@ -48,6 +48,42 @@ class CaseManagementTests(unittest.TestCase):
     def artifact_report(self):
         return self.artifact
 
+    def test_read_only_verifier_accepts_valid_hash_chain(self):
+        case_management.build_case_report(self.service)
+        before = self.ledger.read_bytes()
+        result = case_management.verify_audit_ledger()
+        self.assertTrue(result["verified"])
+        self.assertEqual(result["record_count"], 1)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(self.ledger.read_bytes(), before)
+
+    def test_read_only_verifier_detects_content_tampering(self):
+        case_management.build_case_report(self.service)
+        self.ledger.write_text(self.ledger.read_text().replace('"event":"case_created"', '"event":"altered"'))
+        result = case_management.verify_audit_ledger()
+        self.assertFalse(result["verified"])
+        self.assertTrue(any("unsupported audit event" in error or "record hash mismatch" in error for error in result["errors"]))
+
+    def test_read_only_verifier_rejects_malformed_and_blank_lines(self):
+        self.ledger.write_text('not-json\\n\\n')
+        result = case_management.verify_audit_ledger()
+        self.assertFalse(result["verified"])
+        self.assertTrue(any("malformed JSON" in error for error in result["errors"]))
+        self.assertTrue(any("blank records" in error for error in result["errors"]))
+
+    def test_read_only_verifier_rejects_symlink_ledger(self):
+        outside = self.directory / "outside.jsonl"
+        outside.write_text("{}\\n")
+        self.ledger.symlink_to(outside)
+        result = case_management.verify_audit_ledger()
+        self.assertFalse(result["verified"])
+        self.assertTrue(any("symlink" in error or "regular" in error for error in result["errors"]))
+
+    def test_read_only_verifier_reports_missing_ledger(self):
+        result = case_management.verify_audit_ledger()
+        self.assertFalse(result["verified"])
+        self.assertIn("missing", result["errors"][0].lower())
+
     def test_modified_ledger_is_detected_before_append(self):
         case_management.build_case_report(self.service)
         content = self.ledger.read_text()
