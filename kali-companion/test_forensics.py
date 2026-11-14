@@ -150,6 +150,17 @@ Slot      Start        End          Length       Description
             with self.assertRaisesRegex(ValueError, "completed"):
                 forensics.inspect_image_partitions("d" * 32, "/tmp/disk.img")
 
+    def test_foremost_rejects_symlinked_acquisition_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "real.img"
+            target.write_bytes(b"image")
+            alias = Path(directory) / "alias.img"
+            alias.symlink_to(target)
+            job_id = "f" * 32
+            with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(alias), "source": "/dev/sda"}}):
+                with self.assertRaisesRegex(ValueError, "symbolic link"):
+                    forensics.start_foremost_recovery(job_id, directory, str(alias))
+
     def test_partition_analysis_uses_read_only_mmls_on_confirmed_image(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "disk.img"
