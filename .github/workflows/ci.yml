@@ -45,3 +45,4 @@ jobs:
           chmod +x scripts/os/*.sh
           ./scripts/os/test-build-definition.sh
           ./scripts/os/test-live-build-definition.sh
+          bash -n scripts/os/boot-smoke-test.sh
