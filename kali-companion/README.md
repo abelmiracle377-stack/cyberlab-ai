@@ -7,7 +7,7 @@ A command-line research companion for Kali Linux and other Linux distributions. 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-sudo apt update && sudo apt install -y figlet chafa nmap
+sudo apt update && sudo apt install -y figlet chafa nmap gddrescue testdisk foremost ntfs-3g
 python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py --help
 ```
@@ -80,7 +80,7 @@ HTTP timeout defaults to 12 seconds and can be changed with `--timeout 20`. JSON
 The optional bridge pairs the CyberLab website with Nmap running on your Kali machine. It binds only to `127.0.0.1` and does not open an inbound internet port or require a VPS/tunnel.
 
 1. Install Nmap: `sudo apt update && sudo apt install -y nmap`.
-2. Start the bridge from the repository root: `python3 kali-companion/bridge.py`.
+2. Start the bridge from the repository root: `sudo python3 kali-companion/bridge.py` when you need disk imaging. Running the bridge as root grants it elevated local privileges; keep the token private and stop the bridge when finished.
 3. Copy the pairing token printed in the terminal into CyberLab → Kali Connection → Connect to Kali.
 4. Keep the terminal open while using the dashboard. Press `Ctrl+C` in that terminal to stop the bridge.
 
@@ -89,3 +89,32 @@ The token is generated locally and stored at `~/.config/cyberlab/bridge-token` w
 The dashboard can request a single-target TCP connect scan with light service-version detection on up to 100 selected TCP ports (custom comma-separated lists or ranges such as `22,80,443` or `1-100`). Results distinguish open, closed and filtered ports when determinable; filtered means no definitive response was possible. The bridge uses fixed Nmap arguments; it does not accept arbitrary command-line options, NSE scripts, exploit checks, credentials, stealth/evasion flags, or shell commands. Each run requires an exact target confirmation, an authorisation reference and an explicit ownership/permission confirmation. Loopback, link-local, multicast and reserved targets are blocked. Private LAN targets may be assessed only when they are in your authorised scope.
 
 Browser access to localhost can depend on browser private-network access policies. If the browser blocks the request, check its site permissions and keep the official CyberLab origin unchanged. The bridge is optional; existing CLI commands continue to work without it.
+
+
+## Digital forensics and recovery
+
+The dashboard's **Digital Forensics → File & Picture Recovery** module can use this bridge to:
+- List block devices using `lsblk` (inventory only; no mounting or writes).
+- Require source-device confirmation and reject mounted source partitions.
+- Verify that the image destination is a mounted filesystem on a different physical device.
+- Create a new image and ddrescue map file without overwriting existing output.
+- Run Foremost against a completed CyberLab acquisition image and write results to a new folder on the backup drive.
+
+Install the tools with:
+
+```bash
+sudo apt update
+sudo apt install -y gddrescue testdisk foremost ntfs-3g
+```
+
+For best practice, boot Kali from a live USB, do not boot the installed OS on the affected disk, and do not mount the source partitions. Connect a separate backup drive, then pair the dashboard with the bridge. The acquisition endpoint is allow-listed; it does not accept arbitrary shell commands. It uses GNU ddrescue's first non-scraping pass (`ddrescue -f -n`) and retains the map file so the acquisition can be assessed. Do not disconnect either drive while the job is active.
+
+After imaging, the dashboard can launch a bounded Foremost recovery job against the image. PhotoRec remains an interactive recovery option in a separate Kali terminal:
+
+```bash
+sudo photorec /mnt/backup/cyberlab-disk.img
+```
+
+In PhotoRec, select the image/partition, configure File Opt for the required formats, and choose a recovery directory on the backup drive. NTFS undelete and extundelete workflows are not automated by the dashboard in this release; they require filesystem-specific assessment and an unmounted source. Do not run them against the original disk as a substitute for imaging.
+
+A hosted Vercel deployment cannot directly access the browser user's physical disks. Physical-drive access is provided only by the paired local Kali companion, or by a future self-hosted CyberLab OS runner on the same machine with the required OS permissions and tools.
