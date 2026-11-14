@@ -149,3 +149,12 @@ After pairing, open **Kali Connection → Describe any authorised cybersecurity 
 - Produces a reviewable workflow and explicitly reports that no execution has started.
 
 The current planner is deterministic and intentionally conservative. It does not infer targets from organisation names, scan broad networks, treat a named host as authorised, or turn pasted text into shell commands. A question without a target can still receive a useful classification and a list of what is needed next. A lab challenge can be analysed from its prompt, but host-specific conclusions require the assigned lab target and evidence from that environment. The next development stage is to add individual fixed workflows behind this plan, beginning with low-impact information gathering and service discovery.
+
+
+### Evidence-led service and vulnerability-reference analysis
+
+After a successful local service-identification run, choose **Correlate evidence with NIST CVEs**. The authenticated `POST /evidence/report` endpoint accepts the service-identification result (or a previously collected Nmap result) and builds a bounded report containing observed open ports, protocol/service labels, banners, product/version metadata and TLS certificate details. It uses at most three distinct product/version terms for passive NIST NVD keyword searches, with up to ten records per term.
+
+CVE matches are explicitly labelled **unverified reference candidates**. The report does not convert a keyword match, open port, banner or CVSS score into a vulnerability finding. It records lookup failures, confidence context, evidence limitations and safe verification steps. Service names alone do not trigger broad CVE searches when no product/version was identified. No new target connection, exploit check, authentication or configuration change is performed during correlation.
+
+The report is only as reliable as the evidence supplied to it. Confirm exact vendor, product, version, configuration and patch state against the asset owner and official vendor advisories before making a finding. This stage is evidence correlation, not an automated vulnerability verdict.
