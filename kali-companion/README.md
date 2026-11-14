@@ -100,7 +100,8 @@ The dashboard's **Digital Forensics → File & Picture Recovery** module can use
 - Create a new image and ddrescue map file without overwriting existing output.
 - Run Foremost against a completed CyberLab acquisition image and write results to a new folder on the backup drive.
 - Probe a completed image with `blkid` to report recognised filesystem signatures without mounting or modifying the image.
-- Enumerate allocated partition boundaries in a completed image with Sleuth Kit `mmls`, without mounting, repairing or modifying it.\n- Inspect filesystem metadata for a selected discovered partition with Sleuth Kit `fsstat`; the bridge revalidates the partition start against `mmls` before running a fixed read-only command.
+- Enumerate allocated partition boundaries in a completed image with Sleuth Kit `mmls`, without mounting, repairing or modifying it.
+- Inspect filesystem metadata for a selected discovered partition with Sleuth Kit `fsstat`; the bridge revalidates the partition start against `mmls` before running a fixed read-only command.
 
 Install the tools with:
 
