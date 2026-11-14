@@ -48,8 +48,16 @@ export default function SolidityLabPage() {
   const [generationError, setGenerationError] = useState("");
   const [compilerStatus, setCompilerStatus] = useState<{available:boolean;version:string|null;message:string}|null>(null);
   const [compilerBusy, setCompilerBusy] = useState(false);
-  const [compileResult, setCompileResult] = useState<{status:string;version:string;diagnostics:{severity:string;code:string;message:string;file:string;line:number|null}[];contracts:{name:string;file:string;abi:unknown[];bytecode:string}[];note:string}|null>(null);
+  const [compileResult, setCompileResult] = useState<{status:string;version:string;diagnostics:{severity:string;code:string;message:string;file:string;line:number|null}[];contracts:{name:string;file:string;abi:unknown[];bytecode:string}[];source_files?:number;dependency_packages?:number;note:string}|null>(null);
   const [compilerError, setCompilerError] = useState("");
+  const [projectFilesJson, setProjectFilesJson] = useState(JSON.stringify([
+    { path: "src/MyToken.sol", content: 'pragma solidity ^0.8.20; import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol"; contract MyToken is ERC20 { constructor() ERC20("MyToken", "MTK") { _mint(msg.sender, 1_000_000 * 10 ** decimals()); } }' },
+    { path: "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol", content: "// Paste the exact ERC20.sol source from your locally verified OpenZeppelin release." },
+    { path: "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol", content: "// Paste the exact IERC20.sol source from the same release." },
+    { path: "lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol", content: "// Paste the exact IERC20Metadata.sol source from the same release." },
+    { path: "lib/openzeppelin-contracts/contracts/utils/Context.sol", content: "// Paste the exact Context.sol source from the same release." }
+  ], null, 2));
+  const [dependencyLockJson, setDependencyLockJson] = useState("[]");
   const [testRunnerStatus, setTestRunnerStatus] = useState<{available:boolean;message:string;runtime?:string;image?:string}|null>(null);
   const [testFilesJson, setTestFilesJson] = useState(JSON.stringify([
     { path: "src/Vault.sol", content: "pragma solidity ^0.8.20; contract Vault { uint256 public value; function set(uint256 next) external { value = next; } }" },
@@ -120,6 +128,28 @@ export default function SolidityLabPage() {
       setCompileResult(data);
       setCompilerStatus({ available: true, version: data.version, message: "Local solc compiler completed." });
     } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local compilation failed."); }
+    finally { setCompilerBusy(false); }
+  }
+
+  async function compileProjectLocally() {
+    if (language !== "Solidity") { setCompilerError("The local project compiler currently supports Solidity only."); return; }
+    setCompilerBusy(true); setCompilerError(""); setCompileResult(null);
+    try {
+      const files = JSON.parse(projectFilesJson);
+      const dependencyLock = JSON.parse(dependencyLockJson);
+      if (!Array.isArray(files) || !Array.isArray(dependencyLock)) throw new Error("Project files and dependency lock must both be JSON arrays.");
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+      if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/solidity/project/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ files, dependencyLock, expectedCompilerVersion: compilerVersion.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Local project compilation failed.");
+      setCompileResult(data);
+      setCompilerStatus({ available: true, version: data.version, message: "Local multi-file project compiler completed." });
+    } catch (cause) { setCompilerError(cause instanceof Error ? cause.message : "Local project compilation failed."); }
     finally { setCompilerBusy(false); }
   }
 
@@ -239,12 +269,20 @@ export default function SolidityLabPage() {
           <div className="solidity-actions">
             <small>{compilerStatus ? (compilerStatus.available ? "solc " + compilerStatus.version + " detected" : compilerStatus.message) : (language !== "Solidity" ? "Local solc is available for Solidity projects only." : "Check whether a local solc compiler is installed.")}</small>
             <button type="button" onClick={checkLocalCompiler} disabled={compilerBusy || language !== "Solidity"}><Search size={13}/>{compilerBusy ? "Working…" : "Check local solc"}</button>
-            <button type="button" onClick={compileLocally} disabled={compilerBusy || language !== "Solidity" || !source.trim()}><Code2 size={13}/>{compilerBusy ? "Compiling…" : "Compile locally"}</button>
+            <button type="button" onClick={compileLocally} disabled={compilerBusy || language !== "Solidity" || !source.trim()}><Code2 size={13}/>{compilerBusy ? "Compiling…" : "Compile single file"}</button>
+          </div>
+          <div className="solidity-editor">
+            <label htmlFor="solidity-project-files">Multi-file project JSON</label>
+            <textarea id="solidity-project-files" value={projectFilesJson} onChange={(event) => setProjectFilesJson(event.target.value)} rows={10} spellCheck={false} />
+            <label htmlFor="solidity-dependency-lock">Pinned OpenZeppelin dependency lock JSON</label>
+            <textarea id="solidity-dependency-lock" value={dependencyLockJson} onChange={(event) => setDependencyLockJson(event.target.value)} rows={6} spellCheck={false} />
+            <small>Local-only compilation. Supply every imported source file and a SHA-256 lock entry for every OpenZeppelin source. Verify the release commit and source independently; hashes only confirm that submitted files match the submitted lock.</small>
+            <button type="button" onClick={compileProjectLocally} disabled={compilerBusy || language !== "Solidity"}><Code2 size={13}/>{compilerBusy ? "Compiling…" : "Compile multi-file project"}</button>
           </div>
           {compilerError && <div className="agent-error"><AlertTriangle size={14}/>{compilerError}</div>}
           {compileResult && <div className="solidity-limitations">
             <h3>Compiler result: {compileResult.status.toUpperCase()} · solc {compileResult.version}</h3>
-            <p>{compileResult.contracts.length} contract artifact(s) · {compileResult.diagnostics.length} diagnostic(s)</p>
+            <p>{compileResult.contracts.length} contract artifact(s) · {compileResult.diagnostics.length} diagnostic(s){compileResult.source_files ? ` · ${compileResult.source_files} source files · ${compileResult.dependency_packages || 0} locked dependencies` : ""}</p>
             {compileResult.diagnostics.map((item,index)=><article className="solidity-finding" key={item.code+"-"+index}><div className="solidity-finding-head"><span>{item.code || "COMPILER"} · {item.file || "Contract.sol"}</span><b>{item.severity.toUpperCase()}</b></div><pre>{item.message}</pre></article>)}
             {compileResult.contracts.map(item=><div key={item.file+"-"+item.name}><strong>{item.name}</strong><p>ABI entries: {item.abi.length} · Bytecode characters: {item.bytecode.length}</p></div>)}
             <p>{compileResult.note}</p>
