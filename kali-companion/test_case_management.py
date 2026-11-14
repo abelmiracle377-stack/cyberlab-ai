@@ -42,7 +42,7 @@ class CaseManagementTests(unittest.TestCase):
 
     def test_second_case_chains_to_first_record(self):
         first = case_management.build_case_report(self.service)
-        second = case_management.build_case_report(self.artifact_report() if False else None, self.artifact)
+        second = case_management.build_case_report(artifact_report=self.artifact)
         self.assertEqual(second["audit_trail"]["previous_record_hash"], first["audit_trail"]["record_hash"])
 
     def artifact_report(self):
