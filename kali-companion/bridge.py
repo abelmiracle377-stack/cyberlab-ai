@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from forensics import get_image_job, inspect_image_filesystem, list_block_devices, start_foremost_recovery, start_image_acquisition
+from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -215,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect"}:
+        if path not in {"/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -224,6 +224,12 @@ class Handler(BaseHTTPRequestHandler):
             if length < 2 or length > MAX_BODY:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
+            if path == "/forensics/partitions":
+                result = inspect_image_partitions(
+                    str(data.get("imageJobId", "")),
+                    str(data.get("confirmationImage", "")),
+                )
+                return self.send_json(200, result, origin)
             if path == "/forensics/inspect":
                 result = inspect_image_filesystem(
                     str(data.get("imageJobId", "")),
