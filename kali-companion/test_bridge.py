@@ -253,3 +253,62 @@ class SolidityTestRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(FileNotFoundError, "sandbox missing"):
                 bridge.run_solidity_tests(valid)
         run.assert_not_called()
+
+
+class SolidityProjectCompilerValidationTests(unittest.TestCase):
+    def test_validates_multi_file_project_and_exact_openzeppelin_file_hashes(self):
+        import hashlib
+        dependency_path = "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"
+        dependency_content = "pragma solidity ^0.8.20; interface IERC20 {}"
+        digest = hashlib.sha256(dependency_content.encode()).hexdigest()
+        files = [
+            {"path": "src/Token.sol", "content": 'pragma solidity ^0.8.20; import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; contract Token {}'},
+            {"path": dependency_path, "content": dependency_content},
+        ]
+        lock = [{
+            "name": "@openzeppelin/contracts", "version": "5.4.0",
+            "source": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+            "commit": "a" * 40, "files": [{"path": dependency_path, "sha256": digest}],
+        }]
+        sources, remappings = bridge._validate_solidity_project(files, lock)
+        self.assertIn(dependency_path, sources)
+        self.assertEqual(remappings, ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"])
+
+    def test_rejects_dependency_hash_mismatch_and_unpinned_library_files(self):
+        dependency_path = "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"
+        files = [
+            {"path": "src/Token.sol", "content": "contract Token {}"},
+            {"path": dependency_path, "content": "interface IERC20 {}"},
+        ]
+        lock = [{
+            "name": "@openzeppelin/contracts", "version": "5.4.0",
+            "source": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+            "commit": "b" * 40, "files": [{"path": dependency_path, "sha256": "0" * 64}],
+        }]
+        with self.assertRaisesRegex(ValueError, "integrity check"):
+            bridge._validate_solidity_project(files, lock)
+        with self.assertRaisesRegex(ValueError, "covered by the dependency lock"):
+            bridge._validate_solidity_project(files, [])
+
+    def test_rejects_path_traversal_and_unresolved_or_unapproved_imports(self):
+        with self.assertRaisesRegex(ValueError, "Only flat"):
+            bridge._validate_solidity_project([
+                {"path": "src/../Token.sol", "content": "contract Token {}"}
+            ], [])
+        with self.assertRaisesRegex(ValueError, "Unsupported import path"):
+            bridge._validate_solidity_project([
+                {"path": "src/Token.sol", "content": 'import "https://example.com/Token.sol"; contract Token {}'}
+            ], [])
+        with self.assertRaisesRegex(ValueError, "does not resolve"):
+            bridge._validate_solidity_project([
+                {"path": "src/Token.sol", "content": 'import "./Missing.sol"; contract Token {}'}
+            ], [])
+
+    def test_project_compiler_checks_manifest_before_invoking_solc(self):
+        with patch.object(bridge, "solidity_compiler_status") as status, patch.object(bridge.subprocess, "run") as run:
+            with self.assertRaisesRegex(ValueError, "Unsupported import path"):
+                bridge.compile_solidity_project([
+                    {"path": "src/Token.sol", "content": 'import "untrusted/Token.sol"; contract Token {}'}
+                ])
+        status.assert_not_called()
+        run.assert_not_called()

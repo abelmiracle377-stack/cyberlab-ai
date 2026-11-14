@@ -296,12 +296,96 @@ def solidity_compiler_status() -> dict:
         return {"available": False, "compiler": "solc", "version": None, "message": "The installed solc executable could not be queried."}
 
 
-def compile_solidity(source: str, expected_version: str = "") -> dict:
-    """Compile one import-free source via fixed solc standard JSON, with strict resource bounds."""
-    if not isinstance(source, str) or not source.strip() or len(source.encode("utf-8")) > MAX_SOLIDITY_SOURCE:
-        raise ValueError("Provide Solidity source between 1 and 100,000 UTF-8 bytes.")
-    if re.search(r"\bimport\b", source):
-        raise ValueError("Imports are not supported in this first local compiler stage. Resolve dependencies explicitly before compiling.")
+
+def _validate_solidity_project(files: object, dependency_lock: object) -> tuple[dict[str, str], list[str]]:
+    """Validate an in-memory multi-file project and its operator-pinned local dependency manifest."""
+    import hashlib
+    import posixpath
+
+    if not isinstance(files, list) or not 1 <= len(files) <= 100:
+        raise ValueError("Provide 1–100 Solidity project files.")
+    sources: dict[str, str] = {}
+    total = 0
+    for item in files:
+        if not isinstance(item, dict) or set(item) != {"path", "content"}:
+            raise ValueError("Each project file must contain only path and content.")
+        path, content = item["path"], item["content"]
+        if not isinstance(path, str) or not isinstance(content, str):
+            raise ValueError("Project paths and file contents must be text.")
+        valid_source = bool(re.fullmatch(r"(?:src|test)/[A-Za-z0-9_.-]+\.sol", path))
+        valid_dependency = bool(re.fullmatch(r"lib/openzeppelin-contracts/contracts/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.sol", path))
+        if not (valid_source or valid_dependency) or any(part in {"", ".", ".."} for part in path.split("/")):
+            raise ValueError("Only flat src/*.sol, test/*.sol and nested OpenZeppelin contracts paths are accepted.")
+        if path in sources:
+            raise ValueError("Duplicate project paths are not accepted.")
+        size = len(content.encode("utf-8"))
+        if not content.strip() or size > 100000:
+            raise ValueError("Each project file must contain 1–100,000 UTF-8 bytes.")
+        total += size
+        if total > 500000:
+            raise ValueError("Combined Solidity project exceeds 500,000 UTF-8 bytes.")
+        sources[path] = content
+    if not any(path.startswith("src/") for path in sources):
+        raise ValueError("Include at least one src/*.sol contract.")
+
+    if not isinstance(dependency_lock, list) or len(dependency_lock) > 5:
+        raise ValueError("Dependency lock must be an array containing at most five reviewed dependencies.")
+    remappings: list[str] = []
+    locked_paths: set[str] = set()
+    for dependency in dependency_lock:
+        if not isinstance(dependency, dict) or set(dependency) != {"name", "version", "source", "commit", "files"}:
+            raise ValueError("Each dependency lock entry must contain name, version, source, commit and files.")
+        if dependency["name"] != "@openzeppelin/contracts":
+            raise ValueError("Only the explicitly supported @openzeppelin/contracts package is enabled in this stage.")
+        if not isinstance(dependency["version"], str) or not re.fullmatch(r"5\.\d+\.\d+", dependency["version"]):
+            raise ValueError("OpenZeppelin Contracts must use an exact 5.x.y version.")
+        if dependency["source"] != "https://github.com/OpenZeppelin/openzeppelin-contracts":
+            raise ValueError("OpenZeppelin dependency source must be its canonical GitHub repository.")
+        if not isinstance(dependency["commit"], str) or not re.fullmatch(r"[a-f0-9]{40}", dependency["commit"]):
+            raise ValueError("OpenZeppelin dependency lock must include a full 40-character lowercase commit.")
+        entries = dependency["files"]
+        if not isinstance(entries, list) or not entries:
+            raise ValueError("OpenZeppelin dependency lock must include SHA-256 entries for every dependency source file.")
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+                raise ValueError("Dependency file lock entries must contain only path and sha256.")
+            path, digest = entry["path"], entry["sha256"]
+            if not isinstance(path, str) or not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+                raise ValueError("Dependency file paths and SHA-256 digests are invalid.")
+            if not path.startswith("lib/openzeppelin-contracts/contracts/") or path in locked_paths:
+                raise ValueError("Dependency file path is outside the approved package root or duplicated.")
+            if path not in sources:
+                raise ValueError("A locked dependency file is missing from the supplied project: " + path)
+            actual = hashlib.sha256(sources[path].encode("utf-8")).hexdigest()
+            if not hmac.compare_digest(actual, digest):
+                raise ValueError("Dependency integrity check failed for " + path)
+            locked_paths.add(path)
+        remappings.append("@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/")
+    supplied_dependency_paths = {path for path in sources if path.startswith("lib/")}
+    if supplied_dependency_paths != locked_paths:
+        raise ValueError("Every supplied dependency source must be covered by the dependency lock; no unpinned library files are accepted.")
+
+    import_pattern = re.compile(r"\bimport\s+(?:(?:[^'\";]*?)\s+from\s+)?['\"]([^'\"]+)['\"]\s*;")
+    for importer, content in sources.items():
+        for imported in import_pattern.findall(content):
+            if imported.startswith("@openzeppelin/contracts/"):
+                resolved = "lib/openzeppelin-contracts/contracts/" + imported[len("@openzeppelin/contracts/"):]
+            elif imported.startswith("./") or imported.startswith("../"):
+                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(importer), imported))
+                if resolved.startswith("../") or resolved.startswith("/") or resolved not in sources:
+                    raise ValueError("Relative import does not resolve to a supplied project file: " + imported)
+                if importer.startswith("lib/") and not resolved.startswith("lib/openzeppelin-contracts/contracts/"):
+                    raise ValueError("OpenZeppelin dependency imports must remain inside the pinned package root.")
+            else:
+                raise ValueError("Unsupported import path. Use project-relative imports or the pinned @openzeppelin/contracts package.")
+            if resolved not in sources:
+                raise ValueError("Import does not resolve to a supplied, locked source file: " + imported)
+    return sources, remappings
+
+
+def compile_solidity_project(files: object, dependency_lock: object = None, expected_version: str = "") -> dict:
+    """Compile a bounded multi-file project with explicit local source and SHA-256-locked OpenZeppelin inputs."""
+    sources, remappings = _validate_solidity_project(files, dependency_lock if dependency_lock is not None else [])
     if expected_version and not re.fullmatch(r"\d+\.\d+\.\d+", expected_version):
         raise ValueError("Expected compiler version must use the exact x.y.z format.")
     status = solidity_compiler_status()
@@ -314,8 +398,11 @@ def compile_solidity(source: str, expected_version: str = "") -> dict:
     try:
         standard_input = {
             "language": "Solidity",
-            "sources": {"Contract.sol": {"content": source}},
-            "settings": {"outputSelection": {"*": {"*": ["abi", "evm.bytecode.object"]}}},
+            "sources": {path: {"content": content} for path, content in sources.items()},
+            "settings": {
+                "remappings": remappings,
+                "outputSelection": {"*": {"*": ["abi", "evm.bytecode.object"]}},
+            },
         }
         payload = json.dumps(standard_input, separators=(",", ":")).encode("utf-8")
         command = [shutil.which("solc"), "--standard-json"]
@@ -323,8 +410,6 @@ def compile_solidity(source: str, expected_version: str = "") -> dict:
             "input": payload, "capture_output": True, "timeout": SOLIDITY_RUNTIME,
             "check": False, "env": {"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8"},
         }
-        # Apply conservative Linux process limits where supported. This does not
-        # replace an OS sandbox; users should compile only source they trust.
         if os.name == "posix":
             try:
                 import resource
@@ -372,13 +457,22 @@ def compile_solidity(source: str, expected_version: str = "") -> dict:
             "status": "failed" if errors or completed.returncode else "compiled",
             "compiler": "solc", "version": status["version"],
             "diagnostics": diagnostics, "contracts": contracts,
-            "note": "Compilation is not a security audit, test run, deployment or proof of correctness. Imports and external dependency resolution are disabled. Source was processed locally by the paired companion.",
+            "source_files": len(sources), "dependency_packages": len(dependency_lock or []),
+            "note": "Compilation is local and uses only the supplied in-memory files. OpenZeppelin file integrity is checked against the supplied SHA-256 lock entries; repository/commit provenance must be independently verified by the operator. No network fetch, package install, deployment or signing occurs. Compilation is not a security audit or test run.",
         }
     except subprocess.TimeoutExpired as exc:
-        raise TimeoutError("Solidity compilation exceeded the 30-second limit.") from exc
+        raise TimeoutError("Solidity project compilation exceeded the 30-second limit.") from exc
     finally:
         solidity_lock.release()
 
+
+def compile_solidity(source: str, expected_version: str = "") -> dict:
+    """Backward-compatible single-file compiler entry point."""
+    result = compile_solidity_project(
+        [{"path": "src/Contract.sol", "content": source}], [], expected_version
+    )
+    result["note"] = "Single-file local compilation; imports are not supported by this compatibility endpoint. " + result["note"]
+    return result
 
 
 def solidity_test_runner_status() -> dict:
@@ -576,13 +670,13 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/scan", "/ollama/chat", "/solidity/compile", "/solidity/tests/run"}:
+        if path not in {"/scan", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else SOLIDITY_TEST_BODY if path == "/solidity/tests/run" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
+            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else SOLIDITY_TEST_BODY if path == "/solidity/tests/run" else MAX_SOLIDITY_PROJECT_BODY if path == "/solidity/project/compile" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
             if length < 2 or length > limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
