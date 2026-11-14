@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CHAIN_REGISTRY } from "@/lib/chain-registry";
+import { CHAIN_REGISTRY, getChainById } from "@/lib/chain-registry";
 import { ArrowLeft, ShieldCheck, Code2, Search, AlertTriangle, FileCode2, Sparkles, LoaderCircle } from "lucide-react";
 
 type Model = { id: string; name: string; provider: string; openWeight: boolean };
@@ -41,6 +41,9 @@ export default function SolidityLabPage() {
   const [language, setLanguage] = useState("Solidity");
   const [compilerVersion, setCompilerVersion] = useState("0.8.20");
   const [targetChain, setTargetChain] = useState("EVM-compatible (specify network in requirements)");
+  const [walletNetwork, setWalletNetwork] = useState<{chainId:number;name:string;known:boolean}|null>(null);
+  const [walletNetworkBusy, setWalletNetworkBusy] = useState(false);
+  const [walletNetworkError, setWalletNetworkError] = useState("");
   const [standard, setStandard] = useState("OpenZeppelin; ERC-20");
   const [projectName, setProjectName] = useState("MyContract");
   const [requirements, setRequirements] = useState("");
@@ -84,6 +87,29 @@ export default function SolidityLabPage() {
     });
     return () => { active = false; };
   }, []);
+
+  async function readWalletNetwork() {
+    setWalletNetworkBusy(true);
+    setWalletNetworkError("");
+    try {
+      const provider = (window as Window & { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
+      if (!provider) throw new Error("No injected EVM wallet provider was detected in this browser.");
+      // eth_chainId is a read-only provider request; this does not request accounts or initiate signing.
+      const result = await provider.request({ method: "eth_chainId" });
+      if (typeof result !== "string" || !/^0x[0-9a-fA-F]+$/.test(result)) {
+        throw new Error("The wallet returned an invalid chain ID response.");
+      }
+      const chainId = Number.parseInt(result, 16);
+      if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error("The wallet returned an unsupported chain ID.");
+      const known = getChainById(chainId);
+      setWalletNetwork({ chainId, name: known?.name ?? "Unlisted EVM network", known: Boolean(known) });
+    } catch (cause) {
+      setWalletNetwork(null);
+      setWalletNetworkError(cause instanceof Error ? cause.message : "Unable to read wallet network.");
+    } finally {
+      setWalletNetworkBusy(false);
+    }
+  }
 
   function loadBlockchainBlueprint(kind: "erc721" | "erc1155" | "amm") {
     if (kind === "erc721") {
@@ -234,6 +260,20 @@ export default function SolidityLabPage() {
           <h1>Smart-contract engineering</h1>
           <p>Generate contract projects from instructions and review existing Solidity source. Build, test and deployment integrations are separate validation stages.</p>
         </div>
+
+        <section className="solidity-results" aria-labelledby="wallet-network-title">
+          <div className="solidity-result-head">
+            <div><div className="agent-overline">READ-ONLY WALLET DISCOVERY</div><h2 id="wallet-network-title">Check wallet network</h2></div>
+            <ShieldCheck size={18} />
+          </div>
+          <p className="agent-disclaimer">Reads only the active injected wallet provider's chain ID. It does not request wallet accounts, connect a session, switch networks, sign messages or send transactions.</p>
+          <div className="solidity-actions">
+            <small>{walletNetwork ? `Chain ID ${walletNetwork.chainId} · ${walletNetwork.name}` : "No wallet network has been read in this session."}</small>
+            <button type="button" onClick={readWalletNetwork} disabled={walletNetworkBusy}><Search size={13}/>{walletNetworkBusy ? "Reading…" : "Read wallet chain ID"}</button>
+          </div>
+          {walletNetwork && <div className="network-results"><strong>{walletNetwork.known ? "Known registry entry" : "Unlisted network"}</strong><p>Provider-reported chain ID: {walletNetwork.chainId}. {walletNetwork.known ? "Compare this value with the intended deployment network before proceeding." : "Do not assume this network is supported; verify its chain ID and documentation independently."}</p></div>}
+          {walletNetworkError && <div className="agent-error"><AlertTriangle size={14}/>{walletNetworkError}</div>}
+        </section>
 
         <section className="solidity-results" aria-labelledby="contract-generator-title">
           <div className="solidity-result-head">
