@@ -61,11 +61,14 @@ def calculate_entropy(data: bytes) -> float:
     return round(-sum((count / len(data)) * math.log2(count / len(data)) for count in counts.values()), 3)
 
 def triage_file(path: Path) -> dict:
-    data = path.read_bytes()
-    if not data:
-        raise ValueError("Selected file is empty.")
+    # Read at most one byte beyond the limit so oversized inputs cannot exhaust
+    # memory before the size check is reached.
+    with path.open("rb") as source:
+        data = source.read(MAX_FILE_BYTES + 1)
     if len(data) > MAX_FILE_BYTES:
         raise ValueError("File exceeds the 10 MB limit.")
+    if not data:
+        raise ValueError("Selected file is empty.")
     strings = re.findall(rb"[\x20-\x7e]{5,}", data)
     decoded = [item.decode("latin-1", errors="replace") for item in strings]
     matches = [(name, value) for name, pattern in INDICATORS.items() for value in decoded if pattern.search(value)]
@@ -82,7 +85,10 @@ def triage_file(path: Path) -> dict:
     }
 
 def parse_nmap_xml(path: Path) -> dict:
-    raw = path.read_bytes()
+    # Bound the read itself, rather than allocating an arbitrarily large XML
+    # report and checking its size only after it is already in memory.
+    with path.open("rb") as source:
+        raw = source.read(MAX_XML_BYTES + 1)
     if len(raw) > MAX_XML_BYTES:
         raise ValueError("Nmap XML exceeds the 2 MB limit.")
     if re.search(rb"<!DOCTYPE|<!ENTITY", raw, re.I):
