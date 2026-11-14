@@ -36,6 +36,19 @@ The local test runner is optional and fails closed if rootless Podman or the con
 
 The repository now includes self-contained capped-NFT and constant-product AMM teaching fixtures with focused Foundry test contracts. CI checks their source paths and import graphs, but CI does not execute the Solidity tests: a real run still requires the operator's local, preloaded Foundry image and compatible compiler. The fixtures are deliberately incomplete examples, not production contracts or evidence of security.
 
+## Curated EVM chain registry
+
+A read-only, source-linked chain metadata registry is exposed at GET /api/network/registry and suggested in the Solidity Lab target-chain field. The initial curated set includes Ethereum Mainnet/Sepolia, Base Mainnet/Base Sepolia, Arbitrum One/Nova/Sepolia, OP Mainnet and Polygon PoS. Each entry records its chain ID, network type, native gas-token symbol, primary documentation source and review date.
+
+The registry deliberately contains no RPC endpoints, DEX router addresses, factory addresses or claims that a protocol is deployed on a given chain. Chain IDs are metadata, not proof of the connected network. Any future wallet integration must query `eth_chainId` from the active provider and compare it to the intended chain before preparing a transaction; user-facing transaction previews and explicit wallet approval remain mandatory. The registry is a reviewed starting set, not an exhaustive or automatically updated chain catalogue.
+
+Primary references:
+- Ethereum JSON-RPC documentation: https://ethereum.org/developers/docs/apis/json-rpc/
+- Base `eth_chainId` documentation: https://docs.base.org/base-chain/api-reference/ethereum-json-rpc-api/eth_chainId
+- Arbitrum chain information: https://developer.arbitrum.io/chain-info
+- Ethereum network-switching EIP example for OP Mainnet chain ID: https://eips.ethereum.org/EIPS/eip-5094
+- Polygon network setup documentation: https://docs.polygon.technology/tools/dApp-development/common-tools/remix/
+
 ## ERC-1155 multi-token fixture
 
 The repository also includes an ERC-1155-style educational project under examples/solidity/erc1155. It demonstrates per-ID supply caps, owner-controlled single and batch minting, operator approvals, safe single/batch transfers and pause controls. Its tests cover unauthorized minting, batch balance reads, operator transfers, pause enforcement, receiver callbacks and state rollback after rejected batch minting.
