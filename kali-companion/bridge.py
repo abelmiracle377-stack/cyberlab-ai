@@ -29,6 +29,7 @@ from service_enumeration import enumerate_services
 from evidence_analysis import build_service_report, validate_report_payload
 from artifact_analysis import build_artifact_report, validate_artifact_payload
 from case_management import build_case_report, validate_case_payload
+from case_export import export_case_bundle
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -44,6 +45,7 @@ service_lock = threading.Lock()
 evidence_lock = threading.Lock()
 artifact_lock = threading.Lock()
 case_lock = threading.Lock()
+case_export_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -230,13 +232,13 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body_limit = 131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else MAX_BODY)
+            body_limit = 600000 if path == "/evidence/case/export" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else MAX_BODY))
             if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
@@ -251,6 +253,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, run_research_action(data), origin)
                 finally:
                     research_lock.release()
+            if path == "/evidence/case/export":
+                case_report = data.get("caseReport")
+                if not case_export_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A case export is already being written."}, origin)
+                try:
+                    return self.send_json(200, export_case_bundle(case_report), origin)
+                finally:
+                    case_export_lock.release()
             if path == "/evidence/case":
                 service_evidence, artifact_evidence = validate_case_payload(data)
                 if not case_lock.acquire(blocking=False):
