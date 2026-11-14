@@ -19,25 +19,56 @@ const signatures = {
 function findBytes(data:Uint8Array, pattern:number[], from=0):number {
   outer: for(let i=from;i<=data.length-pattern.length;i++){for(let j=0;j<pattern.length;j++)if(data[i+j]!==pattern[j])continue outer;return i;}return -1;
 }
-function carve(data:Uint8Array):Recovered[]{
+const MAX_SIGNATURE_OFFSETS = 10000;
+function findOffsets(data:Uint8Array, patterns:number[][]):number[]{
+  const offsets:number[]=[];
+  for(const pattern of patterns){
+    let cursor=0;
+    while(offsets.length<MAX_SIGNATURE_OFFSETS){
+      const found=findBytes(data,pattern,cursor);
+      if(found<0)break;
+      offsets.push(found);
+      cursor=found+1;
+    }
+    if(offsets.length>=MAX_SIGNATURE_OFFSETS)break;
+  }
+  return offsets.sort((a,b)=>a-b);
+}
+function pairSignatures(data:Uint8Array, starts:number[][], endPattern:number[], kind:Kind):Recovered[]{
+  const startOffsets=findOffsets(data,starts),endOffsets=findOffsets(data,[endPattern]);
   const found:Recovered[]=[];
-  const add=(kind:Kind,start:number,end:number)=>{if(end>start&&end<=data.length)found.push({id:`${kind}-${start}-${end}`,kind,start,end,size:end-start,name:`recovered-${String(found.length+1).padStart(3,"0")}.${kind==="JPEG"?"jpg":kind.toLowerCase()}`});};
-  let cursor=0;
-  while(cursor<data.length){
-    const jpg=findBytes(data,signatures.jpegStart,cursor), png=findBytes(data,signatures.pngStart,cursor);
-    const gifA=findBytes(data,signatures.gif87,cursor),gifB=findBytes(data,signatures.gif89,cursor);
-    const gif=gifA<0?gifB:gifB<0?gifA:Math.min(gifA,gifB);
-    const pdf=findBytes(data,signatures.pdf,cursor);
-    const candidates=[{kind:"JPEG" as Kind,start:jpg},{kind:"PNG" as Kind,start:png},{kind:"GIF" as Kind,start:gif},{kind:"PDF" as Kind,start:pdf}].filter(x=>x.start>=0).sort((a,b)=>a.start-b.start);
-    if(!candidates.length)break;
-    const item=candidates[0];let end=-1;
-    if(item.kind==="JPEG"){const p=findBytes(data,signatures.jpegEnd,item.start+3);if(p>=0)end=p+2;}
-    if(item.kind==="PNG"){const p=findBytes(data,signatures.pngEnd,item.start+8);if(p>=0)end=p+signatures.pngEnd.length;}
-    if(item.kind==="GIF"){const p=data.indexOf(0x3b,item.start+6);if(p>=0)end=p+1;}
-    if(item.kind==="PDF"){const p=findBytes(data,signatures.pdfEnd,item.start+5);if(p>=0)end=p+signatures.pdfEnd.length;}
-    if(end>item.start){add(item.kind,item.start,end);cursor=end;}else cursor=item.start+1;
+  let endIndex=0;
+  for(let startIndex=0;startIndex<startOffsets.length&&endIndex<endOffsets.length;startIndex++){
+    const start=startOffsets[startIndex];
+    while(endIndex<endOffsets.length&&endOffsets[endIndex]<start+starts[0].length)endIndex++;
+    if(endIndex>=endOffsets.length)break;
+    const end=endOffsets[endIndex]+endPattern.length;
+    if(end>start&&end<=data.length){
+      found.push({id:`${kind}-${start}-${end}`,kind,start,end,size:end-start,name:`recovered-${String(found.length+1).padStart(3,"0")}.${kind==="JPEG"?"jpg":kind.toLowerCase()}`});
+      while(startIndex+1<startOffsets.length&&startOffsets[startIndex+1]<end)startIndex++;
+      endIndex++;
+    }
   }
   return found;
+}
+function carve(data:Uint8Array):Recovered[]{
+  const candidates=[
+    ...pairSignatures(data,[signatures.jpegStart],signatures.jpegEnd,"JPEG"),
+    ...pairSignatures(data,[signatures.pngStart],signatures.pngEnd,"PNG"),
+    ...pairSignatures(data,[signatures.gif87,signatures.gif89],[0x3b],"GIF"),
+    ...pairSignatures(data,[signatures.pdf],signatures.pdfEnd,"PDF")
+  ].sort((a,b)=>a.start-b.start||a.end-b.end);
+  const accepted:Recovered[]=[];
+  let lastEnd=-1;
+  for(const item of candidates){
+    if(item.start<lastEnd)continue;
+    const index=accepted.length;
+    item.name=`recovered-${String(index+1).padStart(3,"0")}.${item.kind==="JPEG"?"jpg":item.kind.toLowerCase()}`;
+    item.id=`${item.kind}-${item.start}-${item.end}`;
+    accepted.push(item);
+    lastEnd=item.end;
+  }
+  return accepted;
 }
 function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).toFixed(1)} KB`:`${(n/1024/1024).toFixed(2)} MB`;}
 
