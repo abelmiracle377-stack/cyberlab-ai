@@ -48,6 +48,27 @@ class ForensicsSafetyTests(unittest.TestCase):
             self.assertEqual(manifest["files"][0]["path"], "sample.bin")
             self.assertFalse(manifest["truncated"])
 
+    def test_recovery_manifest_marks_file_limit_as_truncated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "recovered"
+            root.mkdir()
+            (root / "a.bin").write_bytes(b"a")
+            (root / "b.bin").write_bytes(b"b")
+            result = forensics.build_recovery_manifest(str(root), max_files=1)
+            manifest = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest["files_hashed"], 1)
+            self.assertTrue(manifest["truncated"])
+
+    def test_recovery_manifest_never_overwrites_existing_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "recovered"
+            root.mkdir()
+            manifest_path = root / "cyberlab-recovery-manifest.json"
+            manifest_path.write_text("preserve", encoding="utf-8")
+            with self.assertRaises(FileExistsError):
+                forensics.build_recovery_manifest(str(root))
+            self.assertEqual(manifest_path.read_text(encoding="utf-8"), "preserve")
+
     def test_unknown_job_is_not_retrievable(self):
         self.assertIsNone(forensics.get_image_job("0" * 32))
 
