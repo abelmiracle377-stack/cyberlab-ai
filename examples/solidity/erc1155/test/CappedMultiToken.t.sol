@@ -63,6 +63,21 @@ contract CappedMultiTokenTest {
         assert(values[0] == 4 && values[1] == 6);
     }
 
+    function testBatchMintCapFailureRollsBackEveryId() public {
+        CappedMultiTokenFixture token = new CappedMultiTokenFixture();
+        token.setCap(20, 5);
+        token.setCap(21, 2);
+        uint256[] memory ids = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        ids[0] = 20; ids[1] = 21;
+        amounts[0] = 4; amounts[1] = 3;
+        (bool ok,) = address(token).call(abi.encodeCall(token.mintBatch, (address(this), ids, amounts, "")));
+        assert(!ok);
+        assert(token.totalSupply(20) == 0);
+        assert(token.balanceOf(address(this), 20) == 0);
+        assert(token.totalSupply(21) == 0);
+    }
+
     function testApprovedOperatorCanTransferAndPauseBlocksTransfers() public {
         CappedMultiTokenFixture token = new CappedMultiTokenFixture();
         token.setCap(5, 10);
