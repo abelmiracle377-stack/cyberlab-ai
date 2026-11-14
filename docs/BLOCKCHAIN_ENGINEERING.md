@@ -20,9 +20,9 @@ The blueprints are prompts/specifications for project generation; they are not v
 
 ### Solidity compiler and dependency resolution
 
-The initial local compiler integration accepts one source file and rejects imports. It does not resolve OpenZeppelin or other packages, remappings, linked libraries, multi-file projects, compiler settings files or external dependency graphs. The isolated Foundry runner likewise rejects imports and only accepts flat `src/*.sol` and `test/*.t.sol` files.
+The local companion supports both a backward-compatible single-file, import-free compiler endpoint and a multi-file project compiler. The project compiler accepts bounded flat `src/*.sol` and `test/*.sol` files plus a locally supplied OpenZeppelin Contracts 5.x source closure under `lib/openzeppelin-contracts/contracts/`. Every supplied dependency source must be covered by an exact SHA-256 lock entry; the package name, canonical repository, exact 5.x.y version and full commit identifier are checked. The source is not downloaded or installed. The same dependency manifest and remapping are accepted by the isolated Foundry runner.
 
-Consequently, a contract that imports `@openzeppelin/contracts` cannot yet be compiled or tested end-to-end through these first-stage local integrations. Do not work around this by stripping imports or substituting homemade token implementations in production code. A later dependency-aware stage must pin package versions and integrity, resolve dependencies offline, prevent path traversal, and make the complete compiler input reproducible.
+Only one package is currently supported: `@openzeppelin/contracts`. `forge-std`, arbitrary packages, linked libraries and dependency installation remain unsupported. Hash matching proves consistency with the submitted lock, not that the initial source actually came from the declared Git commit; independently verify the release, commit and files.
 
 ### Static analyzer
 
@@ -32,9 +32,9 @@ It is not Slither, Mythril, Echidna, Medusa, Foundry invariant testing, symbolic
 
 ### Test runner
 
-The local test runner is optional and fails closed if rootless Podman or the configured local image is unavailable. The operator must independently verify and preload a trusted Foundry image whose full reference includes a SHA-256 digest. The bridge does not pull images. The container has no network, drops Linux capabilities and applies resource limits, but this is not a formal security boundary or a substitute for a hardened isolated build host. Imports and external dependencies are not supported in this first stage.
+The local test runner is optional and fails closed if rootless Podman or the configured local image is unavailable. The operator must independently verify and preload a trusted Foundry image whose full reference includes a SHA-256 digest. The bridge does not pull images. The container has no network, drops Linux capabilities and applies resource limits, but this is not a formal security boundary or a substitute for a hardened isolated build host. The image must already contain the Foundry and solc versions required by the project; no compiler can be downloaded in the offline container. The runner supports only the locally supplied, hash-locked OpenZeppelin 5.x package and project-relative imports.
 
-A sample test containing `assert(true)` is only a UI/example fixture; it is not a meaningful contract test and must never be treated as evidence of correctness.
+The repository now includes self-contained capped-NFT and constant-product AMM teaching fixtures with focused Foundry test contracts. CI checks their source paths and import graphs, but CI does not execute the Solidity tests: a real run still requires the operator's local, preloaded Foundry image and compatible compiler. The fixtures are deliberately incomplete examples, not production contracts or evidence of security.
 
 ## NFT engineering review matrix
 
@@ -133,8 +133,7 @@ Never display "secure", "audited", "production-ready", "listed" or "liquidity lo
 
 ## Next implementation stages
 
-1. Multi-file, offline dependency-aware compiler and test workspaces with pinned package integrity.
-2. Meaningful NFT and AMM fixtures, property tests, fuzzing and invariant suites.
+1. Expand NFT and AMM fixtures with adversarial callback, access-control, rounding and stateful invariant coverage; add property/fuzz/invariant execution when the sandbox image and test harness support it.
 3. Verified chain/DEX deployment registry with source references and review dates.
 4. Wallet connection with read-only account/network discovery.
 5. Testnet deployment and liquidity preparation UI with explicit per-transaction wallet approval.
