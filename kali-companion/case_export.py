@@ -85,6 +85,11 @@ def export_case_bundle(report):
     }
     manifest_bytes = _canonical(manifest)
     EXPORT_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Do not silently write an evidence archive through a symlinked export root.
+    # lstat checks the configured root itself without following its final component.
+    root_info = EXPORT_ROOT.lstat()
+    if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
+        raise ValueError("The configured export root must be a regular directory, not a symlink or special file.")
     try:
         os.chmod(EXPORT_ROOT, 0o700)
     except OSError:
