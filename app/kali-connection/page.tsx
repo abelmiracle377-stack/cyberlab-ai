@@ -53,7 +53,7 @@ export default function KaliConnectionPage() {
   const [artifactBusy,setArtifactBusy]=useState(false);
   const [artifactReport,setArtifactReport]=useState<Record<string,unknown>|null>(null);
   const [caseBusy,setCaseBusy]=useState(false);
-  const [caseReport,setCaseReport]=useState<Record<string,unknown>|null>(null);
+  const [caseReport,setCaseReport]=useState<Record<string,unknown>|null>(null);\n  const [ledgerBusy,setLedgerBusy]=useState(false);\n  const [ledgerVerification,setLedgerVerification]=useState<Record<string,unknown>|null>(null);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -136,7 +136,7 @@ export default function KaliConnectionPage() {
     finally{setCaseBusy(false);}
   }
 
-  async function analyseArtifactEvidence(){
+\n  async function verifyAuditLedger(){\n    setLedgerBusy(true);setError("");setLedgerVerification(null);\n    try{const response=await fetch("http://127.0.0.1:8765/evidence/case/ledger/verify",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not verify the audit ledger.");setLedgerVerification(data as Record<string,unknown>);}\n    catch(e){setError(e instanceof Error?e.message:"Could not verify the audit ledger.");}\n    finally{setLedgerBusy(false);}\n  }\n\n  async function analyseArtifactEvidence(){
     setArtifactBusy(true);setError("");setArtifactReport(null);
     try{
       const parsed=JSON.parse(artifactEvidence);
@@ -325,8 +325,8 @@ export default function KaliConnectionPage() {
       {connected&&<section className="kali-panel">
         <h2>10. Unified investigation case</h2>
         <p>Combine completed service/CVE analysis and static artifact/recovery analysis into one provenance report. The local audit ledger records evidence digests and case metadata, not raw samples, banners or recovered contents.</p>
-        <button className="report-download" type="button" onClick={createInvestigationCase} disabled={caseBusy||(!evidenceReport&&!artifactReport)}>{caseBusy?<><LoaderCircle size={14}/> Creating case…</>:<><FileSearch size={14}/> Create unified case report</>}</button>
-        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><button className="report-download" type="button" onClick={exportInvestigationCase} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Preparing exports…</>:<><FileSearch size={14}/> Export JSON + HTML and archive locally</>}</button>{caseReport.export_archive&&<><p className="network-note">Private archive: {String((caseReport.export_archive as Record<string,unknown>).directory)} · JSON and HTML downloads started.</p><button className="report-download" type="button" onClick={verifyInvestigationArchive} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Verifying archive…</>:<><ShieldCheck size={14}/> Verify archived files</>}</button></>}{caseReport.archive_verification&&<div className="bridge-connected"><strong>{(caseReport.archive_verification as Record<string,unknown>).verified?"Archive integrity verified":"Archive verification failed"}</strong><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(caseReport.archive_verification,null,2)}</pre></div>}<pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
+        <button className="report-download" type="button" onClick={createInvestigationCase} disabled={caseBusy||(!evidenceReport&&!artifactReport)}>{caseBusy?<><LoaderCircle size={14}/> Creating case…</>:<><FileSearch size={14}/> Create unified case report</>}</button>\n        <button className="report-download" type="button" onClick={verifyAuditLedger} disabled={ledgerBusy}>{ledgerBusy?<><LoaderCircle size={14}/> Verifying audit ledger…</>:<><ShieldCheck size={14}/> Verify audit ledger</>}</button>\n        {ledgerVerification&&<div className="bridge-connected"><strong>{Boolean(ledgerVerification.verified)?"Audit ledger integrity verified":"Audit ledger verification failed"}</strong><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(ledgerVerification,null,2)}</pre></div>}
+        {caseReport&&<div className="network-results"><h3>Investigation case created</h3><button className="report-download" type="button" onClick={exportInvestigationCase} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Preparing exports…</>:<><FileSearch size={14}/> Export JSON + HTML and archive locally</>}</button>{caseReport.export_archive&&<><p className="network-note">Private archive: {String((caseReport.export_archive as Record<string,unknown>).directory)} · JSON and HTML downloads started.</p><button className="report-download" type="button" onClick={verifyInvestigationArchive} disabled={caseBusy}>{caseBusy?<><LoaderCircle size={14}/> Verifying archive…</>:<><ShieldCheck size={14}/> Verify archived files</>}</button></>}{caseReport.archive_verification&&<div className="bridge-connected"><strong>{Boolean((caseReport.archive_verification as Record<string,unknown>).verified)?"Archive integrity verified":"Archive verification failed"}</strong><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(caseReport.archive_verification,null,2)}</pre></div>}<pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:620,overflow:"auto"}}>{JSON.stringify(caseReport,null,2)}</pre></div>}
       </section>}
 
       {connected&&<section className="kali-panel">
