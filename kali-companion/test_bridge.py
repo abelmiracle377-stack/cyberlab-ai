@@ -1,5 +1,6 @@
 """Offline tests for the loopback-only Kali bridge and local Ollama adapter."""
 import importlib.util
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
