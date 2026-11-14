@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 PROFILE="${1:-desktop}"
 OUTPUT_DIR="${2:-${ROOT_DIR}/dist}"
 case "$PROFILE" in
@@ -21,8 +21,8 @@ WORK_DIR="${WORK_ROOT}/${PROFILE}"
 OUTPUT_NAME="cyberlab-ai-os-${PROFILE}-amd64.iso"
 mkdir -p "$WORK_ROOT" "$OUTPUT_DIR"
 # Resolve caller-supplied paths before changing into the live-build tree.
-OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
-WORK_ROOT="$(cd "$WORK_ROOT" && pwd)"
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd -P)"
+WORK_ROOT="$(cd "$WORK_ROOT" && pwd -P)"
 WORK_DIR="${WORK_ROOT}/${PROFILE}"
 # This script runs as root: only clean a dedicated work tree outside the
 # repository and output directory. Reject nested paths, not just exact matches.
