@@ -51,17 +51,18 @@ def _append_audit(case_id, created_at, sources):
             previous_hash = "GENESIS"
             if current_size:
                 handle.seek(0)
-                last_line = ""
-                for line in handle:
-                    if line.strip():
-                        last_line = line
-                try:
-                    previous = json.loads(last_line)
-                    previous_hash = previous.get("record_hash", "")
-                except (json.JSONDecodeError, AttributeError):
-                    raise ValueError("The existing local case audit ledger is malformed; preserve it for review.")
-                if not re.fullmatch(r"[a-f0-9]{64}", previous_hash):
-                    raise ValueError("The existing local case audit ledger has no valid final record hash.")
+                for line_number, line in enumerate(handle, 1):
+                    if not line.strip():
+                        continue
+                    try:
+                        previous = json.loads(line)
+                        claimed_hash = previous.pop("record_hash")
+                        claimed_previous = previous.get("previous_record_hash")
+                    except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+                        raise ValueError("The existing local case audit ledger is malformed; preserve it for review.")
+                    if claimed_previous != previous_hash or not isinstance(claimed_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", claimed_hash) or _digest(previous) != claimed_hash:
+                        raise ValueError("The existing local case audit ledger failed hash-chain verification at line " + str(line_number) + "; preserve it for review.")
+                    previous_hash = claimed_hash
             record = {
                 "case_id": case_id,
                 "created_at": created_at,
