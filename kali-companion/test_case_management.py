@@ -84,6 +84,14 @@ class CaseManagementTests(unittest.TestCase):
         self.assertFalse(result["verified"])
         self.assertIn("missing", result["errors"][0].lower())
 
+    def test_append_refuses_symlinked_ledger(self):
+        outside = self.directory / "outside.jsonl"
+        outside.write_text("", encoding="utf-8")
+        self.ledger.symlink_to(outside)
+        with self.assertRaises(OSError):
+            case_management.build_case_report(self.service)
+        self.assertEqual(outside.read_text(encoding="utf-8"), "")
+
     def test_modified_ledger_is_detected_before_append(self):
         case_management.build_case_report(self.service)
         content = self.ledger.read_text()
