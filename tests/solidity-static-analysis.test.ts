@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeSoliditySource } from "../lib/solidity-static-analysis";
+import { CHAIN_REGISTRY, getChainById } from "../lib/chain-registry";
 
 test("extracts Solidity project inventory", () => {
  const result=analyzeSoliditySource(`// SPDX-License-Identifier: MIT
@@ -103,4 +104,20 @@ contract ExampleDex {
   assert.ok(result.findings.some(f=>f.id===id), `expected ${id}`);
  }
  assert.equal(result.findings.find(f=>f.id==="SOL-022")?.severity,"medium");
+});
+
+test("curated EVM chain registry has unique positive IDs and documented sources", () => {
+ const ids = CHAIN_REGISTRY.map(chain => chain.chainId);
+ assert.ok(ids.length >= 8);
+ assert.equal(new Set(ids).size, ids.length);
+ for (const chain of CHAIN_REGISTRY) {
+  assert.ok(Number.isSafeInteger(chain.chainId) && chain.chainId > 0);
+  assert.ok(chain.name.length > 0);
+  assert.ok(chain.sourceUrls.length > 0);
+  assert.ok(chain.sourceUrls.every(url => url.startsWith("https://")));
+  assert.ok(chain.reviewedAt.length === 10);
+ }
+ assert.equal(getChainById(1)?.name, "Ethereum Mainnet");
+ assert.equal(getChainById(84532)?.name, "Base Sepolia");
+ assert.equal(getChainById(999999), undefined);
 });
