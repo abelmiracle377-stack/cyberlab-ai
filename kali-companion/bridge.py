@@ -14,6 +14,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -30,7 +31,13 @@ MAX_SOLIDITY_BODY = 120000
 MAX_SOLIDITY_SOURCE = 100000
 MAX_SOLIDITY_OUTPUT = 2_000_000
 SOLIDITY_RUNTIME = 30
+SOLIDITY_TEST_BODY = 120000
+SOLIDITY_TEST_FILES = 20
+SOLIDITY_TEST_TOTAL = 100000
+SOLIDITY_TEST_RUNTIME = 120
+SOLIDITY_TEST_OUTPUT = 262144
 solidity_lock = threading.Lock()
+solidity_test_lock = threading.Lock()
 OLLAMA_URL = "http://127.0.0.1:11434"
 MAX_PORTS = 100
 MAX_RUNTIME = 55
@@ -373,6 +380,130 @@ def compile_solidity(source: str, expected_version: str = "") -> dict:
         solidity_lock.release()
 
 
+
+def solidity_test_runner_status() -> dict:
+    """Fail-closed discovery for rootless, preloaded, digest-pinned Foundry."""
+    executable = shutil.which("podman")
+    image = os.environ.get("CYBERLAB_FOUNDRY_IMAGE", "").strip()
+    pinned = bool(re.fullmatch(r"[A-Za-z0-9._/:+-]+@sha256:[a-f0-9]{64}", image))
+    if not executable:
+        return {"available": False, "message": "Rootless Podman is required; Docker and direct host execution are not accepted."}
+    if not pinned:
+        return {"available": False, "message": "Configure CYBERLAB_FOUNDRY_IMAGE with a locally preloaded trusted image pinned by sha256 digest. No image is pulled."}
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": str(Path.home())}
+    try:
+        rootless = subprocess.run([executable, "info", "--format", "{{.Host.Security.Rootless}}"], capture_output=True, text=True, timeout=8, check=False, env=env)
+        if rootless.returncode or rootless.stdout.strip().lower() != "true":
+            return {"available": False, "message": "Podman is not confirmed rootless; execution is disabled."}
+        present = subprocess.run([executable, "image", "exists", image], capture_output=True, text=True, timeout=8, check=False, env=env)
+        if present.returncode:
+            return {"available": False, "message": "The configured digest-pinned Foundry image is not present locally. Load it manually; no pull is attempted."}
+        return {"available": True, "runtime": "rootless Podman", "image": image, "message": "Local rootless Podman and digest-pinned image are ready for offline tests."}
+    except (OSError, subprocess.TimeoutExpired):
+        return {"available": False, "message": "Could not verify rootless Podman and the local image."}
+
+
+def _validate_solidity_test_files(files: object) -> list[dict]:
+    if not isinstance(files, list) or not 2 <= len(files) <= SOLIDITY_TEST_FILES:
+        raise ValueError("Provide 2–20 files: at least one src/*.sol contract and one test/*.t.sol test.")
+    cleaned, seen, total = [], set(), 0
+    has_source = has_test = False
+    for item in files:
+        if not isinstance(item, dict) or set(item) - {"path", "content"}:
+            raise ValueError("Each file must contain only path and content.")
+        path, content = item.get("path"), item.get("content")
+        if not isinstance(path, str) or not isinstance(content, str):
+            raise ValueError("Every Solidity file needs a text path and content.")
+        if not (re.fullmatch(r"src/[A-Za-z0-9_.-]+\.sol", path) or re.fullmatch(r"test/[A-Za-z0-9_.-]+\.t\.sol", path)):
+            raise ValueError("Only flat src/*.sol and test/*.t.sol paths are accepted.")
+        if path in seen:
+            raise ValueError("Duplicate project paths are not accepted.")
+        seen.add(path)
+        size = len(content.encode("utf-8"))
+        if not content.strip() or size > 50000:
+            raise ValueError("Each Solidity file must contain 1–50,000 UTF-8 bytes.")
+        if re.search(r"\bimport\b", content):
+            raise ValueError("Imports and external dependencies are disabled in this first test-runner stage.")
+        total += size
+        if total > SOLIDITY_TEST_TOTAL:
+            raise ValueError("Combined project source exceeds 100,000 bytes.")
+        has_source = has_source or path.startswith("src/")
+        has_test = has_test or path.startswith("test/")
+        cleaned.append({"path": path, "content": content})
+    if not has_source or not has_test:
+        raise ValueError("Include at least one src/*.sol contract and one test/*.t.sol test.")
+    return cleaned
+
+
+def run_solidity_tests(files: object) -> dict:
+    """Run Foundry only in a preloaded rootless Podman sandbox; never on host."""
+    project_files = _validate_solidity_test_files(files)
+    status = solidity_test_runner_status()
+    if not status["available"]:
+        raise FileNotFoundError(status["message"])
+    if not solidity_test_lock.acquire(blocking=False):
+        raise BlockingIOError("A local Solidity test run is already active.")
+    try:
+        executable = shutil.which("podman")
+        image = os.environ["CYBERLAB_FOUNDRY_IMAGE"].strip()
+        with tempfile.TemporaryDirectory(prefix="cyberlab-solidity-") as workspace:
+            root = Path(workspace)
+            for item in project_files:
+                destination = root / item["path"]
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(item["content"], encoding="utf-8")
+            (root / "foundry.toml").write_text(
+                '[profile.default]\nsrc = "src"\ntest = "test"\nout = "out"\ncache_path = "cache"\nlibs = []\nauto_detect_solc = true\noptimizer = false\n',
+                encoding="utf-8",
+            )
+            command = [
+                executable, "run", "--rm", "--pull=never", "--network=none",
+                "--memory=1g", "--cpus=1", "--pids-limit=64", "--read-only",
+                "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
+                "--security-opt=no-new-privileges", "--cap-drop=all", "--userns=keep-id",
+                "--volume", workspace + ":/workspace:rw", "--workdir", "/workspace",
+                image, "forge", "test", "--offline", "--json",
+            ]
+            stdout_path, stderr_path = root / "runner.stdout", root / "runner.stderr"
+            def limit_runner():
+                try:
+                    import resource
+                    resource.setrlimit(resource.RLIMIT_CPU, (SOLIDITY_TEST_RUNTIME, SOLIDITY_TEST_RUNTIME + 2))
+                    resource.setrlimit(resource.RLIMIT_FSIZE, (SOLIDITY_TEST_OUTPUT, SOLIDITY_TEST_OUTPUT))
+                    resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+                except (ImportError, AttributeError, OSError, ValueError):
+                    pass
+            try:
+                with stdout_path.open("wb") as out, stderr_path.open("wb") as err:
+                    completed = subprocess.run(
+                        command, stdout=out, stderr=err, timeout=SOLIDITY_TEST_RUNTIME,
+                        check=False, env={"PATH": os.environ.get("PATH", ""), "HOME": str(Path.home()), "LANG": "C.UTF-8"},
+                        preexec_fn=limit_runner if os.name == "posix" else None,
+                    )
+            except subprocess.TimeoutExpired as exc:
+                raise TimeoutError("Solidity tests exceeded the 120-second limit.") from exc
+            stdout, stderr = stdout_path.read_bytes(), stderr_path.read_bytes()
+            if len(stdout) > SOLIDITY_TEST_OUTPUT or len(stderr) > SOLIDITY_TEST_OUTPUT:
+                raise RuntimeError("Test runner output exceeded the 256 KB limit.")
+            if completed.returncode not in (0, 1) or not stdout.strip():
+                raise RuntimeError("Sandboxed Foundry runner failed: " + stderr.decode("utf-8", "replace")[:1200])
+            try:
+                result = json.loads(stdout.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise RuntimeError("Foundry returned invalid or truncated JSON test results.") from exc
+            if not isinstance(result, dict):
+                raise RuntimeError("Foundry returned an unexpected test result shape.")
+            return {
+                "status": "passed" if completed.returncode == 0 else "failed",
+                "exit_code": completed.returncode, "result": result,
+                "stderr": stderr.decode("utf-8", "replace")[:8000],
+                "sandbox": "rootless Podman; no network; 1 GiB memory; 1 CPU; 64 processes; read-only image filesystem",
+                "note": "A passing test suite is not a security audit or proof of correctness.",
+            }
+    finally:
+        solidity_test_lock.release()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CyberLabKaliBridge/1.0"
 
@@ -415,12 +546,14 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler"}:
+        if path not in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
         if path == "/solidity/compiler":
             return self.send_json(200, solidity_compiler_status(), origin)
+        if path == "/solidity/tests/status":
+            return self.send_json(200, solidity_test_runner_status(), origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
         if path == "/capabilities":
@@ -443,13 +576,13 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/scan", "/ollama/chat", "/solidity/compile"}:
+        if path not in {"/scan", "/ollama/chat", "/solidity/compile", "/solidity/tests/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
+            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else SOLIDITY_TEST_BODY if path == "/solidity/tests/run" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
             if length < 2 or length > limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
@@ -460,6 +593,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result, origin)
             if path == "/solidity/compile":
                 result = compile_solidity(data.get("source"), str(data.get("expectedCompilerVersion", "")))
+                return self.send_json(200, result, origin)
+            if path == "/solidity/tests/run":
+                result = run_solidity_tests(data.get("files"))
                 return self.send_json(200, result, origin)
             target = valid_target(str(data.get("target", "")))
             confirmation = str(data.get("confirmationTarget", "")).strip().lower().rstrip(".")

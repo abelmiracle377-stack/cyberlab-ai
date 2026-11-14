@@ -209,3 +209,46 @@ class OllamaBridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SolidityTestRunnerTests(unittest.TestCase):
+    def test_file_validation_requires_contract_and_test_and_rejects_imports(self):
+        valid = [
+            {"path": "src/Vault.sol", "content": "pragma solidity ^0.8.20; contract Vault {}"},
+            {"path": "test/Vault.t.sol", "content": "pragma solidity ^0.8.20; contract VaultTest { function testBasic() public pure { assert(true); } }"},
+        ]
+        self.assertEqual(len(bridge._validate_solidity_test_files(valid)), 2)
+        with self.assertRaisesRegex(ValueError, "at least one src"):
+            bridge._validate_solidity_test_files([valid[0]])
+        with self.assertRaisesRegex(ValueError, "Imports"):
+            bridge._validate_solidity_test_files([
+                valid[0], {"path": "test/Vault.t.sol", "content": 'import "forge-std/Test.sol";'}
+            ])
+
+    def test_file_validation_rejects_path_traversal_and_duplicates(self):
+        with self.assertRaisesRegex(ValueError, "flat src"):
+            bridge._validate_solidity_test_files([
+                {"path": "src/../Vault.sol", "content": "contract Vault {}"},
+                {"path": "test/Vault.t.sol", "content": "contract VaultTest {}"},
+            ])
+        item = {"path": "src/Vault.sol", "content": "contract Vault {}"}
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            bridge._validate_solidity_test_files([
+                item, item, {"path": "test/Vault.t.sol", "content": "contract VaultTest {}"},
+            ])
+
+    def test_runner_fails_closed_when_rootless_runtime_is_missing(self):
+        with patch.dict(os.environ, {}, clear=True), patch.object(bridge.shutil, "which", return_value=None):
+            status = bridge.solidity_test_runner_status()
+        self.assertFalse(status["available"])
+        self.assertIn("Rootless Podman", status["message"])
+
+    def test_test_execution_never_falls_back_to_host(self):
+        valid = [
+            {"path": "src/Vault.sol", "content": "contract Vault {}"},
+            {"path": "test/Vault.t.sol", "content": "contract VaultTest {}"},
+        ]
+        with patch.object(bridge, "solidity_test_runner_status", return_value={"available": False, "message": "sandbox missing"}), patch.object(bridge.subprocess, "run") as run:
+            with self.assertRaisesRegex(FileNotFoundError, "sandbox missing"):
+                bridge.run_solidity_tests(valid)
+        run.assert_not_called()
