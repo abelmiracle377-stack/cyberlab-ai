@@ -107,7 +107,7 @@ sudo apt update
 sudo apt install -y gddrescue testdisk foremost ntfs-3g
 ```
 
-For best practice, boot Kali from a live USB, do not boot the installed OS on the affected disk, and do not mount the source partitions. Connect a separate backup drive, then pair the dashboard with the bridge. The acquisition endpoint is allow-listed; it does not accept arbitrary shell commands. It uses GNU ddrescue's first non-scraping pass (`ddrescue -f -n`) and retains the map file so the acquisition can be assessed. Do not disconnect either drive while the job is active.
+For best practice, boot Kali from a live USB, do not boot the installed OS on the affected disk, and do not mount the source partitions. Connect a separate backup drive, then pair the dashboard with the bridge. The acquisition endpoint is allow-listed; it does not accept arbitrary shell commands. It uses GNU ddrescue's first non-scraping pass (`ddrescue -f -n`) and retains the map file so the acquisition can be assessed. Do not disconnect either drive while the job is active. Preserve both the image and the ddrescue-created map file; the map records completed and unreadable regions and is required for a safe resume or follow-up pass. The source device is never an output path.
 
 After imaging, the dashboard can launch a bounded Foremost recovery job against the image. PhotoRec remains an interactive recovery option in a separate Kali terminal:
 
