@@ -6,6 +6,7 @@ import Link from "next/link";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
 type Message = { role: "user" | "assistant"; content: string };
+type LocalOllamaModel = { name: string; size?: number; parameter_size?: string; quantization?: string };
 type LocalScanResult = { target: string; profile: string; duration_seconds: number; method: string; state_summary: Record<string, number>; summary: { hosts: number; up: number; ports: number; open_ports: number; state_counts: Record<string, number> }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; open_ports: { host: string; port: number; protocol: string; state: string; service: string; product: string; version: string }[]; note: string };
 type ScanProfile = "quick" | "standard" | "custom";
 
@@ -13,6 +14,10 @@ export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState("");
   const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
+  const [modelSource, setModelSource] = useState<"cloud" | "ollama">("cloud");
+  const [localModels, setLocalModels] = useState<LocalOllamaModel[]>([]);
+  const [localModel, setLocalModel] = useState("");
+  const [localProviderStatus, setLocalProviderStatus] = useState("Not checked");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
@@ -45,6 +50,33 @@ export default function AgentPage() {
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  useEffect(() => {
+    if (modelSource !== "ollama") return;
+    let cancelled = false;
+    async function loadLocalModels() {
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+      if (!token) { setLocalProviderStatus("Pair Kali Connection first."); setLocalModels([]); return; }
+      setLocalProviderStatus("Checking local Ollama…");
+      try {
+        const health = await fetch("http://127.0.0.1:8765/ollama/health", { headers: { "Authorization": "Bearer " + token } });
+        const healthData = await health.json();
+        if (!health.ok) throw new Error(healthData.error || "Ollama is not responding locally.");
+        const response = await fetch("http://127.0.0.1:8765/ollama/models", { headers: { "Authorization": "Bearer " + token } });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not list local Ollama models.");
+        if (cancelled) return;
+        const catalogue: LocalOllamaModel[] = Array.isArray(data.models) ? data.models : [];
+        setLocalModels(catalogue);
+        setLocalModel((current) => catalogue.some((item) => item.name === current) ? current : catalogue[0]?.name || "");
+        setLocalProviderStatus(catalogue.length ? "Connected · " + healthData.version + " · " + catalogue.length + " installed model(s)" : "Ollama is running, but no models are installed.");
+      } catch (cause) {
+        if (!cancelled) { setLocalModels([]); setLocalModel(""); setLocalProviderStatus(cause instanceof Error ? cause.message : "Local Ollama connection failed."); }
+      }
+    }
+    void loadLocalModels();
+    return () => { cancelled = true; };
+  }, [modelSource]);
 
   useEffect(() => {
     const pending = sessionStorage.getItem("cyberlab.pendingNmapJob");
@@ -166,6 +198,21 @@ export default function AgentPage() {
     setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "" }]);
     setBusy(true);
     try {
+      if (modelSource === "ollama") {
+        const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+        if (!token) throw new Error("Pair Kali Connection before using a local Ollama model.");
+        if (!localModel) throw new Error("No installed Ollama model is selected.");
+        const response = await fetch("http://127.0.0.1:8765/ollama/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+          body: JSON.stringify({ model: localModel, messages: [...messages, { role: "user", content: text }].filter((item) => item.content.trim()).slice(-12) }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Local Ollama request failed.");
+        const output = typeof data.content === "string" ? data.content : "";
+        setMessages((current) => { const next = [...current]; next[next.length - 1] = { role: "assistant", content: output || "The local model returned an empty response." }; return next; });
+        return;
+      }
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
