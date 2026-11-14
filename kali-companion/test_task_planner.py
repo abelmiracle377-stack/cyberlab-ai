@@ -94,6 +94,14 @@ class TaskPlannerTests(unittest.TestCase):
         self.assertIsNone(self.plan("Research DNS for 8.8.8.8.")["passive_research_suggestion"])
         self.assertIsNone(self.plan("Explain DNS records.")["passive_research_suggestion"])
 
+    def test_service_plan_suggests_only_reviewed_protocol_ports(self):
+        result = self.plan("Enumerate FTP and SSH services on lab.example.org.")
+        self.assertEqual(result["service_enumeration_suggestion"], {"ports": [21, 22], "target": "lab.example.org"})
+
+    def test_service_plan_without_target_does_not_offer_execution_handoff(self):
+        result = self.plan("How do I enumerate FTP and SMB safely?")
+        self.assertIsNone(result["service_enumeration_suggestion"])
+
     def test_url_path_is_not_mistaken_for_hostname(self):
         result = self.plan("Check https://lab.example.org/login/admin for my web assessment.")
         self.assertEqual(result["target"], "lab.example.org")
