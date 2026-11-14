@@ -26,7 +26,7 @@ export default function ModelsPage() {
   const [loading, setLoading] = useState(true);
   const [prompt, setPrompt] = useState("");
   const [reply, setReply] = useState("");
-  const [history, setHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [historyByModel, setHistoryByModel] = useState<Record<string, Array<{ role: "user" | "assistant"; content: string }>>>({});
   const [busy, setBusy] = useState(false);
   const [responseMode, setResponseMode] = useState<"single" | "comparison">("single");
   const [localStatus, setLocalStatus] = useState("Pair your Kali companion to discover local Ollama models.");
@@ -100,6 +100,7 @@ export default function ModelsPage() {
   ), [models, openOnly, query]);
 
   const activeModel = models.find((m) => m.id === active);
+  const activeHistory = historyByModel[active] || [];
   const selectedModels = selected.map((id) => models.find((m) => m.id === id)).filter((m): m is Model => Boolean(m));
 
   function toggle(id: string) {
@@ -127,20 +128,20 @@ export default function ModelsPage() {
         const response = await fetch("http://127.0.0.1:8765/ollama/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ model: activeModel.name, prompt: submittedPrompt, history }),
+          body: JSON.stringify({ model: activeModel.name, prompt: submittedPrompt, history: activeHistory }),
           signal: AbortSignal.timeout(125000),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Local Ollama request failed.");
         const answer = typeof data.response === "string" ? data.response : "The local model returned an empty response.";
         setReply(answer);
-        setHistory((current) => [...current, { role: "user", content: submittedPrompt }, { role: "assistant", content: answer }].slice(-12));
+        setHistoryByModel((current) => ({ ...current, [active]: [...(current[active] || []), { role: "user", content: submittedPrompt }, { role: "assistant", content: answer }].slice(-12) }));
         setPrompt("");
         return;
       }
       const response = await fetch("/api/agent", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: submittedPrompt, model: active, agentMode: activeModel?.openWeight ? "open-weight" : "standard", history }),
+        body: JSON.stringify({ prompt: submittedPrompt, model: active, agentMode: activeModel?.openWeight ? "open-weight" : "standard", history: activeHistory }),
       });
       if (!response.ok) { const data = await response.json(); throw new Error(data.error || "Agent request failed."); }
       if (!response.body) throw new Error("Streaming response unavailable.");
@@ -156,7 +157,7 @@ export default function ModelsPage() {
       output += decoder.decode();
       const answer = output || "The model returned an empty response.";
       setReply(answer);
-      setHistory((current) => [...current, { role: "user", content: submittedPrompt }, { role: "assistant", content: answer }].slice(-12));
+      setHistoryByModel((current) => ({ ...current, [active]: [...(current[active] || []), { role: "user", content: submittedPrompt }, { role: "assistant", content: answer }].slice(-12) }));
       setPrompt("");
     } catch (e) { setError(e instanceof Error ? e.message : "Unexpected model error."); }
     finally { setBusy(false); }
