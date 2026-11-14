@@ -113,6 +113,44 @@ class CyberLabOsCapabilityTests(unittest.TestCase):
         self.assertIn("scope", payload["capabilities"])
 
 
+class SolidityCompilerTests(unittest.TestCase):
+    def test_status_reports_missing_compiler_without_installing(self):
+        with patch.object(bridge.shutil, "which", return_value=None):
+            result = bridge.solidity_compiler_status()
+        self.assertFalse(result["available"])
+        self.assertIn("never downloads", result["message"])
+
+    def test_rejects_imports_and_invalid_source_before_process(self):
+        with patch.object(bridge.subprocess, "run") as run:
+            with self.assertRaisesRegex(ValueError, "Imports"):
+                bridge.compile_solidity('pragma solidity ^0.8.20; import "https://example.com/X.sol";')
+            with self.assertRaisesRegex(ValueError, "between 1 and 100,000"):
+                bridge.compile_solidity("")
+        run.assert_not_called()
+
+    def test_compile_uses_fixed_standard_json_command_and_returns_diagnostics(self):
+        import json
+        fake_output = json.dumps({
+            "errors": [{"severity": "warning", "errorCode": "SPDX", "formattedMessage": "SPDX warning"}],
+            "contracts": {"Contract.sol": {"Example": {"abi": [], "evm": {"bytecode": {"object": "6000"}}}}},
+        }).encode()
+        with patch.object(bridge, "solidity_compiler_status", return_value={"available": True, "version": "0.8.20"}), \
+             patch.object(bridge.shutil, "which", return_value="/usr/bin/solc"), \
+             patch.object(bridge.subprocess, "run", return_value=type("Completed", (), {"stdout": fake_output, "stderr": b"", "returncode": 0})()) as run:
+            result = bridge.compile_solidity("pragma solidity ^0.8.20; contract Example {}", "0.8.20")
+        self.assertEqual(run.call_args.args[0], ["/usr/bin/solc", "--standard-json"])
+        self.assertEqual(result["status"], "compiled")
+        self.assertEqual(result["contracts"][0]["name"], "Example")
+        self.assertEqual(result["version"], "0.8.20")
+
+    def test_rejects_compiler_version_mismatch(self):
+        with patch.object(bridge, "solidity_compiler_status", return_value={"available": True, "version": "0.8.19"}), \
+             patch.object(bridge.subprocess, "run") as run:
+            with self.assertRaisesRegex(RuntimeError, "version mismatch"):
+                bridge.compile_solidity("contract Example {}", "0.8.20")
+        run.assert_not_called()
+
+
 class OllamaBridgeTests(unittest.TestCase):
     def test_ollama_request_rejects_arbitrary_paths(self):
         with patch.object(bridge.urllib.request, "urlopen") as urlopen:

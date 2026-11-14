@@ -26,6 +26,11 @@ HOST = "127.0.0.1"
 PORT = 8765
 MAX_BODY = 8192
 MAX_OLLAMA_BODY = 65536
+MAX_SOLIDITY_BODY = 120000
+MAX_SOLIDITY_SOURCE = 100000
+MAX_SOLIDITY_OUTPUT = 2_000_000
+SOLIDITY_RUNTIME = 30
+solidity_lock = threading.Lock()
 OLLAMA_URL = "http://127.0.0.1:11434"
 MAX_PORTS = 100
 MAX_RUNTIME = 55
@@ -264,6 +269,110 @@ def system_snapshot() -> dict:
     }
 
 
+def solidity_compiler_status() -> dict:
+    """Discover only the fixed PATH-resolved solc executable; never install or accept a path."""
+    executable = shutil.which("solc")
+    if not executable:
+        return {"available": False, "compiler": "solc", "version": None, "message": "solc is not installed or not on PATH. Install a trusted, pinned Solidity compiler manually; the bridge never downloads or installs toolchains."}
+    try:
+        completed = subprocess.run(
+            [executable, "--version"], capture_output=True, text=True,
+            timeout=5, check=False, env={"PATH": os.environ.get("PATH", "")},
+        )
+        if completed.returncode != 0:
+            return {"available": False, "compiler": "solc", "version": None, "message": "The installed solc executable did not report a version."}
+        match = re.search(r"Version:\s*([0-9]+\\.[0-9]+\\.[0-9]+)", completed.stdout)
+        if not match:
+            return {"available": False, "compiler": "solc", "version": None, "message": "Could not parse the installed solc version."}
+        return {"available": True, "compiler": "solc", "version": match.group(1), "message": "Local compiler detected. Compilation runs on this machine."}
+    except (OSError, subprocess.TimeoutExpired):
+        return {"available": False, "compiler": "solc", "version": None, "message": "The installed solc executable could not be queried."}
+
+
+def compile_solidity(source: str, expected_version: str = "") -> dict:
+    """Compile one import-free source via fixed solc standard JSON, with strict resource bounds."""
+    if not isinstance(source, str) or not source.strip() or len(source.encode("utf-8")) > MAX_SOLIDITY_SOURCE:
+        raise ValueError("Provide Solidity source between 1 and 100,000 UTF-8 bytes.")
+    if re.search(r"(?m)^\\s*import\\b", source):
+        raise ValueError("Imports are not supported in this first local compiler stage. Resolve dependencies explicitly before compiling.")
+    if expected_version and not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", expected_version):
+        raise ValueError("Expected compiler version must use the exact x.y.z format.")
+    status = solidity_compiler_status()
+    if not status["available"]:
+        raise FileNotFoundError(status["message"])
+    if expected_version and status["version"] != expected_version:
+        raise RuntimeError("Compiler version mismatch: expected " + expected_version + ", found " + status["version"] + ".")
+    if not solidity_lock.acquire(blocking=False):
+        raise BlockingIOError("A local Solidity compilation is already running.")
+    try:
+        standard_input = {
+            "language": "Solidity",
+            "sources": {"Contract.sol": {"content": source}},
+            "settings": {"outputSelection": {"*": {"*": ["abi", "evm.bytecode.object"]}}},
+        }
+        payload = json.dumps(standard_input, separators=(",", ":")).encode("utf-8")
+        command = [shutil.which("solc"), "--standard-json"]
+        kwargs = {
+            "input": payload, "capture_output": True, "timeout": SOLIDITY_RUNTIME,
+            "check": False, "env": {"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8"},
+        }
+        # Apply conservative Linux process limits where supported. This does not
+        # replace an OS sandbox; users should compile only source they trust.
+        if os.name == "posix":
+            try:
+                import resource
+                def limit_process():
+                    resource.setrlimit(resource.RLIMIT_CPU, (SOLIDITY_RUNTIME, SOLIDITY_RUNTIME + 2))
+                    resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_SOLIDITY_OUTPUT, MAX_SOLIDITY_OUTPUT))
+                    resource.setrlimit(resource.RLIMIT_NOFILE, (32, 32))
+                kwargs["preexec_fn"] = limit_process
+            except (ImportError, AttributeError, OSError, ValueError):
+                pass
+        completed = subprocess.run(command, **kwargs)
+        raw = completed.stdout
+        if len(raw) > MAX_SOLIDITY_OUTPUT or len(completed.stderr) > 16000:
+            raise RuntimeError("Compiler output exceeded the configured safety limit.")
+        if completed.returncode not in (0, 1) or not raw.strip():
+            raise RuntimeError("solc failed to return standard JSON output: " + completed.stderr.decode("utf-8", "replace")[:1000])
+        try:
+            output = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("solc returned invalid or truncated standard JSON output.") from exc
+        diagnostics = []
+        for item in output.get("errors", [])[:200]:
+            if not isinstance(item, dict):
+                continue
+            location = item.get("sourceLocation") or {}
+            diagnostics.append({
+                "severity": item.get("severity", "info"),
+                "code": str(item.get("errorCode", ""))[:32],
+                "message": str(item.get("formattedMessage") or item.get("message") or "")[:4000],
+                "file": str(location.get("file", ""))[:160],
+                "line": location.get("start"),
+            })
+        contracts = []
+        for file_name, entries in output.get("contracts", {}).items():
+            if not isinstance(entries, dict):
+                continue
+            for name, artifact in entries.items():
+                contracts.append({
+                    "file": str(file_name)[:160], "name": str(name)[:128],
+                    "abi": artifact.get("abi", []),
+                    "bytecode": (artifact.get("evm") or {}).get("bytecode", {}).get("object", "")[:500000],
+                })
+        errors = sum(1 for item in diagnostics if item["severity"] == "error")
+        return {
+            "status": "failed" if errors or completed.returncode else "compiled",
+            "compiler": "solc", "version": status["version"],
+            "diagnostics": diagnostics, "contracts": contracts,
+            "note": "Compilation is not a security audit, test run, deployment or proof of correctness. Imports and external dependency resolution are disabled. Source was processed locally by the paired companion.",
+        }
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError("Solidity compilation exceeded the 30-second limit.") from exc
+    finally:
+        solidity_lock.release()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CyberLabKaliBridge/1.0"
 
@@ -306,10 +415,12 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models"}:
+        if path not in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
+        if path == "/solidity/compiler":
+            return self.send_json(200, solidity_compiler_status(), origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
         if path == "/capabilities":
@@ -332,13 +443,13 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/scan", "/ollama/chat"}:
+        if path not in {"/scan", "/ollama/chat", "/solidity/compile"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else MAX_BODY
+            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
             if length < 2 or length > limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
@@ -346,6 +457,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Request body must be a JSON object.")
             if path == "/ollama/chat":
                 result = ollama_chat(str(data.get("model", "")), str(data.get("prompt", "")), data.get("history"))
+                return self.send_json(200, result, origin)
+            if path == "/solidity/compile":
+                result = compile_solidity(data.get("source"), str(data.get("expectedCompilerVersion", "")))
                 return self.send_json(200, result, origin)
             target = valid_target(str(data.get("target", "")))
             confirmation = str(data.get("confirmationTarget", "")).strip().lower().rstrip(".")
@@ -386,8 +500,12 @@ class Handler(BaseHTTPRequestHandler):
                 scan_lock.release()
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json(400, {"error": str(exc)}, origin)
-        except ConnectionError as exc:
+        except (ConnectionError, FileNotFoundError) as exc:
             self.send_json(503, {"error": str(exc)}, origin)
+        except BlockingIOError as exc:
+            self.send_json(409, {"error": str(exc)}, origin)
+        except TimeoutError as exc:
+            self.send_json(504, {"error": str(exc)}, origin)
         except subprocess.TimeoutExpired:
             self.send_json(504, {"error": "Assessment exceeded the 55-second time limit."}, origin)
         except Exception as exc:
