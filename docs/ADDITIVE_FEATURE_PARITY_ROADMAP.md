@@ -81,6 +81,37 @@ This workstream begins after the hosted AI gateway foundation. Delivery is incre
 
 The first Solidity source-review module is a heuristic aid, not a compiler, auditor, exploitability verdict or formal verification system. Wallet security and recovery are separate later workstreams and must not be conflated with contract analysis.
 
+### Expanded Web3 engineering scope (user-directed)
+
+The Solidity Lab is intended to grow into a full Web3 engineering workspace. These are planned capabilities, not claims that they are already implemented:
+
+1. **Multi-language smart-contract authoring:** accept natural-language instructions and generate, explain, refactor and test Solidity first, then add other supported contract languages such as Vyper and Move where toolchains and target ecosystems are verified. Let the user specify language, compiler version, target chain/VM, standards, dependencies and project structure. Generated code must be clearly labelled as AI-authored and unverified until compiled and tested.
+2. **Project build and test:** reproducible project scaffolding, pinned compiler/tool versions, dependency lockfiles, import resolution, unit/integration tests, static analysis, fuzz/property testing, gas snapshots and build artefacts. Support established toolchains through isolated, resource-bounded workers rather than assuming compilers exist in the hosted web process.
+3. **NFT engineering:** ERC-721/ERC-1155 and chain-specific equivalents; metadata and media validation; minting/burning/royalty/access-control patterns; allowlists, reveal and supply controls; marketplace integration and testnets. Include metadata permanence, storage availability, royalty-enforcement limitations and marketplace compatibility in generated project notes.
+4. **DEX engineering:** AMM and order-book design where appropriate; pools, swaps, liquidity provision/removal, routing, fee accounting, oracle integration, slippage/deadline protections, MEV and sandwich-risk analysis, flash-loan and reentrancy review, invariant/property tests, simulations and testnet deployment. Do not present a generated DEX as audited or production-safe.
+5. **Deployment and wallet connection:** support user-selected networks and compatible wallets through standard wallet-provider interfaces. Before any transaction, show chain/network, account, contract address, constructor arguments, bytecode/build verification, transaction calldata, estimated gas limit, fee/gas price, native-token total, simulation result and any approvals. The user signs and submits in their own wallet; the app never asks for or handles a seed phrase or raw private key. Require a fresh explicit confirmation for every deployment, approval or value transfer. Provide testnet-first defaults, chain-ID checks, simulation, cancellation/error handling and transaction receipt tracking. A user-paid gas fee is paid by the wallet on the selected network; estimates can change before inclusion.
+6. **Contract operations:** verify published source/bytecode where supported, inspect events and transactions, compare deployed bytecode, monitor configured contracts and create post-deployment reports. Any automated action remains separately permissioned and bounded.
+
+### Wallet security and recovery workstream (after Web3 engineering)
+
+- Support wallet inventory and chain/address identification, public-address diagnostics, derivation-path education, backup validation guidance, encrypted keystore format identification, and recovery checklists.
+- Recovery helpers must operate locally where secrets are involved. Seed phrases, private keys, keystore passwords and signing material must never be submitted to CyberLab AI chat, model providers, logs, analytics or hosted APIs.
+- A connected wallet should expose public account information and request signatures/transactions through the wallet's own approval UI. CyberLab must not silently sign, export keys or bypass wallet protections.
+- Explain recovery limits honestly: if the required secret material and backups are irretrievably lost, blockchain account control generally cannot be recreated by software or support staff.
+- Include scam/phishing detection, malicious approval review, revoke-approval guidance, address poisoning warnings and transaction simulation where the chain/tooling supports it.
+- Recovery of third-party wallets, bypassing authentication, brute-forcing secrets or extracting keys from devices without authority is out of scope.
+
+### File and digital-evidence recovery workstream (after wallet recovery)
+
+- Build a dedicated recovery and forensics workflow for user-owned or explicitly authorised media: disk/image intake, filesystem and partition identification, deleted-file carving where supported, metadata/timeline analysis, hash manifests and recoverability estimates.
+- Preserve originals: read-only acquisition, verified working copies, SHA-256 hashes, chain-of-custody events, timestamps and examiner notes.
+- Run parsers and carving tools in isolated, resource-limited workers; never execute recovered files automatically. Flag encrypted, overwritten, damaged and unsupported data rather than promising recovery.
+- Support exports and evidence reports with source image, tool/version, parameters, hashes, findings and limitations. Do not overwrite source media or write recovered output back to the source device.
+
+### Delivery order override
+
+The user has explicitly set the next product sequence: **(1) complete Solidity and Web3 engineering, (2) wallet security/recovery, (3) file and digital forensics/recovery, (4) full UI/UX design and integration, then (5) continue the remaining original CyberLab scope. CyberLab OS is deferred until those original CyberLab workstreams have been reached.** This ordering supersedes any earlier roadmap placement of CyberLab OS as an immediate next phase. Preserve its architecture notes and existing work; do not delete or disable it.
+
 ## CyberLab OS — first-class platform workstream
 
 CyberLab OS is now a core product workstream, not a separate side project. It is the unified operating environment and local runtime management layer for CyberLab AI. It must preserve all existing web, agent, evidence, model and Kali companion functionality.
