@@ -24,6 +24,7 @@ from forensics import get_image_job, inspect_image_filesystem, inspect_image_par
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
 from task_planner import plan_task
+from research_workflows import run_research_action
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -220,7 +221,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
+        if path not in {"/plan", "/research", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -233,6 +234,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Request body must be a JSON object.")
             if path == "/plan":
                 return self.send_json(200, plan_task(data.get("prompt", "")), origin)
+            if path == "/research":
+                return self.send_json(200, run_research_action(data), origin)
             if path == "/forensics/fsstat":
                 result = inspect_partition_filesystem(
                     str(data.get("imageJobId", "")),
