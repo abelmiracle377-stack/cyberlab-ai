@@ -159,8 +159,11 @@ def inspect_image_filesystem(image_job_id: str, confirmation_image: str) -> dict
         source_job = dict(source_job) if source_job else None
     if not source_job or source_job.get("state") != "completed":
         raise ValueError("Choose a completed CyberLab ddrescue acquisition job.")
-    image = Path(str(source_job.get("image", ""))).resolve(strict=True)
-    if not image.is_file() or image.is_symlink():
+    recorded_image = Path(str(source_job.get("image", "")))
+    if recorded_image.is_symlink():
+        raise ValueError("The acquired image path must not be a symbolic link.")
+    image = recorded_image.resolve(strict=True)
+    if not image.is_file():
         raise ValueError("The acquired image is not a regular image file.")
     if confirmation_image.strip() != str(image):
         raise ValueError("Retype the exact acquired image path to confirm inspection.")
