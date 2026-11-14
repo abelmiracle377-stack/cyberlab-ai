@@ -36,6 +36,12 @@ The local test runner is optional and fails closed if rootless Podman or the con
 
 The repository now includes self-contained capped-NFT and constant-product AMM teaching fixtures with focused Foundry test contracts. CI checks their source paths and import graphs, but CI does not execute the Solidity tests: a real run still requires the operator's local, preloaded Foundry image and compatible compiler. The fixtures are deliberately incomplete examples, not production contracts or evidence of security.
 
+## Read-only wallet network discovery
+
+The Solidity Lab can query `eth_chainId` from an injected EVM provider. This is a read-only network-discovery operation: it does not request `eth_accounts`, prompt for account access, switch chains, sign messages or submit transactions. The returned hexadecimal chain ID is validated and matched against the local curated registry; unknown IDs are shown as unlisted rather than silently mapped to a known network.
+
+The current implementation reads the network only when the user presses the button. It does not yet subscribe to `chainChanged`, retain a wallet session, read account balances, or prepare/sign transactions. Re-read the network immediately before any future transaction flow and compare it with the explicit target chain. The active provider's chain ID is a claim from that provider, not an independent proof of RPC correctness.
+
 ## Curated EVM chain registry
 
 A read-only, source-linked chain metadata registry is exposed at GET /api/network/registry and suggested in the Solidity Lab target-chain field. The initial curated set includes Ethereum Mainnet/Sepolia, Base Mainnet/Base Sepolia, Arbitrum One/Nova/Sepolia, OP Mainnet and Polygon PoS. Each entry records its chain ID, network type, native gas-token symbol, primary documentation source and review date.
