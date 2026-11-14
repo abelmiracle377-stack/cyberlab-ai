@@ -20,6 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from forensics import get_image_job, list_block_devices, start_image_acquisition
+
 HOST = "127.0.0.1"
 PORT = 8765
 MAX_BODY = 8192
@@ -192,10 +194,18 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system"}:
+        if not (path in {"/health", "/system", "/forensics/devices"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
+        if path == "/forensics/devices":
+            try:
+                return self.send_json(200, list_block_devices(), origin)
+            except (ValueError, OSError, json.JSONDecodeError) as exc:
+                return self.send_json(400, {"error": str(exc)}, origin)
+        if path.startswith("/forensics/jobs/"):
+            job = get_image_job(path.rsplit("/", 1)[-1])
+            return self.send_json(200 if job else 404, job or {"error": "Unknown or expired acquisition job."}, origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
         self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
@@ -204,7 +214,8 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin", "")
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
-        if urlparse(self.path).path != "/scan":
+        path = urlparse(self.path).path
+        if path not in {"/scan", "/forensics/image"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -213,6 +224,14 @@ class Handler(BaseHTTPRequestHandler):
             if length < 2 or length > MAX_BODY:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
+            if path == "/forensics/image":
+                result = start_image_acquisition(
+                    str(data.get("source", "")),
+                    str(data.get("destinationDirectory", "")),
+                    str(data.get("filename", "")),
+                    str(data.get("confirmationSource", "")),
+                )
+                return self.send_json(202, result, origin)
             target = valid_target(str(data.get("target", "")))
             confirmation = str(data.get("confirmationTarget", "")).strip().lower().rstrip(".")
             reference = str(data.get("authorizationReference", "")).strip()
