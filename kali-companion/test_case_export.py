@@ -77,6 +77,14 @@ class CaseExportTests(unittest.TestCase):
         self.assertFalse(result["verified"])
         self.assertTrue(any("regular file" in item for item in result["errors"]))
 
+    def test_export_refuses_symlinked_export_root(self):
+        real_root = self.root.parent / "real-exports"
+        real_root.mkdir()
+        self.root.symlink_to(real_root, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "regular directory"):
+            case_export.export_case_bundle(self.report)
+        self.assertEqual(list(real_root.iterdir()), [])
+
     def test_verification_reports_missing_archive(self):
         result = case_export.verify_case_archive("c" * 32)
         self.assertEqual(result["status"], "failed")
