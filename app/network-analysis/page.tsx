@@ -85,7 +85,7 @@ export default function NetworkAnalysisPage() {
           <div><span>Open ports</span><strong>{result.summary.openPorts}</strong></div>
         </div>
         <section className="network-results">
-          <h2>Open services</h2>
+          <h2>Evidence status: {(result.evidenceStatus || "unknown").replaceAll("_", " ")}</h2><p>Port-state totals: {Object.entries(result.summary.stateCounts || {}).map(([state, count]) => `${state}: ${count}`).join(" · ") || "No state counts returned"}</p><h2>Open services</h2>
           {result.openPorts.length ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>Service</th><th>Version</th></tr></thead><tbody>{result.openPorts.map((port, index) => <tr key={index}><td>{port.host}</td><td>{port.port}</td><td>{port.protocol}</td><td>{port.service}</td><td>{[port.product, port.version].filter(Boolean).join(" ") || "Not reported"}</td></tr>)}</tbody></table></div> : <p>No open ports were recorded in this report.</p>}
         </section>
         <section className="network-results">
