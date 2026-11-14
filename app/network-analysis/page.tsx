@@ -5,9 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, FileUp, Network, ShieldCheck, AlertTriangle } from "lucide-react";
 import InvestigationLink from "@/components/investigation-link";
 
-type Port = { protocol: string; port: number; state: string; service: string; product: string; version: string };
+type Port = { protocol: string; port: number; state: string; reason?: string; service: string; product: string; version: string; method?: string; confidence?: string | null };
 type Host = { index: number; status: string; addresses: { address: string; type: string }[]; hostnames: string[]; ports: Port[] };
-type Result = { summary: { hosts: number; up: number; ports: number; openPorts: number }; hosts: Host[]; openPorts: (Port & { host: string })[]; note: string };
+type Result = { summary: { hosts: number; up: number; ports: number; openPorts: number; stateCounts?: Record<string, number> }; hosts: Host[]; openPorts: (Port & { host: string })[]; evidenceStatus?: string; scaninfo?: Record<string, string>[]; completion?: { finished?: Record<string, string>; hosts?: Record<string, string>; scanner?: string; version?: string; args?: string; start?: string }; note: string };
 
 export default function NetworkAnalysisPage() {
   const [fileName, setFileName] = useState("");
@@ -90,9 +90,9 @@ export default function NetworkAnalysisPage() {
         </section>
         <section className="network-results">
           <h2>Hosts and port states</h2>
-          {result.hosts.map((host) => <details className="network-host" key={host.index}><summary>{host.addresses.map((a) => a.address).join(", ") || `Host ${host.index}`} <span>{host.status.toUpperCase()} · {host.ports.length} PORTS</span></summary><div>{host.hostnames.length > 0 && <p>Names: {host.hostnames.join(", ")}</p>}{host.ports.map((port, index) => <div className="network-port" key={index}><span>{port.port}/{port.protocol}</span><span>{port.state}</span><span>{port.service}</span></div>)}</div></details>)}
+          {result.hosts.map((host) => <details className="network-host" key={host.index}><summary>{host.addresses.map((a) => a.address).join(", ") || `Host ${host.index}`} <span>{host.status.toUpperCase()} · {host.ports.length} PORTS</span></summary><div>{host.hostnames.length > 0 && <p>Names: {host.hostnames.join(", ")}</p>}{host.ports.map((port, index) => <div className="network-port" key={index}><span>{port.port}/{port.protocol}</span><span>{port.state}{port.reason ? ` · ${port.reason}` : ""}</span><span>{port.service}{port.method ? ` · ${port.method}` : ""}</span></div>)}</div></details>)}
         </section>
-        <p className="network-note"><ShieldCheck size={13} /> {result.note}</p>
+        <p className="network-note"><ShieldCheck size={13} /> {result.note}</p>\n        {result.completion && <section className="network-results"><h2>Scan metadata</h2><p>{result.completion.scanner || "Nmap"} {result.completion.version || ""} · {result.completion.finished?.exit || "completion status unavailable"} · {result.completion.finished?.elapsed || "elapsed time unavailable"}</p><p>{result.scaninfo?.map((item) => `${item.type}/${item.protocol}: ${item.services || item.numservices || "unspecified"}`).join(" · ")}</p></section>}
       </>}
       {result && <InvestigationLink source="network-analysis" eventType="nmap-report" title={`Nmap report: ${fileName || result.summary.hosts + " hosts"}`} severity={result.summary.openPorts > 0 ? "medium" : "informational"} details={{ fileName, summary: result.summary, openPorts: result.openPorts, hosts: result.hosts, note: result.note }} />}
       <div className="agent-disclaimer"><ShieldCheck size={12} /> Use scan reports only when the underlying assessment was authorised. Parsed service/version data is evidence, not proof of vulnerability.</div>
