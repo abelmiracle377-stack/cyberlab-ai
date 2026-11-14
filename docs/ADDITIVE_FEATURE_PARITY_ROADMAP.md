@@ -67,20 +67,6 @@ Kodachi's public whitepaper describes three tiers: client/workstation services, 
 - Searchable tool catalogue, command builder, workflow queue, output formats, job history and cancellation.
 - System status, API docs, help center and guided remediation.
 
-## Blockchain engineering and Solidity security workstream
-
-This workstream begins after the hosted AI gateway foundation. Delivery is incremental and additive; no wallet or chain action is enabled by the initial source-review slice.
-
-### Solidity delivery sequence
-1. **Source intake and static review (first slice):** bounded Solidity source input, contract/interface/library/import inventory, compiler pragma visibility and deterministic pattern-based review leads with line references.
-2. **Compiler and project validation:** optional isolated compiler integration with pinned solc versions, reproducible project manifests, import resolution and no deployment by default.
-3. **Deeper security analysis:** Slither and other reviewed static-analysis integrations, AST-aware checks, test generation, fuzzing and symbolic analysis in isolated environments.
-4. **Smart-contract engineering:** project scaffolding, contract templates, test harnesses, deployment simulation and verified build artefacts.
-5. **Chain-aware review:** EVM target selection, compiler/EVM compatibility, proxy/storage-layout analysis and chain-specific source provenance.
-6. **Human-approved transaction workflows:** only later, with explicit chain/network, contract address, simulation, gas/fee preview and separate approval; never request private keys or seed phrases in chat.
-
-The first Solidity source-review module is a heuristic aid, not a compiler, auditor, exploitability verdict or formal verification system. Wallet security and recovery are separate later workstreams and must not be conflated with contract analysis.
-
 ## CyberLab OS — first-class platform workstream
 
 CyberLab OS is now a core product workstream, not a separate side project. It is the unified operating environment and local runtime management layer for CyberLab AI. It must preserve all existing web, agent, evidence, model and Kali companion functionality.
