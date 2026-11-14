@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Check, Search, Send, Sparkles, GitCompareArrows } from "lucide-react";
 import "./models.css";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
+type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; local?: boolean };
 type ConsensusResult = { model: string; answer?: string; error?: string };
 
 export default function ModelsPage() {
@@ -20,6 +20,7 @@ export default function ModelsPage() {
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [responseMode, setResponseMode] = useState<"single" | "comparison">("single");
+  const [localStatus, setLocalStatus] = useState("Pair your Kali companion to discover local Ollama models.");
 
   useEffect(() => {
     let alive = true;
@@ -33,6 +34,37 @@ export default function ModelsPage() {
       if (first) { setSelected([first.id]); setActive(first.id); }
     }).catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Could not load models."); })
       .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+    if (!token) {
+      setLocalStatus("Not paired · open Kali Connection to pair this browser.");
+      return;
+    }
+    fetch("http://127.0.0.1:8765/ollama/models", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    }).then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Local Ollama is unavailable.");
+      if (!alive) return;
+      const localModels = (data.models || []).filter((item: { name?: unknown }) => typeof item.name === "string").map((item: { name: string; size?: number | null }) => ({
+        id: "local:ollama:" + item.name,
+        name: item.name,
+        provider: "ollama (local)",
+        contextLength: null,
+        openWeight: true,
+        local: true,
+      } satisfies Model));
+      setModels((current) => [...current.filter((item) => !item.local), ...localModels]);
+      setLocalStatus(localModels.length ? `Connected · ${localModels.length} local models discovered` : "Ollama connected · no models installed yet.");
+    }).catch((cause) => {
+      if (alive) setLocalStatus(cause instanceof Error ? cause.message : "Could not reach the paired local Ollama service.");
+    });
     return () => { alive = false; };
   }, []);
 
@@ -61,6 +93,21 @@ export default function ModelsPage() {
     if (!prompt.trim() || !active || busy) return;
     setBusy(true); setReply(""); setError(""); setResponseMode("single");
     try {
+      if (activeModel?.local) {
+        const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+        if (!token) throw new Error("Pair your Kali companion first to use local Ollama models.");
+        const response = await fetch("http://127.0.0.1:8765/ollama/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ model: activeModel.name, prompt: prompt.trim(), history: [] }),
+          signal: AbortSignal.timeout(125000),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Local Ollama request failed.");
+        setReply(typeof data.response === "string" ? data.response : "The local model returned an empty response.");
+        setPrompt("");
+        return;
+      }
       const response = await fetch("/api/agent", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt.trim(), model: active, agentMode: activeModel?.openWeight ? "open-weight" : "standard", history: [] }),
@@ -115,7 +162,7 @@ export default function ModelsPage() {
     }
   }
 
-  const canCompare = selected.length >= 2 && selected.length <= 3;
+  const canCompare = selected.length >= 2 && selected.length <= 3 && selectedModels.length === selected.length && selectedModels.every((model) => !model.local);
 
   return <main className="model-workspace">
     <header className="mw-topbar">
@@ -134,7 +181,7 @@ export default function ModelsPage() {
         <div className="mw-model-list">{visible.slice(0, 180).map((m) => <button key={m.id} className={selected.includes(m.id) ? "mw-model selected" : "mw-model"} onClick={() => toggle(m.id)}>
           <span className="mw-provider">{m.provider.slice(0, 1).toUpperCase()}</span><span className="mw-model-name"><strong>{m.name}</strong><small>{m.provider} · {m.openWeight ? "Open-weight" : "Hosted"}</small></span>{selected.includes(m.id) && <Check size={14}/>}
         </button>)}</div>
-        <div className="mw-local"><strong>Local Ollama</strong><span>Companion discovery integration pending verification</span><b>PLANNED</b></div>
+        <div className="mw-local"><strong>Local Ollama</strong><span>{localStatus}</span><b>{localStatus.startsWith("Connected") || localStatus.startsWith("Ollama connected") ? "CONNECTED" : "PAIR REQUIRED"}</b></div>
       </aside>
       <section className="mw-centre">
         <div className="mw-heading"><small>EVALUATION & DISCOVERY</small><h2>Model intelligence centre</h2><p>Compare models using sourced benchmarks and reproducible CyberLab evaluations.</p></div>
@@ -149,11 +196,11 @@ export default function ModelsPage() {
       </section>
       <aside className="mw-chat"><div className="mw-chat-head"><small>ASSISTANT PANEL</small><h2>Research chat</h2></div>
         <div className="mw-active"><i/><span><small>ACTIVE MODEL</small><strong>{activeModel?.name || "Select a model"}</strong><small>{activeModel?.id || "No model selected"}</small></span></div>
-        <div className="mw-chat-body">{reply ? <pre className="mw-reply">{reply}</pre> : <div className="mw-chat-empty"><Sparkles size={24}/><h3>Research with your models</h3><p>Ask one model or compare two or three selected models in parallel, followed by an evidence-focused synthesis.</p></div>}</div>
+        <div className="mw-chat-body">{reply ? <pre className="mw-reply">{reply}</pre> : <div className="mw-chat-empty"><Sparkles size={24}/><h3>Research with your models</h3><p>Ask a cloud or paired local Ollama model, or compare two or three cloud models in parallel with an evidence-focused synthesis.</p></div>}</div>
         {error && <p className="mw-error">{error}</p>}
         <form className="mw-composer" onSubmit={sendMessage}><textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask CyberLab AI…" disabled={!active || busy}/><div><small>{responseMode === "comparison" ? "Parallel model comparison" : (activeModel?.provider || "Choose a model") + " · single-model request"}</small><button type="submit" disabled={!prompt.trim() || !active || busy}>{busy ? "…" : <Send size={15}/>}</button></div>
           <button type="button" className="mw-compare" onClick={compareSelectedModels} disabled={!prompt.trim() || !canCompare || busy}><GitCompareArrows size={14}/> Compare {selected.length} selected models</button>
-          {!canCompare && <small className="mw-compare-hint">Select two or three models to enable parallel comparison.</small>}
+          {!canCompare && <small className="mw-compare-hint">Select two or three cloud models to enable parallel comparison. Local models chat directly with Ollama.</small>}
         </form>
         <p className="mw-chat-note">Uses the CyberLab agent API and parallel consensus API. Model agreement is not independent verification.</p>
       </aside>
