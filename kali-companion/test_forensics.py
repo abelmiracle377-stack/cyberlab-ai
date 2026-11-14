@@ -82,6 +82,20 @@ class ForensicsSafetyTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "completed"):
                     forensics.inspect_image_filesystem("a" * 32, "/tmp/disk.img")
 
+    def test_image_probe_rejects_symlinked_image_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "real.img"
+            target.write_bytes(b"image")
+            alias = Path(directory) / "alias.img"
+            alias.symlink_to(target)
+            job_id = "c" * 32
+            with patch.dict(forensics._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(alias)}}), \
+                 patch.object(forensics.shutil, "which", return_value="/usr/sbin/blkid"), \
+                 patch.object(forensics.subprocess, "run") as run:
+                with self.assertRaisesRegex(ValueError, "symbolic link"):
+                    forensics.inspect_image_filesystem(job_id, str(alias))
+            run.assert_not_called()
+
     def test_image_probe_returns_only_allowlisted_read_only_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "disk.img"
