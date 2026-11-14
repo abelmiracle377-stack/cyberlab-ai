@@ -69,6 +69,13 @@ class ForensicsSafetyTests(unittest.TestCase):
                 forensics.build_recovery_manifest(str(root))
             self.assertEqual(manifest_path.read_text(encoding="utf-8"), "preserve")
 
+    def test_recovery_manifest_rejects_unbounded_file_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for limit in (0, -1, 5001, True):
+                with self.subTest(limit=limit):
+                    with self.assertRaisesRegex(ValueError, "between 1 and 5000"):
+                        forensics.build_recovery_manifest(directory, max_files=limit)
+
     def test_unknown_job_is_not_retrievable(self):
         self.assertIsNone(forensics.get_image_job("0" * 32))
 
