@@ -136,10 +136,19 @@ def plan_task(prompt: str) -> dict:
     ]
     if not needs_authorisation:
         steps[2] = "Confirm that supplied files, data and systems are owned by the user or authorised for analysis."
+    passive_suggestion = None
+    if "dns_osint" in categories and target:
+        # Domain OSINT is a passive lookup; it never implies permission to scan.
+        try:
+            import ipaddress
+            ipaddress.ip_address(target)
+        except ValueError:
+            if re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}", target, flags=re.I):
+                passive_suggestion = {"action": "domain", "value": target}
     return {
         "status": "plan_only",
         "summary": "Detected task type(s): " + ", ".join(categories).replace("_", " "),
-        "categories": categories,
+        "categories": categories,\n        "passive_research_suggestion": passive_suggestion,
         "target": target,
         "target_status": "candidate extracted; not yet validated or authorised" if target else "not provided",
         "requires_authorisation": needs_authorisation,
