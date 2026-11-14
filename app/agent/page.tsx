@@ -115,7 +115,7 @@ export default function AgentPage() {
         const response = await fetch("/api/agent/orchestrate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: text, model, maxSpecialists: 4 }),
+          body: JSON.stringify({ prompt: text, model, maxSpecialists: 4, agentMode }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Specialist orchestration failed.");
