@@ -15,6 +15,8 @@ const modules = [
 
 type Snapshot = { platform:string; release:string; architecture:string; uptime_seconds:number|null; load_average_1_5_15:number[]|null; memory_bytes:Record<string,number>; disk_root_bytes:{total:number;used:number;free:number}; process_count:number|null; nmap_available:boolean; collected_at:string; scope:string };
 
+type KaliTool = {name:string;category:string;binary:string;package:string|null;mode:string;purpose:string;installed:boolean;path:string|null;install_hint:string|null};
+type ToolInventory = {categories:{name:string;tools:KaliTool[]}[];tool_count:number;installed_count:number;missing_count:number;note:string};
 type Result = { target:string; ports_checked:number[]; duration_seconds:number; method:string; state_summary:{open:number;closed:number;filtered:number}; open_ports:{address:string;port:number;protocol:string;state:string;service:string;product:string;version:string}[]; hosts:{status:string;addresses:{address:string;type:string}[];ports:{port:number;state:string;service:string;product:string;version:string}[]}[]; note:string };
 
 export default function KaliConnectionPage() {
@@ -32,6 +34,8 @@ export default function KaliConnectionPage() {
   const [copied,setCopied]=useState(false);
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [telemetryBusy,setTelemetryBusy]=useState(false);
+  const [toolInventory,setToolInventory]=useState<ToolInventory|null>(null);
+  const [toolsBusy,setToolsBusy]=useState(false);
 
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
@@ -40,10 +44,21 @@ export default function KaliConnectionPage() {
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
       if(!data.nmap)throw new Error("Bridge is running, but Nmap is missing. Run: sudo apt install -y nmap");
+      const inventoryResponse=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const inventory=await inventoryResponse.json();
+      if(!inventoryResponse.ok)throw new Error(inventory.error||"Connected, but the Kali tool inventory could not be loaded. Update the local companion.");
+      setToolInventory(inventory as ToolInventory);
       sessionStorage.setItem("cyberlab.kaliBridgeToken", token.trim());
       setConnected(true);
     }catch(e){setError(e instanceof Error?e.message:"Could not connect. Start the Kali bridge and try again.");}
     finally{setChecking(false);}
+  }
+
+  async function refreshToolInventory(){
+    setToolsBusy(true);setError("");
+    try{const response=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
+    catch(e){setError(e instanceof Error?e.message:"Tool inventory request failed.");}
+    finally{setToolsBusy(false);}
   }
 
   async function refreshTelemetry(){
@@ -116,6 +131,25 @@ export default function KaliConnectionPage() {
         {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local Kali bridge. The pairing token is held only in this page's memory.</p>}
       </section>
 
+      {connected&&toolInventory&&<section className="kali-panel">
+        <h2>4. Kali tool inventory</h2>
+        <p>{toolInventory.installed_count} of {toolInventory.tool_count} catalogued tools detected · {toolInventory.missing_count} missing. Inventory checks executable availability only; it does not install or launch tools.</p>
+        <button className="report-download" type="button" onClick={refreshToolInventory} disabled={toolsBusy}>{toolsBusy?<><LoaderCircle size={14}/> Checking tools…</>:<><Activity size={14}/> Refresh tool inventory</>}</button>
+        <div className="kali-module-grid" style={{marginTop:14}}>
+          {toolInventory.categories.map(category=><div className="kali-module" key={category.name} style={{display:"block"}}>
+            <strong>{category.name}</strong>
+            <div style={{marginTop:8,display:"grid",gap:8}}>
+              {category.tools.map(tool=><div key={tool.name} style={{borderTop:"1px solid var(--line)",paddingTop:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}><strong>{tool.name}</strong><span>{tool.installed?"INSTALLED":"MISSING"}</span></div>
+                <p>{tool.purpose}</p><small>Mode: {tool.mode.replaceAll("_"," ")}</small>
+                {!tool.installed&&tool.install_hint&&<p><code>{tool.install_hint}</code></p>}
+              </div>)}
+            </div>
+          </div>)}
+        </div>
+        <p className="network-note">{toolInventory.note} Review package suggestions and install them yourself in the Kali terminal.</p>
+      </section>}
+
       {connected&&<section className="kali-panel">
         <h2>4. SOC host telemetry</h2>
         <p>Read-only health snapshot from the paired Kali machine. It does not collect usernames, process names, command lines, files or network payloads.</p>
@@ -136,7 +170,7 @@ export default function KaliConnectionPage() {
       </section>}
 
       {connected&&<section className="kali-panel">
-        <h2>5. Run an authorised Nmap assessment</h2>
+        <h2>6. Run an authorised Nmap assessment</h2>
         <div className="scope-warning"><AlertTriangle size={14}/> Only scan systems you own or have explicit written permission to assess. This checks selected TCP ports and reports open, closed or filtered states where determinable, with light service-version detection. No NSE scripts, exploit attempts, credentials, stealth or denial-of-service options.</div>
         <form className="report-editor" onSubmit={runAssessment}>
           <label>Target IP or hostname<input value={target} onChange={e=>setTarget(e.target.value)} placeholder="192.0.2.10 or lab.example.com" required maxLength={253}/></label>
