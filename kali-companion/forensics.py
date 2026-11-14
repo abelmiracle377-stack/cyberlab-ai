@@ -188,6 +188,63 @@ def inspect_image_filesystem(image_job_id: str, confirmation_image: str) -> dict
         "note": "Read-only signature probe only. The image was not mounted or modified. A missing signature does not prove that the image contains no recoverable data.",
     }
 
+
+def parse_mmls_partitions(output: str) -> list[dict]:
+    """Parse Sleuth Kit mmls rows, returning allocated partition entries only."""
+    partitions = []
+    row = re.compile(r"^\\s*(\\d{3}):\\s+(?:(?:\\d{3}:\\d{3}|Meta|-------)\\s+)?(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(.+?)\\s*$")
+    for line in output.splitlines():
+        match = row.match(line)
+        if not match:
+            continue
+        slot, start, end, length, description = match.groups()
+        if description.lower().startswith("unallocated") or description.lower().startswith("primary table"):
+            continue
+        start_sector, end_sector, sector_count = int(start), int(end), int(length)
+        if sector_count <= 0 or end_sector < start_sector or end_sector - start_sector + 1 != sector_count:
+            continue
+        partitions.append({
+            "slot": slot,
+            "start_sector": start_sector,
+            "end_sector": end_sector,
+            "length_sectors": sector_count,
+            "description": description[:200],
+        })
+    return partitions
+
+
+def inspect_image_partitions(image_job_id: str, confirmation_image: str) -> dict:
+    """List partition boundaries from a completed image using read-only Sleuth Kit mmls."""
+    with _jobs_lock:
+        source_job = _jobs.get(image_job_id)
+        source_job = dict(source_job) if source_job else None
+    if not source_job or source_job.get("state") != "completed":
+        raise ValueError("Choose a completed CyberLab ddrescue acquisition job.")
+    recorded_image = Path(str(source_job.get("image", "")))
+    if recorded_image.is_symlink():
+        raise ValueError("The acquired image path must not be a symbolic link.")
+    image = recorded_image.resolve(strict=True)
+    if not image.is_file():
+        raise ValueError("The acquired image is not a regular image file.")
+    if confirmation_image.strip() != str(image):
+        raise ValueError("Retype the exact acquired image path to confirm partition analysis.")
+    if not shutil.which("mmls"):
+        raise ValueError("Sleuth Kit mmls is required. Install it with: sudo apt install -y sleuthkit")
+    result = subprocess.run(
+        ["mmls", str(image)],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError((result.stderr or result.stdout or "Partition analysis failed.")[:500])
+    partitions = parse_mmls_partitions(result.stdout)
+    return {
+        "image": str(image),
+        "partitions": partitions,
+        "partition_count": len(partitions),
+        "method": "Sleuth Kit mmls partition-table analysis",
+        "note": "Read-only partition-boundary analysis of the acquired image. No partition was mounted, repaired or modified. An empty result can mean an unsupported, damaged or absent partition table; it does not prove that no recoverable data exists.",
+    }
+
 def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dict:
     """Hash regular recovered files without following symlinks; cap work for safety."""
     if type(max_files) is not int or not 1 <= max_files <= 5000:
