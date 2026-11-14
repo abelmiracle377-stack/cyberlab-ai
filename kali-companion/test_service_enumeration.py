@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from service_enumeration import ALLOWED_PORTS, enumerate_services
+from service_enumeration import ALLOWED_PORTS, enumerate_services, _probe_one
 
 
 class ServiceEnumerationTests(unittest.TestCase):
@@ -36,6 +36,27 @@ class ServiceEnumerationTests(unittest.TestCase):
         self.assertEqual(result["ports_checked"], [22, 80])
         self.assertEqual([row["service"] for row in result["services"]], ["ssh", "http"])
         self.assertIn("Non-authenticating", result["note"])
+
+    def test_http_probe_sends_only_head_request(self):
+        class FakeSocket:
+            def __init__(self):
+                self.sent = b""
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def settimeout(self, timeout):
+                pass
+            def sendall(self, data):
+                self.sent += data
+            def recv(self, size):
+                return b"HTTP/1.0 200 OK\\r\\nServer: test\\r\\n\\r\\n"
+        fake = FakeSocket()
+        with patch("service_enumeration.socket.create_connection", return_value=fake):
+            result = _probe_one("lab.example.org", 80)
+        self.assertTrue(fake.sent.startswith(b"HEAD / HTTP/1.0"))
+        self.assertNotIn(b"GET ", fake.sent)
+        self.assertEqual(result["state"], "open")
 
     def test_no_command_execution_or_credentials_are_part_of_result(self):
         with patch("service_enumeration._probe_one", return_value={"port": 21, "state": "open", "service": "ftp", "banner": "220 ready"}):
