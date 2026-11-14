@@ -10,6 +10,9 @@ fi
 cat >/usr/local/bin/cyberlab <<'LAUNCHER'
 #!/bin/sh
 set -eu
+if [ "$#" -eq 0 ]; then
+  exec python3 /usr/local/lib/cyberlab/menu.py
+fi
 exec python3 /opt/cyberlab-ai/kali-companion/cyberlab.py "$@"
 LAUNCHER
 chmod 0755 /usr/local/bin/cyberlab
