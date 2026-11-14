@@ -38,6 +38,38 @@ class FilesystemAnalysisTests(unittest.TestCase):
             self.assertEqual(run.call_args_list[1].args[0], ["fsstat", "-o", "2048", str(image)])
             self.assertIn("not mounted", result["note"])
 
+    def test_fsstat_requires_exact_image_confirmation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "disk.img"
+            image.write_bytes(b"image")
+            job_id = "c" * 32
+            with patch.dict(filesystem_analysis._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}):
+                with self.assertRaisesRegex(ValueError, "exact acquired image path"):
+                    filesystem_analysis.inspect_partition_filesystem(job_id, str(image) + ".other", 2048)
+
+    def test_fsstat_rejects_symlinked_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "disk.img"
+            image.write_bytes(b"image")
+            alias = Path(directory) / "alias.img"
+            alias.symlink_to(image)
+            job_id = "d" * 32
+            with patch.dict(filesystem_analysis._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(alias)}}):
+                with self.assertRaisesRegex(ValueError, "symbolic link"):
+                    filesystem_analysis.inspect_partition_filesystem(job_id, str(image), 2048)
+
+    def test_fsstat_rejects_unavailable_partition_tool_without_running_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "disk.img"
+            image.write_bytes(b"image")
+            job_id = "e" * 32
+            with patch.dict(filesystem_analysis._jobs, {job_id: {"id": job_id, "state": "completed", "image": str(image)}}):
+                with patch.object(filesystem_analysis.shutil, "which", return_value=None):
+                    with patch.object(filesystem_analysis.subprocess, "run") as run:
+                        with self.assertRaisesRegex(ValueError, "mmls is required"):
+                            filesystem_analysis.inspect_partition_filesystem(job_id, str(image), 2048)
+            run.assert_not_called()
+
     def test_fsstat_rejects_boolean_and_negative_offsets(self):
         for offset in (True, -1, 2**64):
             with self.subTest(offset=offset):
