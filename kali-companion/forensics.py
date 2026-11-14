@@ -61,6 +61,13 @@ def _validate_acquisition(source: str, destination_dir: str, filename: str) -> t
     dest_majmin, mountpoint = _mount_device(dest_dir)
     if not dest_majmin or not mountpoint:
         raise ValueError("Could not verify the destination filesystem device.")
+    tree = json.loads(_run(["lsblk", "--json", "-o", "PATH,TYPE,MOUNTPOINTS", str(source_path)]))
+    def mounted(node):
+        if any(point for point in (node.get("mountpoints") or [])):
+            return True
+        return any(mounted(child) for child in node.get("children", []))
+    if any(mounted(node) for node in tree.get("blockdevices", [])):
+        raise ValueError("A source partition is mounted. Boot from a live USB and unmount every source partition before imaging.")
     source_ancestors = _ancestors(str(source_path))
     dest_ancestors = _ancestors("/dev/block/" + dest_majmin) if Path("/dev/block/" + dest_majmin).exists() else {dest_majmin}
     if source_ancestors.intersection(dest_ancestors):
@@ -69,6 +76,15 @@ def _validate_acquisition(source: str, destination_dir: str, filename: str) -> t
     map_path = dest_dir / (filename + ".log")
     if image_path.exists() or map_path.exists():
         raise ValueError("Image or ddrescue map file already exists. Choose a new filename; existing files are never overwritten.")
+    # Reserve both output paths atomically before starting ddrescue; never overwrite prior evidence.
+    fd = os.open(str(image_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(fd)
+    try:
+        fd = os.open(str(map_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+    except Exception:
+        image_path.unlink(missing_ok=True)
+        raise
     return str(source_path), image_path, map_path
 
 
@@ -113,3 +129,53 @@ def get_image_job(job_id: str) -> dict | None:
         if not record:
             return None
         return {"job": dict(record)}
+
+
+def start_foremost_recovery(image_job_id: str, output_directory: str, confirmation_image: str) -> dict:
+    with _jobs_lock:
+        source_job = _jobs.get(image_job_id)
+        source_job = dict(source_job) if source_job else None
+    if not source_job or source_job.get("state") != "completed":
+        raise ValueError("Choose a completed CyberLab ddrescue acquisition job.")
+    image = Path(str(source_job.get("image", ""))).resolve(strict=True)
+    if confirmation_image.strip() != str(image):
+        raise ValueError("Retype the exact forensic image path to confirm recovery.")
+    if not shutil.which("foremost"):
+        raise ValueError("Foremost is required. Install it with: sudo apt install -y foremost")
+    parent = Path(output_directory).expanduser().resolve(strict=True)
+    if not parent.is_dir():
+        raise ValueError("Choose an existing destination parent directory on a mounted backup drive.")
+    dest_majmin, _ = _mount_device(parent)
+    dest_ancestors = _ancestors("/dev/block/" + dest_majmin) if dest_majmin and Path("/dev/block/" + dest_majmin).exists() else {dest_majmin}
+    source_ancestors = _ancestors(str(source_job["source"]))
+    if source_ancestors.intersection(dest_ancestors):
+        raise ValueError("Recovery output is on the original source device. Choose a different physical drive.")
+    output = parent / ("cyberlab-foremost-" + time.strftime("%Y%m%d-%H%M%S"))
+    output.mkdir(mode=0o700, exist_ok=False)
+    if not _acquisition_lock.acquire(blocking=False):
+        output.rmdir()
+        raise ValueError("Another forensic acquisition or recovery job is already running.")
+    job_id = uuid.uuid4().hex
+    record = {"id": job_id, "kind": "foremost", "state": "running", "source": str(source_job["source"]), "image": str(image), "output": str(output), "started_at": time.time(), "message": "Foremost recovery started from the verified disk image."}
+    with _jobs_lock:
+        _jobs[job_id] = record
+
+    def worker():
+        try:
+            command = ["foremost", "-t", "jpg,png,gif,bmp,tif,doc,pdf,xls,ppt,zip", "-i", str(image), "-o", str(output)]
+            completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            with _jobs_lock:
+                record["state"] = "completed" if completed.returncode == 0 else "failed"
+                record["return_code"] = completed.returncode
+                record["message"] = "Foremost finished. Review its audit.txt and validate every recovered file." if completed.returncode == 0 else (completed.stderr or "Foremost failed.")[-1200:]
+                record["finished_at"] = time.time()
+        except Exception as exc:
+            with _jobs_lock:
+                record["state"] = "failed"
+                record["message"] = str(exc)[:1200]
+                record["finished_at"] = time.time()
+        finally:
+            _acquisition_lock.release()
+
+    threading.Thread(target=worker, name="cyberlab-foremost", daemon=True).start()
+    return {"job": {key: value for key, value in record.items() if key != "started_at"}, "note": "Recovery reads only the forensic image. Recovered output is written to a new directory on the backup drive."}
