@@ -501,41 +501,29 @@ def solidity_test_runner_status() -> dict:
         return {"available": False, "message": "Could not verify rootless Podman and the local image."}
 
 
-def _validate_solidity_test_files(files: object) -> list[dict]:
-    if not isinstance(files, list) or not 2 <= len(files) <= SOLIDITY_TEST_FILES:
-        raise ValueError("Provide 2–20 files: at least one src/*.sol contract and one test/*.t.sol test.")
-    cleaned, seen, total = [], set(), 0
-    has_source = has_test = False
+def _validate_solidity_test_files(files: object, dependency_lock: object = None) -> tuple[list[dict], list[str]]:
+    if not isinstance(files, list) or not 2 <= len(files) <= 100:
+        raise ValueError("Provide 2–100 project files, including a contract and a Foundry test.")
+    seen, has_source, has_test = set(), False, False
     for item in files:
-        if not isinstance(item, dict) or set(item) - {"path", "content"}:
-            raise ValueError("Each file must contain only path and content.")
-        path, content = item.get("path"), item.get("content")
-        if not isinstance(path, str) or not isinstance(content, str):
-            raise ValueError("Every Solidity file needs a text path and content.")
-        if not (re.fullmatch(r"src/[A-Za-z0-9_.-]+\.sol", path) or re.fullmatch(r"test/[A-Za-z0-9_.-]+\.t\.sol", path)):
-            raise ValueError("Only flat src/*.sol and test/*.t.sol paths are accepted.")
+        if not isinstance(item, dict) or set(item) != {"path", "content"}:
+            raise ValueError("Each project file must contain only path and content.")
+        path = item["path"]
+        if not isinstance(path, str):
+            raise ValueError("Every Solidity file needs a text path.")
         if path in seen:
             raise ValueError("Duplicate project paths are not accepted.")
         seen.add(path)
-        size = len(content.encode("utf-8"))
-        if not content.strip() or size > 50000:
-            raise ValueError("Each Solidity file must contain 1–50,000 UTF-8 bytes.")
-        if re.search(r"\bimport\b", content):
-            raise ValueError("Imports and external dependencies are disabled in this first test-runner stage.")
-        total += size
-        if total > SOLIDITY_TEST_TOTAL:
-            raise ValueError("Combined project source exceeds 100,000 bytes.")
-        has_source = has_source or path.startswith("src/")
-        has_test = has_test or path.startswith("test/")
-        cleaned.append({"path": path, "content": content})
+        has_source = has_source or bool(re.fullmatch(r"src/[A-Za-z0-9_.-]+\.sol", path))
+        has_test = has_test or bool(re.fullmatch(r"test/[A-Za-z0-9_.-]+\.t\.sol", path))
     if not has_source or not has_test:
         raise ValueError("Include at least one src/*.sol contract and one test/*.t.sol test.")
-    return cleaned
+    sources, remappings = _validate_solidity_project(files, dependency_lock if dependency_lock is not None else [])
+    return [{"path": path, "content": content} for path, content in sources.items()], remappings
 
-
-def run_solidity_tests(files: object) -> dict:
+def run_solidity_tests(files: object, dependency_lock: object = None) -> dict:
     """Run Foundry only in a preloaded rootless Podman sandbox; never on host."""
-    project_files = _validate_solidity_test_files(files)
+    project_files, remappings = _validate_solidity_test_files(files, dependency_lock)
     status = solidity_test_runner_status()
     if not status["available"]:
         raise FileNotFoundError(status["message"])
@@ -550,7 +538,13 @@ def run_solidity_tests(files: object) -> dict:
                 destination = root / item["path"]
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text(item["content"], encoding="utf-8")
-            foundry_config = (\n                '[profile.default]\\nsrc = "src"\\ntest = "test"\\nout = "out"\\n'\n                'cache_path = "cache"\\nlibs = ["lib"]\\nauto_detect_solc = true\\noptimizer = false\\n'\n                'remappings = ' + json.dumps(remappings) + '\\n'\n            )\n            (root / "foundry.toml").write_text(foundry_config, encoding="utf-8")\n            command = [
+            foundry_config = (
+                '[profile.default]\nsrc = "src"\ntest = "test"\nout = "out"\n'
+                'cache_path = "cache"\nlibs = ["lib"]\nauto_detect_solc = true\noptimizer = false\n'
+                'remappings = ' + json.dumps(remappings) + '\n'
+            )
+            (root / "foundry.toml").write_text(foundry_config, encoding="utf-8")
+            command = [
                 executable, "run", "--rm", "--pull=never", "--network=none",
                 "--memory=1g", "--cpus=1", "--pids-limit=64", "--read-only",
                 "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
@@ -676,7 +670,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else SOLIDITY_TEST_BODY if path == "/solidity/tests/run" else MAX_SOLIDITY_PROJECT_BODY if path == "/solidity/project/compile" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
+            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else MAX_SOLIDITY_PROJECT_BODY if path == "/solidity/tests/run" else MAX_SOLIDITY_PROJECT_BODY if path == "/solidity/project/compile" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
             if length < 2 or length > limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
