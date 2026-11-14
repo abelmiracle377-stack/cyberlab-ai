@@ -40,10 +40,10 @@ def main() -> int:
         try:
             choice = ask("Select an option: ")
         except EOFError:
-            print("\\nInput closed; exiting.")
+            print("\nInput closed; exiting.")
             return 0
         except KeyboardInterrupt:
-            print("\\nInterrupted; exiting.")
+            print("\nInterrupted; exiting.")
             return 130
         if choice == "0":
             return 0
@@ -61,7 +61,14 @@ def main() -> int:
             return 130
         except (OSError, ValueError) as exc:
             print(f"Input error: {exc}", file=sys.stderr)
-        ask("\nPress Enter to return to the menu...")
+        try:
+            ask("\nPress Enter to return to the menu...")
+        except EOFError:
+            print("\nInput closed; exiting.")
+            return 0
+        except KeyboardInterrupt:
+            print("\nInterrupted; exiting.")
+            return 130
 
 
 if __name__ == "__main__":
