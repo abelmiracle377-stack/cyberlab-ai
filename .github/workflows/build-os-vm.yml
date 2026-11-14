@@ -1,0 +1,37 @@
+name: Build CyberLab AI OS VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install VM build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libguestfs-tools qemu-utils
+      - name: Build Debian-based CyberLab OS disk
+        env:
+          CYBERLAB_VM_PASSWORD: ${{ secrets.CYBERLAB_VM_PASSWORD }}
+        run: |
+          if [ -z "$CYBERLAB_VM_PASSWORD" ]; then
+            echo "Add CYBERLAB_VM_PASSWORD as a repository Actions secret before running this workflow."
+            exit 1
+          fi
+          chmod +x scripts/os/*.sh
+          ./scripts/os/build-vm.sh
+      - name: Verify QCOW2 structure
+        run: ./scripts/os/verify-vm.sh dist/cyberlab-ai-os-amd64.qcow2
+      - name: Upload VM image
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-amd64-qcow2
+          path: dist/cyberlab-ai-os-amd64.qcow2
+          if-no-files-found: error
+          retention-days: 7
