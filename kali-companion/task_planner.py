@@ -14,7 +14,7 @@ from tool_catalog import inspect_tool_catalog
 MAX_PROMPT_CHARS = 4000
 
 PATTERNS = [
-    ("network_recon", ("nmap", "port scan", "open ports", "service scan", "network scan", "host discovery", "enumerate ports")),
+    ("network_recon", ("nmap", "port scan", "open ports", "service scan", "network scan", "scan ", "host discovery", "enumerate ports")),
     ("web_assessment", ("web app", "website", "http", "https", "web server", "directory scan", "wordpress", "sql injection", "xss", "api endpoint")),
     ("dns_osint", ("dns", "subdomain", "domain", "whois", "certificate transparency", "theharvester", "amass")),
     ("vulnerability_research", ("vulnerability", "cve", "exploit-db", "searchsploit", "is it vulnerable", "security advisory")),
