@@ -20,6 +20,23 @@ const rules: Array<{id:string;severity:SoliditySeverity;title:string;pattern:Reg
 function maskCommentsAndStrings(source:string):string {
  return source.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,(match)=>match.replace(/[^\r\n]/g," "));
 }
+
+// Preserve quoted import paths while blanking comments. This prevents commented-out
+// imports from entering the inventory without erasing real dependency strings.
+function maskCommentsPreservingStrings(source:string):string {
+ let output="", quote="", escaped=false, lineComment=false, blockComment=false;
+ for(let i=0;i<source.length;i++){
+  const char=source[i], next=source[i+1];
+  if(lineComment){if(char==="\n"||char==="\r"){lineComment=false;output+=char;}else output+=" ";continue;}
+  if(blockComment){if(char==="*"&&next==="/"){output+="  ";i++;blockComment=false;}else output+=char==="\n"||char==="\r"?char:" ";continue;}
+  if(quote){output+=char;if(escaped){escaped=false;continue;}if(char==="\\"){escaped=true;continue;}if(char===quote)quote="";continue;}
+  if(char==='"'||char==="'"){quote=char;output+=char;continue;}
+  if(char==="/"&&next==="/"){output+="  ";i++;lineComment=true;continue;}
+  if(char==="/"&&next==="*"){output+="  ";i++;blockComment=true;continue;}
+  output+=char;
+ }
+ return output;
+}
 function lineAt(source:string,index:number):number{return source.slice(0,index).split("\n").length;}
 export function analyzeSoliditySource(source:string):SolidityAnalysis {
  if(typeof source!=="string"||!source.trim())throw new Error("Paste Solidity source code to analyse.");
@@ -45,7 +62,7 @@ export function analyzeSoliditySource(source:string):SolidityAnalysis {
   contracts:extract(/\bcontract\s+([A-Za-z_$][\w$]*)/g),
   interfaces:extract(/\binterface\s+([A-Za-z_$][\w$]*)/g),
   libraries:extract(/\blibrary\s+([A-Za-z_$][\w$]*)/g),
-  imports:extract(/import\s+(?:[^'"]*from\s+)?['"]([^'"]+)['"]\s*;/g),
+  imports:[...maskCommentsPreservingStrings(source).matchAll(/\bimport\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]\s*;/g)].map(m=>m[1]),
   functions:[...clean.matchAll(/\bfunction\s+[A-Za-z_$][\w$]*\s*\(/g)].length,
   findings:ordered,summary,
   limitations:["Pattern-based source review only; this is not a Solidity compiler, Slither, Mythril, fuzzing, symbolic execution, or formal verification.","A detected pattern is a review lead, not proof of exploitability. Absence of findings does not mean the contract is secure.","The analyzer does not resolve inheritance, modifiers, control flow, storage layout, external dependencies, or chain-specific semantics.","Do not paste private keys, seed phrases, production secrets, or confidential source into an untrusted deployment."]
