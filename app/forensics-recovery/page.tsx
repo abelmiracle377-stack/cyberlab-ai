@@ -116,8 +116,8 @@ export default function ForensicsRecoveryPage(){
       <div className="agent-heading"><div className="agent-overline">ANALYSIS & EVIDENCE / ADDITIVE MODULE</div><h1>File & picture recovery</h1><p>Carve contiguous JPEG, PNG, GIF and PDF candidates from a user-supplied disk image or forensic export. Source data is read locally and never modified or uploaded.</p></div>
       <div className="vault-security"><ShieldCheck size={16}/><div><strong>Non-destructive evidence handling</strong><p>CyberLab reads a copy you select, records its SHA-256 hash and exports recovered candidates as new files. It never writes to the source device.</p></div></div>
       <section className="module-page-panel panel" style={{marginTop:18}}>
-        <h2 style={{marginTop:0}}>Kali-connected forensic acquisition</h2>
-        <p>Connect the local Kali bridge to inventory disks and create a ddrescue image on a separately mounted destination drive. This action requires the companion to run with root privileges. Inventory does not write to disks.</p>
+        <h2 style={{marginTop:0}}>Kali / CyberLab AI OS forensic acquisition</h2>
+        <p>Connect the local Kali or CyberLab AI OS Linux runner to inventory disks and create a ddrescue image on a separately mounted destination drive. This action requires the companion to run with root privileges. Inventory does not write to disks.</p>
         <label className="vault-field"><span>Kali bridge pairing token</span><input type="password" autoComplete="off" value={bridgeToken} onChange={e=>{setBridgeToken(e.target.value);setPaired(false);}} placeholder="Paste token printed by the Kali bridge"/></label>
         <button className="network-run" type="button" onClick={pairKali} disabled={!bridgeToken.trim()||bridgeBusy}>{bridgeBusy?"Connecting…":"Connect and list drives"}</button>
         {paired&&<><div className="malware-kv"><span>Connection</span><strong>LOCAL KALI BRIDGE PAIRED</strong></div>
