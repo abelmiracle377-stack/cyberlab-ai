@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CHAIN_REGISTRY } from "@/lib/chain-registry";
 import { ArrowLeft, ShieldCheck, Code2, Search, AlertTriangle, FileCode2, Sparkles, LoaderCircle } from "lucide-react";
 
 type Model = { id: string; name: string; provider: string; openWeight: boolean };
@@ -245,7 +246,7 @@ export default function SolidityLabPage() {
               <div><label htmlFor="contract-language">LANGUAGE</label><select id="contract-language" value={language} onChange={event => setLanguage(event.target.value)}><option>Solidity</option><option>Vyper</option><option>Move</option><option>Rust (Anchor)</option></select></div>
               <div><label htmlFor="contract-model">AI MODEL</label><select id="contract-model" value={model} onChange={event => setModel(event.target.value)} disabled={!models.length}><option value="">{models.length ? "Select model" : "No open-weight model available"}</option>{models.map(item => <option key={item.id} value={item.id}>{item.name} · {item.provider}</option>)}</select></div>
               <div><label htmlFor="contract-version">COMPILER / TOOLCHAIN</label><input id="contract-version" value={compilerVersion} onChange={event => setCompilerVersion(event.target.value)} placeholder="e.g. 0.8.20" maxLength={80} /></div>
-              <div><label htmlFor="contract-chain">TARGET CHAIN / VM</label><input id="contract-chain" value={targetChain} onChange={event => setTargetChain(event.target.value)} required maxLength={100} /></div>
+              <div><label htmlFor="contract-chain">TARGET CHAIN / VM</label><input id="contract-chain" list="known-chain-options" value={targetChain} onChange={event => setTargetChain(event.target.value)} required maxLength={100} /><datalist id="known-chain-options">{CHAIN_REGISTRY.map(chain => <option key={chain.chainId} value={`${chain.name} (chain ID ${chain.chainId})`} />)}</datalist><small>Curated chain IDs are reference metadata only; confirm the connected wallet network independently. Custom networks remain supported.</small></div>
               <div><label htmlFor="contract-standard">STANDARD / FRAMEWORK</label><input id="contract-standard" value={standard} onChange={event => setStandard(event.target.value)} maxLength={100} placeholder="e.g. ERC-721, OpenZeppelin" /></div>
               <div><label htmlFor="contract-project">PROJECT NAME</label><input id="contract-project" value={projectName} onChange={event => setProjectName(event.target.value)} required maxLength={80} /></div>
             </div>
