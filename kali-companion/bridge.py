@@ -194,6 +194,38 @@ def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
     return {"model": model, "response": content[:50000], "done": bool(result.get("done", False))}
 
 
+def environment_capabilities() -> dict:
+    """Read-only discovery for CyberLab OS; never installs or starts runtimes."""
+    os_release = {}
+    try:
+        for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+            if "=" in line:
+                key, value = line.split("=", 1)
+                os_release[key] = value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+
+    runtimes = {
+        "docker": {"installed": bool(shutil.which("docker")), "executable": shutil.which("docker")},
+        "podman": {"installed": bool(shutil.which("podman")), "executable": shutil.which("podman")},
+        "qemu": {"installed": bool(shutil.which("qemu-system-x86_64") or shutil.which("qemu-system-aarch64")), "executable": shutil.which("qemu-system-x86_64") or shutil.which("qemu-system-aarch64")},
+        "libvirt": {"installed": bool(shutil.which("virsh")), "executable": shutil.which("virsh")},
+        "virtualbox": {"installed": bool(shutil.which("VBoxManage")), "executable": shutil.which("VBoxManage")},
+    }
+    return {
+        "platform": platform.system(),
+        "distribution": os_release.get("PRETTY_NAME") or platform.platform(),
+        "distribution_id": os_release.get("ID", "").lower(),
+        "architecture": platform.machine(),
+        "cpu_count": os.cpu_count(),
+        "hardware_virtualization_device": Path("/dev/kvm").exists(),
+        "wsl": bool(os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP")),
+        "runtimes": runtimes,
+        "detected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "scope": "Read-only capability discovery. No packages were installed, no containers or virtual machines were started, and no host commands were executed.",
+    }
+
+
 def system_snapshot() -> dict:
     """Return bounded, non-sensitive host health metrics; never process args or user data."""
     memory = {}
@@ -274,7 +306,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system", "/ollama/health", "/ollama/models"}:
+        if path not in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
