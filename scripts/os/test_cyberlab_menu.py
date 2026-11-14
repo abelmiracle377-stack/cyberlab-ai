@@ -3,14 +3,18 @@ from __future__ import annotations
 
 import contextlib
 import io
-import sys
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cyberlab_menu  # noqa: E402
+MENU_PATH = Path(__file__).resolve().parent / "cyberlab-menu.py"
+SPEC = importlib.util.spec_from_file_location("cyberlab_menu", MENU_PATH)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError(f"Cannot load CyberLab menu module: {MENU_PATH}")
+cyberlab_menu = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(cyberlab_menu)
 
 
 class CyberLabMenuTests(unittest.TestCase):
