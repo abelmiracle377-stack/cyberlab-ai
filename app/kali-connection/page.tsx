@@ -133,11 +133,7 @@ export default function KaliConnectionPage() {
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
-        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"
-"}cd cyberlab-ai{"
-"}git checkout feature/additive-forensics-recovery{"
-"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"
-"}python3 kali-companion/cyberlab.py doctor</pre>
+        <pre>git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git{"\\n"}cd cyberlab-ai{"\\n"}git checkout feature/additive-forensics-recovery{"\\n"}sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g{"\\n"}python3 kali-companion/cyberlab.py doctor</pre>
         <p>For this preview build, check out <code>feature/additive-forensics-recovery</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>main</code> and pull the latest changes.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
