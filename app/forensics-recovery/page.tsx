@@ -70,6 +70,9 @@ function carve(data:Uint8Array):Recovered[]{
   }
   return accepted;
 }
+function flattenBlockDevices(nodes:BlockDevice[]):BlockDevice[]{
+  return nodes.flatMap(node=>[node,...flattenBlockDevices(((node as any).children||[]) as BlockDevice[])]);
+}
 function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).toFixed(1)} KB`:`${(n/1024/1024).toFixed(2)} MB`;}
 
 export default function ForensicsRecoveryPage(){
@@ -85,7 +88,7 @@ export default function ForensicsRecoveryPage(){
       const h=await health.json();if(!health.ok)throw new Error(h.error||"Could not connect to Kali.");
       const inventory=await fetch("http://127.0.0.1:8765/forensics/devices",{headers,cache:"no-store"});
       const d=await inventory.json();if(!inventory.ok)throw new Error(d.error||"Could not read block-device inventory.");
-      setDevices((d.devices||[]).flatMap((item:BlockDevice)=>[item,...((item as any).children||[])]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
+      setDevices(flattenBlockDevices((d.devices||[]) as BlockDevice[]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
       setPaired(true);setBridgeMessage("Kali connected. Device inventory is read-only; no drive has been mounted or modified.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Kali connection failed.");}
     finally{setBridgeBusy(false);}
@@ -93,7 +96,7 @@ export default function ForensicsRecoveryPage(){
   async function refreshDevices(){
     const response=await fetch("http://127.0.0.1:8765/forensics/devices",{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
     const data=await response.json();if(!response.ok)throw new Error(data.error||"Device inventory failed.");
-    setDevices((data.devices||[]).flatMap((item:BlockDevice)=>[item,...((item as any).children||[])]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
+    setDevices(flattenBlockDevices((data.devices||[]) as BlockDevice[]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
   }
   async function runForemost(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before starting recovery.");return;}
