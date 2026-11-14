@@ -158,3 +158,10 @@ After a successful local service-identification run, choose **Correlate evidence
 CVE matches are explicitly labelled **unverified reference candidates**. The report does not convert a keyword match, open port, banner or CVSS score into a vulnerability finding. It records lookup failures, confidence context, evidence limitations and safe verification steps. Service names alone do not trigger broad CVE searches when no product/version was identified. No new target connection, exploit check, authentication or configuration change is performed during correlation.
 
 The report is only as reliable as the evidence supplied to it. Confirm exact vendor, product, version, configuration and patch state against the asset owner and official vendor advisories before making a finding. This stage is evidence correlation, not an automated vulnerability verdict.
+
+
+### Static artifact and recovery-manifest evidence
+
+The authenticated `POST /evidence/artifacts` endpoint accepts bounded JSON from the companion's existing static `triage` command or the SHA-256 recovery manifest. It validates the file hash, size and entropy fields, limits indicator arrays, checks manifest paths against traversal, rejects malformed hashes, and summarises recovered file extensions, sizes and hashes. The analysis never opens or executes a sample; it does not upload files or contact third-party reputation services.
+
+The report keeps heuristic string indicators and entropy separate from conclusions. High entropy may reflect ordinary compression or encryption, and a matching string is only a prompt for contextual review. The recovery manifest proves only that listed bytes matched the recorded hashes when the manifest was created; it does not prove file authenticity, original filenames or safe contents. No automatic malware verdict or risk finding is issued. The Kali dashboard includes a paste-in JSON panel for a triage result or recovery manifest so this analysis can be used without adding a sample-upload path.
