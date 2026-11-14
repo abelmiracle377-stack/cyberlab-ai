@@ -67,3 +67,18 @@ test("returns explicit limitations even when no rule matches", () => {
  assert.ok(result.limitations.some(item=>item.includes("not a Solidity compiler")));
  assert.ok(result.limitations.some(item=>item.includes("Absence of findings")));
 });
+
+
+test("adds cautious NFT review leads without claiming missing controls", () => {
+ const result=analyzeSoliditySource(`pragma solidity 0.8.24;
+contract Collection {
+ function mint(address to) external {}
+ function _safeMint(address to, uint256 id) internal {}
+ function tokenURI(uint256 id) public view returns(string memory) { return ""; }
+ function royaltyInfo(uint256 id, uint256 salePrice) external view returns(address,uint256) { return (address(0), salePrice); }
+}`);
+ assert.ok(result.findings.some(f=>f.id==="SOL-013"));
+ assert.ok(result.findings.some(f=>f.id==="SOL-014"));
+ assert.ok(result.findings.some(f=>f.id==="SOL-015"));
+ assert.ok(result.findings.some(f=>f.id==="SOL-016"));
+});
