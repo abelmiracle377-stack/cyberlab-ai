@@ -76,9 +76,7 @@ def _validate_acquisition(source: str, destination_dir: str, filename: str) -> t
     map_path = dest_dir / (filename + ".log")
     if image_path.exists() or map_path.exists():
         raise ValueError("Image or ddrescue map file already exists. Choose a new filename; existing files are never overwritten.")
-    # Reserve both output paths atomically before starting ddrescue; never overwrite prior evidence.
-    fd = os.open(str(image_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    os.close(fd)
+    # The caller reserves the image only after all confirmations and tool checks pass.
     # ddrescue creates and updates its own map file; do not pre-create an invalid empty map.
     return str(source_path), image_path, map_path
 
@@ -91,6 +89,15 @@ def start_image_acquisition(source: str, destination_dir: str, filename: str, co
         raise ValueError("GNU ddrescue is required. Install it with: sudo apt install -y gddrescue")
     if not _acquisition_lock.acquire(blocking=False):
         raise ValueError("Another disk acquisition is already running.")
+    try:
+        fd = os.open(str(image_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+        if map_path.exists():
+            image_path.unlink(missing_ok=True)
+            raise ValueError("The ddrescue map file already exists. Choose a new image filename.")
+    except Exception:
+        _acquisition_lock.release()
+        raise
     job_id = uuid.uuid4().hex
     record = {"id": job_id, "state": "running", "source": source_path, "image": str(image_path), "map": str(map_path), "started_at": time.time(), "message": "Acquisition started. Source is opened read-only by ddrescue."}
     with _jobs_lock:
