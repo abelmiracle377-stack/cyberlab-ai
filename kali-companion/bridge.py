@@ -15,6 +15,8 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,9 +25,11 @@ from urllib.parse import urlparse
 HOST = "127.0.0.1"
 PORT = 8765
 MAX_BODY = 8192
+MAX_OLLAMA_BODY = 65536
+OLLAMA_URL = "http://127.0.0.1:11434"
 MAX_PORTS = 100
 MAX_RUNTIME = 55
-ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app"}
+ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"}
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
@@ -112,6 +116,76 @@ def parse_report(xml_text: str) -> dict:
     }
 
 
+
+def ollama_request(path: str, payload: dict | None = None, timeout: int = 12) -> dict:
+    """Talk only to the fixed Ollama loopback service; callers cannot supply a host or URL."""
+    if path not in {"/api/tags", "/api/chat"}:
+        raise ValueError("Unsupported local model operation.")
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        OLLAMA_URL + path,
+        data=body,
+        headers={"Content-Type": "application/json"} if body is not None else {},
+        method="POST" if body is not None else "GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read(2_000_001)
+        if len(raw) > 2_000_000:
+            raise ValueError("Local model response exceeded the 2 MB limit.")
+        result = json.loads(raw.decode("utf-8"))
+        if not isinstance(result, dict):
+            raise ValueError("Local model service returned an invalid response.")
+        return result
+    except urllib.error.URLError as exc:
+        raise ConnectionError("Ollama is unavailable at 127.0.0.1:11434. Start Ollama locally and try again.") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Ollama returned invalid JSON.") from exc
+
+
+def ollama_models() -> list[dict]:
+    result = ollama_request("/api/tags")
+    models = result.get("models", [])
+    if not isinstance(models, list):
+        raise ValueError("Ollama model catalogue is malformed.")
+    return [
+        {"name": str(item.get("name", "")), "size": item.get("size"), "modified_at": item.get("modified_at")}
+        for item in models if isinstance(item, dict) and item.get("name")
+    ][:100]
+
+
+def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
+    model = model.strip()
+    prompt = prompt.strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", model):
+        raise ValueError("Choose a valid model name from your local Ollama catalogue.")
+    if not prompt or len(prompt) > 12000:
+        raise ValueError("Prompt must contain between 1 and 12,000 characters.")
+    available = {item["name"] for item in ollama_models()}
+    if model not in available:
+        raise ValueError("Selected model is not installed in local Ollama.")
+    messages = []
+    if isinstance(history, list):
+        for item in history[-12:]:
+            if not isinstance(item, dict) or item.get("role") not in {"user", "assistant"}:
+                continue
+            content = item.get("content")
+            if isinstance(content, str) and content.strip() and len(content) <= 8000:
+                messages.append({"role": item["role"], "content": content})
+    messages.append({"role": "user", "content": prompt})
+    result = ollama_request("/api/chat", {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"num_predict": 4096},
+    }, timeout=120)
+    message = result.get("message", {})
+    content = message.get("content", "") if isinstance(message, dict) else ""
+    if not isinstance(content, str):
+        raise ValueError("Local model returned an invalid message.")
+    return {"model": model, "response": content[:50000], "done": bool(result.get("done", False))}
+
+
 def system_snapshot() -> dict:
     """Return bounded, non-sensitive host health metrics; never process args or user data."""
     memory = {}
@@ -192,27 +266,43 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system"}:
+        if path not in {"/health", "/system", "/ollama/health", "/ollama/models"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
-        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
+        if path == "/ollama/health":
+            try:
+                models = ollama_models()
+                return self.send_json(200, {"status": "available", "endpoint": OLLAMA_URL, "model_count": len(models)}, origin)
+            except (ConnectionError, ValueError) as exc:
+                return self.send_json(503, {"status": "unavailable", "error": str(exc)}, origin)
+        if path == "/ollama/models":
+            try:
+                return self.send_json(200, {"models": ollama_models()}, origin)
+            except (ConnectionError, ValueError) as exc:
+                return self.send_json(503, {"error": str(exc)}, origin)
+        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap")), "ollama": True}, origin)
 
     def do_POST(self):
         origin = self.headers.get("Origin", "")
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
-        if urlparse(self.path).path != "/scan":
+        path = urlparse(self.path).path
+        if path not in {"/scan", "/ollama/chat"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 2 or length > MAX_BODY:
+            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else MAX_BODY
+            if length < 2 or length > limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
+            if path == "/ollama/chat":
+                result = ollama_chat(str(data.get("model", "")), str(data.get("prompt", "")), data.get("history"))
+                return self.send_json(200, result, origin)
             target = valid_target(str(data.get("target", "")))
             confirmation = str(data.get("confirmationTarget", "")).strip().lower().rstrip(".")
             reference = str(data.get("authorizationReference", "")).strip()
@@ -252,6 +342,8 @@ class Handler(BaseHTTPRequestHandler):
                 scan_lock.release()
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json(400, {"error": str(exc)}, origin)
+        except ConnectionError as exc:
+            self.send_json(503, {"error": str(exc)}, origin)
         except subprocess.TimeoutExpired:
             self.send_json(504, {"error": "Assessment exceeded the 55-second time limit."}, origin)
         except Exception as exc:
