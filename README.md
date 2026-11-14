@@ -158,4 +158,8 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - The bridge also writes a private local archive under `~/.local/state/cyberlab/exports/<case-id>/`, with `case.json`, `case.html` and `manifest.json`. The directory is restricted to mode 0700 and files to mode 0600 where supported; files are created exclusively and existing case archives are never overwritten.
 - The manifest records SHA-256 digests and byte sizes for the JSON and HTML exports, plus the source-report digests. Verify these hashes after transfer or storage.
 - HTML report fields are escaped and the document applies a restrictive Content Security Policy. The export contains report observations and metadata, not original samples, disk images or recovered file contents.
+
+- The paired local bridge exposes `POST /evidence/case/verify`. Supply only the case identifier; the verifier resolves it beneath the configured export directory and never accepts a caller-selected filesystem path.
+- Verification checks the exact expected file set, rejects symlinks/non-regular files, validates the manifest schema and case ID, and recomputes SHA-256 and byte sizes for the JSON and HTML reports. It is read-only and reports missing or altered files without repairing them.
+- A successful check confirms consistency with the local manifest only. It does not prove who created the files, when they were created, or that the manifest itself is authentic.
 - This is integrity-oriented local archiving, not a digital signature, immutable storage, trusted timestamp or formal chain-of-custody system. Preserve original media and acquisition maps separately under your evidence-retention policy.
