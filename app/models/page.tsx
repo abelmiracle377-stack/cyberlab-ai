@@ -157,7 +157,7 @@ export default function ModelsPage() {
       output += decoder.decode();
       const answer = output || "The model returned an empty response.";
       setReply(answer);
-      setHistoryByModel((current) => ({ ...current, [active]: [...(current[active] || []), { role: "user", content: submittedPrompt }, { role: "assistant", content: answer }].slice(-12) }));
+      setHistoryByModel((current) => ({ ...current, [active]: [...(current[active] || []), { role: "user" as const, content: submittedPrompt }, { role: "assistant" as const, content: answer }].slice(-12) }));
       setPrompt("");
     } catch (e) { setError(e instanceof Error ? e.message : "Unexpected model error."); }
     finally { setBusy(false); }
