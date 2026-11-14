@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
+from task_planner import plan_task
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -219,7 +220,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
+        if path not in {"/plan", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -228,6 +229,10 @@ class Handler(BaseHTTPRequestHandler):
             if length < 2 or length > MAX_BODY:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
+            if not isinstance(data, dict):
+                raise ValueError("Request body must be a JSON object.")
+            if path == "/plan":
+                return self.send_json(200, plan_task(data.get("prompt", "")), origin)
             if path == "/forensics/fsstat":
                 result = inspect_partition_filesystem(
                     str(data.get("imageJobId", "")),
