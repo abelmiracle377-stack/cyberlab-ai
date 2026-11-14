@@ -43,4 +43,4 @@ jobs:
       - name: Validate CyberLab AI OS VM build definition
         run: |
           chmod +x scripts/os/*.sh
-          ./scripts/os/test-build-definition.sh
+          ./scripts/os/test-build-definition.sh\n          ./scripts/os/test-live-build-definition.sh
