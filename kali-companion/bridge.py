@@ -312,6 +312,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "Pairing token required."}, origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
+        if path == "/capabilities":
+            return self.send_json(200, {"status": "ok", "capabilities": environment_capabilities()}, origin)
         if path == "/ollama/health":
             try:
                 models = ollama_models()
