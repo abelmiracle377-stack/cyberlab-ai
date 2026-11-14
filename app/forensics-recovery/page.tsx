@@ -9,7 +9,7 @@ type Recovered = { id:string; kind:Kind; start:number; end:number; size:number; 
 type BlockDevice = {name:string;path:string;type:string;size:number;ro:boolean;tran?:string;model?:string;fstype?:string;mountpoints?:Array<string|null>};
 type AcquisitionJob = {id:string;state:string;source:string;image:string;map:string;output?:string;message:string;return_code?:number;manifest?:{path:string;files_hashed:number;total_bytes_hashed:number;truncated:boolean}};
 type ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};
-type ImagePartitions = {partitions:Array<{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string}>;partition_count:number;method:string;note:string};
+type ImagePartitions = {partitions:Array<{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string}>;partition_count:number;method:string;note:string};\ntype FilesystemDetails = {partition:{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string};metadata:string;truncated:boolean;method:string;note:string};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
@@ -79,7 +79,7 @@ function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).to
 
 export default function ForensicsRecoveryPage(){
   const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
-  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false),[imagePartitions,setImagePartitions]=useState<ImagePartitions|null>(null),[partitionsBusy,setPartitionsBusy]=useState(false);
+  const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false),[imagePartitions,setImagePartitions]=useState<ImagePartitions|null>(null),[partitionsBusy,setPartitionsBusy]=useState(false),[selectedPartition,setSelectedPartition]=useState(""),[filesystemDetails,setFilesystemDetails]=useState<FilesystemDetails|null>(null),[filesystemBusy,setFilesystemBusy]=useState(false);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
   async function pairKali(){
@@ -119,6 +119,17 @@ export default function ForensicsRecoveryPage(){
       setImagePartitions(data);setBridgeMessage(data.note||"Read-only partition analysis completed.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Partition analysis failed.");}
     finally{setPartitionsBusy(false);}
+  }
+  async function inspectPartitionFilesystem(){
+    const startSector=Number(selectedPartition);
+    if(!job||job.state!=="completed"||confirmImage!==job.image||!selectedPartition){setBridgeMessage("Select a discovered partition and confirm the exact image path.");return;}
+    setFilesystemBusy(true);setFilesystemDetails(null);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/fsstat",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,startSector})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Filesystem metadata inspection failed.");
+      setFilesystemDetails(data);setBridgeMessage(data.note||"Read-only filesystem metadata inspection completed.");
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Filesystem metadata inspection failed.");}
+    finally{setFilesystemBusy(false);}
   }
   async function runForemost(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before starting recovery.");return;}
@@ -193,6 +204,8 @@ export default function ForensicsRecoveryPage(){
             <button className="network-run" type="button" onClick={runForemost} disabled={bridgeBusy||confirmImage!==job.image}>Run Foremost on image</button>
             <button className="network-run" type="button" onClick={inspectImage} disabled={probeBusy||confirmImage!==job.image} style={{marginTop:8}}>{probeBusy?"Inspecting image…":"Identify filesystem (read-only)"}</button>
             <button className="network-run" type="button" onClick={inspectPartitions} disabled={partitionsBusy||confirmImage!==job.image} style={{marginTop:8}}>{partitionsBusy?"Analysing partitions…":"Analyse partition table (read-only)"}</button>
+            {imagePartitions&&imagePartitions.partition_count>0&&<><label className="vault-field"><span>Partition for filesystem metadata inspection</span><select value={selectedPartition} onChange={e=>{setSelectedPartition(e.target.value);setFilesystemDetails(null);}}><option value="">Select a discovered partition</option>{imagePartitions.partitions.map(part=><option key={part.slot} value={String(part.start_sector)}>Slot {part.slot} · sector {part.start_sector.toLocaleString()} · {part.description}</option>)}</select></label><button className="network-run" type="button" onClick={inspectPartitionFilesystem} disabled={filesystemBusy||!selectedPartition||confirmImage!==job.image} style={{marginTop:8}}>{filesystemBusy?"Inspecting filesystem…":"Inspect selected filesystem metadata (read-only)"}</button></>}
+            {filesystemDetails&&<><div className="malware-kv"><span>Filesystem metadata · slot {filesystemDetails.partition.slot}</span><strong>{filesystemDetails.partition.description}</strong></div><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflowY:"auto",fontSize:12,padding:12,background:"var(--panel)",border:"1px solid var(--line)",borderRadius:6}}>{filesystemDetails.metadata}</pre>{filesystemDetails.truncated&&<p className="network-note">Output was truncated to 12,000 characters.</p>}<p className="network-note">{filesystemDetails.note}</p></>}
             {imagePartitions&&<><div className="malware-kv"><span>Allocated partitions</span><strong>{imagePartitions.partition_count}</strong></div>{imagePartitions.partitions.map(part=><div className="malware-kv" key={part.slot}><span>Slot {part.slot} · sectors {part.start_sector.toLocaleString()}–{part.end_sector.toLocaleString()} · {part.length_sectors.toLocaleString()} sectors</span><strong>{part.description}</strong></div>)}<p className="network-note">{imagePartitions.note}</p></>}
             {imageProbe&&<><div className="malware-kv"><span>Filesystem signature</span><strong>{imageProbe.recognized?"RECOGNISED":"NO SIGNATURE RECOGNISED"}</strong></div>{Object.entries(imageProbe.metadata).map(([key,value])=><div className="malware-kv" key={key}><span>{key.toUpperCase()}</span><strong>{value}</strong></div>)}<p className="network-note">{imageProbe.note}</p></>}
             {recoveryJob&&<div className="malware-kv"><span>Foremost job · {recoveryJob.state}</span><strong>{recoveryJob.message}</strong></div>}
