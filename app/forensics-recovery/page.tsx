@@ -121,7 +121,7 @@ export default function ForensicsRecoveryPage(){
         <label className="vault-field"><span>Kali bridge pairing token</span><input type="password" autoComplete="off" value={bridgeToken} onChange={e=>{setBridgeToken(e.target.value);setPaired(false);}} placeholder="Paste token printed by the Kali bridge"/></label>
         <button className="network-run" type="button" onClick={pairKali} disabled={!bridgeToken.trim()||bridgeBusy}>{bridgeBusy?"Connecting…":"Connect and list drives"}</button>
         {paired&&<><div className="malware-kv"><span>Connection</span><strong>LOCAL KALI BRIDGE PAIRED</strong></div>
-          <label className="vault-field"><span>Source device (choose the disk, not a mounted file)</span><select value={selectedDevice} onChange={e=>{setSelectedDevice(e.target.value);setConfirmationSource("");}}><option value="">Select a detected device</option>{devices.map(d=><option key={d.path} value={d.path}>{d.path} · {d.type} · {(d.size/1024/1024/1024).toFixed(2)} GB · {d.model||d.fstype||"storage"}{d.ro?" · read-only":""}</option>)}</select></label>
+          <label className="vault-field"><span>Source device (choose the disk, not a mounted file)</span><select value={selectedDevice} onChange={e=>{setSelectedDevice(e.target.value);setConfirmationSource("");}}><option value="">Select a detected device</option>{devices.map(d=>{const mounted=Boolean(d.mountpoints?.some(Boolean));return <option key={d.path} value={d.path} disabled={mounted}>{d.path} · {d.type} · {(d.size/1024/1024/1024).toFixed(2)} GB · {d.model||d.fstype||"storage"}{d.ro?" · read-only":""}{mounted?" · MOUNTED — unavailable":""}</option>})}</select></label>
           <label className="vault-field"><span>Destination directory on a DIFFERENT physical drive</span><input value={destinationDirectory} onChange={e=>setDestinationDirectory(e.target.value)} placeholder="/mnt/backup"/></label>
           <label className="vault-field"><span>New image filename</span><input value={imageFilename} onChange={e=>setImageFilename(e.target.value)} placeholder="disk.img"/></label>
           <label className="vault-field"><span>Retype the exact source path to confirm</span><input value={confirmationSource} onChange={e=>setConfirmationSource(e.target.value)} placeholder="/dev/sdX"/></label>
@@ -141,7 +141,7 @@ export default function ForensicsRecoveryPage(){
           </div>}
         </>}
         {bridgeMessage&&<p role="status" className="network-note">{bridgeMessage}</p>}
-        <p className="network-note">Safety checks: exact source-path confirmation, existing destination directory, destination filesystem verification, different-device ancestry check, no overwrite, and a dedicated ddrescue map file. The original device is never used as the output target. Keep both drives connected until the job finishes.</p>
+        <p className="network-note">Mounted source partitions are marked unavailable in the selector; the bridge independently checks the full source device tree and rejects any mounted source partition. Safety checks: exact source-path confirmation, existing destination directory, destination filesystem verification, different-device ancestry check, no overwrite, and a dedicated ddrescue map file. The original device is never used as the output target. Keep both drives connected until the job finishes.</p>
       </section>
       <section className="module-page-panel panel" style={{marginTop:18}}>
         <h2 style={{marginTop:0}}>1 / Select an evidence image</h2>
