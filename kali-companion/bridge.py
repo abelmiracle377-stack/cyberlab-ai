@@ -328,15 +328,15 @@ def _validate_solidity_project(files: object, dependency_lock: object) -> tuple[
     if not any(path.startswith("src/") for path in sources):
         raise ValueError("Include at least one src/*.sol contract.")
 
-    if not isinstance(dependency_lock, list) or len(dependency_lock) > 5:
-        raise ValueError("Dependency lock must be an array containing at most five reviewed dependencies.")
+    if not isinstance(dependency_lock, list) or len(dependency_lock) > 1:
+        raise ValueError("Dependency lock must contain at most one reviewed package; only @openzeppelin/contracts is supported.")
     remappings: list[str] = []
     locked_paths: set[str] = set()
     for dependency in dependency_lock:
         if not isinstance(dependency, dict) or set(dependency) != {"name", "version", "source", "commit", "files"}:
             raise ValueError("Each dependency lock entry must contain name, version, source, commit and files.")
-        if dependency["name"] != "@openzeppelin/contracts":
-            raise ValueError("Only the explicitly supported @openzeppelin/contracts package is enabled in this stage.")
+        if dependency["name"] != "@openzeppelin/contracts" or remappings:
+            raise ValueError("Only one @openzeppelin/contracts package lock is supported in this stage.")
         if not isinstance(dependency["version"], str) or not re.fullmatch(r"5\.\d+\.\d+", dependency["version"]):
             raise ValueError("OpenZeppelin Contracts must use an exact 5.x.y version.")
         if dependency["source"] != "https://github.com/OpenZeppelin/openzeppelin-contracts":
