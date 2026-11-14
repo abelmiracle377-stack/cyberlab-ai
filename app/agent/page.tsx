@@ -18,6 +18,7 @@ export default function AgentPage() {
   const [localModels, setLocalModels] = useState<LocalOllamaModel[]>([]);
   const [localModel, setLocalModel] = useState("");
   const [localProviderStatus, setLocalProviderStatus] = useState("Not checked");
+  const [ollamaRefresh, setOllamaRefresh] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
@@ -76,7 +77,7 @@ export default function AgentPage() {
     }
     void loadLocalModels();
     return () => { cancelled = true; };
-  }, [modelSource]);
+  }, [modelSource, ollamaRefresh]);
 
   useEffect(() => {
     const pending = sessionStorage.getItem("cyberlab.pendingNmapJob");
@@ -293,6 +294,7 @@ export default function AgentPage() {
               <ChevronDown size={13} />
             </label>
             <span className="agent-model-count">{localProviderStatus.toUpperCase()}</span>
+            <button type="button" className="report-download" onClick={() => setOllamaRefresh((value) => value + 1)} disabled={busy}>Refresh local models</button>
           </>}
         </div>
         <div className="agent-chat">
