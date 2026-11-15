@@ -66,6 +66,7 @@ lb config \
   --binary-images iso-hybrid \
   --debian-installer live \
   --archive-areas "main contrib non-free-firmware" \
+  --security false \
   --bootappend-live "boot=live components username=cyberlab hostname=cyberlab-ai locales=en_US.UTF-8 keyboard-layouts=us console=ttyS0,115200n8 loglevel=4 systemd.show_status=1" \
   --apt-recommends false \
   --iso-application "CyberLab AI OS" \
