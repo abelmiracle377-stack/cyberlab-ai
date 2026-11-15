@@ -5,6 +5,7 @@ import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldChe
 import Link from "next/link";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; source: "openrouter" | "ollama" };
+const modelKey = (item: Model) => `${item.source}::${item.id}`;
 type Message = { role: "user" | "assistant"; content: string };
 type AgentAttachment = { name: string; mediaType: string; data: string; size: number };
 type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
@@ -51,8 +52,9 @@ export default function AgentPage() {
         if (preferredSource === "ollama") setProviderChoice("ollama");
         setModel((current) => {
           const eligible = eligibleForMode.filter((item) => item.source === preferredSource);
-          if (eligible.some((item) => item.id === current)) return current;
-          return eligible.find((item) => item.id === "openai/gpt-5.5")?.id || eligible[0]?.id || "";
+          if (eligible.some((item) => modelKey(item) === current)) return current;
+          const preferred = eligible.find((item) => item.id === "openai/gpt-5.5") || eligible[0];
+          return preferred ? modelKey(preferred) : "";
         });
       })
       .catch((cause) => setError(cause.message || "Could not load model catalogue."));
@@ -188,7 +190,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model, modelSource: models.find((item) => item.id === model)?.source || "openrouter", fallbackModel: models.find((item) => item.source === "openrouter" && (agentMode === "open-weight" ? item.openWeight : (item.id === "openai/gpt-5.5" || item.openWeight)))?.id || (agentMode === "open-weight" ? "" : "openai/gpt-5.5"), provider: providerChoice, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
+        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model: models.find((item) => modelKey(item) === model)?.id || "", modelSource: models.find((item) => modelKey(item) === model)?.source || "openrouter", fallbackModel: models.find((item) => item.source === "openrouter" && (agentMode === "open-weight" ? item.openWeight : (item.id === "openai/gpt-5.5" || item.openWeight)))?.id || (agentMode === "open-weight" ? "" : "openai/gpt-5.5"), provider: providerChoice, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -246,8 +248,8 @@ export default function AgentPage() {
         </div>
         <div className="agent-config agent-config-stack">
           <div className="agent-mode-switch" role="group" aria-label="Agent mode">
-            <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); const choices = providerChoice === "ollama" ? models.filter((item) => item.source === "ollama") : providerChoice === "openrouter" ? models.filter((item) => item.source === "openrouter") : models; if (!choices.some((item) => item.id === model)) setModel(choices.find((item) => item.id === "openai/gpt-5.5")?.id || choices[0]?.id || ""); }} disabled={busy}>Standard</button>
-            <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight && (providerChoice === "auto" || (providerChoice === "ollama" ? item.source === "ollama" : item.source === "openrouter"))); setAgentMode("open-weight"); if (first) setModel(first.id); }} disabled={busy}>Open-weight research mode</button>
+            <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); const choices = providerChoice === "ollama" ? models.filter((item) => item.source === "ollama") : providerChoice === "openrouter" ? models.filter((item) => item.source === "openrouter") : models; if (!choices.some((item) => modelKey(item) === model)) { const preferred = choices.find((item) => item.id === "openai/gpt-5.5") || choices[0]; setModel(preferred ? modelKey(preferred) : ""); } }} disabled={busy}>Standard</button>
+            <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight && (providerChoice === "auto" || (providerChoice === "ollama" ? item.source === "ollama" : item.source === "openrouter"))); setAgentMode("open-weight"); if (first) setModel(modelKey(first)); }} disabled={busy}>Open-weight research mode</button>
           </div>
           <div className="agent-model-label"><span className="agent-live-dot" /> {agentMode === "open-weight" ? "OPEN-WEIGHT MODEL ROUTING" : "MODEL ROUTING"}</div>
           <label className="agent-select-wrap">
@@ -257,7 +259,7 @@ export default function AgentPage() {
               setProviderChoice(next);
               const choices = next === "openrouter" ? models.filter((item) => item.source === "openrouter") : next === "ollama" ? models.filter((item) => item.source === "ollama") : models;
               const filtered = agentMode === "open-weight" ? choices.filter((item) => item.openWeight) : choices;
-              if (!filtered.some((item) => item.id === model)) setModel(filtered[0]?.id || "");
+              if (!filtered.some((item) => modelKey(item) === model)) setModel(filtered[0] ? modelKey(filtered[0]) : "");
             }} disabled={busy}>
               <option value="openrouter">OpenRouter · Cloud</option>
               <option value="ollama" disabled={!ollamaConfigured}>Ollama · Configured local/remote endpoint{ollamaConfigured ? "" : " (not configured)"}</option>
@@ -268,7 +270,7 @@ export default function AgentPage() {
           <label className="agent-select-wrap">
             <span className="sr-only">Select model</span>
             <select value={model} onChange={(event) => setModel(event.target.value)} disabled={busy}>
-              {availableModels.length ? availableModels.map((item) => <option value={item.id} key={item.source + ":" + item.id}>{item.name} · {item.provider} · {item.source === "ollama" ? "LOCAL" : "CLOUD"}</option>) : <option value="">{providerChoice === "ollama" ? "No Ollama models discovered" : agentMode === "open-weight" ? "No recognised open-weight models available" : "No models available"}</option>}
+              {availableModels.length ? availableModels.map((item) => <option value={modelKey(item)} key={modelKey(item)}>{item.name} · {item.provider} · {item.source === "ollama" ? "LOCAL" : "CLOUD"}</option>) : <option value="">{providerChoice === "ollama" ? "No Ollama models discovered" : agentMode === "open-weight" ? "No recognised open-weight models available" : "No models available"}</option>}
             </select>
             <ChevronDown size={13} />
           </label>
