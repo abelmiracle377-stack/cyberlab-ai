@@ -49,4 +49,5 @@ jobs:
           ./scripts/os/test-build-definition.sh
           ./scripts/os/test-live-build-definition.sh
           python -m unittest discover -s scripts/os -p "test_*.py" -v
+          bash -n scripts/os/build-live-iso.sh
           bash -n scripts/os/boot-smoke-test.sh
