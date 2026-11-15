@@ -77,6 +77,12 @@ jobs:
           desktop-lite
           "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-uefi-boot.log"
 
+      - name: Inspect desktop ISO UEFI boot catalog
+        if: always()
+        run: |
+          xorriso -indev "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso" -report_el_torito as_mkisofs
+          xorriso -indev "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso" -find /EFI -type f -exec lsdl
+
       - name: Free lightweight desktop build space
         run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
 
