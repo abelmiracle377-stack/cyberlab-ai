@@ -63,4 +63,10 @@ fi
 grep -q 'never started automatically' "$ROOT_DIR/scripts/os/live-configure.chroot"
 grep -q "desktop) EXPECTED_MARKER='Reached target Graphical Interface'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q "terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
+grep -q 'MEMORY_MB=4096; VCPUS=2' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
+grep -q 'MEMORY_MB=1536; VCPUS=1' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
+if grep -q 'run: sudo ./scripts/os/boot-smoke-test.sh' "$ROOT_DIR/.github/workflows/build-os-vm.yml"; then
+  echo "QEMU boot acceptance must run as the unprivileged workflow user." >&2
+  exit 1
+fi
 echo "CyberLab AI OS live ISO definitions and profile manifests passed."
