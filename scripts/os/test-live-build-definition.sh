@@ -43,8 +43,8 @@ grep -q 'lb config' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q -- '--mode debian' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q -- '--security false' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'trixie-security main contrib non-free-firmware' "$ROOT_DIR/scripts/os/build-live-iso.sh"
-grep -q 'cyberlab-security.list.chroot' "$ROOT_DIR/scripts/os/build-live-iso.sh'
-grep -q 'cyberlab-security.list.binary' "$ROOT_DIR/scripts/os/build-live-iso.sh'
+grep -q 'cyberlab-security.list.chroot' "$ROOT_DIR/scripts/os/build-live-iso.sh"
+grep -q 'cyberlab-security.list.binary' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'pwd -P' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'Unsafe build work directory' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'Build work directory must not be inside the repository' "$ROOT_DIR/scripts/os/build-live-iso.sh"
