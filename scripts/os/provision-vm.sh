@@ -38,6 +38,36 @@ exec python3 /opt/cyberlab-ai/kali-companion/cyberlab.py "$@"
 LAUNCHER
 chmod 0755 /usr/local/bin/cyberlab-companion
 
+# Apply the same conservative guest baseline as the canonical live ISO.
+install -d -m 0755 /etc/sysctl.d /etc/security/limits.d /etc/profile.d
+cat >/etc/sysctl.d/99-cyberlab-hardening.conf <<'SYSCTL'
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.yama.ptrace_scope = 1
+kernel.unprivileged_bpf_disabled = 1
+fs.suid_dumpable = 0
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv6.conf.default.accept_source_route = 0
+SYSCTL
+cat >/etc/security/limits.d/99-cyberlab-core.conf <<'LIMITS'
+* hard core 0
+LIMITS
+cat >/etc/profile.d/99-cyberlab-umask.sh <<'UMASK'
+# Restrict default permissions for newly created user files.
+umask 027
+UMASK
+chmod 0644 /etc/sysctl.d/99-cyberlab-hardening.conf /etc/security/limits.d/99-cyberlab-core.conf /etc/profile.d/99-cyberlab-umask.sh
+
 # Keep the local bridge opt-in; no systemd unit or autostart entry is installed.
 systemctl set-default graphical.target
 systemctl enable lightdm
