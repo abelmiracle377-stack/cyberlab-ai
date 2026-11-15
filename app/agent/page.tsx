@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles, Paperclip, Mic, Square, FileText, X } from "lucide-react";
 import Link from "next/link";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
 type Message = { role: "user" | "assistant"; content: string };
+type AgentAttachment = { name: string; mediaType: string; data: string; size: number };
 type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
 
 export default function AgentPage() {
@@ -13,6 +14,12 @@ export default function AgentPage() {
   const [model, setModel] = useState("");
   const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
   const [prompt, setPrompt] = useState("");
+  const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,17 +97,68 @@ export default function AgentPage() {
     } finally { setScanBusy(false); }
   }
 
+  async function addFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    const allowed = /^(image\/(png|jpeg|webp|gif)|application\/pdf|text\/(plain|markdown|csv)|application\/(json|xml))$/i;
+    for (const file of Array.from(fileList)) {
+      if (file.size > 12 * 1024 * 1024) { setError(file.name + ": maximum file size is 12 MB."); continue; }
+      if (!allowed.test(file.type) && !/\.(txt|md|csv|json|xml)$/i.test(file.name)) { setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML."); continue; }
+      if (attachments.length >= 4) { setError("Attach up to four files per message."); break; }
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Could not read " + file.name + "."));
+        reader.readAsDataURL(file);
+      });
+      setAttachments(current => current.length < 4 ? [...current, { name: file.name, mediaType: file.type || "text/plain", data, size: file.size }] : current);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function transcribeAudio(file: File) {
+    if (file.size > 24 * 1024 * 1024) { setError("Audio files must be 24 MB or smaller."); return; }
+    setAudioBusy(true); setError("");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const response = await fetch("/api/agent/transcribe", { method: "POST", body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Audio transcription failed.");
+      setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\n\n" : ""));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not transcribe this audio."); }
+    finally { setAudioBusy(false); }
+  }
+
+  async function toggleRecording() {
+    if (recording) { mediaRecorderRef.current?.stop(); setRecording(false); return; }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { setError("Audio recording is not supported in this browser. Upload an audio file instead."); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = event => { if (event.data.size) audioChunksRef.current.push(event.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const ext = (recorder.mimeType || "").includes("ogg") ? "ogg" : "webm";
+        await transcribeAudio(new File([blob], "cyberlab-recording." + ext, { type: blob.type }));
+      };
+      mediaRecorderRef.current = recorder; recorder.start(); setRecording(true);
+    } catch { setError("Microphone access was denied or unavailable. You can upload an audio file instead."); }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const text = prompt.trim();
-    if (!text || busy) return;
+    if ((!text && attachments.length === 0) || busy || audioBusy) return;
     setError("");
     setScanRequest(null);
     setScanStatus("");
     setScanResult(null);
     setPrompt("");
+    const submittedAttachments = attachments;
+    setAttachments([]);
     const scanMatch = text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i);
-    if (scanMatch) {
+    if (scanMatch && submittedAttachments.length === 0) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
       setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can prepare a bounded Nmap TCP scan on your paired local Kali machine. Before anything runs, confirm the exact target, authorisation reference and scope below. No scan has started." }]);
       setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\s+/g, "") || "1-100" });
@@ -113,7 +171,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
+        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -213,8 +271,18 @@ export default function AgentPage() {
         {scanStatus && !scanRequest && !scanResult && <div className="agent-error">{scanStatus}</div>}
         {error && <div className="agent-error"><CircleAlert size={14} /><span>{error}</span></div>}
         <form className="agent-composer" onSubmit={submit}>
+          {attachments.length > 0 && <div className="agent-attachment-list">{attachments.map((file, index) => <div className="agent-attachment-chip" key={file.name + index}><FileText size={13}/><span>{file.name}</span><button type="button" aria-label={"Remove " + file.name} onClick={() => setAttachments(current => current.filter((_, i) => i !== index))}><X size={12}/></button></div>)}</div>}
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy} />
-          <div className="agent-composer-bottom"><span><ShieldCheck size={12} /> Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval</span><button type="submit" disabled={busy || !prompt.trim() || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send message"}</button></div>
+          <div className="agent-composer-bottom">
+            <span><ShieldCheck size={12} /> Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval</span>
+            <div className="agent-composer-actions">
+              <input ref={fileInputRef} type="file" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,application/xml,.txt,.md,.csv,.json,.xml" onChange={event => void addFiles(event.target.files)} />
+              <button type="button" className="agent-tool-button" onClick={() => fileInputRef.current?.click()} disabled={busy || attachments.length >= 4}><Paperclip size={14}/><span>Attach</span></button>
+              <label className="agent-tool-button agent-audio-upload"><Mic size={14}/><span>{audioBusy ? "Transcribing…" : "Audio"}</span><input type="file" accept="audio/*" disabled={busy || audioBusy} onChange={event => { const file = event.target.files?.[0]; if (file) void transcribeAudio(file); event.target.value = ""; }}/></label>
+              <button type="button" className={"agent-tool-button " + (recording ? "recording" : "")} onClick={() => void toggleRecording()} disabled={busy || audioBusy}>{recording ? <Square size={13}/> : <Mic size={14}/>}<span>{recording ? "Stop" : "Record"}</span></button>
+              <button type="submit" disabled={busy || audioBusy || (!prompt.trim() && attachments.length === 0) || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send"}</button>
+            </div>
+          </div>
         </form>
         <div className="agent-disclaimer"><Sparkles size={12} /> Open-weight mode does not mean unrestricted or guaranteed uncensored output. Outputs are AI-generated and must be verified against primary evidence. Use only on systems and data you are authorised to assess.</div>
       </section>
