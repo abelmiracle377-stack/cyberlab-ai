@@ -2,6 +2,11 @@ name: Build CyberLab AI OS Live ISOs
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/additive-forensics-recovery
+    paths:
+      - .github/workflows/build-os-vm.yml
 
 permissions:
   contents: read
