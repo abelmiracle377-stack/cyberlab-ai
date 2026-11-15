@@ -32,8 +32,11 @@ umask 077
 set +e
 timeout --signal=TERM --kill-after=10s 180s qemu-system-x86_64 \
   -machine accel=tcg \
+  -no-user-config \
   -m 2048 -smp 2 \
+  -nic none \
   -cdrom "$ISO" -boot order=d,menu=off \
+  -snapshot \
   -display none -serial "file:$LOG" -monitor none \
   -no-reboot -no-shutdown
 QEMU_STATUS=$?
