@@ -13,6 +13,7 @@ on:
       - "package-lock.json"
       - "tsconfig.json"
       - "next.config.ts"
+      - "eslint.config.mjs"
       - ".github/workflows/agent-inputs-ci.yml"
 
 permissions:
