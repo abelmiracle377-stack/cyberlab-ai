@@ -28,16 +28,38 @@ jobs:
           set -euo pipefail
           script="$(dpkg -L live-build | grep -E '/lb_chroot_linux-image$' | head -n 1)"
           test -n "$script" && test -f "$script"
-          legacy='${LB_PARENT_MIRROR_CHROOT}/dists/${LB_PARENT_DISTRIBUTION}/Contents-${LB_ARCHITECTURES}.gz'
-          corrected='${LB_PARENT_MIRROR_CHROOT}/dists/${LB_PARENT_DISTRIBUTION}/main/Contents-${LB_ARCHITECTURES}.gz'
-          if grep -Fq "$legacy" "$script"; then
-            sed -i "s|${legacy}|${corrected}|" "$script"
-          fi
-          grep -Fq "$corrected" "$script" || {
-            echo "Unsupported live-build Contents index implementation: $script" >&2
-            exit 1
-          }
-          echo "Patched $script to use Debian's component-scoped Contents index."
+          python3 - "$script" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          replacements = (
+              (
+                  "${LB_PARENT_DISTRIBUTION}/Contents-${LB_ARCHITECTURES}.gz",
+                  "${LB_PARENT_DISTRIBUTION}/main/Contents-${LB_ARCHITECTURES}.gz",
+              ),
+              (
+                  "${LB_DISTRIBUTION}/Contents-${LB_ARCHITECTURES}.gz",
+                  "${LB_DISTRIBUTION}/main/Contents-${LB_ARCHITECTURES}.gz",
+              ),
+          )
+          changed = 0
+          for old, new in replacements:
+              count = source.count(old)
+              if count:
+                  source = source.replace(old, new)
+                  changed += count
+
+          if changed == 0 and "/main/Contents-${LB_ARCHITECTURES}.gz" not in source:
+              raise SystemExit(
+                  f"Unsupported live-build Contents index implementation: {path}"
+              )
+
+          path.write_text(source)
+          print(f"Verified component-scoped Contents index path in {path}; replacements={changed}")
+          PY
+          grep -Fq '/main/Contents-${LB_ARCHITECTURES}.gz' "$script"
       - name: Build desktop ISO
         run: |
           chmod +x scripts/os/*.sh
