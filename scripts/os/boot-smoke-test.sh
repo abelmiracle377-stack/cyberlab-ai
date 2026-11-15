@@ -30,7 +30,7 @@ trap cleanup EXIT
 umask 077
 
 set +e
-timeout --signal=TERM --kill-after=10s 180s qemu-system-x86_64 \
+timeout --signal=TERM --kill-after=10s "${BOOT_TIMEOUT}s" qemu-system-x86_64 \
   -machine accel=tcg \
   -no-user-config \
   -m "$MEMORY_MB" -smp "$VCPUS" \
