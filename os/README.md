@@ -43,9 +43,8 @@ The builder refuses to overwrite existing output ISOs. It uses an isolated worki
 
 ## Build through GitHub Actions
 
-Open the repository Actions page, select **Build CyberLab AI OS Live ISOs**, and choose **Run workflow**. The workflow builds and boot-tests all three profiles. It publishes separate, short-retention GitHub Actions artifacts so users can download only the edition they need:
+Open the repository Actions page, select **Build CyberLab AI OS Live ISOs**, and choose **Run workflow**. The original Full desktop edition is already available from its previously successful build and is not rebuilt by this follow-up workflow. This workflow builds and boot-tests only the two remaining profiles (Desktop Lite and Terminal), then publishes separate, short-retention GitHub Actions artifacts:
 - `cyberlab-ai-os-desktop-lite-amd64`
-- `cyberlab-ai-os-desktop-full-amd64`
 - `cyberlab-ai-os-terminal-amd64`
 
 Each edition includes its ISO and SHA-256 checksum. Downloading the Lite artifact avoids downloading the Full desktop image.
