@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     const rawModel = typeof body.model === "string" ? body.model.trim() : "openai/gpt-5.5";
     const modelSource = body.modelSource === "ollama" ? "ollama" : "openrouter";
     const model = requestedProvider === "ollama" || (requestedProvider === "auto" && modelSource === "ollama")
-      ? z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+(?:\/[a-zA-Z0-9._:-]+)?$/).safeParse(rawModel)
+      ? z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+(?:\/[a-zA-Z0-9._:-]+)*$/).safeParse(rawModel)
       : modelSchema.safeParse(rawModel);
     const agentMode = body.agentMode === "open-weight" ? "open-weight" : "standard";
     const learningContext: Array<{ title: string; category: string; source: string; content: string }> = await (async () => { try { const db = adminDb(); const { data: settings, error: settingsError } = await db.from("cyberlab_settings").select("ai_learning_enabled").eq("id", true).maybeSingle(); if (settingsError || settings?.ai_learning_enabled !== true) return []; const { data, error } = await db.from("knowledge_items").select("title,category,source,content").eq("status","approved").order("updated_at",{ascending:false}).limit(30); if (error) return []; return (data || []).flatMap((item:any) => typeof item.content === "string" ? [{title:String(item.title||"Untitled").slice(0,160),category:String(item.category||"Other").slice(0,80),source:String(item.source||"Admin curated").slice(0,120),content:item.content.slice(0,3000)}] : []); } catch { return []; } })();
