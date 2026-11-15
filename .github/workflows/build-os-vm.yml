@@ -22,6 +22,8 @@ jobs:
           sudo ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
       - name: Build lightweight terminal ISO
         run: sudo ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
+      - name: Hand build outputs to the runner account
+        run: sudo chown -R "$USER":"$USER" "$RUNNER_TEMP/cyberlab-dist"
       - name: Record QEMU version
         run: qemu-system-x86_64 --version | head -n 1 > "$RUNNER_TEMP/cyberlab-dist/QEMU-VERSION.txt"
       - name: Boot-test desktop ISO in QEMU
