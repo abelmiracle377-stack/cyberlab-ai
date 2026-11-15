@@ -206,10 +206,10 @@ export async function POST(request: Request) {
         attachmentParts.push({ type: "file", data: bytes.toString("base64"), mediaType: "application/pdf" });
       } else {
         const textContent = bytes.toString("utf8");
-        if (textContent.includes("\\u0000")) {
+        if (textContent.includes("\u0000")) {
           return Response.json({ error: "A text attachment contains binary data and cannot be analysed as text." }, { status: 415 });
         }
-        attachmentParts.push({ type: "text", text: "\\n[Attached file: " + String(item.name || "document").replace(/[\\r\\n\\u0000-\\u001f]/g, " ").slice(0, 180) + "]\\n" + textContent.slice(0, 100000) });
+        attachmentParts.push({ type: "text", text: "\n[Attached file: " + String(item.name || "document").replace(/[\r\n\u0000-\u001f]/g, " ").slice(0, 180) + "]\n" + textContent.slice(0, 100000) });
       }
     }
     if (!prompt && attachmentParts.length === 0) return Response.json({ error: "Add a prompt or a supported attachment." }, { status: 400 });
