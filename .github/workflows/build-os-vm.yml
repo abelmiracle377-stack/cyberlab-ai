@@ -8,7 +8,7 @@ on:
     paths:
       - .github/workflows/build-os-vm.yml
       - scripts/os/**
-      - os/profiles/**
+      - os/**
       - kali-companion/**
 
 permissions:
@@ -16,69 +16,71 @@ permissions:
 
 jobs:
   build-live-isos:
-    # Keep live-build and its Debian package metadata native to Debian Trixie.
-    # Node 24 is included so GitHub JavaScript actions work inside the container.
     runs-on: ubuntu-24.04
-    container:
-      image: node:24-trixie
     timeout-minutes: 240
+    container:
+      image: debian:trixie
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DIST_DIR: ${{ github.workspace }}/cyberlab-dist
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Debian Trixie live-build toolchain
-        shell: bash
+      - name: Install Debian live-build toolchain
         run: |
-          set -euo pipefail
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            live-build \
-            debootstrap \
-            debian-archive-keyring \
-            xorriso \
-            squashfs-tools \
-            grub-pc-bin \
-            grub-efi-amd64-bin \
-            mtools \
-            isolinux \
-            syslinux-common \
-            qemu-system-x86 \
-            ca-certificates \
-            file \
-            python3
-      - name: Verify Debian build environment
-        shell: bash
+          apt-get install -y \
+            live-build debootstrap debian-archive-keyring \
+            xorriso squashfs-tools mtools dosfstools cpio \
+            grub-pc-bin grub-efi-amd64-bin isolinux syslinux-common \
+            qemu-system-x86 git wget ca-certificates
+
+      - uses: actions/checkout@v4
+
+      - name: Record tool versions
         run: |
-          set -euo pipefail
-          . /etc/os-release
-          test "${VERSION_CODENAME:-}" = trixie
-          live-build --version
-          dpkg-query -W -f='${Package} ${Version}\n' live-build debootstrap debian-archive-keyring
+          mkdir -p "$GITHUB_WORKSPACE/cyberlab-dist"
+          dpkg-query -W live-build debootstrap
+          qemu-system-x86_64 --version | head -n 1 \
+            > "$GITHUB_WORKSPACE/cyberlab-dist/QEMU-VERSION.txt"
+
       - name: Build desktop ISO
-        shell: bash
         run: |
-          set -euo pipefail
           chmod +x scripts/os/*.sh
-          ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
+          ./scripts/os/build-live-iso.sh desktop "$GITHUB_WORKSPACE/cyberlab-dist"
+
+      - name: Free build space
+        run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop
+
       - name: Build lightweight terminal ISO
-        shell: bash
-        run: ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
-      - name: Record QEMU version
-        shell: bash
-        run: qemu-system-x86_64 --version | head -n 1 > "$RUNNER_TEMP/cyberlab-dist/QEMU-VERSION.txt"
+        run: ./scripts/os/build-live-iso.sh terminal "$GITHUB_WORKSPACE/cyberlab-dist"
+
       - name: Boot-test desktop ISO in QEMU
-        shell: bash
-        run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop "$RUNNER_TEMP/cyberlab-dist/desktop-boot.log"
+        run: >
+          ./scripts/os/boot-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso"
+          desktop
+          "$GITHUB_WORKSPACE/cyberlab-dist/desktop-boot.log"
+
       - name: Boot-test terminal ISO in QEMU
-        shell: bash
-        run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal "$RUNNER_TEMP/cyberlab-dist/terminal-boot.log"
+        run: >
+          ./scripts/os/boot-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso"
+          terminal
+          "$GITHUB_WORKSPACE/cyberlab-dist/terminal-boot.log"
+
       - name: Publish ISO checksums
-        shell: bash
         run: |
-          cd "$RUNNER_TEMP/cyberlab-dist"
+          cd "$GITHUB_WORKSPACE/cyberlab-dist"
           sha256sum *.iso > SHA256SUMS
+
       - name: Upload CyberLab AI OS images
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cyberlab-ai-os-live-isos-amd64
-          path: ${{ runner.temp }}/cyberlab-dist/
+          path: cyberlab-dist/
           if-no-files-found: error
           retention-days: 7
