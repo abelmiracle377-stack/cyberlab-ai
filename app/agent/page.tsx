@@ -115,7 +115,7 @@ export default function AgentPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  async function transcribeAudio(file: File) {
+  async function transcribeAudio(file: File, sendDirectly = true) {
     if (file.size > 4 * 1024 * 1024) { setError("Audio files must be 4 MB or smaller."); return; }
     setAudioBusy(true); setError("");
     try {
@@ -123,7 +123,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent/transcribe", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Audio transcription failed.");
-      setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\n\n" : ""));
+      if (sendDirectly) await sendAgentPrompt(data.text, []);\n      else setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\n\n" : ""));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not transcribe this audio."); }
     finally { setAudioBusy(false); }
   }
@@ -140,23 +140,19 @@ export default function AgentPage() {
         stream.getTracks().forEach(track => track.stop());
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
         const ext = (recorder.mimeType || "").includes("ogg") ? "ogg" : "webm";
-        await transcribeAudio(new File([blob], "cyberlab-recording." + ext, { type: blob.type }));
+        await transcribeAudio(new File([blob], "cyberlab-recording." + ext, { type: blob.type }), true);
       };
       mediaRecorderRef.current = recorder; recorder.start(); setRecording(true);
     } catch { setError("Microphone access was denied or unavailable. You can upload an audio file instead."); }
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const text = prompt.trim();
-    if ((!text && attachments.length === 0) || busy || audioBusy) return;
+  async function sendAgentPrompt(text: string, submittedAttachments: AgentAttachment[] = []) {
+    if ((!text && submittedAttachments.length === 0) || busy) return;
     setError("");
     setScanRequest(null);
     setScanStatus("");
     setScanResult(null);
     setPrompt("");
-    const submittedAttachments = attachments;
-    setAttachments([]);
     const scanMatch = text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i);
     if (scanMatch && submittedAttachments.length === 0) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
@@ -204,6 +200,14 @@ export default function AgentPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const text = prompt.trim();
+    const submittedAttachments = attachments;
+    if ((!text && submittedAttachments.length === 0) || busy || audioBusy) return;
+    await sendAgentPrompt(text, submittedAttachments);
   }
 
   return (
@@ -278,7 +282,7 @@ export default function AgentPage() {
             <div className="agent-composer-actions">
               <input ref={fileInputRef} type="file" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,application/xml,.txt,.md,.csv,.json,.xml" onChange={event => void addFiles(event.target.files)} />
               <button type="button" className="agent-tool-button" onClick={() => fileInputRef.current?.click()} disabled={busy || attachments.length >= 4}><Paperclip size={14}/><span>Attach</span></button>
-              <label className="agent-tool-button agent-audio-upload"><Mic size={14}/><span>{audioBusy ? "Transcribing…" : "Audio"}</span><input type="file" accept="audio/*" disabled={busy || audioBusy} onChange={event => { const file = event.target.files?.[0]; if (file) void transcribeAudio(file); event.target.value = ""; }}/></label>
+              <label className="agent-tool-button agent-audio-upload"><Mic size={14}/><span>{audioBusy ? "Transcribing…" : "Audio"}</span><input type="file" accept="audio/*" disabled={busy || audioBusy} onChange={event => { const file = event.target.files?.[0]; if (file) void transcribeAudio(file, true); event.target.value = ""; }}/></label>
               <button type="button" className={"agent-tool-button " + (recording ? "recording" : "")} onClick={() => void toggleRecording()} disabled={busy || audioBusy}>{recording ? <Square size={13}/> : <Mic size={14}/>}<span>{recording ? "Stop" : "Record"}</span></button>
               <button type="submit" disabled={busy || audioBusy || (!prompt.trim() && attachments.length === 0) || !model}>{busy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} {busy ? "Working" : "Send"}</button>
             </div>
