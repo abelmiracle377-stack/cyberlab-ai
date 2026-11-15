@@ -46,6 +46,17 @@ grep -q 'terminal-boot.log' "$ROOT_DIR/.github/workflows/build-os-vm.yml"
 grep -q 'cyberlab-menu.py' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'exec python3 /usr/local/lib/cyberlab/menu.py' "$ROOT_DIR/scripts/os/live-configure.chroot"
 grep -q 'exec python3 /opt/cyberlab-ai/kali-companion/cyberlab.py' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'kernel.kptr_restrict = 2' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'kernel.dmesg_restrict = 1' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'kernel.yama.ptrace_scope = 1' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'net.ipv4.conf.all.accept_redirects = 0' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'net.ipv6.conf.all.accept_redirects = 0' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'hard core 0' "$ROOT_DIR/scripts/os/live-configure.chroot"
+grep -q 'umask 027' "$ROOT_DIR/scripts/os/live-configure.chroot"
+if grep -qx 'openssh-server' "$DESKTOP" "$TERMINAL"; then
+  echo "SSH server must remain absent from the default live profiles." >&2
+  exit 1
+fi
 grep -q 'never started automatically' "$ROOT_DIR/scripts/os/live-configure.chroot"
 grep -q "desktop) EXPECTED_MARKER='Reached target Graphical Interface'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q "terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
