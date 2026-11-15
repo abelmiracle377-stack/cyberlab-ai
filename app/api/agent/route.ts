@@ -181,8 +181,8 @@ export async function POST(request: Request) {
       if (!match || match[1] !== item.mediaType) continue;
       const bytes = Buffer.from(match[2], "base64");
       attachmentBytes += bytes.byteLength;
-      if (bytes.byteLength > 12 * 1024 * 1024 || attachmentBytes > 24 * 1024 * 1024) {
-        return Response.json({ error: "Attachments exceed the 24 MB total limit or a single file exceeds 12 MB." }, { status: 413 });
+      if (bytes.byteLength > 2 * 1024 * 1024 || attachmentBytes > 3 * 1024 * 1024) {
+        return Response.json({ error: "Attachments exceed the 3 MB total limit or a single file exceeds 2 MB." }, { status: 413 });
       }
       const mediaType = match[1].toLowerCase();
       if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mediaType)) {
@@ -209,8 +209,8 @@ export async function POST(request: Request) {
           return [];
         })
       : [];
-    if (!prompt || prompt.length > 8000) {
-      return Response.json({ error: "Enter a prompt between 1 and 8,000 characters." }, { status: 400 });
+    if ((!prompt && attachmentParts.length === 0) || prompt.length > 8000) {
+      return Response.json({ error: "Enter a prompt up to 8,000 characters or attach a supported file." }, { status: 400 });
     }
     if (!model.success) {
       return Response.json({ error: "Choose a valid provider/model identifier." }, { status: 400 });
