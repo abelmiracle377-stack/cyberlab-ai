@@ -1,16 +1,18 @@
-name: Agent Multimodal Input CI
+name: CyberLab Application CI
 
 on:
   push:
     branches:
       - feature/agent-multimodal-inputs
     paths:
-      - "app/agent/**"
-      - "app/api/agent/**"
-      - "app/globals.css"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "proxy.ts"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.json"
+      - "next.config.ts"
       - ".github/workflows/agent-inputs-ci.yml"
 
 permissions:
