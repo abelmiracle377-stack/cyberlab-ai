@@ -15,6 +15,7 @@ export default function AgentPage() {
   const [model, setModel] = useState("");
   const [providerChoice, setProviderChoice] = useState<"openrouter" | "ollama" | "auto">("openrouter");
   const [ollamaConfigured, setOllamaConfigured] = useState(false);
+  const [ollamaAvailable, setOllamaAvailable] = useState(false);
   const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
@@ -45,6 +46,7 @@ export default function AgentPage() {
         const catalogue: Model[] = data.models || [];
         setModels(catalogue);
         setOllamaConfigured(Boolean(data.providers?.ollamaConfigured));
+        setOllamaAvailable(Boolean(data.providers?.ollamaAvailable));
         const eligibleForMode = catalogue.filter((item) => agentMode === "standard" || item.openWeight);
         const preferredSource = eligibleForMode.some((item) => item.source === "openrouter")
           ? "openrouter"
@@ -262,7 +264,7 @@ export default function AgentPage() {
               if (!filtered.some((item) => modelKey(item) === model)) setModel(filtered[0] ? modelKey(filtered[0]) : "");
             }} disabled={busy}>
               <option value="openrouter">OpenRouter · Cloud</option>
-              <option value="ollama" disabled={!ollamaConfigured}>Ollama · Configured local/remote endpoint{ollamaConfigured ? "" : " (not configured)"}</option>
+              <option value="ollama" disabled={!ollamaConfigured}>Ollama · {ollamaConfigured ? (ollamaAvailable ? "Endpoint configured · models detected" : "Endpoint configured · no models detected") : "Not configured"}</option>
               <option value="auto">Automatic · Use selected provider, local first when selected</option>
             </select>
             <ChevronDown size={13} />
@@ -275,7 +277,7 @@ export default function AgentPage() {
             <ChevronDown size={13} />
           </label>
           <span className="agent-model-count">{availableModels.length} MODELS · {providerChoice === "auto" ? "AUTOMATIC ROUTING" : providerChoice.toUpperCase()}</span>
-          {providerChoice === "ollama" && <p className="agent-provider-note">Ollama must be reachable by the CyberLab server. For Vercel hosting, your computer's 127.0.0.1 is not reachable; configure a secured network endpoint or local companion bridge.</p>}
+          {providerChoice === "ollama" && <p className="agent-provider-note">{!ollamaConfigured ? "Ollama is not configured on the server. Set OLLAMA_BASE_URL to a secured, network-reachable Ollama endpoint." : !ollamaAvailable ? "The configured endpoint did not return any installed models. Check that Ollama is running and reachable, pull a model with ollama pull <model>, then refresh this page. For Vercel hosting, your computer’s 127.0.0.1 is not reachable from the server." : "Ollama models were discovered. The endpoint must remain reachable by the CyberLab server during inference; your computer’s 127.0.0.1 is not reachable from Vercel."}</p>}
           <span className="agent-model-count">{agentMode === "open-weight" ? `${availableModels.length} OPEN-WEIGHT MODELS` : `${availableModels.length} MODELS AVAILABLE`}</span>
         </div>
         <div className="agent-chat">
