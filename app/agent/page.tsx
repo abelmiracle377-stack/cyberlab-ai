@@ -241,7 +241,7 @@ export default function AgentPage() {
         </div>
         <div className="agent-config agent-config-stack">
           <div className="agent-mode-switch" role="group" aria-label="Agent mode">
-            <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); if (!models.some((item) => item.id === model)) setModel(models.find((item) => item.id === "openai/gpt-5.5")?.id || models[0]?.id || "openai/gpt-5.5"); }} disabled={busy}>Standard</button>
+            <button type="button" className={agentMode === "standard" ? "selected" : ""} onClick={() => { setAgentMode("standard"); const choices = providerChoice === "ollama" ? models.filter((item) => item.source === "ollama") : providerChoice === "openrouter" ? models.filter((item) => item.source === "openrouter") : models; if (!choices.some((item) => item.id === model)) setModel(choices.find((item) => item.id === "openai/gpt-5.5")?.id || choices[0]?.id || ""); }} disabled={busy}>Standard</button>
             <button type="button" className={agentMode === "open-weight" ? "selected" : ""} onClick={() => { const first = models.find((item) => item.openWeight && (providerChoice === "auto" || (providerChoice === "ollama" ? item.source === "ollama" : item.source === "openrouter"))); setAgentMode("open-weight"); if (first) setModel(first.id); }} disabled={busy}>Open-weight research mode</button>
           </div>
           <div className="agent-model-label"><span className="agent-live-dot" /> {agentMode === "open-weight" ? "OPEN-WEIGHT MODEL ROUTING" : "MODEL ROUTING"}</div>
