@@ -29,7 +29,8 @@ function LoginForm() {
         const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
         if (authError) throw authError;
         const requested = search.get("next") || "/";
-        const destination = requested.startsWith("/") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/";\n        router.replace(destination); router.refresh();
+        const destination = requested.startsWith("/") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/";
+        router.replace(destination); router.refresh();
       } else {
         const { data, error: authError } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password, options: { emailRedirectTo: window.location.origin + "/auth/callback" } });
         if (authError) throw authError;
