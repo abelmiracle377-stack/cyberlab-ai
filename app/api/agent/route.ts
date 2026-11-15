@@ -267,7 +267,18 @@ export async function POST(request: Request) {
     if (!model.success) {
       return Response.json({ error: "Choose a valid provider/model identifier." }, { status: 400 });
     }
-    const ollamaBase = process.env.OLLAMA_BASE_URL?.trim().replace(/\/$/, "");
+    const configuredOllamaUrl = process.env.OLLAMA_BASE_URL?.trim();
+    let ollamaBase: string | null = null;
+    if (configuredOllamaUrl) {
+      try {
+        const parsed = new URL(configuredOllamaUrl);
+        if (["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) {
+          ollamaBase = parsed.toString().replace(/\/$/, "");
+        }
+      } catch {
+        ollamaBase = null;
+      }
+    }
     const localRequested = requestedProvider === "ollama" || (requestedProvider === "auto" && modelSource === "ollama");
     let selectedProvider: "ollama" | "openrouter" = localRequested ? "ollama" : "openrouter";
     let selectedModel = model.data;
@@ -281,8 +292,12 @@ export async function POST(request: Request) {
       } else {
         try {
           const health = await fetch(`${ollamaBase}/api/tags`, { headers: process.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` } : {}, cache: "no-store", signal: AbortSignal.timeout(5000) });
-          const catalogue = health.ok ? await health.json() as { models?: Array<{ name?: string; model?: string }> } : { models: [] };
-          const available = (catalogue.models || []).map((item) => item.name || item.model).filter((name): name is string => Boolean(name));
+          if (!health.ok) throw new Error(`Ollama catalogue returned HTTP ${health.status}.`);
+          const catalogue = await health.json() as { models?: Array<{ name?: string; model?: string }> };
+          if (!catalogue || !Array.isArray(catalogue.models)) throw new Error("Ollama returned an invalid model catalogue.");
+          const available = catalogue.models
+            .map((item) => item && (item.name || item.model))
+            .filter((name): name is string => typeof name === "string" && name.length > 0);
           if (available.includes(rawModel)) {
             selectedModel = rawModel;
           } else if (requestedProvider === "auto") {
