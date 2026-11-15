@@ -47,7 +47,7 @@ if [[ -e "${OUTPUT_DIR}/${OUTPUT_NAME}" ]]; then
   exit 2
 fi
 rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR/config/package-lists" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab" "$WORK_DIR/config/hooks/normal"
+mkdir -p "$WORK_DIR/config/package-lists" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab" "$WORK_DIR/config/includes.chroot/usr/local/sbin" "$WORK_DIR/config/hooks/normal"
 
 cp "${ROOT_DIR}/os/profiles/${PROFILE}.packages" "$WORK_DIR/config/package-lists/cyberlab.list.chroot"
 cp -a "${ROOT_DIR}/kali-companion" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai/"
