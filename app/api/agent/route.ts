@@ -172,26 +172,44 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-    const incomingAttachments = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
+    if (body.attachments !== undefined && !Array.isArray(body.attachments)) {
+      return Response.json({ error: "Attachments must be supplied as a file list." }, { status: 400 });
+    }
+    const incomingAttachments = Array.isArray(body.attachments) ? body.attachments : [];
+    if (incomingAttachments.length > 4) {
+      return Response.json({ error: "Attach no more than four files per message." }, { status: 400 });
+    }
     const attachmentParts: Array<Record<string, unknown>> = [];
+    const allowedTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf", "text/plain", "text/markdown", "text/csv", "application/json", "application/xml", "text/xml"]);
     let attachmentBytes = 0;
     for (const item of incomingAttachments) {
-      if (!item || typeof item !== "object" || typeof item.data !== "string" || typeof item.mediaType !== "string") continue;
-      const match = item.data.match(/^data:([^;]+);base64,([A-Za-z0-9+/=]+)$/);
-      if (!match || match[1] !== item.mediaType) continue;
-      const bytes = Buffer.from(match[2], "base64");
+      if (!item || typeof item !== "object" || typeof item.data !== "string" || typeof item.mediaType !== "string") {
+        return Response.json({ error: "An attachment is malformed. Remove it and try again." }, { status: 400 });
+      }
+      const match = item.data.match(/^data:([^;]+);base64,([A-Za-z0-9+/]+={0,2})$/);
+      if (!match || match[1].toLowerCase() !== item.mediaType.toLowerCase() || !allowedTypes.has(match[1].toLowerCase())) {
+        return Response.json({ error: "An attachment has an unsupported or mismatched file type." }, { status: 415 });
+      }
+      const encoded = match[2];
+      const bytes = Buffer.from(encoded, "base64");
+      if (!bytes.length || bytes.toString("base64") !== encoded) {
+        return Response.json({ error: "An attachment contains invalid base64 data." }, { status: 400 });
+      }
       attachmentBytes += bytes.byteLength;
-      if (bytes.byteLength > 2 * 1024 * 1024 || attachmentBytes > 3 * 1024 * 1024) {
-        return Response.json({ error: "Attachments exceed the 3 MB total limit or a single file exceeds 2 MB." }, { status: 413 });
+      if (bytes.byteLength > 2 * 1024 * 1024 || attachmentBytes > 2 * 1024 * 1024) {
+        return Response.json({ error: "Attachments must total no more than 2 MB; each file is also limited to 2 MB." }, { status: 413 });
       }
       const mediaType = match[1].toLowerCase();
       if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mediaType)) {
         attachmentParts.push({ type: "image", image: "data:" + mediaType + ";base64," + bytes.toString("base64") });
       } else if (mediaType === "application/pdf") {
         attachmentParts.push({ type: "file", data: bytes.toString("base64"), mediaType: "application/pdf" });
-      } else if (["text/plain", "text/markdown", "text/csv", "application/json", "application/xml", "text/xml"].includes(mediaType)) {
+      } else {
         const textContent = bytes.toString("utf8");
-        attachmentParts.push({ type: "text", text: "\n[Attached file: " + String(item.name || "document").slice(0, 180) + "]\n" + textContent.slice(0, 100000) });
+        if (textContent.includes("\\u0000")) {
+          return Response.json({ error: "A text attachment contains binary data and cannot be analysed as text." }, { status: 415 });
+        }
+        attachmentParts.push({ type: "text", text: "\\n[Attached file: " + String(item.name || "document").replace(/[\\r\\n\\u0000-\\u001f]/g, " ").slice(0, 180) + "]\\n" + textContent.slice(0, 100000) });
       }
     }
     if (!prompt && attachmentParts.length === 0) return Response.json({ error: "Add a prompt or a supported attachment." }, { status: 400 });
