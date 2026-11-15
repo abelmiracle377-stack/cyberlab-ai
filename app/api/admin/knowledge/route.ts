@@ -29,7 +29,7 @@ export async function PATCH(req:Request){
 export async function DELETE(req:Request){
  const g=await adminGate(); if(g.error)return g.error;
  const {searchParams}=new URL(req.url);const id=searchParams.get("id");
- if(!id)return NextResponse.json({error:"Item ID required."},{status:400});
+ if(!id||id.length>64)return NextResponse.json({error:"Item ID required."},{status:400});
  const {error}=await g.db!.from("knowledge_items").delete().eq("id",id);
  if(error)return NextResponse.json({error:error.message},{status:500});
  return NextResponse.json({success:true});
