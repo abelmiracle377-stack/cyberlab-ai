@@ -26,33 +26,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          script="$(dpkg -L live-build | grep -E '/lb_chroot_linux-image      - name: Build lightweight terminal ISO
-        run: sudo ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
-      - name: Hand build outputs to the runner account
-        run: sudo chown -R "$USER":"$USER" "$RUNNER_TEMP/cyberlab-dist"
-      - name: Record QEMU version
-        run: qemu-system-x86_64 --version | head -n 1 > "$RUNNER_TEMP/cyberlab-dist/QEMU-VERSION.txt"
-      - name: Boot-test desktop ISO in QEMU
-        run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop "$RUNNER_TEMP/cyberlab-dist/desktop-boot.log"
-      - name: Boot-test terminal ISO in QEMU
-        run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal "$RUNNER_TEMP/cyberlab-dist/terminal-boot.log"
-      - name: Publish ISO checksums
-        run: |
-          cd "$RUNNER_TEMP/cyberlab-dist"
-          sha256sum *.iso > SHA256SUMS
-      - name: Upload CyberLab AI OS images
-        uses: actions/upload-artifact@v4
-        with:
-          name: cyberlab-ai-os-live-isos-amd64
-          path: ${{ runner.temp }}/cyberlab-dist/
-          if-no-files-found: error
-          retention-days: 7
- | head -n 1)"
+          script="$(dpkg -L live-build | grep -E '/lb_chroot_linux-image$' | head -n 1)"
           test -n "$script" && test -f "$script"
-          legacy='${LB_PARENT_MIRROR_CHROOT}/dists/${LB_PARENT_DISTRIBUTION}/Contents-${LB_ARCHITECTURES}.gz'
-          corrected='${LB_PARENT_MIRROR_CHROOT}/dists/${LB_PARENT_DISTRIBUTION}/main/Contents-${LB_ARCHITECTURES}.gz'
+          legacy='\${LB_PARENT_MIRROR_CHROOT}/dists/\${LB_PARENT_DISTRIBUTION}/Contents-\${LB_ARCHITECTURES}.gz'
+          corrected='\${LB_PARENT_MIRROR_CHROOT}/dists/\${LB_PARENT_DISTRIBUTION}/main/Contents-\${LB_ARCHITECTURES}.gz'
           if grep -Fq "$legacy" "$script"; then
-            sed -i "s|${legacy}|${corrected}|" "$script"
+            sed -i "s|\${legacy}|\${corrected}|" "$script"
           fi
           grep -Fq "$corrected" "$script" || {
             echo "Unsupported live-build Contents index implementation: $script" >&2
@@ -81,6 +60,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cyberlab-ai-os-live-isos-amd64
-          path: ${{ runner.temp }}/cyberlab-dist/
+          path: \${{ runner.temp }}/cyberlab-dist/
           if-no-files-found: error
           retention-days: 7
