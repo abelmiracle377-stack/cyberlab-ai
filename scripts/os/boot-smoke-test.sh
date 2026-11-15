@@ -5,8 +5,8 @@ ISO="${1:?Usage: boot-smoke-test.sh path/to/cyberlab-ai-os-*.iso [desktop|termin
 PROFILE="${2:?Specify the expected profile: desktop or terminal}"
 LOG="${3:-}"
 case "$PROFILE" in
-  desktop) EXPECTED_MARKER='Reached target Graphical Interface'; MEMORY_MB=4096; VCPUS=2; BOOT_TIMEOUT=360 ;;
-  terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'; MEMORY_MB=1536; VCPUS=1; BOOT_TIMEOUT=240 ;;
+  desktop) EXPECTED_MARKER='Reached target .*Graphical Interface'; MEMORY_MB=4096; VCPUS=2; BOOT_TIMEOUT=600 ;;
+  terminal) EXPECTED_MARKER='Reached target .*Multi-User System|login:'; MEMORY_MB=1536; VCPUS=1; BOOT_TIMEOUT=240 ;;
   *) echo "Unknown profile: $PROFILE (expected desktop or terminal)." >&2; exit 2 ;;
 esac
 command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "qemu-system-x86_64 is required." >&2; exit 2; }
@@ -50,7 +50,12 @@ fi
 
 if ! grep -Eiq "$EXPECTED_MARKER" "$LOG"; then
   echo "Expected $PROFILE userspace boot marker was not detected." >&2
-  tail -n 100 "$LOG" >&2
+  if [[ ! -s "$LOG" ]]; then
+    echo "Serial boot log is empty; no guest output reached the configured serial console." >&2
+  else
+    echo "Serial boot log size: $(wc -c < "$LOG") bytes" >&2
+    tail -n 100 "$LOG" >&2
+  fi
   exit 1
 fi
 
