@@ -43,6 +43,11 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Validate OS shell script syntax
+        run: |
+          bash -n scripts/os/build-live-iso.sh
+          bash -n scripts/os/boot-smoke-test.sh
+
       - name: Record tool versions
         run: |
           mkdir -p "$GITHUB_WORKSPACE/cyberlab-dist"
