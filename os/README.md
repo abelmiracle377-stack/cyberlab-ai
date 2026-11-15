@@ -2,15 +2,18 @@
 
 CyberLab AI OS is being developed as a Debian-based security distribution, not merely a desktop VM image. It has two install/live profiles built from the same source tree:
 
-- **Desktop** — XFCE graphical workstation, browser, terminal, CyberLab companion and curated security/forensics utilities.
-- **Terminal** — lighter command-line environment for lower-resource computers, with the same CyberLab command entry point and a focused set of CLI security/forensics tools.
+- **Desktop Lite** — XFCE graphical workstation, browser, terminal, CyberLab companion and a deliberately smaller set of core utilities for lower-resource computers.
+- **Desktop Full** — the original full XFCE workstation, browser, terminal, CyberLab companion and complete curated security/forensics utility set.
+- **Terminal** — the smallest command-line environment for constrained computers, with the same CyberLab command entry point and a focused set of CLI security/forensics tools.
+
+The Lite profile is additive: it does not replace or remove packages from the Full profile. The Full edition remains available for users who want the complete toolset.
 
 Both profiles are amd64 hybrid ISOs intended for bootable USB media and virtual machines. The existing hosted CyberLab web application and Kali companion remain separate, preserved products integrated into this OS build.
 
 ## Build architecture
 
 - Debian 13 (Trixie) base, built with Debian `live-build`.
-- Profile package manifests: `os/profiles/desktop.packages` and `os/profiles/terminal.packages`.
+- Profile package manifests: `os/profiles/desktop-lite.packages`, `os/profiles/desktop.packages` (Full), and `os/profiles/terminal.packages`.
 - Shared guest customisation: `scripts/os/live-configure.chroot`.
 - Reproducible ISO builder: `scripts/os/build-live-iso.sh`.
 - Manual GitHub Actions build: [Build CyberLab AI OS Live ISOs](../.github/workflows/build-os-vm.yml).
@@ -25,22 +28,27 @@ Use a Debian/Ubuntu amd64 build host with internet access and sufficient disk sp
 sudo apt update
 sudo apt install -y live-build debootstrap xorriso squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools isolinux syslinux-common
 chmod +x scripts/os/*.sh
+sudo ./scripts/os/build-live-iso.sh desktop-lite ./dist
 sudo ./scripts/os/build-live-iso.sh desktop ./dist
 sudo ./scripts/os/build-live-iso.sh terminal ./dist
 ```
 
 Expected outputs:
 
-- `dist/cyberlab-ai-os-desktop-amd64.iso`
-- `dist/cyberlab-ai-os-desktop-amd64.iso.sha256`
-- `dist/cyberlab-ai-os-terminal-amd64.iso`
-- `dist/cyberlab-ai-os-terminal-amd64.iso.sha256`
+- `dist/cyberlab-ai-os-desktop-lite-amd64.iso` and its `.sha256` checksum
+- `dist/cyberlab-ai-os-desktop-amd64.iso` (Full) and its `.sha256` checksum
+- `dist/cyberlab-ai-os-terminal-amd64.iso` and its `.sha256` checksum
 
 The builder refuses to overwrite existing output ISOs. It uses an isolated working directory under `/var/tmp/cyberlab-ai-os-build` by default; set `CYBERLAB_OS_WORKDIR` to change it.
 
 ## Build through GitHub Actions
 
-Open the repository Actions page, select **Build CyberLab AI OS Live ISOs**, and choose **Run workflow**. The workflow builds both profiles and uploads the ISO files and checksums as a short-retention artifact.
+Open the repository Actions page, select **Build CyberLab AI OS Live ISOs**, and choose **Run workflow**. The workflow builds and boot-tests all three profiles. It publishes separate, short-retention GitHub Actions artifacts so users can download only the edition they need:
+- `cyberlab-ai-os-desktop-lite-amd64`
+- `cyberlab-ai-os-desktop-full-amd64`
+- `cyberlab-ai-os-terminal-amd64`
+
+Each edition includes its ISO and SHA-256 checksum. Downloading the Lite artifact avoids downloading the Full desktop image.
 
 This workflow is manual so normal web/companion CI does not incur the cost of building multi-gigabyte operating-system images.
 
@@ -101,10 +109,11 @@ Record the QEMU version, host architecture, ISO SHA-256, boot profile and test r
 
 ## Resource targets
 
-- Desktop profile: target 4 GB RAM, 2 vCPUs and 20 GB virtual disk.
+- Desktop Lite profile: target 2 GB RAM, 2 vCPUs and 16 GB virtual disk.
+- Desktop Full profile: target 4 GB RAM, 2 vCPUs and 20 GB virtual disk.
 - Terminal profile: target 1–2 GB RAM, 1 vCPU and 12 GB virtual disk.
 
-These are initial design targets, not benchmark guarantees. A host with only 4 GB total physical RAM should prefer the terminal profile or boot the desktop ISO directly rather than running a desktop VM alongside its own desktop.
+These are initial design targets, not benchmark guarantees. A host with only 4 GB total physical RAM should prefer the terminal profile or boot Desktop Lite directly rather than running a desktop VM alongside its own desktop. The 2 GB Lite target is a guest allocation, not a guarantee that a 4 GB host can comfortably run the VM.
 
 ## Guest security hardening
 
