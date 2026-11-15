@@ -58,6 +58,7 @@ chmod 0755 "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
 
 cd "$WORK_DIR"
 lb config \
+  --mode debian \
   --distribution trixie \
   --architectures amd64 \
   --binary-images iso-hybrid \
