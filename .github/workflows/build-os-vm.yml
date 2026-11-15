@@ -70,19 +70,6 @@ jobs:
       - name: Free lightweight desktop build space
         run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
 
-      - name: Build full desktop ISO
-        run: ./scripts/os/build-live-iso.sh desktop "$GITHUB_WORKSPACE/cyberlab-dist"
-
-      - name: Boot-test full desktop ISO in QEMU
-        run: >
-          ./scripts/os/boot-smoke-test.sh
-          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso"
-          desktop
-          "$GITHUB_WORKSPACE/cyberlab-dist/desktop-boot.log"
-
-      - name: Free full desktop build space
-        run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop
-
       - name: Build lightweight terminal ISO
         run: ./scripts/os/build-live-iso.sh terminal "$GITHUB_WORKSPACE/cyberlab-dist"
 
@@ -115,17 +102,6 @@ jobs:
           path: |
             cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso
             cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso.sha256
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload full desktop edition
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cyberlab-ai-os-desktop-full-amd64
-          path: |
-            cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso
-            cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso.sha256
           if-no-files-found: error
           retention-days: 7
 
