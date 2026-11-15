@@ -99,7 +99,7 @@ export default function AgentPage() {
 
   async function addFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const allowed = /^(image\\/(png|jpeg|webp|gif)|application\\/pdf|text\\/(plain|markdown|csv)|application\\/(json|xml))$/i;
+    const allowed = /^(image\/(png|jpeg|webp|gif)|application\/pdf|text\/(plain|markdown|csv)|application\/(json|xml))$/i;
     let pending = attachments;
     for (const file of Array.from(fileList)) {
       if (file.size > 2 * 1024 * 1024) { setError(file.name + ": maximum file size is 2 MB."); continue; }
