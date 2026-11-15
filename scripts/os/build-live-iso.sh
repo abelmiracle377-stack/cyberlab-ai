@@ -52,6 +52,7 @@ mkdir -p "$WORK_DIR/config/package-lists" "$WORK_DIR/config/includes.chroot/opt/
 cp "${ROOT_DIR}/os/profiles/${PROFILE}.packages" "$WORK_DIR/config/package-lists/cyberlab.list.chroot"
 cp -a "${ROOT_DIR}/kali-companion" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai/"
 cp "${ROOT_DIR}/scripts/os/cyberlab-menu.py" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab/menu.py"
+install -m 0755 "${ROOT_DIR}/scripts/os/guest-security-check.sh" "$WORK_DIR/config/includes.chroot/usr/local/sbin/cyberlab-guest-security-check"
 cp "${ROOT_DIR}/scripts/os/live-configure.chroot" "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
 chmod 0755 "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
 
