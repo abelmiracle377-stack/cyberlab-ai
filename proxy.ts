@@ -23,7 +23,7 @@ export async function proxy(request: NextRequest) {
     },
   });
   const { data: { user } } = await supabase.auth.getUser();
-  const isPublic = path === "/login" || path === "/pricing" || path === "/admin/login" || path.startsWith("/auth/callback") || path === "/api/paystack/webhook";
+  const isPublic = path === "/login" || path === "/signup" || path === "/pricing" || path === "/admin/login" || path.startsWith("/auth/callback") || path === "/api/paystack/webhook";
   const isBilling = path === "/billing" || path.startsWith("/api/billing/");
   if (adminPath || path.startsWith("/api/admin/")) {
     if (!user) {
