@@ -29,7 +29,7 @@ jobs:
       - name: Boot-test desktop ISO in QEMU
         run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop "$RUNNER_TEMP/cyberlab-dist/desktop-boot.log"
       - name: Boot-test terminal ISO in QEMU
-        run: sudo ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal "$RUNNER_TEMP/cyberlab-dist/terminal-boot.log"
+        run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal "$RUNNER_TEMP/cyberlab-dist/terminal-boot.log"
       - name: Publish ISO checksums
         run: |
           cd "$RUNNER_TEMP/cyberlab-dist"
