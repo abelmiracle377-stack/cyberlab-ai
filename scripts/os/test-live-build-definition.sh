@@ -32,6 +32,9 @@ done
 
 test -s "$ROOT_DIR/scripts/os/guest-security-check.sh"
 bash -n "$ROOT_DIR/scripts/os/guest-security-check.sh"
+test -s "$ROOT_DIR/scripts/os/test-guest-security-check.sh"
+bash -n "$ROOT_DIR/scripts/os/test-guest-security-check.sh"
+bash "$ROOT_DIR/scripts/os/test-guest-security-check.sh"
 grep -q "guest-security-check.sh" "$ROOT_DIR/scripts/os/build-live-iso.sh"
 test -s "$ROOT_DIR/scripts/os/cyberlab-menu.py"
 test -s "$ROOT_DIR/kali-companion/cyberlab.py"
