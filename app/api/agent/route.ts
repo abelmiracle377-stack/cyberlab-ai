@@ -245,11 +245,11 @@ export async function POST(request: Request) {
     const requestedProvider = body.provider === "ollama" || body.provider === "auto" ? body.provider : "openrouter";
     const rawModel = typeof body.model === "string" ? body.model.trim() : "openai/gpt-5.5";
     const model = requestedProvider === "ollama" || (requestedProvider === "auto" && !rawModel.includes("/"))
-      ? z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+(?:\\/[a-zA-Z0-9._:-]+)?$/).safeParse(rawModel)
+      ? z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+(?:\/[a-zA-Z0-9._:-]+)?$/).safeParse(rawModel)
       : modelSchema.safeParse(rawModel);
     const agentMode = body.agentMode === "open-weight" ? "open-weight" : "standard";
     const learningContext: Array<{ title: string; category: string; source: string; content: string }> = await (async () => { try { const db = adminDb(); const { data: settings, error: settingsError } = await db.from("cyberlab_settings").select("ai_learning_enabled").eq("id", true).maybeSingle(); if (settingsError || settings?.ai_learning_enabled !== true) return []; const { data, error } = await db.from("knowledge_items").select("title,category,source,content").eq("status","approved").order("updated_at",{ascending:false}).limit(30); if (error) return []; return (data || []).flatMap((item:any) => typeof item.content === "string" ? [{title:String(item.title||"Untitled").slice(0,160),category:String(item.category||"Other").slice(0,80),source:String(item.source||"Admin curated").slice(0,120),content:item.content.slice(0,3000)}] : []); } catch { return []; } })();
-    const learningText = learningContext.map((item, index) => `[Approved item ${index+1}] ${item.title} | ${item.category} | Source: ${item.source}\\n${item.content}`).join("\\n\\n").slice(0, 12000);
+    const learningText = learningContext.map((item, index) => `[Approved item ${index+1}] ${item.title} | ${item.category} | Source: ${item.source}\n${item.content}`).join("\n\n").slice(0, 12000);
     const history = Array.isArray(body.history)
       ? body.history.slice(-12).flatMap((entry: unknown) => {
           if (!entry || typeof entry !== "object") return [];
@@ -266,7 +266,7 @@ export async function POST(request: Request) {
     if (!model.success) {
       return Response.json({ error: "Choose a valid provider/model identifier." }, { status: 400 });
     }
-    const ollamaBase = process.env.OLLAMA_BASE_URL?.trim().replace(/\\/$/, "");
+    const ollamaBase = process.env.OLLAMA_BASE_URL?.trim().replace(/\/$/, "");
     const localRequested = requestedProvider === "ollama" || (requestedProvider === "auto" && !rawModel.includes("/"));
     let selectedProvider: "ollama" | "openrouter" = localRequested ? "ollama" : "openrouter";
     let selectedModel = model.data;
