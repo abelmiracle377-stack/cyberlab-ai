@@ -74,6 +74,16 @@ qemu-system-x86_64 -m 2048 -smp 2 -boot d -no-user-config -nic user,model=virtio
 
 User-mode networking provides outbound guest networking; it is not a bridge to the physical LAN. Keep evidence and untrusted samples inside the disposable guest. Avoid shared folders, clipboard integration, USB passthrough, and host device access unless the specific lab requires them and the risks are understood. Snapshot mode keeps guest writes temporary; it does not protect the host or hypervisor from guest vulnerabilities.
 
+## Runtime guest security verification
+
+The live ISO includes `/usr/local/sbin/cyberlab-guest-security-check`, a read-only check for the guest kernel/network defaults, SSH-server absence, and bridge service state. Run it after boot:
+
+```bash
+sudo /usr/local/sbin/cyberlab-guest-security-check
+```
+
+A passing result checks the live values on that boot; it does not prove host/hypervisor security or replace the broader boot acceptance checklist.
+
 ## Boot acceptance checklist
 
 A successful ISO build is not the same as a boot-tested OS. Before marking a release boot-verified, test both profiles in QEMU/KVM:
