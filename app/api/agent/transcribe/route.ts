@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) return Response.json({ error: "Choose an audio file to transcribe." }, { status: 400 });
-    if (file.size < 1 || file.size > 24 * 1024 * 1024) return Response.json({ error: "Audio must be between 1 byte and 24 MB." }, { status: 413 });
-    if (!allowedAudio.has(file.type)) return Response.json({ error: "Unsupported audio format. Use MP3, WAV, FLAC, M4A, OGG, WebM or AAC." }, { status: 415 });
+    if (file.size < 1 || file.size > 4 * 1024 * 1024) return Response.json({ error: "Audio must be between 1 byte and 4 MB." }, { status: 413 });
+    if (!allowedAudio.has(file.type.split(";")[0])) return Response.json({ error: "Unsupported audio format. Use MP3, WAV, FLAC, M4A, OGG, WebM or AAC." }, { status: 415 });
     const upstream = new FormData();
     upstream.append("file", file, file.name || "recording.webm");
     upstream.append("model", "openai/whisper-1");
