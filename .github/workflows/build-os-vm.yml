@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           script="$(dpkg -L live-build | grep -E '/lb_chroot_linux-image$' | head -n 1)"
           test -n "$script" && test -f "$script"
-          python3 - "$script" <<'PY'
+          sudo python3 - "$script" <<'PY'
           from pathlib import Path
           import sys
 
