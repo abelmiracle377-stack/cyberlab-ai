@@ -32,6 +32,8 @@ jobs:
           node-version: "22"
       - name: Install dependencies
         run: npm install --prefer-offline --no-audit --no-fund
+      - name: Lint application
+        run: npm run lint
       - name: TypeScript validation
         run: npx tsc --noEmit
       - name: Next.js production build
