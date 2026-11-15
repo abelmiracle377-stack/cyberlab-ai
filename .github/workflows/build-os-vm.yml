@@ -11,6 +11,10 @@ on:
       - os/**
       - kali-companion/**
 
+concurrency:
+  group: cyberlab-os-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
