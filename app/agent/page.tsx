@@ -103,7 +103,7 @@ export default function AgentPage() {
     let pending = attachments;
     for (const file of Array.from(fileList)) {
       if (file.size > 2 * 1024 * 1024) { setError(file.name + ": maximum file size is 2 MB."); continue; }
-      if (!allowed.test(file.type) && !/\\.(txt|md|csv|json|xml)$/i.test(file.name)) { setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML."); continue; }
+      if (!allowed.test(file.type) && !/\.(txt|md|csv|json|xml)$/i.test(file.name)) { setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML."); continue; }
       if (pending.length >= 4) { setError("Attach up to four files per message."); break; }
       if (pending.reduce((total, item) => total + item.size, 0) + file.size > 2 * 1024 * 1024) {
         setError("Attachments must total no more than 2 MB per message.");
