@@ -44,12 +44,15 @@ export default function AgentPage() {
         const catalogue: Model[] = data.models || [];
         setModels(catalogue);
         setOllamaConfigured(Boolean(data.providers?.ollamaConfigured));
-        const preferredSource = data.providers?.openrouter ? "openrouter" : data.providers?.ollamaAvailable ? "ollama" : "openrouter";
+        const eligibleForMode = catalogue.filter((item) => agentMode === "standard" || item.openWeight);
+        const preferredSource = eligibleForMode.some((item) => item.source === "openrouter")
+          ? "openrouter"
+          : eligibleForMode.some((item) => item.source === "ollama") ? "ollama" : "openrouter";
         if (preferredSource === "ollama") setProviderChoice("ollama");
         setModel((current) => {
-          const eligible = catalogue.filter((item) => item.source === preferredSource && (agentMode === "standard" || item.openWeight));
+          const eligible = eligibleForMode.filter((item) => item.source === preferredSource);
           if (eligible.some((item) => item.id === current)) return current;
-          return eligible.find((item) => item.id === "openai/gpt-5.5")?.id || eligible[0]?.id || catalogue.find((item) => agentMode === "standard" || item.openWeight)?.id || "";
+          return eligible.find((item) => item.id === "openai/gpt-5.5")?.id || eligible[0]?.id || "";
         });
       })
       .catch((cause) => setError(cause.message || "Could not load model catalogue."));
