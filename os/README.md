@@ -78,6 +78,18 @@ Record the QEMU version, host architecture, ISO SHA-256, boot profile and test r
 
 These are initial design targets, not benchmark guarantees. A host with only 4 GB total physical RAM should prefer the terminal profile or boot the desktop ISO directly rather than running a desktop VM alongside its own desktop.
 
+## Guest security hardening
+
+The live guest applies a conservative baseline through /etc/sysctl.d/99-cyberlab-hardening.conf:
+
+- Restricts kernel pointer and dmesg disclosure and limits ptrace to the normal same-user policy (kernel.yama.ptrace_scope=1).
+- Disables unprivileged BPF and set-user-ID core dumps; enables protected symlink and hardlink handling.
+- Disables IPv4/IPv6 redirect acceptance and source routing, and disables IPv4 redirect transmission.
+- Disables core dumps through a hard user limit and sets a default shell umask of 027 for newly created files.
+- Does not install an SSH server, enable remote login, start the companion bridge, or launch scans at boot.
+
+These are guest-level defaults, not a substitute for securing the host, hypervisor, VM management interface, or physical evidence media. The baseline intentionally does not disable networking, packet capture, debuggers, or authorised lab tooling. Review kernel settings against specialised lab requirements before production use.
+
 ## Safety and limitations
 
 - CyberLab AI OS is a Debian-based security distribution, not an official Kali or Parrot release.
