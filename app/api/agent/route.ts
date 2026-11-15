@@ -273,12 +273,6 @@ export async function POST(request: Request) {
     let selectedModel = model.data;
     const fallbackCandidate = modelSchema.safeParse(typeof body.fallbackModel === "string" ? body.fallbackModel : "openai/gpt-5.5");
     const cloudFallbackModel = fallbackCandidate.success ? fallbackCandidate.data : "";
-    if (requestedProvider === "auto" && selectedProvider === "ollama" && !cloudFallbackModel) {
-      return Response.json({ error: "Automatic Ollama fallback requires an available OpenRouter fallback model. Select a cloud model or configure an open-weight fallback." }, { status: 503 });
-    }
-    if (agentMode === "open-weight" && cloudFallbackModel && !(await isOpenWeightModel(cloudFallbackModel))) {
-      return Response.json({ error: "Open-weight mode requires an open-weight OpenRouter fallback model." }, { status: 400 });
-    }
     if (selectedProvider === "ollama") {
       if (!ollamaBase) {
         if (requestedProvider !== "auto") return Response.json({ error: "Ollama is not configured on the server. Set OLLAMA_BASE_URL to a network-reachable Ollama endpoint; localhost on your own computer is not reachable from Vercel." }, { status: 503 });
@@ -303,6 +297,9 @@ export async function POST(request: Request) {
           selectedModel = cloudFallbackModel;
         }
       }
+    }
+    if (selectedProvider === "openrouter" && !selectedModel) {
+      return Response.json({ error: "No valid OpenRouter fallback model is available. Configure an OpenRouter model and API key, or select a model that can be used with the configured provider." }, { status: 503 });
     }
     if (selectedProvider === "openrouter" && !String(selectedModel).includes("/")) selectedModel = cloudFallbackModel;
     if (selectedProvider === "openrouter" && !process.env.OPENROUTER_API_KEY) {
