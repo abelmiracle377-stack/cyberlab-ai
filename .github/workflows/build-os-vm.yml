@@ -55,23 +55,36 @@ jobs:
           qemu-system-x86_64 --version | head -n 1 \
             > "$GITHUB_WORKSPACE/cyberlab-dist/QEMU-VERSION.txt"
 
-      - name: Build desktop ISO
+      - name: Build lightweight desktop ISO
         run: |
           chmod +x scripts/os/*.sh
-          ./scripts/os/build-live-iso.sh desktop "$GITHUB_WORKSPACE/cyberlab-dist"
+          ./scripts/os/build-live-iso.sh desktop-lite "$GITHUB_WORKSPACE/cyberlab-dist"
 
-      - name: Free build space
-        run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop
+      - name: Boot-test lightweight desktop ISO in QEMU
+        run: >
+          ./scripts/os/boot-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
+          desktop-lite
+          "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-boot.log"
 
-      - name: Build lightweight terminal ISO
-        run: ./scripts/os/build-live-iso.sh terminal "$GITHUB_WORKSPACE/cyberlab-dist"
+      - name: Free lightweight desktop build space
+        run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
 
-      - name: Boot-test desktop ISO in QEMU
+      - name: Build full desktop ISO
+        run: ./scripts/os/build-live-iso.sh desktop "$GITHUB_WORKSPACE/cyberlab-dist"
+
+      - name: Boot-test full desktop ISO in QEMU
         run: >
           ./scripts/os/boot-smoke-test.sh
           "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso"
           desktop
           "$GITHUB_WORKSPACE/cyberlab-dist/desktop-boot.log"
+
+      - name: Free full desktop build space
+        run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop
+
+      - name: Build lightweight terminal ISO
+        run: ./scripts/os/build-live-iso.sh terminal "$GITHUB_WORKSPACE/cyberlab-dist"
 
       - name: Boot-test terminal ISO in QEMU
         run: >
@@ -94,11 +107,35 @@ jobs:
           cd "$GITHUB_WORKSPACE/cyberlab-dist"
           sha256sum *.iso > SHA256SUMS
 
-      - name: Upload CyberLab AI OS images
-        if: always()
+      - name: Upload lightweight desktop edition
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: cyberlab-ai-os-live-isos-amd64
-          path: cyberlab-dist/
+          name: cyberlab-ai-os-desktop-lite-amd64
+          path: |
+            cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso
+            cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload full desktop edition
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-desktop-full-amd64
+          path: |
+            cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso
+            cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload terminal edition
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-terminal-amd64
+          path: |
+            cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso
+            cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso.sha256
           if-no-files-found: error
           retention-days: 7
