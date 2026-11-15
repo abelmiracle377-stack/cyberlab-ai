@@ -71,6 +71,15 @@ jobs:
           terminal
           "$GITHUB_WORKSPACE/cyberlab-dist/terminal-boot.log"
 
+      - name: Upload boot diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-boot-diagnostics
+          path: cyberlab-dist/*-boot.log
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Publish ISO checksums
         run: |
           cd "$GITHUB_WORKSPACE/cyberlab-dist"
