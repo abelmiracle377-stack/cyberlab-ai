@@ -104,6 +104,17 @@ jobs:
           else
             echo "No /boot/grub/grub.cfg could be extracted from the ISO."
           fi
+          CONFIG_CFG="$RUNNER_TEMP/desktop-lite-grub-config.cfg"
+          if xorriso -osirrox on -indev "$ISO" -extract /boot/grub/config.cfg "$CONFIG_CFG"; then
+            if [[ -s "$CONFIG_CFG" ]]; then
+              echo "Extracted /boot/grub/config.cfg:"
+              sed -n '1,240p' "$CONFIG_CFG"
+            else
+              echo "GRUB config.cfg extraction produced an empty file."
+            fi
+          else
+            echo "No /boot/grub/config.cfg could be extracted from the ISO."
+          fi
 
       - name: Free lightweight desktop build space
         run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
