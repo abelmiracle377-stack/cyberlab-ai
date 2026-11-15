@@ -62,6 +62,7 @@ cd "$WORK_DIR"
 lb config \
   --mode debian \
   --distribution trixie \
+  --initsystem systemd \
   --architectures amd64 \
   --binary-images iso-hybrid \
   --debian-installer live \
