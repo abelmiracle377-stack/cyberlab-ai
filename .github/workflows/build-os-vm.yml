@@ -10,13 +10,15 @@ on:
       - scripts/os/**
       - os/**
       - kali-companion/**
+    tags:
+      - 'v*'
 
 concurrency:
   group: cyberlab-os-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-live-isos:
@@ -190,3 +192,13 @@ jobs:
             cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso.sha256
           if-no-files-found: error
           retention-days: 7
+      - name: Publish versioned GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CyberLab AI ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            cyberlab-dist/*.iso
+            cyberlab-dist/SHA256SUMS
