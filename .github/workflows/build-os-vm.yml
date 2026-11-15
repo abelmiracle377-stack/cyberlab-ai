@@ -7,74 +7,63 @@ on:
       - feature/additive-forensics-recovery
     paths:
       - .github/workflows/build-os-vm.yml
-      - scripts/os/build-live-iso.sh
+      - scripts/os/**
+      - os/profiles/**
+      - kali-companion/**
 
 permissions:
   contents: read
 
 jobs:
   build-live-isos:
+    # Keep live-build and its Debian package metadata native to Debian Trixie.
+    # Node 24 is included so GitHub JavaScript actions work inside the container.
     runs-on: ubuntu-24.04
+    container:
+      image: node:24-trixie
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
-      - name: Install Debian live-build toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y live-build debootstrap xorriso squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools isolinux syslinux-common qemu-system-x86
-      - name: Patch live-build Debian Contents index path
+      - name: Install Debian Trixie live-build toolchain
         shell: bash
         run: |
           set -euo pipefail
-          script="$(dpkg -L live-build | grep -E '/lb_chroot_linux-image$' | head -n 1)"
-          test -n "$script" && test -f "$script"
-          sudo python3 - "$script" <<'PY'
-          from pathlib import Path
-          import sys
-
-          path = Path(sys.argv[1])
-          source = path.read_text()
-          replacements = (
-              (
-                  "${LB_PARENT_DISTRIBUTION}/Contents-${LB_ARCHITECTURES}.gz",
-                  "${LB_PARENT_DISTRIBUTION}/main/Contents-${LB_ARCHITECTURES}.gz",
-              ),
-              (
-                  "${LB_DISTRIBUTION}/Contents-${LB_ARCHITECTURES}.gz",
-                  "${LB_DISTRIBUTION}/main/Contents-${LB_ARCHITECTURES}.gz",
-              ),
-          )
-          changed = 0
-          for old, new in replacements:
-              count = source.count(old)
-              if count:
-                  source = source.replace(old, new)
-                  changed += count
-
-          if changed == 0 and "/main/Contents-${LB_ARCHITECTURES}.gz" not in source:
-              raise SystemExit(
-                  f"Unsupported live-build Contents index implementation: {path}"
-              )
-
-          path.write_text(source)
-          print(f"Verified component-scoped Contents index path in {path}; replacements={changed}")
-          PY
-          grep -Fq '/main/Contents-${LB_ARCHITECTURES}.gz' "$script"
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            live-build \
+            debootstrap \
+            debian-archive-keyring \
+            xorriso \
+            squashfs-tools \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            mtools \
+            isolinux \
+            syslinux-common \
+            qemu-system-x86 \
+            ca-certificates \
+            file \
+            python3
       - name: Build desktop ISO
+        shell: bash
         run: |
+          set -euo pipefail
           chmod +x scripts/os/*.sh
-          sudo ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
+          ./scripts/os/build-live-iso.sh desktop "$RUNNER_TEMP/cyberlab-dist"
       - name: Build lightweight terminal ISO
-        run: sudo ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
-      - name: Hand build outputs to the runner account
-        run: sudo chown -R "$USER":"$USER" "$RUNNER_TEMP/cyberlab-dist"
+        shell: bash
+        run: ./scripts/os/build-live-iso.sh terminal "$RUNNER_TEMP/cyberlab-dist"
       - name: Record QEMU version
+        shell: bash
         run: qemu-system-x86_64 --version | head -n 1 > "$RUNNER_TEMP/cyberlab-dist/QEMU-VERSION.txt"
       - name: Boot-test desktop ISO in QEMU
+        shell: bash
         run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-desktop-amd64.iso" desktop "$RUNNER_TEMP/cyberlab-dist/desktop-boot.log"
       - name: Boot-test terminal ISO in QEMU
+        shell: bash
         run: ./scripts/os/boot-smoke-test.sh "$RUNNER_TEMP/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso" terminal "$RUNNER_TEMP/cyberlab-dist/terminal-boot.log"
       - name: Publish ISO checksums
+        shell: bash
         run: |
           cd "$RUNNER_TEMP/cyberlab-dist"
           sha256sum *.iso > SHA256SUMS
