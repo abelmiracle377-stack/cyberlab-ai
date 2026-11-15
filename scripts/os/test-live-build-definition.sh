@@ -30,6 +30,9 @@ for package in xfce4 xfce4-terminal lightdm firefox-esr; do
   fi
 done
 
+test -s "$ROOT_DIR/scripts/os/guest-security-check.sh"
+bash -n "$ROOT_DIR/scripts/os/guest-security-check.sh"
+grep -q "guest-security-check.sh" "$ROOT_DIR/scripts/os/build-live-iso.sh"
 test -s "$ROOT_DIR/scripts/os/cyberlab-menu.py"
 test -s "$ROOT_DIR/kali-companion/cyberlab.py"
 python3 -c "compile(open('$ROOT_DIR/scripts/os/cyberlab-menu.py', encoding='utf-8').read(), 'cyberlab-menu.py', 'exec')"
