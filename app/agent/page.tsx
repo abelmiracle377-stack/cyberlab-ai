@@ -99,18 +99,28 @@ export default function AgentPage() {
 
   async function addFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const allowed = /^(image\/(png|jpeg|webp|gif)|application\/pdf|text\/(plain|markdown|csv)|application\/(json|xml))$/i;
+    const allowed = /^(image\\/(png|jpeg|webp|gif)|application\\/pdf|text\\/(plain|markdown|csv)|application\\/(json|xml))$/i;
+    let pending = attachments;
     for (const file of Array.from(fileList)) {
       if (file.size > 2 * 1024 * 1024) { setError(file.name + ": maximum file size is 2 MB."); continue; }
-      if (!allowed.test(file.type) && !/\.(txt|md|csv|json|xml)$/i.test(file.name)) { setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML."); continue; }
-      if (attachments.length >= 4) { setError("Attach up to four files per message."); break; }
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("Could not read " + file.name + "."));
-        reader.readAsDataURL(file);
-      });
-      setAttachments(current => current.length < 4 ? [...current, { name: file.name, mediaType: file.type || "text/plain", data, size: file.size }] : current);
+      if (!allowed.test(file.type) && !/\\.(txt|md|csv|json|xml)$/i.test(file.name)) { setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML."); continue; }
+      if (pending.length >= 4) { setError("Attach up to four files per message."); break; }
+      if (pending.reduce((total, item) => total + item.size, 0) + file.size > 2 * 1024 * 1024) {
+        setError("Attachments must total no more than 2 MB per message.");
+        continue;
+      }
+      try {
+        const data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Could not read " + file.name + "."));
+          reader.readAsDataURL(file);
+        });
+        pending = [...pending, { name: file.name, mediaType: file.type || "text/plain", data, size: file.size }];
+        setAttachments(pending);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not read " + file.name + ".");
+      }
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -123,7 +133,8 @@ export default function AgentPage() {
       const response = await fetch("/api/agent/transcribe", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Audio transcription failed.");
-      if (sendDirectly) await sendAgentPrompt(data.text, []);\n      else setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\n\n" : ""));
+      if (sendDirectly) await sendAgentPrompt(data.text, []);
+      else setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\n\n" : ""));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not transcribe this audio."); }
     finally { setAudioBusy(false); }
   }
