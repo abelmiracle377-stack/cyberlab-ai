@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ISO="${1:?Usage: boot-smoke-test.sh path/to/cyberlab-ai-os-*.iso [desktop|terminal]}"
+ISO="${1:?Usage: boot-smoke-test.sh path/to/cyberlab-ai-os-*.iso [desktop-lite|desktop|terminal]}"
 PROFILE="${2:?Specify the expected profile: desktop or terminal}"
 LOG="${3:-}"
 case "$PROFILE" in
