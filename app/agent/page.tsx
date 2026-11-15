@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles, Paperclip, Mic, Square, FileText, X } from "lucide-react";
 import Link from "next/link";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean };
+type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; source: "openrouter" | "ollama" };
 type Message = { role: "user" | "assistant"; content: string };
 type AgentAttachment = { name: string; mediaType: string; data: string; size: number };
 type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
@@ -12,6 +12,8 @@ type LocalScanResult = { target: string; duration_seconds: number; method: strin
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState("");
+  const [providerChoice, setProviderChoice] = useState<"openrouter" | "ollama" | "auto">("openrouter");
+  const [ollamaConfigured, setOllamaConfigured] = useState(false);
   const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
@@ -31,7 +33,8 @@ export default function AgentPage() {
   const [scanStatus, setScanStatus] = useState("");
   const [scanResult, setScanResult] = useState<LocalScanResult | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const availableModels = agentMode === "open-weight" ? models.filter((item) => item.openWeight) : models;
+  const providerModels = providerChoice === "openrouter" ? models.filter((item) => item.source === "openrouter") : providerChoice === "ollama" ? models.filter((item) => item.source === "ollama") : models;
+  const availableModels = agentMode === "open-weight" ? providerModels.filter((item) => item.openWeight) : providerModels;
 
   useEffect(() => {
     fetch("/api/models")
@@ -40,10 +43,11 @@ export default function AgentPage() {
         if (!response.ok) throw new Error(data.error || "Model catalogue unavailable.");
         const catalogue: Model[] = data.models || [];
         setModels(catalogue);
+        setOllamaConfigured(Boolean(data.providers?.ollamaConfigured));
         setModel((current) => {
-          if (catalogue.some((item) => item.id === current && (agentMode === "standard" || item.openWeight))) return current;
-          if (agentMode === "open-weight") return catalogue.find((item) => item.openWeight)?.id || "";
-          return catalogue.find((item) => item.id === "openai/gpt-5.5")?.id || catalogue[0]?.id || "";
+          if (catalogue.some((item) => item.id === current && item.source === "openrouter" && (agentMode === "standard" || item.openWeight))) return current;
+          if (agentMode === "open-weight") return catalogue.find((item) => item.source === "openrouter" && item.openWeight)?.id || catalogue.find((item) => item.openWeight)?.id || "";
+          return catalogue.find((item) => item.id === "openai/gpt-5.5")?.id || catalogue.find((item) => item.source === "openrouter")?.id || catalogue[0]?.id || "";
         });
       })
       .catch((cause) => setError(cause.message || "Could not load model catalogue."));
@@ -179,7 +183,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
+        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model, provider: providerChoice, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -242,12 +246,29 @@ export default function AgentPage() {
           </div>
           <div className="agent-model-label"><span className="agent-live-dot" /> {agentMode === "open-weight" ? "OPEN-WEIGHT MODEL ROUTING" : "MODEL ROUTING"}</div>
           <label className="agent-select-wrap">
-            <span className="sr-only">Select model</span>
-            <select value={model} onChange={(event) => setModel(event.target.value)} disabled={busy}>
-              {availableModels.length ? availableModels.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.provider}</option>) : <option value="">{agentMode === "open-weight" ? "No recognised open-weight models available" : model}</option>}
+            <span className="sr-only">Select provider</span>
+            <select value={providerChoice} onChange={(event) => {
+              const next = event.target.value as "openrouter" | "ollama" | "auto";
+              setProviderChoice(next);
+              const choices = next === "openrouter" ? models.filter((item) => item.source === "openrouter") : next === "ollama" ? models.filter((item) => item.source === "ollama") : models;
+              const filtered = agentMode === "open-weight" ? choices.filter((item) => item.openWeight) : choices;
+              if (!filtered.some((item) => item.id === model)) setModel(filtered[0]?.id || "");
+            }} disabled={busy}>
+              <option value="openrouter">OpenRouter · Cloud</option>
+              <option value="ollama" disabled={!ollamaConfigured}>Ollama · Configured local/remote endpoint{ollamaConfigured ? "" : " (not configured)"}</option>
+              <option value="auto">Automatic · Use selected provider, local first when selected</option>
             </select>
             <ChevronDown size={13} />
           </label>
+          <label className="agent-select-wrap">
+            <span className="sr-only">Select model</span>
+            <select value={model} onChange={(event) => setModel(event.target.value)} disabled={busy}>
+              {availableModels.length ? availableModels.map((item) => <option value={item.id} key={item.source + ":" + item.id}>{item.name} · {item.provider} · {item.source === "ollama" ? "LOCAL" : "CLOUD"}</option>) : <option value="">{providerChoice === "ollama" ? "No Ollama models discovered" : agentMode === "open-weight" ? "No recognised open-weight models available" : "No models available"}</option>}
+            </select>
+            <ChevronDown size={13} />
+          </label>
+          <span className="agent-model-count">{availableModels.length} MODELS · {providerChoice === "auto" ? "AUTOMATIC ROUTING" : providerChoice.toUpperCase()}</span>
+          {providerChoice === "ollama" && <p className="agent-provider-note">Ollama must be reachable by the CyberLab server. For Vercel hosting, your computer's 127.0.0.1 is not reachable; configure a secured network endpoint or local companion bridge.</p>}
           <span className="agent-model-count">{agentMode === "open-weight" ? `${availableModels.length} OPEN-WEIGHT MODELS` : `${availableModels.length} MODELS AVAILABLE`}</span>
         </div>
         <div className="agent-chat">
