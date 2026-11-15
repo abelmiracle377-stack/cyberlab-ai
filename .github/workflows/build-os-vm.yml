@@ -71,6 +71,8 @@ jobs:
           "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-boot.log"
 
       - name: Boot-test lightweight desktop ISO in QEMU (UEFI)
+        id: desktop_lite_uefi
+        continue-on-error: true
         run: >
           ./scripts/os/uefi-smoke-test.sh
           "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
@@ -82,6 +84,26 @@ jobs:
         run: |
           xorriso -indev "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso" -report_el_torito as_mkisofs
           xorriso -indev "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso" -find /EFI -type f -exec lsdl
+
+      - name: Inspect Desktop Lite GRUB configuration
+        if: always()
+        run: |
+          ISO="$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
+          CFG="$RUNNER_TEMP/desktop-lite-grub.cfg"
+          if [[ ! -s "$ISO" ]]; then
+            echo "Desktop Lite ISO is unavailable; GRUB configuration inspection skipped."
+            exit 0
+          fi
+          if xorriso -osirrox on -indev "$ISO" -extract /boot/grub/grub.cfg "$CFG"; then
+            if [[ -s "$CFG" ]]; then
+              echo "Extracted /boot/grub/grub.cfg:"
+              sed -n '1,240p' "$CFG"
+            else
+              echo "GRUB configuration extraction produced an empty file."
+            fi
+          else
+            echo "No /boot/grub/grub.cfg could be extracted from the ISO."
+          fi
 
       - name: Free lightweight desktop build space
         run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
@@ -97,6 +119,8 @@ jobs:
           "$GITHUB_WORKSPACE/cyberlab-dist/terminal-boot.log"
 
       - name: Boot-test terminal ISO in QEMU (UEFI)
+        id: terminal_uefi
+        continue-on-error: true
         run: >
           ./scripts/os/uefi-smoke-test.sh
           "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso"
@@ -111,6 +135,23 @@ jobs:
           path: cyberlab-dist/*-boot.log
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Enforce required UEFI boot checks
+        if: always()
+        run: |
+          failed=0
+          if [[ "${{ steps.desktop_lite_uefi.outcome }}" != "success" ]]; then
+            echo "Desktop Lite UEFI boot verification did not pass."
+            failed=1
+          fi
+          if [[ "${{ steps.terminal_uefi.outcome }}" != "success" ]]; then
+            echo "Terminal UEFI boot verification did not pass."
+            failed=1
+          fi
+          if [[ "$failed" -ne 0 ]]; then
+            echo "ISO artifacts will not be published until every required UEFI boot check passes."
+            exit 1
+          fi
 
       - name: Publish ISO checksums
         run: |
