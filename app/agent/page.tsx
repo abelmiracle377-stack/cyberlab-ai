@@ -44,10 +44,12 @@ export default function AgentPage() {
         const catalogue: Model[] = data.models || [];
         setModels(catalogue);
         setOllamaConfigured(Boolean(data.providers?.ollamaConfigured));
+        const preferredSource = data.providers?.openrouter ? "openrouter" : data.providers?.ollamaAvailable ? "ollama" : "openrouter";
+        if (preferredSource === "ollama") setProviderChoice("ollama");
         setModel((current) => {
-          if (catalogue.some((item) => item.id === current && item.source === "openrouter" && (agentMode === "standard" || item.openWeight))) return current;
-          if (agentMode === "open-weight") return catalogue.find((item) => item.source === "openrouter" && item.openWeight)?.id || catalogue.find((item) => item.openWeight)?.id || "";
-          return catalogue.find((item) => item.id === "openai/gpt-5.5")?.id || catalogue.find((item) => item.source === "openrouter")?.id || catalogue[0]?.id || "";
+          const eligible = catalogue.filter((item) => item.source === preferredSource && (agentMode === "standard" || item.openWeight));
+          if (eligible.some((item) => item.id === current)) return current;
+          return eligible.find((item) => item.id === "openai/gpt-5.5")?.id || eligible[0]?.id || catalogue.find((item) => agentMode === "standard" || item.openWeight)?.id || "";
         });
       })
       .catch((cause) => setError(cause.message || "Could not load model catalogue."));
@@ -183,7 +185,7 @@ export default function AgentPage() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model, fallbackModel: models.find((item) => item.source === "openrouter" && (item.id === "openai/gpt-5.5" || item.openWeight))?.id || "openai/gpt-5.5", provider: providerChoice, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
+        body: JSON.stringify({ prompt: text || "Please inspect the attached material and summarise its security-relevant contents.", attachments: submittedAttachments, model, modelSource: models.find((item) => item.id === model)?.source || "openrouter", fallbackModel: models.find((item) => item.source === "openrouter" && (agentMode === "open-weight" ? item.openWeight : (item.id === "openai/gpt-5.5" || item.openWeight)))?.id || (agentMode === "open-weight" ? "" : "openai/gpt-5.5"), provider: providerChoice, agentMode, history: messages.filter((item) => item.content.trim()).slice(-12), learningContext: (() => { try { const items = JSON.parse(localStorage.getItem("cyberlab.learning.v1") || "[]"); return Array.isArray(items) ? items.filter((item: any) => item?.status === "approved" && typeof item.content === "string").slice(0, 30).map((item: any) => ({ title: String(item.title || "Untitled").slice(0, 160), category: String(item.category || "Other").slice(0, 80), source: String(item.source || "User supplied").slice(0, 120), content: item.content.slice(0, 3000) })) : []; } catch { return []; } })() }),
       });
       if (!response.ok) {
         const data = await response.json();
