@@ -64,39 +64,7 @@ if ! grep -Eq '^[[:space:]]*timeout[[:space:]]+0([[:space:]]*(#.*)?)?$' "$BOOTLO
   exit 2
 fi
 sed -i -E 's/^[[:space:]]*timeout[[:space:]]+0([[:space:]]*(#.*)?)?$/timeout 50/' "$BOOTLOADER_CONFIG"
-grep -Eq '^[[:space:]]*timeout[[:space:]]+50([[:space:]]*(#.*)?)?
-printf '%s\n' "deb http://security.debian.org/debian-security trixie-security main contrib non-free-firmware" > "$WORK_DIR/config/archives/cyberlab-security.list.chroot"
-printf '%s\n' "deb http://security.debian.org/debian-security trixie-security main contrib non-free-firmware" > "$WORK_DIR/config/archives/cyberlab-security.list.binary"
-cp "${ROOT_DIR}/os/profiles/${PROFILE}.packages" "$WORK_DIR/config/package-lists/cyberlab.list.chroot"
-cp -a "${ROOT_DIR}/kali-companion" "$WORK_DIR/config/includes.chroot/opt/cyberlab-ai/"
-cp "${ROOT_DIR}/scripts/os/cyberlab-menu.py" "$WORK_DIR/config/includes.chroot/usr/local/lib/cyberlab/menu.py"
-install -m 0755 "${ROOT_DIR}/scripts/os/guest-security-check.sh" "$WORK_DIR/config/includes.chroot/usr/local/sbin/cyberlab-guest-security-check"
-cp "${ROOT_DIR}/scripts/os/live-configure.chroot" "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
-chmod 0755 "$WORK_DIR/config/hooks/normal/0100-cyberlab-configure.hook.chroot"
-
-cd "$WORK_DIR"
-lb config \
-  --mode debian \
-  --distribution trixie \
-  --initsystem systemd \
-  --architectures amd64 \
-  --binary-images iso-hybrid \
-  --debian-installer live \
-  --archive-areas "main contrib non-free-firmware" \
-  --security false \
-  --bootappend-live "boot=live components username=cyberlab hostname=cyberlab-ai locales=en_US.UTF-8 keyboard-layouts=us console=ttyS0,115200n8 loglevel=4 systemd.show_status=1" \
-  --apt-recommends false \
-  --iso-application "CyberLab AI OS ${PROFILE}" \
-  --iso-volume "CYBERLAB_AI_OS"
-
-lb build
-ISO_PATH="$(find "$WORK_DIR" -maxdepth 1 -type f -name '*.iso' -print -quit)"
-[[ -n "$ISO_PATH" && -s "$ISO_PATH" ]] || { echo "live-build completed without an ISO output." >&2; exit 1; }
-install -m 0644 "$ISO_PATH" "${OUTPUT_DIR}/${OUTPUT_NAME}"
-sha256sum "${OUTPUT_DIR}/${OUTPUT_NAME}" | tee "${OUTPUT_DIR}/${OUTPUT_NAME}.sha256"
-echo "Created ${OUTPUT_DIR}/${OUTPUT_NAME}"
-echo "This is an ISO build result; perform the documented QEMU boot test before declaring it boot-verified."
- "$BOOTLOADER_CONFIG" || {
+grep -Eq '^[[:space:]]*timeout[[:space:]]+50([[:space:]]*(#.*)?)?$' "$BOOTLOADER_CONFIG" || {
   echo "Failed to configure a five-second ISOLINUX timeout." >&2
   exit 2
 }
