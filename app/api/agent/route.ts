@@ -270,10 +270,13 @@ export async function POST(request: Request) {
     const localRequested = requestedProvider === "ollama" || (requestedProvider === "auto" && !rawModel.includes("/"));
     let selectedProvider: "ollama" | "openrouter" = localRequested ? "ollama" : "openrouter";
     let selectedModel = model.data;
+    const fallbackCandidate = modelSchema.safeParse(typeof body.fallbackModel === "string" ? body.fallbackModel : "openai/gpt-5.5");
+    const cloudFallbackModel = fallbackCandidate.success ? fallbackCandidate.data : "openai/gpt-5.5";
     if (selectedProvider === "ollama") {
       if (!ollamaBase) {
         if (requestedProvider !== "auto") return Response.json({ error: "Ollama is not configured on the server. Set OLLAMA_BASE_URL to a network-reachable Ollama endpoint; localhost on your own computer is not reachable from Vercel." }, { status: 503 });
         selectedProvider = "openrouter";
+        selectedModel = cloudFallbackModel;
       } else {
         try {
           const health = await fetch(`${ollamaBase}/api/tags`, { headers: process.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` } : {}, cache: "no-store", signal: AbortSignal.timeout(5000) });
@@ -283,15 +286,18 @@ export async function POST(request: Request) {
             selectedModel = rawModel;
           } else if (requestedProvider === "auto") {
             selectedProvider = "openrouter";
+            selectedModel = cloudFallbackModel;
           } else {
             return Response.json({ error: "The selected Ollama model is not available on the configured endpoint. Pull it with 'ollama pull <model>' and refresh the model list." }, { status: 404 });
           }
         } catch {
           if (requestedProvider !== "auto") return Response.json({ error: "Could not reach the configured Ollama endpoint. Check OLLAMA_BASE_URL, network access and the Ollama service." }, { status: 502 });
           selectedProvider = "openrouter";
+          selectedModel = cloudFallbackModel;
         }
       }
     }
+    if (selectedProvider === "openrouter" && !String(selectedModel).includes("/")) selectedModel = cloudFallbackModel;
     if (selectedProvider === "openrouter" && !process.env.OPENROUTER_API_KEY) {
       return Response.json({ error: "OpenRouter is unavailable and no configured Ollama model could be reached. Configure OPENROUTER_API_KEY or OLLAMA_BASE_URL.", needsConfiguration: true }, { status: 503 });
     }
