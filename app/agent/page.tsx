@@ -153,6 +153,7 @@ export default function AgentPage() {
     setScanStatus("");
     setScanResult(null);
     setPrompt("");
+    setAttachments([]);
     const scanMatch = text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i);
     if (scanMatch && submittedAttachments.length === 0) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
@@ -161,7 +162,7 @@ export default function AgentPage() {
       setBusy(false);
       return;
     }
-    setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "" }]);
+    setMessages((current) => [...current, { role: "user", content: text || ("Please analyse the attached file(s): " + submittedAttachments.map(file => file.name).join(", ")) }, { role: "assistant", content: "" }]);
     setBusy(true);
     try {
       const response = await fetch("/api/agent", {
