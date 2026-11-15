@@ -39,7 +39,7 @@ jobs:
             live-build debootstrap debian-archive-keyring \
             xorriso squashfs-tools mtools dosfstools cpio \
             grub-pc-bin grub-efi-amd64-bin isolinux syslinux-common \
-            qemu-system-x86 git wget ca-certificates
+            qemu-system-x86 ovmf git wget ca-certificates
 
       - uses: actions/checkout@v4
 
@@ -47,25 +47,35 @@ jobs:
         run: |
           bash -n scripts/os/build-live-iso.sh
           bash -n scripts/os/boot-smoke-test.sh
+          bash -n scripts/os/uefi-smoke-test.sh
 
       - name: Record tool versions
         run: |
           mkdir -p "$GITHUB_WORKSPACE/cyberlab-dist"
-          dpkg-query -W live-build debootstrap
+          dpkg-query -W live-build debootstrap ovmf
           qemu-system-x86_64 --version | head -n 1 \
             > "$GITHUB_WORKSPACE/cyberlab-dist/QEMU-VERSION.txt"
+          find /usr/share/OVMF -maxdepth 1 -type f -name 'OVMF_CODE*.fd' -print \
+            | sort > "$GITHUB_WORKSPACE/cyberlab-dist/OVMF-FIRMWARE.txt"
 
       - name: Build lightweight desktop ISO
         run: |
           chmod +x scripts/os/*.sh
           ./scripts/os/build-live-iso.sh desktop-lite "$GITHUB_WORKSPACE/cyberlab-dist"
 
-      - name: Boot-test lightweight desktop ISO in QEMU
+      - name: Boot-test lightweight desktop ISO in QEMU (BIOS)
         run: >
           ./scripts/os/boot-smoke-test.sh
           "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
           desktop-lite
           "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-boot.log"
+
+      - name: Boot-test lightweight desktop ISO in QEMU (UEFI)
+        run: >
+          ./scripts/os/uefi-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
+          desktop-lite
+          "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-uefi-boot.log"
 
       - name: Free lightweight desktop build space
         run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
@@ -73,12 +83,19 @@ jobs:
       - name: Build lightweight terminal ISO
         run: ./scripts/os/build-live-iso.sh terminal "$GITHUB_WORKSPACE/cyberlab-dist"
 
-      - name: Boot-test terminal ISO in QEMU
+      - name: Boot-test terminal ISO in QEMU (BIOS)
         run: >
           ./scripts/os/boot-smoke-test.sh
           "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso"
           terminal
           "$GITHUB_WORKSPACE/cyberlab-dist/terminal-boot.log"
+
+      - name: Boot-test terminal ISO in QEMU (UEFI)
+        run: >
+          ./scripts/os/uefi-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso"
+          terminal
+          "$GITHUB_WORKSPACE/cyberlab-dist/terminal-uefi-boot.log"
 
       - name: Upload boot diagnostics
         if: always()
