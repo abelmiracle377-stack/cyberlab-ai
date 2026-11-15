@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 PROFILE="${1:-desktop}"
 OUTPUT_DIR="${2:-${ROOT_DIR}/dist}"
 case "$PROFILE" in
-  desktop|terminal) ;;
-  *) echo "Usage: $0 desktop|terminal [output-directory]" >&2; exit 2 ;;
+  desktop-lite|desktop|terminal) ;;
+  *) echo "Usage: $0 desktop-lite|desktop|terminal [output-directory]" >&2; exit 2 ;;
 esac
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root (for example: sudo $0 $PROFILE)." >&2
@@ -90,7 +90,7 @@ lb config \
   --security false \
   --bootappend-live "boot=live components username=cyberlab hostname=cyberlab-ai locales=en_US.UTF-8 keyboard-layouts=us console=ttyS0,115200n8 loglevel=4 systemd.show_status=1" \
   --apt-recommends false \
-  --iso-application "CyberLab AI OS" \
+  --iso-application "CyberLab AI OS ${PROFILE}" \
   --iso-volume "CYBERLAB_AI_OS"
 
 lb build
