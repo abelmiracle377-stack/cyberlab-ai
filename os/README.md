@@ -56,6 +56,24 @@ qemu-system-x86_64 -m 4096 -smp 2 -boot d \
 
 For the terminal profile, replace the ISO filename. For a persistent USB, use a dedicated USB-writing utility and select the correct removable drive carefully; writing an ISO destroys existing contents on the selected USB device.
 
+## Safer QEMU defaults
+
+Start with an isolated, disposable live session: no guest network interface, no host folders, no USB passthrough, and no persistent writable disk.
+
+```bash
+qemu-system-x86_64 -m 2048 -smp 2 -boot d -no-user-config -nic none -snapshot -cdrom dist/cyberlab-ai-os-terminal-amd64.iso
+```
+
+For desktop, use its ISO and allocate 4096 MB only when the host has enough spare memory. On a machine with 4 GB total RAM, prefer terminal profile or boot the ISO directly rather than running a desktop VM beside the host desktop.
+
+If a lab explicitly requires guest internet access, opt into QEMU user-mode networking without host port forwards:
+
+```bash
+qemu-system-x86_64 -m 2048 -smp 2 -boot d -no-user-config -nic user,model=virtio-net-pci -snapshot -cdrom dist/cyberlab-ai-os-terminal-amd64.iso
+```
+
+User-mode networking provides outbound guest networking; it is not a bridge to the physical LAN. Keep evidence and untrusted samples inside the disposable guest. Avoid shared folders, clipboard integration, USB passthrough, and host device access unless the specific lab requires them and the risks are understood. Snapshot mode keeps guest writes temporary; it does not protect the host or hypervisor from guest vulnerabilities.
+
 ## Boot acceptance checklist
 
 A successful ISO build is not the same as a boot-tested OS. Before marking a release boot-verified, test both profiles in QEMU/KVM:
