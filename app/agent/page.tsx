@@ -101,7 +101,7 @@ export default function AgentPage() {
     if (!fileList) return;
     const allowed = /^(image\/(png|jpeg|webp|gif)|application\/pdf|text\/(plain|markdown|csv)|application\/(json|xml))$/i;
     for (const file of Array.from(fileList)) {
-      if (file.size > 12 * 1024 * 1024) { setError(file.name + ": maximum file size is 12 MB."); continue; }
+      if (file.size > 2 * 1024 * 1024) { setError(file.name + ": maximum file size is 2 MB."); continue; }
       if (!allowed.test(file.type) && !/\.(txt|md|csv|json|xml)$/i.test(file.name)) { setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML."); continue; }
       if (attachments.length >= 4) { setError("Attach up to four files per message."); break; }
       const data = await new Promise<string>((resolve, reject) => {
@@ -116,10 +116,10 @@ export default function AgentPage() {
   }
 
   async function transcribeAudio(file: File) {
-    if (file.size > 24 * 1024 * 1024) { setError("Audio files must be 24 MB or smaller."); return; }
+    if (file.size > 4 * 1024 * 1024) { setError("Audio files must be 4 MB or smaller."); return; }
     setAudioBusy(true); setError("");
     try {
-      const form = new FormData(); form.append("file", file);
+      const form = new FormData(); const normalizedType = (file.type || "audio/webm").split(";")[0]; const normalizedFile = normalizedType === file.type ? file : new File([file], file.name, { type: normalizedType }); form.append("file", normalizedFile);
       const response = await fetch("/api/agent/transcribe", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Audio transcription failed.");
