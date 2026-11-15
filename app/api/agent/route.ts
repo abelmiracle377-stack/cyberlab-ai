@@ -168,9 +168,38 @@ cve_lookup: tool({
   }),
 };
 
+const MAX_REQUEST_BYTES = 3 * 1024 * 1024;
+
+async function readBoundedJson(request: Request): Promise<any> {
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (declaredLength > MAX_REQUEST_BYTES) {
+    throw new Error("REQUEST_BODY_TOO_LARGE");
+  }
+  if (!request.body) throw new Error("INVALID_REQUEST_BODY");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_REQUEST_BYTES) {
+      await reader.cancel();
+      throw new Error("REQUEST_BODY_TOO_LARGE");
+    }
+    chunks.push(value);
+  }
+  const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error("INVALID_REQUEST_BODY");
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await readBoundedJson(request);
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     if (body.attachments !== undefined && !Array.isArray(body.attachments)) {
       return Response.json({ error: "Attachments must be supplied as a file list." }, { status: 400 });
@@ -263,6 +292,12 @@ export async function POST(request: Request) {
     headers.set("X-CyberLab-Specialist", specialist.label);
     return new Response(response.body, { status: response.status, headers });
   } catch (error) {
+    if (error instanceof Error && error.message === "REQUEST_BODY_TOO_LARGE") {
+      return Response.json({ error: "The request is too large. Keep the complete message and attachments below 3 MB." }, { status: 413 });
+    }
+    if (error instanceof Error && error.message === "INVALID_REQUEST_BODY") {
+      return Response.json({ error: "The request body must contain valid JSON." }, { status: 400 });
+    }
     console.error("CyberLab agent request failed:", error);
     return Response.json({ error: "The agent could not complete this request. Check provider configuration and deployment logs." }, { status: 500 });
   }
