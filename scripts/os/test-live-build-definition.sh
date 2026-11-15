@@ -51,6 +51,8 @@ grep -q 'Build work directory must not be inside the repository' "$ROOT_DIR/scri
 grep -q 'Output directory must not be inside the profile work directory' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'iso-hybrid' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'username=cyberlab' "$ROOT_DIR/scripts/os/build-live-iso.sh"
+grep -q 'BOOTLOADER_TEMPLATE="/usr/share/live/build/bootloaders/isolinux"' "$ROOT_DIR/scripts/os/build-live-iso.sh"
+grep -q 'timeout 50' "$ROOT_DIR/scripts/os/build-live-iso.sh"
 grep -q 'Serial boot log retained' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q -- '-no-user-config' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q -- '-nic none' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
@@ -72,8 +74,8 @@ if grep -qx 'openssh-server' "$DESKTOP" "$TERMINAL"; then
   exit 1
 fi
 grep -q 'never started automatically' "$ROOT_DIR/scripts/os/live-configure.chroot"
-grep -q "desktop) EXPECTED_MARKER='Reached target Graphical Interface'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
-grep -q "terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
+grep -q "desktop) EXPECTED_MARKER='Reached target .*Graphical Interface'.*BOOT_TIMEOUT=600" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
+grep -q "terminal) EXPECTED_MARKER='Reached target .*Multi-User System|login:'" "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q 'MEMORY_MB=4096; VCPUS=2' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 grep -q 'MEMORY_MB=1536; VCPUS=1' "$ROOT_DIR/scripts/os/boot-smoke-test.sh"
 if grep -q 'run: sudo ./scripts/os/boot-smoke-test.sh' "$ROOT_DIR/.github/workflows/build-os-vm.yml"; then
