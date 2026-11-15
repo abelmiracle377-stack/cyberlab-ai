@@ -5,8 +5,8 @@ ISO="${1:?Usage: boot-smoke-test.sh path/to/cyberlab-ai-os-*.iso [desktop|termin
 PROFILE="${2:?Specify the expected profile: desktop or terminal}"
 LOG="${3:-}"
 case "$PROFILE" in
-  desktop) EXPECTED_MARKER='Reached target Graphical Interface' ;;
-  terminal) EXPECTED_MARKER='Reached target Multi-User System|login:' ;;
+  desktop) EXPECTED_MARKER='Reached target Graphical Interface'; MEMORY_MB=4096; VCPUS=2 ;;
+  terminal) EXPECTED_MARKER='Reached target Multi-User System|login:'; MEMORY_MB=1536; VCPUS=1 ;;
   *) echo "Unknown profile: $PROFILE (expected desktop or terminal)." >&2; exit 2 ;;
 esac
 command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "qemu-system-x86_64 is required." >&2; exit 2; }
@@ -33,7 +33,7 @@ set +e
 timeout --signal=TERM --kill-after=10s 180s qemu-system-x86_64 \
   -machine accel=tcg \
   -no-user-config \
-  -m 2048 -smp 2 \
+  -m "$MEMORY_MB" -smp "$VCPUS" \
   -nic none \
   -cdrom "$ISO" -boot order=d,menu=off \
   -snapshot \
