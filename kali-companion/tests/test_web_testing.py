@@ -110,6 +110,7 @@ class WebTestingValidationTests(unittest.TestCase):
         live = {
             "body": "session-token=secret-response",
             "bodyBytes": len("session-token=secret-response"),
+            "target": "https://lab.example.test/search?access_token=secret-query",
             "headers": [
                 {"name": "Content-Type", "value": "text/plain"},
                 {"name": "Set-Cookie", "value": "session=secret; HttpOnly"},
@@ -118,6 +119,8 @@ class WebTestingValidationTests(unittest.TestCase):
         }
         history = web_testing._safe_history_response(live)
         self.assertEqual(history["body"], "")
+        self.assertEqual(history["target"], "https://lab.example.test/search")
+        self.assertTrue(history["targetQueryOmitted"])
         self.assertTrue(history["responseBodyOmitted"])
         self.assertEqual(history["responseBodyLength"], len("session-token=secret-response"))
         self.assertEqual(history["headers"][0]["value"], "text/plain")
@@ -125,6 +128,7 @@ class WebTestingValidationTests(unittest.TestCase):
         self.assertEqual(history["headers"][2]["value"], "[REDACTED]")
         self.assertNotIn("secret-response", str(history))
         self.assertNotIn("secret-token", str(history))
+        self.assertNotIn("secret-query", str(history))
 
 
     @patch("web_testing.socket.getaddrinfo")
