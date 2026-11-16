@@ -55,6 +55,7 @@ The Agent Console recognises explicit web assessment requests that include an HT
 The paired local bridge exposes proxy controls through `/proxy/status`, `/proxy/start`, `/proxy/stop` and `/proxy/history`. The workbench provides the explicit scope and start/stop controls. The proxy:
 - Binds only to `127.0.0.1`; it is not an open network proxy.
 - Requires an exact origin to be retyped, written-authorisation confirmation, an engagement reference and a separate start approval. POST, PUT, PATCH and DELETE are blocked unless the operator separately approves forwarding state-changing methods.
+- Optional manual interception pauses each request in a bounded in-memory queue (20 requests maximum). The operator explicitly forwards or drops each request; undecided requests are dropped after 120 seconds, and stopping the proxy drops all pending requests. The queue displays redacted headers and body length only; it does not expose or retain request bodies.
 - Enforces that exact scheme/host/port for every request and blocks other hosts, including cross-origin redirects when the browser follows them.
 - Supports HTTP/1.1 absolute-form HTTP requests and HTTPS CONNECT with TLS termination using a CyberLab-issued exact-host certificate.
 - Validates the upstream HTTPS certificate using the operating system's normal trust roots and pins the resolved address for each upstream connection.
@@ -62,7 +63,7 @@ The paired local bridge exposes proxy controls through `/proxy/status`, `/proxy/
 - Uses bounded header sizes, request bodies (64 KB), response bodies (2 MB) and network timeouts; oversized responses are rejected rather than partially relayed.
 - Requires a local CA created by explicit approval. The operator must manually install the public CA certificate in a dedicated test browser profile; CyberLab never changes system/browser trust stores or exports the private key.
 
-This is an initial HTTP/1.1 proxy, not full Burp parity. It handles one request per client connection and does not support HTTP/2, WebSockets, chunked client request bodies, client certificates, request pause/edit queues, or multi-origin scope profiles. It has not yet been verified against a full browser matrix. The proxy forwards in-scope browser traffic while enabled; use a dedicated test browser profile and stop it when finished. State-changing methods remain blocked by default.
+This is an initial HTTP/1.1 proxy, not full Burp parity. It handles one request per client connection and does not support HTTP/2, WebSockets, chunked client request bodies, client certificates, request pause/edit queues, or multi-origin scope profiles. It has not yet been verified against a full browser matrix. The proxy forwards in-scope browser traffic while enabled; use a dedicated test browser profile and stop it when finished. State-changing methods remain blocked by default. Manual request interception is disabled by default and requires separate approval at proxy start.
 
 ## Not yet implemented
 
