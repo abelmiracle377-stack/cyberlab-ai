@@ -65,13 +65,13 @@ class NetworkCaptureTests(unittest.TestCase):
                 "eth0", "eth0", True, "LAB-2026-01",
                 duration_seconds=3, packet_limit=20, filter_name="ssh",
             )
+            self.assertTrue(Path(result["local_file"]).is_file())
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["ssh_packet_count"], 2)
         self.assertEqual(result["packet_count"], 2)
         self.assertFalse(result["payload_exported"])
         self.assertEqual(len(result["sha256"]), 64)
         self.assertEqual(result["snaplen_bytes"], 96)
-        self.assertTrue(Path(result["local_file"]).is_file())
         command = popen.call_args.args[0]
         self.assertIn("tcp port 22", command)
         self.assertIn("96", command)
