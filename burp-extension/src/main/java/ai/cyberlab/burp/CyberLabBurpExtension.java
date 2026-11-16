@@ -29,7 +29,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
         api.extension().setName("CyberLab AI — Local Burp Connector");
         try {
             String token = token();
-            HttpServer server = HttpServer.create(
+            server = HttpServer.create(
                 new InetSocketAddress(InetAddress.getByName("127.0.0.1"), PORT), 16
             );
             server.createContext("/v1/health", e -> health(e, token));
