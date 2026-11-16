@@ -195,15 +195,19 @@ def inspect_burp_proxy_history(limit: int = 50) -> dict:
         items = payload["items"][:bounded_limit]
         safe_items = []
         for item in items:
-            if not isinstance(item, dict):
+            if not isinstance(item, dict) or item.get("in_scope") is not True:
+                continue
+            url = item.get("url")
+            method = item.get("method")
+            if not isinstance(url, str) or not isinstance(method, str):
                 continue
             safe_items.append({
-                "id": item.get("id"),
-                "timestamp": item.get("timestamp"),
-                "method": item.get("method"),
-                "url": item.get("url"),
-                "status_code": item.get("status_code"),
-                "in_scope": item.get("in_scope") is True,
+                "id": item.get("id") if isinstance(item.get("id"), int) else None,
+                "timestamp": item.get("timestamp") if isinstance(item.get("timestamp"), str) else None,
+                "method": method[:20],
+                "url": url[:2048],
+                "status_code": item.get("status_code") if isinstance(item.get("status_code"), int) else None,
+                "in_scope": True,
             })
         return {"status": "connected", "items": safe_items, "count": len(safe_items)}
     except HTTPError as exc:
