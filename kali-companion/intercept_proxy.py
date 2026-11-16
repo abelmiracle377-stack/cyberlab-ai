@@ -17,6 +17,7 @@ import socketserver
 import ssl
 import threading
 import time
+import uuid
 from collections import deque
 from urllib.parse import urlsplit, urlunsplit
 
@@ -31,6 +32,10 @@ MAX_REQUEST_BODY = 64 * 1024
 MAX_RESPONSE_BODY = 2 * 1024 * 1024
 MAX_TIMEOUT = 12
 MAX_CONCURRENT_CLIENTS = 16
+MAX_PENDING_INTERCEPTS = 20
+INTERCEPT_DECISION_TIMEOUT = 120
+_INTERCEPTS = {}
+_INTERCEPT_LOCK = threading.RLock()
 _HISTORY = deque(maxlen=100)
 _HISTORY_LOCK = threading.Lock()
 _SENSITIVE = {"authorization", "proxy-authorization", "cookie", "set-cookie",
@@ -80,6 +85,56 @@ def _redact_url_path(url: str) -> str:
         else:
             parts.append(segment[:160])
     return urlunsplit((parsed.scheme, parsed.netloc, "/".join(parts), "", ""))
+
+
+def pending_intercepts() -> dict:
+    with _INTERCEPT_LOCK:
+        items = [entry["public"] for entry in _INTERCEPTS.values()]
+    return {"items": items, "count": len(items), "maxPending": MAX_PENDING_INTERCEPTS}
+
+
+def decide_intercept(intercept_id: str, action: str) -> dict:
+    if action not in {"forward", "drop"}:
+        raise ValueError("Interception decision must be forward or drop.")
+    with _INTERCEPT_LOCK:
+        entry = _INTERCEPTS.get(intercept_id)
+        if entry is None:
+            raise ValueError("This request is no longer pending; it may have timed out or already been handled.")
+        entry["action"] = action
+        entry["event"].set()
+    return {"id": intercept_id, "decision": action, "accepted": True}
+
+
+def _await_intercept_decision(method: str, url: str, headers: list[tuple[str, str]], body_size: int) -> str:
+    intercept_id = uuid.uuid4().hex
+    event = threading.Event()
+    public = {
+        "id": intercept_id, "method": method.upper(), "url": _redact_url_path(url),
+        "headers": _safe_headers(headers), "bodyLength": body_size,
+        "bodyOmitted": body_size > 0,
+        "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "decisionTimeoutSeconds": INTERCEPT_DECISION_TIMEOUT,
+    }
+    entry = {"event": event, "action": None, "public": public}
+    with _INTERCEPT_LOCK:
+        if len(_INTERCEPTS) >= MAX_PENDING_INTERCEPTS:
+            raise ValueError("The interception queue is full; forward or drop pending requests first.")
+        _INTERCEPTS[intercept_id] = entry
+    try:
+        if not event.wait(INTERCEPT_DECISION_TIMEOUT):
+            return "timeout"
+        return entry["action"] or "drop"
+    finally:
+        with _INTERCEPT_LOCK:
+            _INTERCEPTS.pop(intercept_id, None)
+
+
+def _drop_all_pending_intercepts() -> None:
+    with _INTERCEPT_LOCK:
+        entries = list(_INTERCEPTS.values())
+        for entry in entries:
+            entry["action"] = "drop"
+            entry["event"].set()
 
 
 def _history_entry(method: str, url: str, status: int, request_headers: list[tuple[str, str]],
@@ -294,6 +349,17 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         addresses = _resolve_pinned(host, port, controller.local_lab_mode)
         address = addresses[0]
         url = scheme + "://" + (f"[{host}]" if ":" in host else host) + (f":{port}" if port not in (80, 443) else "") + path
+        if controller.intercept_requests:
+            try:
+                decision = _await_intercept_decision(method, url, headers, body_size)
+            except ValueError as exc:
+                self._error(503, str(exc))
+                return
+            if decision != "forward":
+                self._error(504 if decision == "timeout" else 403,
+                            "Operator did not approve this request in time" if decision == "timeout"
+                            else "Request dropped by the CyberLab operator")
+                return
         started = time.monotonic()
         connection = (_PinnedHTTPSConnection(host, port, address) if scheme == "https"
                       else _PinnedHTTPConnection(host, port, address))
@@ -383,6 +449,7 @@ class NativeInterceptProxy:
         self.local_lab_mode = False
         self.authorization_reference = ""
         self.allow_state_changing_methods = False
+        self.intercept_requests = False
 
     def start(self, data: dict) -> dict:
         if not isinstance(data, dict):
@@ -404,6 +471,9 @@ class NativeInterceptProxy:
         allow_mutating = data.get("allowStateChangingMethods") is True
         if allow_mutating and data.get("confirmStateChangingMethods") is not True:
             raise ValueError("Separately approve forwarding POST, PUT, PATCH and DELETE requests.")
+        pause_requests = data.get("interceptRequests") is True
+        if pause_requests and data.get("confirmInterceptRequests") is not True:
+            raise ValueError("Separately approve pausing browser requests for manual forward or drop decisions.")
         port = data.get("listenPort", DEFAULT_PORT)
         if isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
             raise ValueError("Proxy listen port must be between 1024 and 65535.")
@@ -418,6 +488,7 @@ class NativeInterceptProxy:
             self.local_lab_mode = local_lab
             self.authorization_reference = reference.strip()
             self.allow_state_changing_methods = allow_mutating
+            self.intercept_requests = pause_requests
             self._server = server
             self._thread = threading.Thread(target=server.serve_forever, name="cyberlab-intercept-proxy", daemon=True)
             self._thread.start()
@@ -432,6 +503,8 @@ class NativeInterceptProxy:
             self.authorization_reference = ""
             self.local_lab_mode = False
             self.allow_state_changing_methods = False
+            self.intercept_requests = False
+        _drop_all_pending_intercepts()
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -450,9 +523,10 @@ class NativeInterceptProxy:
                           + (f":{scope[2]}" if scope[2] not in (80, 443) else "")) if scope else None,
                 "authorizationReference": self.authorization_reference if active else None,
                 "allowStateChangingMethods": self.allow_state_changing_methods if active else False,
+                "interceptRequests": self.intercept_requests if active else False,
                 "mode": "HTTP/1.1 request/response inspection; HTTPS CONNECT TLS termination" if active else "stopped",
                 "limitations": ["one approved origin", "one request per client connection", "no HTTP/2",
-                                "no WebSockets", "no chunked client request bodies", "no client certificates"],
+                                "no WebSockets", "no chunked client request bodies", "no client certificates", "manual interception queue is bounded to 20 pending requests"],
                 "historyCount": len(_HISTORY),
             }
 
