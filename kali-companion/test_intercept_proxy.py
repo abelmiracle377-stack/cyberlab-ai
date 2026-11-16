@@ -364,9 +364,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 result = {}
                 def send_original():
                     with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
-                        client.sendall((f"GET {origin}/before HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        client.sendall((f"GET {origin}/before HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: close\r\n\r\n").encode("ascii"))
                         chunks = []
                         while True:
                             chunk = client.recv(4096)
@@ -403,12 +403,12 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
     def test_binary_request_body_is_preserved_when_other_fields_are_edited(self):
         entry = {
-            "method": "PUT", "path": "/binary", "headers": [], "body": b"\\xff\\x00",
+            "method": "PUT", "path": "/binary", "headers": [], "body": b"\xff\x00",
             "bodyEditable": False, "allowStateChangingMethods": True,
         }
         edited = intercept_proxy._validated_intercept_edit(entry, {"path": "/binary-updated"})
         self.assertEqual(edited["path"], "/binary-updated")
-        self.assertEqual(edited["body"], b"\\xff\\x00")
+        self.assertEqual(edited["body"], b"\xff\x00")
         with self.assertRaisesRegex(ValueError, "binary request body cannot be changed"):
             intercept_proxy._validated_intercept_edit(entry, {"body": "replacement"})
 
