@@ -38,6 +38,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
             server.createContext("/v1/health", e -> health(e, token));
             server.createContext("/v1/proxy/history", e -> history(e, token, api));
             server.createContext("/v1/site-map", e -> siteMap(e, token, api));
+            server.createContext("/v1/issues", e -> issues(e, token, api));
             server.createContext("/v1/repeater/from-history", e -> repeaterFromHistory(e, token, api));
             executor = Executors.newFixedThreadPool(2, r -> {
                 Thread t = new Thread(r, "cyberlab-burp-api");
@@ -152,6 +153,34 @@ public final class CyberLabBurpExtension implements BurpExtension {
             + String.join(",", items) + "]}");
     }
 
+    private static void issues(HttpExchange e, String token, MontoyaApi api) throws IOException {
+        if (!"/v1/issues".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        List<burp.api.montoya.scanner.audit.issues.AuditIssue> all = api.siteMap().issues();
+        List<String> items = new ArrayList<>();
+        int max = limit(e.getRequestURI().getRawQuery());
+        for (var issue : all) {
+            try {
+                boolean inScope = issue.requestResponses() != null
+                    && issue.requestResponses().stream().anyMatch(rr -> rr.request().isInScope());
+                if (!inScope) continue;
+                String baseUrl = issue.baseUrl() == null ? "" : SECRET_QUERY.matcher(issue.baseUrl()).replaceAll("$1[REDACTED]");
+                baseUrl = baseUrl.replaceFirst("(?i)^(https?://)[^/@]+@", "$1");
+                String name = issue.name() == null ? "Unnamed issue" : issue.name();
+                items.add("{\"name\":" + json(name.substring(0, Math.min(200, name.length())))
+                    + ",\"base_url\":" + json(baseUrl.substring(0, Math.min(2048, baseUrl.length())))
+                    + ",\"severity\":" + json(String.valueOf(issue.severity()))
+                    + ",\"confidence\":" + json(String.valueOf(issue.confidence()))
+                    + ",\"in_scope\":true}");
+                if (items.size() >= max) break;
+            } catch (RuntimeException ignored) { }
+        }
+        send(e, 200, "{\"status\":\"ok\",\"source\":\"burp_site_map_issues\","
+            + "\"read_only\":true,\"count\":" + items.size() + ",\"items\":["
+            + String.join(",", items) + "]}");
+    }
+
     private static int limit(String query) {
         if (query != null) for (String pair : query.split("&")) {
             String[] p = pair.split("=", 2);
@@ -184,7 +213,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
         for (char c : s.toCharArray()) {
             switch (c) {
                 case '"': b.append("\\""); break;
-                case '\\': b.append("\\\"); break;
+                case '\\': b.append("\\\\"); break;
                 case '\n': b.append("\\n"); break;
                 case '\r': b.append("\\r"); break;
                 case '\t': b.append("\\t"); break;
