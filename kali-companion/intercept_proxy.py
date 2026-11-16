@@ -99,7 +99,9 @@ def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
     method = edits.get("method", entry["method"])
     path = edits.get("path", entry["path"])
     headers = edits.get("headers", entry["headers"])
-    body_text = edits.get("body", entry["body"].decode("utf-8", errors="strict"))
+    if not entry["bodyEditable"]:
+        raise ValueError("This request body is binary and cannot be edited in the text editor.")
+    body_text = edits.get("body", entry["body"].decode("utf-8"))
     if not isinstance(method, str) or method.upper() not in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}:
         raise ValueError("Edited HTTP method is not supported.")
     method = method.upper()
@@ -176,7 +178,7 @@ def _await_intercept_decision(method: str, url: str, headers: list[tuple[str, st
     }
     entry = {"event": event, "decision": None, "public": public, "method": method.upper(),
              "path": path, "headers": headers, "body": body,
-             "allowStateChangingMethods": allow_state_changing_methods}
+             "allowStateChangingMethods": allow_state_changing_methods, "bodyEditable": body_editable}
     with _INTERCEPT_LOCK:
         if len(_INTERCEPTS) >= MAX_PENDING_INTERCEPTS:
             raise ValueError("The interception queue is full; forward or drop pending requests first.")
