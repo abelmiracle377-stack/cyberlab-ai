@@ -93,39 +93,98 @@ def pending_intercepts() -> dict:
     return {"items": items, "count": len(items), "maxPending": MAX_PENDING_INTERCEPTS}
 
 
-def decide_intercept(intercept_id: str, action: str) -> dict:
+def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
+    if not isinstance(edits, dict):
+        raise ValueError("Edited request must be an object.")
+    method = edits.get("method", entry["method"])
+    path = edits.get("path", entry["path"])
+    headers = edits.get("headers", entry["headers"])
+    body_text = edits.get("body", entry["body"].decode("utf-8", errors="strict"))
+    if not isinstance(method, str) or method.upper() not in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}:
+        raise ValueError("Edited HTTP method is not supported.")
+    method = method.upper()
+    if method in {"POST", "PUT", "PATCH", "DELETE"} and not entry["allowStateChangingMethods"]:
+        raise ValueError("State-changing methods are disabled for this proxy session.")
+    if not isinstance(path, str) or len(path) > 8192 or not path.startswith("/") or path.startswith("//"):
+        raise ValueError("Edited path must remain an origin-form path on the approved host.")
+    parsed = urlsplit(path)
+    if parsed.scheme or parsed.netloc or parsed.fragment or any(ord(ch) <= 32 or ord(ch) == 127 for ch in path):
+        raise ValueError("Edited path cannot change origin or contain fragments, whitespace or control characters.")
+    if not isinstance(headers, list) or len(headers) > MAX_HEADER_COUNT:
+        raise ValueError("Edited headers must be a list of at most 100 name/value entries.")
+    original_by_name = {}
+    for name, value in entry["headers"]:
+        original_by_name.setdefault(name.lower(), []).append(value)
+    clean_headers = []
+    for item in headers:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str) or not isinstance(item.get("value"), str):
+            raise ValueError("Each edited header must contain string name and value fields.")
+        name, value = item["name"], item["value"]
+        if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}", name):
+            raise ValueError("Edited header name is invalid.")
+        lowered = name.lower()
+        if lowered in _HOP_BY_HOP or lowered in {"host", "content-length"}:
+            raise ValueError("Host, Content-Length and hop-by-hop headers are managed by CyberLab.")
+        if any(ord(ch) in (10, 13, 127) or ord(ch) < 32 and ch != "\t" for ch in value) or len(value) > 8192:
+            raise ValueError("Edited header value contains invalid characters or exceeds the limit.")
+        if value == "[REDACTED]":
+            remaining = original_by_name.get(lowered, [])
+            if remaining:
+                value = remaining.pop(0)
+        clean_headers.append((name, value))
+    if not isinstance(body_text, str):
+        raise ValueError("Edited request body must be text.")
+    body = body_text.encode("utf-8")
+    if len(body) > MAX_REQUEST_BODY:
+        raise ValueError("Edited request body exceeds 64 KB.")
+    return {"method": method, "path": path, "headers": clean_headers, "body": body}
+
+
+def decide_intercept(intercept_id: str, action: str, edits: dict | None = None) -> dict:
     if not isinstance(intercept_id, str) or not re.fullmatch(r"[a-f0-9]{32}", intercept_id):
         raise ValueError("Interception request ID is invalid.")
-    if not isinstance(action, str) or action not in {"forward", "drop"}:
-        raise ValueError("Interception decision must be forward or drop.")
+    if not isinstance(action, str) or action not in {"forward", "forward_edited", "drop"}:
+        raise ValueError("Interception decision must be forward, forward_edited or drop.")
     with _INTERCEPT_LOCK:
         entry = _INTERCEPTS.get(intercept_id)
         if entry is None:
             raise ValueError("This request is no longer pending; it may have timed out or already been handled.")
-        entry["action"] = action
+        decision = {"action": action}
+        if action == "forward_edited":
+            decision["edited"] = _validated_intercept_edit(entry, edits)
+        entry["decision"] = decision
         entry["event"].set()
     return {"id": intercept_id, "decision": action, "accepted": True}
 
 
-def _await_intercept_decision(method: str, url: str, headers: list[tuple[str, str]], body_size: int) -> str:
+def _await_intercept_decision(method: str, url: str, headers: list[tuple[str, str]], body: bytes,
+                              path: str, allow_state_changing_methods: bool) -> dict:
     intercept_id = uuid.uuid4().hex
     event = threading.Event()
+    try:
+        body_text = body.decode("utf-8")
+        body_editable = True
+    except UnicodeDecodeError:
+        body_text, body_editable = "", False
     public = {
         "id": intercept_id, "method": method.upper(), "url": _redact_url_path(url),
-        "headers": _safe_headers(headers), "bodyLength": body_size,
-        "bodyOmitted": body_size > 0,
+        "path": path, "headers": _safe_headers(headers), "bodyLength": len(body),
+        "bodyOmitted": len(body) > 0, "body": body_text if body_editable else "",
+        "bodyEditable": body_editable,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "decisionTimeoutSeconds": INTERCEPT_DECISION_TIMEOUT,
     }
-    entry = {"event": event, "action": None, "public": public}
+    entry = {"event": event, "decision": None, "public": public, "method": method.upper(),
+             "path": path, "headers": headers, "body": body,
+             "allowStateChangingMethods": allow_state_changing_methods}
     with _INTERCEPT_LOCK:
         if len(_INTERCEPTS) >= MAX_PENDING_INTERCEPTS:
             raise ValueError("The interception queue is full; forward or drop pending requests first.")
         _INTERCEPTS[intercept_id] = entry
     try:
         if not event.wait(INTERCEPT_DECISION_TIMEOUT):
-            return "timeout"
-        return entry["action"] or "drop"
+            return {"action": "timeout"}
+        return entry["decision"] or {"action": "drop"}
     finally:
         with _INTERCEPT_LOCK:
             _INTERCEPTS.pop(intercept_id, None)
@@ -362,15 +421,23 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         url = scheme + "://" + (f"[{host}]" if ":" in host else host) + (f":{port}" if port not in (80, 443) else "") + path
         if controller.intercept_requests:
             try:
-                decision = _await_intercept_decision(method, url, headers, body_size)
+                decision = _await_intercept_decision(method, url, headers, body, path,
+                                                     controller.allow_state_changing_methods)
             except ValueError as exc:
                 self._error(503, str(exc))
                 return
-            if decision != "forward":
-                self._error(504 if decision == "timeout" else 403,
-                            "Operator did not approve this request in time" if decision == "timeout"
-                            else "Request dropped by the CyberLab operator")
+            action = decision.get("action")
+            if action == "timeout":
+                self._error(504, "Operator did not approve this request in time")
                 return
+            if action == "drop":
+                self._error(403, "Request dropped by the CyberLab operator")
+                return
+            if action == "forward_edited":
+                edited = decision["edited"]
+                method, path, headers, body = edited["method"], edited["path"], edited["headers"], edited["body"]
+                body_size = len(body)
+                connection_tokens = set()
         started = time.monotonic()
         connection = (_PinnedHTTPSConnection(host, port, address) if scheme == "https"
                       else _PinnedHTTPConnection(host, port, address))
