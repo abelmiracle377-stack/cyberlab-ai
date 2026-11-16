@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldCheck } from "lucide-react";
 
 type ProxyHistoryItem = { id: string; method: string; url: string; status: number; queryOmitted?: boolean; requestBodyOmitted?: boolean; responseBodyOmitted?: boolean; durationMs: number; };
-type PendingIntercept = { id: string; method: string; url: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; createdAt: string; decisionTimeoutSeconds: number; };
+type PendingIntercept = { id: string; method: string; url: string; path: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; body: string; bodyEditable: boolean; createdAt: string; decisionTimeoutSeconds: number; };
+type InterceptDraft = { method: string; path: string; headersText: string; body: string };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
   durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
@@ -44,6 +45,7 @@ export default function WebWorkbenchPage() {
   const [proxyInterceptConsent, setProxyInterceptConsent] = useState(false);
   const [proxyInterceptActive, setProxyInterceptActive] = useState(false);
   const [pendingIntercepts, setPendingIntercepts] = useState<PendingIntercept[]>([]);
+  const [interceptDrafts, setInterceptDrafts] = useState<Record<string, InterceptDraft>>({});
   const [interceptBusyId, setInterceptBusyId] = useState("");
   const [proxyActive, setProxyActive] = useState(false);
   const [proxyActiveScope, setProxyActiveScope] = useState("");
@@ -108,18 +110,37 @@ export default function WebWorkbenchPage() {
     const response = await fetch("http://127.0.0.1:8765/proxy/intercepts", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load pending intercepted requests.");
-    setPendingIntercepts(data.items || []);
+    const items: PendingIntercept[] = data.items || [];
+    setPendingIntercepts(items);
+    setInterceptDrafts(current => {
+      const next = { ...current };
+      for (const item of items) if (!next[item.id]) next[item.id] = {
+        method: item.method, path: item.path,
+        headersText: JSON.stringify(item.headers, null, 2), body: item.body || "",
+      };
+      for (const id of Object.keys(next)) if (!items.some(item => item.id === id)) delete next[id];
+      return next;
+    });
   }
 
-  async function decidePendingIntercept(id: string, action: "forward" | "drop") {
+  async function decidePendingIntercept(id: string, action: "forward" | "forward_edited" | "drop") {
     setInterceptBusyId(id); setProxyError("");
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      let edits: { method: string; path: string; headers: { name: string; value: string }[]; body: string } | undefined;
+      if (action === "forward_edited") {
+        const draft = interceptDrafts[id];
+        if (!draft) throw new Error("The request editor is not ready.");
+        let parsed: unknown;
+        try { parsed = JSON.parse(draft.headersText); } catch { throw new Error("Edited headers must be valid JSON."); }
+        if (!Array.isArray(parsed)) throw new Error("Edited headers must be a JSON array of name/value objects.");
+        edits = { method: draft.method, path: draft.path, headers: parsed, body: draft.body };
+      }
       const response = await fetch("http://127.0.0.1:8765/proxy/intercepts/decision", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
-        body: JSON.stringify({ id, action }),
+        body: JSON.stringify({ id, action, edits }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not apply the interception decision.");
@@ -261,9 +282,13 @@ export default function WebWorkbenchPage() {
           <button className="report-download" type="button" onClick={()=>loadPendingIntercepts().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh pending requests."))}>Refresh pending requests</button>
           {pendingIntercepts.map(item=><div className="scope-warning" key={item.id}>
             <strong>{item.method} · {item.url}</strong>
-            <p>Captured {item.createdAt}. Request body: {item.bodyLength} bytes {item.bodyOmitted ? "(not displayed or stored in history)" : "(empty)"}.</p>
-            <p>{item.headers.map(header=>header.name+": "+header.value).join(" · ")}</p>
-            <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"forward")}>{interceptBusyId===item.id ? "Applying…" : "Forward request"}</button>
+            <p>Captured {item.createdAt}. Body: {item.bodyLength} bytes. Sensitive header values are redacted; leave the [REDACTED] placeholders unchanged to preserve the original values. Request contents remain in companion memory only while pending.</p>
+            <label>Method<input value={interceptDrafts[item.id]?.method || item.method} onChange={e=>setInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],method:e.target.value}}))}/></label>
+            <label>Path and query<textarea rows={2} value={interceptDrafts[item.id]?.path || item.path} onChange={e=>setInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],path:e.target.value}}))}/></label>
+            <label>Headers · JSON array<textarea rows={5} spellCheck={false} value={interceptDrafts[item.id]?.headersText || ""} onChange={e=>setInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],headersText:e.target.value}}))}/></label>
+            <label>Body · UTF-8 text only<textarea rows={5} disabled={!item.bodyEditable} value={interceptDrafts[item.id]?.body ?? ""} onChange={e=>setInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],body:e.target.value}}))} placeholder={item.bodyEditable ? "Request body" : "Binary body cannot be edited here; forward unchanged or drop"}/></label>
+            <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"forward")}>Forward unchanged</button>
+            <button className="report-download" type="button" disabled={Boolean(interceptBusyId) || !item.bodyEditable} onClick={()=>decidePendingIntercept(item.id,"forward_edited")}>{interceptBusyId===item.id ? "Applying…" : "Forward edited request"}</button>
             <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"drop")}>Drop request</button>
           </div>)}
           {!pendingIntercepts.length && <p>No requests are currently waiting.</p>}
