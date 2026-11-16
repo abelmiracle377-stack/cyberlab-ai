@@ -33,7 +33,7 @@ _HISTORY = deque(maxlen=100)
 _HISTORY_LOCK = threading.Lock()
 _SENSITIVE = {"authorization", "proxy-authorization", "cookie", "set-cookie",
               "www-authenticate", "proxy-authenticate", "x-api-key", "api-key",
-              "x-auth-token", "x-access-token"}
+              "x-auth-token", "x-access-token", "referer", "location", "content-location", "refresh", "link"}
 _HOP_BY_HOP = {"connection", "proxy-connection", "keep-alive", "te", "trailer",
                "transfer-encoding", "upgrade", "proxy-authenticate", "proxy-authorization", "expect"}
 
@@ -148,6 +148,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             path = parsed.path or "/"
             if parsed.query:
                 path += "?" + parsed.query
+            if any(ord(char) <= 32 or ord(char) == 127 for char in path):
+                self._error(400, "Request target contains unescaped whitespace or control characters")
+                return
             self._process_request(method, parsed.scheme, parsed.hostname, port, path, version)
         except (OSError, ValueError, ssl.SSLError, http.client.HTTPException):
             try:
@@ -187,12 +190,15 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         if origin != ("https", host, port):
             self._error(403, "CONNECT host is outside the approved proxy scope")
             return
+        self._read_headers()
         cert = issue_host_certificate(host)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(cert["certificate"], cert["privateKey"])
         self.wfile.write(b"HTTP/1.1 200 Connection Established\r\nProxy-Agent: CyberLab AI\r\n\r\n")
         self.wfile.flush()
+        self.rfile.close()
+        self.wfile.close()
         tls = context.wrap_socket(self.connection, server_side=True)
         self.connection = tls
         self.rfile = tls.makefile("rb")
