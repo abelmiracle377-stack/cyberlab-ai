@@ -50,10 +50,24 @@ These checks are not a full vulnerability scanner. Reflection does not prove XSS
 
 The Agent Console recognises explicit web assessment requests that include an HTTP(S) URL and opens a local approval panel. After the operator confirms the exact origin, written-authorisation reference and crawl approval, the browser calls the paired loopback companion directly. The operator can separately approve the limited active checks. Returned crawl and scanner evidence is then submitted to the selected AI model for interpretation. The server-side model does not receive the bridge token and cannot silently initiate local requests. This is a user-approved workflow handoff, not yet autonomous specialist-agent execution or full finding verification.
 
+## Native HTTP/HTTPS interception proxy (first implementation)
+
+The paired local bridge exposes proxy controls through `/proxy/status`, `/proxy/start`, `/proxy/stop` and `/proxy/history`. The workbench provides the explicit scope and start/stop controls. The proxy:
+- Binds only to `127.0.0.1`; it is not an open network proxy.
+- Requires an exact origin to be retyped, written-authorisation confirmation, an engagement reference and a separate start approval.
+- Enforces that exact scheme/host/port for every request and blocks other hosts, including cross-origin redirects when the browser follows them.
+- Supports HTTP/1.1 absolute-form HTTP requests and HTTPS CONNECT with TLS termination using a CyberLab-issued exact-host certificate.
+- Validates the upstream HTTPS certificate using the operating system's normal trust roots and pins the resolved address for each upstream connection.
+- Forwards request and response bodies but never retains body contents in proxy history. History redacts credentials, cookies, token-like headers, redirect locations and URL query strings.
+- Uses bounded header sizes, request bodies (64 KB), response bodies (2 MB) and network timeouts; oversized responses are rejected rather than partially relayed.
+- Requires a local CA created by explicit approval. The operator must manually install the public CA certificate in a dedicated test browser profile; CyberLab never changes system/browser trust stores or exports the private key.
+
+This is an initial HTTP/1.1 proxy, not full Burp parity. It handles one request per client connection and does not support HTTP/2, WebSockets, chunked client request bodies, client certificates, request pause/edit queues, or multi-origin scope profiles. It has not yet been verified against a full browser matrix. The proxy forwards in-scope browser traffic while enabled; use a dedicated test browser profile and stop it when finished.
+
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
-- Native HTTP/HTTPS proxy interception is still in development. The first supporting component now creates a local root CA only after explicit operator approval and issues exact-host, short-lived certificates. CA private keys are stored owner-only under `~/.config/cyberlab/proxy-ca`; trust installation remains manual, and CyberLab never modifies browser or operating-system trust stores. This CA foundation does not itself intercept traffic or provide a working proxy.
+- Advanced interception features remain in development: pause/edit/resume queues, multi-origin profiles, HTTP/2, WebSockets, chunked client request bodies, client-certificate authentication and broader browser compatibility.
 - Authenticated crawling and session/role handling.
 - Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
 - Native request repeater UI with response comparison.
