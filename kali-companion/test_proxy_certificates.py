@@ -48,6 +48,13 @@ class ProxyCertificateTests(unittest.TestCase):
         ))
         self.assertEqual(certs.issue_host_certificate("lab.example.test")["reused"], True)
 
+    def test_public_certificate_export_never_contains_private_key_material(self):
+        certs.create_local_ca()
+        exported = certs.ca_certificate_pem()
+        self.assertIn("-----BEGIN CERTIFICATE-----", exported["pem"])
+        self.assertNotIn("PRIVATE KEY", exported["pem"])
+        self.assertEqual(exported["filename"], "cyberlab-local-inspection-ca.pem")
+
     def test_ca_status_rejects_world_readable_private_key(self):
         certs.create_local_ca()
         os.chmod(certs.CA_KEY, 0o644)
