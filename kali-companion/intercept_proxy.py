@@ -102,8 +102,14 @@ def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
                        if name.lower() not in _HOP_BY_HOP and name.lower() not in {"host", "content-length"}]
     headers = edits.get("headers", default_headers)
     if not entry["bodyEditable"]:
-        raise ValueError("This request body is binary and cannot be edited in the text editor.")
-    body_text = edits.get("body", entry["body"].decode("utf-8"))
+        if "body" in edits:
+            raise ValueError("This binary request body cannot be changed in the text editor.")
+        body = entry["body"]
+    else:
+        body_text = edits.get("body", entry["body"].decode("utf-8"))
+        if not isinstance(body_text, str):
+            raise ValueError("Edited request body must be text.")
+        body = body_text.encode("utf-8")
     if not isinstance(method, str) or method.upper() not in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}:
         raise ValueError("Edited HTTP method is not supported.")
     method = method.upper()
@@ -112,7 +118,7 @@ def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
     if not isinstance(path, str) or len(path) > 8192 or not path.startswith("/") or path.startswith("//"):
         raise ValueError("Edited path must remain an origin-form path on the approved host.")
     parsed = urlsplit(path)
-    if parsed.scheme or parsed.netloc or parsed.fragment or any(ord(ch) <= 32 or ord(ch) == 127 for ch in path):
+    if parsed.scheme or parsed.netloc or parsed.fragment or "\\" in path or any(ord(ch) <= 32 or ord(ch) == 127 for ch in path):
         raise ValueError("Edited path cannot change origin or contain fragments, whitespace or control characters.")
     if not isinstance(headers, list) or len(headers) > MAX_HEADER_COUNT:
         raise ValueError("Edited headers must be a list of at most 100 name/value entries.")
@@ -136,9 +142,6 @@ def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
             if remaining:
                 value = remaining.pop(0)
         clean_headers.append((name, value))
-    if not isinstance(body_text, str):
-        raise ValueError("Edited request body must be text.")
-    body = body_text.encode("utf-8")
     if len(body) > MAX_REQUEST_BODY:
         raise ValueError("Edited request body exceeds 64 KB.")
     return {"method": method, "path": path, "headers": clean_headers, "body": body}
@@ -173,7 +176,7 @@ def _await_intercept_decision(method: str, url: str, headers: list[tuple[str, st
     public = {
         "id": intercept_id, "method": method.upper(), "url": _redact_url_path(url),
         "path": path, "headers": _safe_headers(headers), "bodyLength": len(body),
-        "bodyOmitted": len(body) > 0, "body": body_text if body_editable else "",
+        "bodyOmitted": not body_editable, "body": body_text if body_editable else "",
         "bodyEditable": body_editable,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "decisionTimeoutSeconds": INTERCEPT_DECISION_TIMEOUT,
