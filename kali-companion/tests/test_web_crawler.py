@@ -2,6 +2,7 @@
 import unittest
 from unittest.mock import patch
 import web_crawler
+from task_planner import plan_task
 
 
 class WebCrawlerTests(unittest.TestCase):
@@ -41,6 +42,9 @@ class WebCrawlerTests(unittest.TestCase):
         result = web_crawler.run_crawl(self.base())
         self.assertEqual(result["summary"]["pagesVisited"], 2)
         self.assertEqual(result["summary"]["formsObserved"], 1)
+        self.assertEqual(result["pages"][0]["forms"][0]["method"], "POST")
+        self.assertEqual(result["pages"][0]["forms"][0]["fields"][0]["name"], "amount")
+        self.assertFalse(result["pages"][0]["forms"][0]["submitted"])
         self.assertEqual(result["summary"]["outOfScopeLinksBlocked"], 1)
         self.assertEqual(execute.call_count, 2)
         for call in execute.call_args_list:
@@ -51,6 +55,14 @@ class WebCrawlerTests(unittest.TestCase):
     @patch("web_crawler.time.sleep")
     @patch("web_crawler.validate_request", return_value={"addresses": ["127.0.0.1"]})
     @patch("web_crawler.execute_request")
+    def test_planner_recommends_native_crawler_and_labels_active_scan_as_pending(self):
+        plan = plan_task("Assess this web app http://localhost:8080")
+        names = {item["name"] for item in plan["suggested_tools"]}
+        self.assertIn("CyberLab Web Crawler & Baseline Auditor", names)
+        phases = {item["phase"]: item for item in plan["recommended_workflow"]}
+        self.assertEqual(phases["application discovery"]["status"], "available")
+        self.assertEqual(phases["active vulnerability validation"]["status"], "not_implemented")
+
     def test_redirect_is_recorded_but_never_followed(self, execute, validate, sleep):
         execute.return_value = self.response("", "text/html", 302)
         execute.return_value["headers"].append({"name": "Location", "value": "http://outside.example/"})
