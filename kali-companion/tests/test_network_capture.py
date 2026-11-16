@@ -36,10 +36,10 @@ class NetworkCaptureTests(unittest.TestCase):
     def test_capture_requires_exact_interface_confirmation_and_authorisation(self):
         with patch.object(network_capture.socket, "if_nameindex", return_value=self.interfaces), \
              patch.object(network_capture.subprocess, "Popen") as popen:
-            result = network_capture.capture_packets(
-                "eth0", "lo", False, "", duration_seconds=3, packet_limit=10, filter_name="ssh"
-            )
-        self.assertEqual(result["status"], "error") if result.get("status") == "error" else self.assertIn("error", result)
+            with self.assertRaises(ValueError):
+                network_capture.capture_packets(
+                    "eth0", "lo", False, "", duration_seconds=3, packet_limit=10, filter_name="ssh"
+                )
         popen.assert_not_called()
 
     def test_rejects_arbitrary_capture_filter(self):
