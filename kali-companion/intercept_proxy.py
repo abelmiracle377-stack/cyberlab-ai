@@ -204,6 +204,61 @@ def _drop_all_pending_intercepts() -> None:
             entry["decision"] = {"action": "drop"}
             entry["event"].set()
 
+def pending_response_intercepts() -> dict:
+    with _INTERCEPT_LOCK:
+        items = [entry["public"] for entry in _RESPONSE_INTERCEPTS.values()]
+    return {"items": items, "count": len(items), "maxPending": MAX_PENDING_INTERCEPTS}
+
+
+def decide_response_intercept(intercept_id: str, action: str) -> dict:
+    if not isinstance(intercept_id, str) or not re.fullmatch(r"[a-f0-9]{32}", intercept_id):
+        raise ValueError("Response interception request ID is invalid.")
+    if not isinstance(action, str) or action not in {"forward", "drop"}:
+        raise ValueError("Response interception decision must be forward or drop.")
+    with _INTERCEPT_LOCK:
+        entry = _RESPONSE_INTERCEPTS.get(intercept_id)
+        if entry is None:
+            raise ValueError("This response is no longer pending; it may have timed out or already been handled.")
+        entry["decision"] = {"action": action}
+        entry["event"].set()
+    return {"id": intercept_id, "decision": action, "accepted": True}
+
+
+def _await_response_decision(method: str, url: str, status: int, reason: str,
+                             headers: list[tuple[str, str]], body: bytes) -> dict:
+    intercept_id = uuid.uuid4().hex
+    event = threading.Event()
+    content_type = next((value.lower() for name, value in headers if name.lower() == "content-type"), "")
+    textual = any(kind in content_type for kind in ("text/", "json", "xml", "javascript", "x-www-form-urlencoded"))
+    try:
+        preview = body[:16384].decode("utf-8") if textual else ""
+        body_visible = textual
+    except UnicodeDecodeError:
+        preview, body_visible = "", False
+    public = {
+        "id": intercept_id, "method": method.upper(), "url": _redact_url_path(url),
+        "status": status, "reason": str(reason)[:120],
+        "headers": _safe_headers(headers), "bodyLength": len(body),
+        "body": preview, "bodyVisible": body_visible,
+        "bodyTruncated": body_visible and len(body) > 16384,
+        "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "decisionTimeoutSeconds": INTERCEPT_DECISION_TIMEOUT,
+    }
+    entry = {"event": event, "decision": None, "public": public}
+    with _INTERCEPT_LOCK:
+        if len(_RESPONSE_INTERCEPTS) >= MAX_PENDING_INTERCEPTS:
+            raise ValueError("The response interception queue is full; forward or drop pending responses first.")
+        _RESPONSE_INTERCEPTS[intercept_id] = entry
+    try:
+        if not event.wait(INTERCEPT_DECISION_TIMEOUT):
+            return {"action": "timeout"}
+        return entry["decision"] or {"action": "drop"}
+    finally:
+        with _INTERCEPT_LOCK:
+            _RESPONSE_INTERCEPTS.pop(intercept_id, None)
+
+
+
 def _history_entry(method: str, url: str, status: int, request_headers: list[tuple[str, str]],
                    response_headers: list[tuple[str, str]], request_size: int,
                    response_size: int, duration_ms: int) -> None:
