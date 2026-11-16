@@ -17,6 +17,12 @@ The local Kali companion provides a scope-bound HTTP request sender and short-li
 
 The native HTTP workbench can load an in-memory request-history item back into the editor for an explicitly approved replay. History retains safe request metadata only: sensitive request and response headers are redacted, response bodies are omitted, and URL query strings are omitted to avoid retaining credentials or tokens embedded in parameters. Request-body contents are not retained either. If the original request had a body or query string, the UI tells the operator to re-enter it. The live response remains visible in the current workbench session, but is not kept in history. Loading a history item never sends it automatically; scope and send approval are required again.
 
+## Native request repeater (first implementation)
+
+The `/web-repeater` workbench provides up to five browser-session request tabs. Operators can create or duplicate a tab, edit the URL, method, headers and UTF-8 body, and explicitly send each request through the same native `POST /web/request` engine. Each send repeats the hostname confirmation, written-authorisation reference and state-changing-method approval checks. The repeater does not automatically replay requests, follow redirects or bypass the companion's DNS pinning, address policy, timeouts or request/response size limits.
+
+Responses are retained only in the active browser session and can be compared by status, response headers and body text. The companion's own request history remains metadata-only; response bodies are not persisted there. This first implementation supports ordinary text requests and responses, not raw binary editing, response editing, HTTP/2, WebSockets or automated parameter mutation/fuzzing.
+
 ## Native bounded crawler and baseline audit
 
 The companion's `POST /web/crawl` endpoint runs `kali-companion/web_crawler.py`. It:
@@ -71,7 +77,7 @@ The crawler is a discovery and baseline layer, not a full active vulnerability s
 - Advanced interception features remain in development: full response editing, multi-origin profiles, HTTP/2, WebSockets, chunked client request bodies, client-certificate authentication and broader browser compatibility.
 - Authenticated crawling and session/role handling.
 - Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
-- Native request repeater UI with response comparison.
+- Raw binary request editing, response editing and richer response-diff tooling.
 - Bounded parameter mutation and fuzzing engine.
 - WebSocket and GraphQL security testing.
 - Full AI specialist-agent orchestration across crawl, scan, independent finding verification and reporting. The Agent Console currently provides a user-approved handoff and evidence-analysis step only.
