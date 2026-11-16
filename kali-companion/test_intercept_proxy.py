@@ -540,7 +540,8 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertEqual(len(pending), 1)
                 item = pending[0]
                 self.assertTrue(item["bodyEditable"])
-                self.assertEqual(item["headers"][1]["value"], "[REDACTED]")
+                self.assertEqual(next(header["value"] for header in item["headers"] if header["name"].lower() == "set-cookie"), "[REDACTED]")
+                self.assertNotIn("content-length", [header["name"].lower() for header in item["headers"]])
                 with self.assertRaisesRegex(ValueError, "status"):
                     intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
                         "status": 700, "headers": item["headers"], "body": "edited",
