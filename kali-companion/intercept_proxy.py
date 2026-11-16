@@ -253,6 +253,11 @@ def _validated_response_edit(entry: dict, edits: dict) -> dict:
         body = edits["body"].encode("utf-8")
         if len(body) > MAX_RESPONSE_BODY:
             raise ValueError("Edited response body exceeds the 2 MB response limit.")
+    if "body" in edits:
+        headers = [(name, value) for name, value in headers
+                   if name.lower() not in {"content-encoding", "content-md5", "digest", "etag", "content-range", "accept-ranges"}]
+    if status in {204, 205, 304}:
+        body = b""
     return {"status": status, "reason": reason, "headers": headers, "body": body}
 
 
@@ -287,7 +292,9 @@ def _await_response_decision(method: str, url: str, status: int, reason: str,
     public = {
         "id": intercept_id, "method": method.upper(), "url": _redact_url_path(url),
         "status": status, "reason": str(reason)[:120],
-        "headers": _safe_headers(headers), "bodyLength": len(body),
+        "headers": _safe_headers([(name, value) for name, value in headers
+                                  if name.lower() not in _HOP_BY_HOP and name.lower() not in {"host", "content-length"}]),
+        "bodyLength": len(body),
         "body": preview, "bodyVisible": body_visible,
         "bodyTruncated": body_visible and len(body) > 16384,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
