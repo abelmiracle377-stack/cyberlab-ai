@@ -14,6 +14,9 @@ on:
       - "kali-companion/test_task_planner.py"
       - "kali-companion/web_testing.py"
       - "kali-companion/web_crawler.py"
+      - "kali-companion/web_active_scan.py"
+      - "kali-companion/tests/test_web_active_scan.py"
+      - "app/web-scanner/**"
       - "kali-companion/tests/test_web_crawler.py"
       - "app/web-crawler/**"
       - "kali-companion/tests/test_web_testing.py"
@@ -38,6 +41,9 @@ on:
       - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/web_testing.py"
       - "kali-companion/web_crawler.py"
+      - "kali-companion/web_active_scan.py"
+      - "kali-companion/tests/test_web_active_scan.py"
+      - "app/web-scanner/**"
       - "kali-companion/tests/test_web_crawler.py"
       - "app/web-crawler/**"
       - "kali-companion/tests/test_web_testing.py"
@@ -71,6 +77,7 @@ jobs:
           python -m unittest discover -s kali-companion/tests -p "test_network_capture.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_web_testing.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_web_crawler.py" -v
+          python -m unittest discover -s kali-companion/tests -p "test_web_active_scan.py" -v
           python -m unittest discover -s kali-companion -p "test_task_planner.py" -v
 
   web-build:
