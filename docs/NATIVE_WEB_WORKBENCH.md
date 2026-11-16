@@ -13,6 +13,10 @@ The local Kali companion provides a scope-bound HTTP request sender and short-li
 - No automatic redirect following.
 - A separate confirmation for state-changing HTTP methods.
 
+## Native request repeater foundation
+
+The native HTTP workbench can load an in-memory request-history item back into the editor for an explicitly approved replay. History retains safe request-header metadata, redacts Authorization/Cookie/API-key/token headers and does not retain request-body contents. If the original request had a body, the UI tells the operator to re-enter it. Loading a history item never sends it automatically; scope and send approval are required again.
+
 ## Native bounded crawler and baseline audit
 
 The companion's `POST /web/crawl` endpoint runs `kali-companion/web_crawler.py`. It:
