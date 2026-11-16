@@ -13,6 +13,9 @@ on:
       - "kali-companion/test_tool_catalog.py"
       - "kali-companion/test_task_planner.py"
       - "kali-companion/web_testing.py"
+      - "kali-companion/web_crawler.py"
+      - "kali-companion/tests/test_web_crawler.py"
+      - "app/web-crawler/**"
       - "kali-companion/tests/test_web_testing.py"
       - "kali-companion/task_planner.py"
       - "lib/agent-orchestrator.ts"
@@ -34,6 +37,9 @@ on:
       - "kali-companion/network_capture.py"
       - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/web_testing.py"
+      - "kali-companion/web_crawler.py"
+      - "kali-companion/tests/test_web_crawler.py"
+      - "app/web-crawler/**"
       - "kali-companion/tests/test_web_testing.py"
       - "kali-companion/task_planner.py"
       - "kali-companion/tool_catalog.py"
@@ -64,6 +70,7 @@ jobs:
           python -m unittest discover -s kali-companion/tests -p "test_burp_connector.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_network_capture.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_web_testing.py" -v
+          python -m unittest discover -s kali-companion/tests -p "test_web_crawler.py" -v
           python -m unittest discover -s kali-companion -p "test_task_planner.py" -v
 
   web-build:
