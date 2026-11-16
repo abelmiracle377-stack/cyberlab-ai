@@ -10,11 +10,15 @@ class ToolCatalogTests(unittest.TestCase):
         with patch.object(tool_catalog.shutil, "which", side_effect=lambda name: "/usr/bin/" + name if name == "nmap" else None):
             result = tool_catalog.inspect_tool_catalog()
         self.assertGreaterEqual(result["tool_count"], 40)
-        self.assertEqual(result["installed_count"], 1)
+        self.assertEqual(result["installed_count"], 2)
         nmap = next(tool for category in result["categories"] for tool in category["tools"] if tool["name"] == "Nmap")
         self.assertTrue(nmap["installed"])
         self.assertIsNone(nmap["install_hint"])
         self.assertIn("no tools were executed", result["note"])
+        native = next(tool for category in result["categories"] for tool in category["tools"] if tool["name"] == "CyberLab HTTP Workbench")
+        self.assertTrue(native["installed"])
+        self.assertEqual(native["mode"], "native_http")
+        self.assertNotIn("Burp Suite", {tool["name"] for category in result["categories"] for tool in category["tools"]})
 
     def test_missing_tools_receive_package_install_guidance(self):
         with patch.object(tool_catalog.shutil, "which", return_value=None):
