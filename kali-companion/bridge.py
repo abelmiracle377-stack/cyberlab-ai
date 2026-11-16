@@ -29,7 +29,7 @@ from web_testing import execute_request, request_history
 from web_crawler import run_crawl
 from web_active_scan import run_active_scan
 from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
-from intercept_proxy import PROXY, proxy_history
+from intercept_proxy import PROXY, decide_intercept, pending_intercepts, proxy_history
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -223,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -245,6 +245,8 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 limit = 50
             return self.send_json(200, proxy_history(limit), origin)
+        if path == "/proxy/intercepts":
+            return self.send_json(200, pending_intercepts(), origin)
         if path == "/network/interfaces":
             return self.send_json(200, list_capture_interfaces(), origin)
         if path == "/web/history":
@@ -296,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/proxy/ca/create", "/proxy/start", "/proxy/stop"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -308,6 +310,11 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError("Request body must be a JSON object.")
+            if path == "/proxy/intercepts/decision":
+                try:
+                    return self.send_json(200, decide_intercept(data.get("id", ""), data.get("action", "")), origin)
+                except ValueError as exc:
+                    return self.send_json(409, {"error": str(exc)}, origin)
             if path == "/proxy/start":
                 if not proxy_control_lock.acquire(blocking=False):
                     return self.send_json(409, {"error": "A proxy control operation is already running."}, origin)
