@@ -169,7 +169,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
             byte[] raw = new byte[32];
             new SecureRandom().nextBytes(raw);
             String generated = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-            try { Files.writeString(file, generated, StandardOpenOption.CREATE_NEW); }
+            try { Files.writeString(file, generated, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE); }
             catch (FileAlreadyExistsException ignored) { }
         }
         try {
