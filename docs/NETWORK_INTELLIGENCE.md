@@ -47,8 +47,10 @@ Use only on a network/interface that you own or are explicitly authorised to mon
 
 ## Not implemented in this slice
 
+The initial browser workspace is available at `/network-intelligence`; it discovers local interfaces and starts a single bounded capture after explicit authorisation. Capture is synchronous and runs for the selected duration (maximum 30 seconds).
+
+
 - PCAP/PCAPNG upload and offline analysis.
-- A browser dashboard for starting, stopping and reviewing capture jobs.
 - Deep protocol dissection with TShark/Wireshark.
 - DNS conversation timelines, TCP stream reconstruction and TLS metadata enrichment.
 - AI anomaly detection, alert correlation and case/evidence integration.
