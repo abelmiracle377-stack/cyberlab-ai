@@ -20,7 +20,7 @@ CA_DIR = CONFIG_ROOT / "proxy-ca"
 CA_KEY = CA_DIR / "ca-key.pem"
 CA_CERT = CA_DIR / "ca-cert.pem"
 LEAF_DIR = CA_DIR / "hosts"
-_HOST_RE = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.?$", re.I)
+_HOST_RE = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?$", re.I)
 _LOCK = threading.RLock()
 
 
