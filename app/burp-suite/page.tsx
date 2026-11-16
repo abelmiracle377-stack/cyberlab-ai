@@ -7,6 +7,7 @@ import { ArrowLeft, RefreshCw, ShieldCheck, AlertTriangle, ExternalLink, Network
 type Snapshot = { status:string; installed?:boolean; api_configured?:boolean; api_reachable?:boolean; api_url?:string; edition?:string; error?:string; note?:string; next_step?:string };
 type HistoryItem = { id:number|null; timestamp:string|null; method:string; url:string; status_code:number|null; in_scope:boolean };
 type MapItem = { method:string; url:string; status_code:number|null; in_scope:boolean };
+type IssueItem = { name:string; base_url:string; severity:string; confidence:string; in_scope:boolean };
 type Result = { status:string; count:number; items:HistoryItem[] };
 
 const BRIDGE = "http://127.0.0.1:8765";
@@ -17,6 +18,7 @@ export default function BurpSuitePage() {
   const [status,setStatus] = useState<Snapshot|null>(null);
   const [history,setHistory] = useState<Result|null>(null);
   const [siteMap,setSiteMap] = useState<{status:string;count:number;items:MapItem[]}|null>(null);
+  const [issues,setIssues] = useState<{status:string;count:number;items:IssueItem[]}|null>(null);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
   const [repeaterConfirmed,setRepeaterConfirmed] = useState(false);
@@ -65,20 +67,23 @@ export default function BurpSuitePage() {
       if (!health.ok) throw new Error(healthData.error || "Kali companion is not reachable.");
       setBridgeReady(true);
 
-      const [statusResponse,historyResponse,mapResponse] = await Promise.all([
+      const [statusResponse,historyResponse,mapResponse,issuesResponse] = await Promise.all([
         fetch(BRIDGE + "/burp/status", { headers, cache: "no-store" }),
         fetch(BRIDGE + "/burp/proxy/history?limit=50", { headers, cache: "no-store" }),
-        fetch(BRIDGE + "/burp/site-map?limit=50", { headers, cache: "no-store" })
+        fetch(BRIDGE + "/burp/site-map?limit=50", { headers, cache: "no-store" }),
+        fetch(BRIDGE + "/burp/issues?limit=50", { headers, cache: "no-store" })
       ]);
-      const [statusData,historyData,mapData] = await Promise.all([
-        statusResponse.json(), historyResponse.json(), mapResponse.json()
+      const [statusData,historyData,mapData,issuesData] = await Promise.all([
+        statusResponse.json(), historyResponse.json(), mapResponse.json(), issuesResponse.json()
       ]);
       if (!statusResponse.ok) throw new Error(statusData.error || "Burp status request failed.");
       if (!historyResponse.ok) throw new Error(historyData.error || "Burp proxy history request failed.");
       if (!mapResponse.ok) throw new Error(mapData.error || "Burp site map request failed.");
+      if (!issuesResponse.ok) throw new Error(issuesData.error || "Burp issue retrieval failed.");
       setStatus(statusData);
       setHistory(historyData);
       setSiteMap(mapData);
+      setIssues(issuesData);
     } catch (e) {
       setBridgeReady(false);
       setError(e instanceof Error ? e.message : "Could not read Burp connector status.");
@@ -131,16 +136,22 @@ export default function BurpSuitePage() {
         {siteMap.status !== "connected" && <p>Montoya extension: {siteMap.status}.</p>}
         {siteMap.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Method</th><th>URL</th><th>Status</th></tr></thead><tbody>{siteMap.items.map((item,i)=><tr key={item.url + i}><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td></tr>)}</tbody></table></div> : <p>No in-scope site map entries were returned.</p>}
       </section>}
+      {issues && <section className="network-results">
+        <h2>Existing Burp audit issues ({issues.count})</h2>
+        {issues.status !== "connected" && <p>Montoya issue retrieval: {issues.status}. Ensure the CyberLab Burp extension is loaded in the same OS user session.</p>}
+        {issues.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Finding</th><th>Severity</th><th>Confidence</th><th>Base URL</th></tr></thead><tbody>{issues.items.map((item,i)=><tr key={item.name + item.base_url + i}><td>{item.name}</td><td>{item.severity}</td><td>{item.confidence}</td><td className="burp-url-cell">{item.base_url}</td></tr>)}</tbody></table></div> : <p>No existing in-scope Burp audit issues were returned. This does not trigger a scan.</p>}
+      </section>}
       <section className="network-results">
         <h2>Available now</h2>
         <ul>
           <li>Local Burp REST API reachability and configuration status.</li>
           <li>Read-only proxy history metadata, limited to 50 entries per refresh.</li>
           <li>Read-only site-map metadata, limited to 50 entries per refresh.</li>
+          <li>Existing in-scope audit issue names, severity and confidence, without raw request/response evidence.</li>
           <li>Common credential-like query parameters are redacted before leaving Burp.</li>
         </ul>
         <h2>Not enabled yet</h2>
-        <p>Repeater request replay, Intruder task execution, active scanner/crawler operations, issue export and automatic remediation remain disabled until their scope, approval and edition gates are implemented.</p>
+        <p>Repeater request replay, Intruder task execution, active scanner/crawler operations, active scan creation, issue mutation, raw issue detail export and automatic remediation remain disabled until their scope, approval and edition gates are implemented.</p>
       </section>
     </section>
   </main>;
