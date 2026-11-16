@@ -193,7 +193,7 @@ export default function WebRepeaterPage() {
         </>}
         {!comparison && <p>Send at least two requests, or select two saved responses, to compare them.</p>}
       </div>
-      <div className="agent-disclaimer"><ShieldCheck size={12}/> Requests loaded from proxy history are drafts only. Query strings, request bodies and redacted credentials are not restored. Review the target and re-enter any required test data; every send still requires fresh explicit authorisation and confirmation. This native repeater is not full Burp Repeater parity: no raw binary editor, HTTP/2, WebSockets or automated Intruder/fuzzing.</div>
+      <div className="agent-disclaimer"><ShieldCheck size={12}/> Requests loaded from proxy history are drafts only. Query strings, request bodies and redacted credentials are not restored. Review the target and re-enter any required test data; every send still requires fresh explicit authorisation and confirmation. Response editing is available in the proxy interception workbench, not in the Repeater response pane. This native repeater is not full Burp Repeater parity: no raw binary editor, HTTP/2, WebSockets or automated Intruder/fuzzing.</div>
     </section>
   </main>;
 }
