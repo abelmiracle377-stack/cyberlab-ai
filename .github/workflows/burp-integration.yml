@@ -7,6 +7,9 @@ on:
     paths:
       - "burp-extension/**"
       - "kali-companion/burp_connector.py"
+      - "kali-companion/intercept_proxy.py"
+      - "kali-companion/proxy_certificates.py"
+      - "kali-companion/test_intercept_proxy.py"
       - "kali-companion/bridge.py"
       - "kali-companion/network_capture.py"
       - "kali-companion/tool_catalog.py"
@@ -37,6 +40,9 @@ on:
     paths:
       - "burp-extension/**"
       - "kali-companion/burp_connector.py"
+      - "kali-companion/intercept_proxy.py"
+      - "kali-companion/proxy_certificates.py"
+      - "kali-companion/test_intercept_proxy.py"
       - "kali-companion/bridge.py"
       - "kali-companion/network_capture.py"
       - "kali-companion/tests/test_network_capture.py"
@@ -74,6 +80,7 @@ jobs:
         env:
           PYTHONPATH: kali-companion
         run: |
+          python -m unittest discover -s kali-companion -p "test_intercept_proxy.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_burp_connector.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_network_capture.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_web_testing.py" -v
