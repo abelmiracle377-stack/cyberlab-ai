@@ -178,7 +178,7 @@ def inspect_burp_proxy_history(limit: int = 50) -> dict:
         token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
     except OSError:
         return {"status": "not_configured", "items": [], "count": 0}
-    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
         return {"status": "invalid_configuration", "items": [], "count": 0}
     request = Request(
         EXTENSION_HISTORY_URL + "?limit=" + str(bounded_limit),
@@ -230,7 +230,7 @@ def inspect_burp_site_map(limit: int = 50) -> dict:
         token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
     except OSError:
         return {"status": "not_configured", "items": [], "count": 0}
-    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
         return {"status": "invalid_configuration", "items": [], "count": 0}
     request = Request(
         EXTENSION_SITE_MAP_URL + "?limit=" + str(bounded_limit),
@@ -332,7 +332,7 @@ def open_burp_history_in_repeater(history_id: int, confirmed: bool = False) -> d
         token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
     except OSError:
         return {"status": "not_configured", "request_sent": False}
-    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
         return {"status": "invalid_configuration", "request_sent": False}
     request = Request(
         EXTENSION_REPEATER_URL + "?id=" + str(history_id) + "&confirm=true",
