@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen\nimport json
 
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 DEFAULT_API_URL = "http://127.0.0.1:1337"
@@ -26,7 +26,7 @@ def _loopback_base_url(value: str) -> str:
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("Burp REST API URL must not contain credentials, query, or fragment.")
     host = (parsed.hostname or "").lower()
-    if host not in {"127.0.0.1", "::1", "localhost"}:
+    if host not in {"127.0.0.1", "::1"}:
         try:
             if not ipaddress_is_loopback(host):
                 raise ValueError("Burp REST API must bind to loopback only.")
@@ -161,3 +161,52 @@ def inspect_burp_status(
             "edition": "unknown",
             "error": "Burp REST API is not reachable on the configured loopback address.",
         }
+
+
+EXTENSION_TOKEN_FILE = Path.home() / ".config" / "cyberlab" / "burp-extension-token"
+EXTENSION_HISTORY_URL = "http://127.0.0.1:8766/v1/proxy/history"
+
+
+def inspect_burp_proxy_history(limit: int = 50) -> dict:
+    """Read redacted, in-scope proxy-history metadata from the local Montoya extension."""
+    try:
+        bounded_limit = max(1, min(int(limit), 100))
+    except (TypeError, ValueError):
+        bounded_limit = 50
+    try:
+        token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {"status": "not_configured", "items": [], "count": 0}
+    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+        return {"status": "invalid_configuration", "items": [], "count": 0}
+    request = Request(
+        EXTENSION_HISTORY_URL + "?limit=" + str(bounded_limit),
+        headers={"Accept": "application/json", "Authorization": "Bearer " + token},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=2.5) as response:
+            if getattr(response, "status", 200) != 200:
+                return {"status": "api_error", "items": [], "count": 0}
+            payload = json.loads(response.read(256 * 1024).decode("utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            return {"status": "invalid_response", "items": [], "count": 0}
+        items = payload["items"][:bounded_limit]
+        safe_items = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            safe_items.append({
+                "id": item.get("id"),
+                "timestamp": item.get("timestamp"),
+                "method": item.get("method"),
+                "url": item.get("url"),
+                "status_code": item.get("status_code"),
+                "in_scope": item.get("in_scope") is True,
+            })
+        return {"status": "connected", "items": safe_items, "count": len(safe_items)}
+    except HTTPError as exc:
+        return {"status": "authentication_failed" if exc.code in {401, 403} else "api_error",
+                "items": [], "count": 0}
+    except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
+        return {"status": "unavailable", "items": [], "count": 0}
