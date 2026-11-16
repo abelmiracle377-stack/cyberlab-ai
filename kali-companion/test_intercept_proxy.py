@@ -401,6 +401,17 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target.server_close()
             target_thread.join(timeout=2)
 
+    def test_binary_request_body_is_preserved_when_other_fields_are_edited(self):
+        entry = {
+            "method": "PUT", "path": "/binary", "headers": [], "body": b"\\xff\\x00",
+            "bodyEditable": False, "allowStateChangingMethods": True,
+        }
+        edited = intercept_proxy._validated_intercept_edit(entry, {"path": "/binary-updated"})
+        self.assertEqual(edited["path"], "/binary-updated")
+        self.assertEqual(edited["body"], b"\\xff\\x00")
+        with self.assertRaisesRegex(ValueError, "binary request body cannot be changed"):
+            intercept_proxy._validated_intercept_edit(entry, {"body": "replacement"})
+
     def test_stop_drops_pending_intercepts_using_decision_record(self):
         event = threading.Event()
         intercept_proxy._INTERCEPTS["a" * 32] = {
