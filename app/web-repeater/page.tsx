@@ -1,0 +1,173 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Copy, GitCompareArrows, Plus, Send, ShieldCheck, X } from "lucide-react";
+
+type HttpResult = {
+  id: string; status: number; reason: string; method: string; target: string;
+  durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
+  body: string; bodyBytes: number; truncated: boolean; capturedAt: string;
+};
+type RequestTab = {
+  id: string; name: string; url: string; confirmationUrl: string; method: string;
+  headersText: string; body: string; response: HttpResult | null; error: string; busy: boolean;
+};
+
+const newRequest = (name: string): RequestTab => ({
+  id: crypto.randomUUID(), name, url: "http://localhost:3000/",
+  confirmationUrl: "http://localhost:3000/", method: "GET",
+  headersText: '{\n  "Accept": "*/*"\n}', body: "", response: null, error: "", busy: false,
+});
+
+export default function WebRepeaterPage() {
+  const [tabs, setTabs] = useState<RequestTab[]>([newRequest("Request 1")]);
+  const [activeId, setActiveId] = useState(tabs[0].id);
+  const [reference, setReference] = useState("LOCAL-LAB-001");
+  const [authorised, setAuthorised] = useState(false);
+  const [confirmStateChange, setConfirmStateChange] = useState(false);
+  const [localLabMode, setLocalLabMode] = useState(true);
+  const [baselineId, setBaselineId] = useState("");
+  const [candidateId, setCandidateId] = useState("");
+
+  const active = tabs.find(tab => tab.id === activeId) || tabs[0];
+  const responses = tabs.filter(tab => tab.response);
+  const baseline = responses.find(tab => tab.id === baselineId)?.response || null;
+  const candidate = responses.find(tab => tab.id === candidateId)?.response || null;
+  const comparison = useMemo(() => {
+    if (!baseline || !candidate) return null;
+    const headerMap = (items: HttpResult["headers"]) => Object.fromEntries(items.map(item => [item.name.toLowerCase(), item.value]));
+    const a = headerMap(baseline.headers), b = headerMap(candidate.headers);
+    const names = Array.from(new Set([...Object.keys(a), ...Object.keys(b)])).sort();
+    return {
+      statusChanged: baseline.status !== candidate.status,
+      bodyChanged: baseline.body !== candidate.body,
+      headers: names.filter(name => a[name] !== b[name]).map(name => ({ name, before: a[name] ?? "(absent)", after: b[name] ?? "(absent)" })),
+      bodyLengthDelta: candidate.bodyBytes - baseline.bodyBytes,
+    };
+  }, [baseline, candidate]);
+
+  function updateActive(patch: Partial<RequestTab>) {
+    setTabs(current => current.map(tab => tab.id === activeId ? { ...tab, ...patch } : tab));
+  }
+
+  function addTab(duplicate: boolean) {
+    if (tabs.length >= 5) return;
+    const source = active;
+    const next = newRequest("Request " + (tabs.length + 1));
+    if (duplicate && source) {
+      next.url = source.url; next.confirmationUrl = source.confirmationUrl;
+      next.method = source.method; next.headersText = source.headersText; next.body = source.body;
+    }
+    setTabs(current => [...current, next]);
+    setActiveId(next.id);
+  }
+
+  function closeTab(id: string) {
+    if (tabs.length <= 1) return;
+    const next = tabs.filter(tab => tab.id !== id);
+    setTabs(next);
+    if (activeId === id) setActiveId(next[0].id);
+    if (baselineId === id) setBaselineId("");
+    if (candidateId === id) setCandidateId("");
+  }
+
+  async function sendRequest() {
+    if (!active) return;
+    updateActive({ busy: true, error: "", response: null });
+    try {
+      const pairing = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
+      if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      let parsedHeaders: unknown;
+      try { parsedHeaders = JSON.parse(active.headersText); } catch { throw new Error("Headers must be valid JSON in name/value format."); }
+      if (!parsedHeaders || Array.isArray(parsedHeaders) || typeof parsedHeaders !== "object") throw new Error("Headers must be a JSON object.");
+      const stateChanging = ["POST", "PUT", "PATCH", "DELETE"].includes(active.method);
+      const response = await fetch("http://127.0.0.1:8765/web/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+        body: JSON.stringify({
+          url: active.url, confirmationUrl: active.confirmationUrl, method: active.method,
+          headers: parsedHeaders, body: active.body, authorizationReference: reference,
+          authorizationConfirmed: authorised, confirmSend: true,
+          confirmStateChange: stateChanging && confirmStateChange, localLabMode,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Native request failed.");
+      const result = data as HttpResult;
+      setTabs(current => current.map(tab => tab.id === activeId ? { ...tab, response: result, error: "", busy: false } : tab));
+      setCandidateId(activeId);
+      if (!baselineId) setBaselineId(activeId);
+    } catch (cause) {
+      updateActive({ error: cause instanceof Error ? cause.message : "Unexpected request error.", busy: false });
+    }
+  }
+
+  return <main className="agent-shell">
+    <header className="agent-topbar">
+      <Link href="/web-workbench" className="agent-back"><ArrowLeft size={14}/> Web workbench</Link>
+      <div className="agent-brand"><GitCompareArrows size={16}/> CYBERLAB AI <span className="agent-top-sep">/</span> NATIVE REPEATER</div>
+      <span className="agent-secure-label"><span/> LOCAL ENGINE</span>
+    </header>
+    <section className="agent-main">
+      <div className="agent-heading">
+        <div className="agent-overline">NATIVE HTTP TESTING / 002</div>
+        <h1>Request repeater</h1>
+        <p>Prepare, edit and manually resend bounded HTTP requests through CyberLab's native local engine. Every send is explicit; no request is replayed automatically.</p>
+      </div>
+      <div className="scope-warning"><ShieldCheck size={14}/> Use only systems covered by written permission. The companion pins DNS, blocks private addresses outside loopback lab mode, does not follow redirects and enforces request/response limits. POST, PUT, PATCH and DELETE require separate approval.</div>
+      <div className="network-results">
+        <h2>Request tabs</h2>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          {tabs.map(tab=><div key={tab.id} style={{display:"flex",gap:4,alignItems:"center"}}>
+            <button className="nav-item" type="button" onClick={()=>setActiveId(tab.id)} aria-pressed={activeId===tab.id}>{tab.name}{tab.response ? " · "+tab.response.status : ""}</button>
+            {tabs.length>1 && <button className="nav-item" type="button" onClick={()=>closeTab(tab.id)} aria-label={"Close "+tab.name}><X size={12}/></button>}
+          </div>)}
+          <button className="report-download" type="button" disabled={tabs.length>=5} onClick={()=>addTab(false)}><Plus size={13}/> New</button>
+          <button className="report-download" type="button" disabled={tabs.length>=5} onClick={()=>addTab(true)}><Copy size={13}/> Duplicate</button>
+        </div>
+        <p>{tabs.length}/5 request tabs · responses are kept in this browser session only.</p>
+      </div>
+      {active && <div className="report-editor">
+        <label>Request name<input value={active.name} onChange={e=>updateActive({name:e.target.value})}/></label>
+        <label>Target URL<input value={active.url} onChange={e=>updateActive({url:e.target.value})} maxLength={2048}/></label>
+        <label>Retype target hostname<input value={active.confirmationUrl} onChange={e=>updateActive({confirmationUrl:e.target.value})} maxLength={2048}/></label>
+        <label>HTTP method<select value={active.method} onChange={e=>updateActive({method:e.target.value})}>{["GET","HEAD","OPTIONS","POST","PUT","PATCH","DELETE"].map(item=><option key={item}>{item}</option>)}</select></label>
+        <label>Headers · JSON object<textarea rows={5} spellCheck={false} value={active.headersText} onChange={e=>updateActive({headersText:e.target.value})}/></label>
+        <label>Request body · maximum 16 KB<textarea rows={6} value={active.body} onChange={e=>updateActive({body:e.target.value})} placeholder="Optional request body for POST, PUT or PATCH"/></label>
+        <label>Engagement / authorisation reference<input value={reference} onChange={e=>setReference(e.target.value)} maxLength={160}/></label>
+        <div className="scope-checks"><label><input type="checkbox" checked={localLabMode} onChange={e=>setLocalLabMode(e.target.checked)}/> Local lab mode (loopback only)</label></div>
+        <div className="scope-checks"><label><input type="checkbox" checked={authorised} onChange={e=>setAuthorised(e.target.checked)}/> I own this target or have explicit written authorisation.</label></div>
+        {["POST","PUT","PATCH","DELETE"].includes(active.method) && <div className="scope-checks"><label><input type="checkbox" checked={confirmStateChange} onChange={e=>setConfirmStateChange(e.target.checked)}/> I separately approve this state-changing request.</label></div>}
+        <button className="report-download" type="button" disabled={active.busy || !authorised || !reference.trim() || (["POST","PUT","PATCH","DELETE"].includes(active.method) && !confirmStateChange)} onClick={sendRequest}>{active.busy ? "Sending…" : <><Send size={14}/> Send request</>}</button>
+        {active.error && <div className="agent-error">{active.error}</div>}
+      </div>}
+      {active?.response && <div className="network-results">
+        <h2>Response · {active.response.status} {active.response.reason}</h2>
+        <p>{active.response.method} {active.response.target} · {active.response.durationMs} ms · {active.response.resolvedAddress} · {active.response.bodyBytes} bytes</p>
+        <h3>Headers</h3>
+        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{active.response.headers.map(h=>h.name+": "+h.value).join("\n")}</pre>
+        <h3>Body</h3>
+        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{active.response.body}</pre>
+      </div>}
+      <div className="network-results">
+        <h2>Response comparison</h2>
+        <p>Choose two responses captured by explicit sends to compare status, headers and body text.</p>
+        <label>Baseline response<select value={baselineId} onChange={e=>setBaselineId(e.target.value)}><option value="">Select response</option>{responses.map(tab=><option key={tab.id} value={tab.id}>{tab.name} · {tab.response?.status}</option>)}</select></label>
+        <label>Candidate response<select value={candidateId} onChange={e=>setCandidateId(e.target.value)}><option value="">Select response</option>{responses.map(tab=><option key={tab.id} value={tab.id}>{tab.name} · {tab.response?.status}</option>)}</select></label>
+        {comparison && <>
+          <p>Status: {comparison.statusChanged ? "changed" : "unchanged"} · Body: {comparison.bodyChanged ? "changed" : "unchanged"} · Body size delta: {comparison.bodyLengthDelta} bytes</p>
+          <h3>Changed headers ({comparison.headers.length})</h3>
+          {comparison.headers.map(item=><div key={item.name} className="scope-warning"><strong>{item.name}</strong><p>Before: {item.before}</p><p>After: {item.after}</p></div>)}
+          {!comparison.headers.length && <p>No header differences detected.</p>}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <div><h3>Baseline body</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:320,overflow:"auto",fontSize:11}}>{baseline?.body}</pre></div>
+            <div><h3>Candidate body</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:320,overflow:"auto",fontSize:11}}>{candidate?.body}</pre></div>
+          </div>
+        </>}
+        {!comparison && <p>Send at least two requests, or select two saved responses, to compare them.</p>}
+      </div>
+      <div className="agent-disclaimer"><ShieldCheck size={12}/> This native repeater uses the existing bounded request engine. It is not a full Burp Repeater replacement yet: no raw binary editor, HTTP/2, WebSockets, automated Intruder/fuzzing or response-side editing. Request and response bodies are not persisted by the companion history.</div>
+    </section>
+  </main>;
+}
