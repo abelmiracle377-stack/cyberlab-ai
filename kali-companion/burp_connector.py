@@ -264,3 +264,38 @@ def inspect_burp_site_map(limit: int = 50) -> dict:
                 "items": [], "count": 0}
     except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
         return {"status": "unavailable", "items": [], "count": 0}
+
+
+EXTENSION_REPEATER_URL = "http://127.0.0.1:8766/v1/repeater/from-history"
+
+
+def open_burp_history_in_repeater(history_id: int, confirmed: bool = False) -> dict:
+    """Place one in-scope captured request into Repeater; this does not send it."""
+    if isinstance(history_id, bool) or not isinstance(history_id, int) or history_id < 1:
+        return {"status": "invalid_request", "request_sent": False}
+    if confirmed is not True:
+        return {"status": "confirmation_required", "request_sent": False}
+    try:
+        token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {"status": "not_configured", "request_sent": False}
+    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+        return {"status": "invalid_configuration", "request_sent": False}
+    request = Request(
+        EXTENSION_REPEATER_URL + "?id=" + str(history_id) + "&confirm=true",
+        data=b"",
+        headers={"Accept": "application/json", "Authorization": "Bearer " + token},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=2.5) as response:
+            payload = json.loads(response.read(8192).decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("status") != "opened_in_repeater":
+            return {"status": "invalid_response", "request_sent": False}
+        return {"status": "opened_in_repeater", "history_id": history_id, "request_sent": False}
+    except HTTPError as exc:
+        return {"status": "out_of_scope" if exc.code == 403 else (
+            "authentication_failed" if exc.code in {401, 403} else "api_error"),
+            "request_sent": False}
+    except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
+        return {"status": "unavailable", "request_sent": False}
