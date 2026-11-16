@@ -25,6 +25,7 @@ from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
 from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater
 from network_capture import list_capture_interfaces, capture_packets
+from web_testing import execute_request, request_history
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -49,6 +50,7 @@ artifact_lock = threading.Lock()
 case_lock = threading.Lock()
 case_export_lock = threading.Lock()
 network_capture_lock = threading.Lock()
+web_request_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -213,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -221,6 +223,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, inspect_tool_catalog(), origin)
         if path == "/network/interfaces":
             return self.send_json(200, list_capture_interfaces(), origin)
+        if path == "/web/history":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["20"])[0])
+            except (TypeError, ValueError):
+                limit = 20
+            return self.send_json(200, request_history(limit), origin)
         if path == "/burp/status":
             return self.send_json(200, inspect_burp_status(), origin)
         if path == "/burp/proxy/history":
@@ -263,18 +272,26 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body_limit = 600000 if path == "/evidence/case/export" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else MAX_BODY)))
+            body_limit = 600000 if path == "/evidence/case/export" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path == "/web/request" else MAX_BODY))))
             if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError("Request body must be a JSON object.")
+            if path == "/web/request":
+                if not web_request_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A native HTTP request is already running."}, origin)
+                try:
+                    result = execute_request(data)
+                    return self.send_json(200, result, origin)
+                finally:
+                    web_request_lock.release()
             if path == "/network/capture":
                 if not network_capture_lock.acquire(blocking=False):
                     return self.send_json(409, {"error": "A packet capture is already running."}, origin)
