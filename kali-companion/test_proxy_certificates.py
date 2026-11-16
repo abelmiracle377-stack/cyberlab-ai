@@ -56,6 +56,10 @@ class ProxyCertificateTests(unittest.TestCase):
             certs.create_local_ca()
         self.assertEqual(certs.CA_KEY.read_bytes(), original)
 
+    def test_ipv6_literals_are_normalised_for_ip_subject_alternative_names(self):
+        self.assertEqual(certs._normalise_host("::1"), ("::1", "IP"))
+        self.assertEqual(certs._normalise_host("[::1]"), ("::1", "IP"))
+
     def test_wildcard_and_url_inputs_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Wildcards"):
             certs._normalise_host("*.example.test")
