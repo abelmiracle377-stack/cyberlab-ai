@@ -25,7 +25,7 @@ TOOL_CATALOG = [
     {"name": "Greenbone / OpenVAS", "category": "Vulnerability analysis", "binary": "gvm-cli", "package": "gvm", "mode": "manual_only", "purpose": "Managed vulnerability assessment; requires configured services."},
     {"name": "Lynis", "category": "Vulnerability analysis", "binary": "lynis", "package": "lynis", "mode": "local_audit", "purpose": "Local Linux security configuration audit."},
     {"name": "Nuclei", "category": "Vulnerability analysis", "binary": "nuclei", "package": "nuclei", "mode": "manual_only", "purpose": "Template-based checks; templates and target scope must be reviewed."},
-    {"name": "Burp Suite", "category": "Web application analysis", "binary": "burpsuite", "package": "burpsuite", "mode": "manual_only", "integration": {"kind": "local_montoya_and_rest_api", "status_endpoint": "/burp/status", "proxy_history_endpoint": "/burp/proxy/history", "site_map_endpoint": "/burp/site-map", "issues_endpoint": "/burp/issues", "automation": "read_only_metadata"}, "purpose": "Burp Suite desktop proxy and web application testing; CyberLab reads only in-scope proxy history, site-map metadata and existing audit issue summaries."},
+    {"name": "CyberLab HTTP Workbench", "category": "Web application analysis", "binary": None, "package": None, "mode": "native_http", "native": True, "purpose": "Native, scope-bound HTTP request inspection and replay through the authenticated local companion."},
     {"name": "OWASP ZAP", "category": "Web application analysis", "binary": "zaproxy", "package": "zaproxy", "mode": "manual_only", "purpose": "Web application proxy and controlled scanning."},
     {"name": "sqlmap", "category": "Web application analysis", "binary": "sqlmap", "package": "sqlmap", "mode": "manual_only", "purpose": "SQL injection testing; potentially intrusive."},
     {"name": "WPScan", "category": "Web application analysis", "binary": "wpscan", "package": "wpscan", "mode": "manual_only", "purpose": "WordPress security enumeration."},
@@ -69,7 +69,7 @@ def inspect_tool_catalog() -> dict:
     categories: dict[str, list[dict]] = {}
     installed_count = 0
     for entry in TOOL_CATALOG:
-        found = shutil.which(entry["binary"])
+        found = "native" if entry.get("native") else (shutil.which(entry["binary"]) if entry.get("binary") else None)
         item = {
             **entry,
             "installed": bool(found),
