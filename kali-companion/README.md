@@ -199,3 +199,5 @@ CyberLab includes a native HTTP workbench and a bounded same-origin web crawler/
 
 
 CyberLab also includes limited native safe active web checks for CORS preflight and inert GET query-reflection indicators. These are bounded and approval-gated; they do not constitute a full exploit scanner. See `docs/NATIVE_WEB_WORKBENCH.md` for the current scope and limitations.
+
+The native HTTP workbench can reload request history for a newly approved replay. Sensitive request headers are redacted and request-body contents are deliberately omitted from history; operators must re-enter any body before replay.
