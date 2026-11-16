@@ -6,7 +6,6 @@ web dashboard or model; a short-snaplen PCAP is retained locally as evidence.
 from __future__ import annotations
 
 import hashlib
-import ipaddress
 import os
 import re
 import secrets
@@ -146,12 +145,19 @@ def capture_packets(
         return {"status": "unavailable", "error": "tcpdump is not installed on the paired workstation."}
 
     CAPTURE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if CAPTURE_DIR.is_symlink() or not CAPTURE_DIR.is_dir():
+        return {"status": "capture_failed", "error": "The local capture directory must be a real directory, not a symlink."}
     try:
         os.chmod(CAPTURE_DIR, 0o700)
     except OSError:
         pass
     capture_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(5)
     pcap_path = CAPTURE_DIR / (capture_id + ".pcap")
+    try:
+        descriptor = os.open(str(pcap_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+    except OSError as exc:
+        return {"status": "capture_failed", "error": "Could not safely create the local capture file: " + str(exc)[:180]}
     command = [
         tcpdump, "-i", interface, "-nn", "-s", str(SNAPLEN_BYTES),
         "-c", str(packet_limit), "-w", str(pcap_path), CAPTURE_FILTERS[filter_name],
