@@ -535,6 +535,7 @@ def main():
     except KeyboardInterrupt:
         print("\nStopping CyberLab Kali Bridge...")
     finally:
+        PROXY.stop()
         server.server_close()
 
 
