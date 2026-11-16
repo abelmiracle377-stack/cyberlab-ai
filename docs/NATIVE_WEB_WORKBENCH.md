@@ -75,10 +75,10 @@ This is an initial HTTP/1.1 proxy, not full Burp parity. It handles one request 
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
-- Advanced interception features remain in development: full response editing, multi-origin profiles, HTTP/2, WebSockets, chunked client request bodies, client-certificate authentication and broader browser compatibility.
+- Advanced interception features remain in development: binary and oversized response editing, response diff tooling, multi-origin profiles, HTTP/2, WebSockets, chunked client request bodies, client-certificate authentication and broader browser compatibility.
 - Authenticated crawling and session/role handling.
 - Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
-- Raw binary request editing, response editing and richer response-diff tooling.
+- Raw binary request/response editing and richer response-diff tooling.
 - Bounded parameter mutation and fuzzing engine.
 - WebSocket and GraphQL security testing.
 - Full AI specialist-agent orchestration across crawl, scan, independent finding verification and reporting. The Agent Console currently provides a user-approved handoff and evidence-analysis step only.
