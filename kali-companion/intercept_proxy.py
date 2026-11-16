@@ -152,7 +152,12 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self._error(400, "Request target contains unescaped whitespace or control characters")
                 return
             self._process_request(method, parsed.scheme, parsed.hostname, port, path, version)
-        except (OSError, ValueError, RuntimeError, ssl.SSLError, http.client.HTTPException):
+        except ValueError as exc:
+            try:
+                self._error(400, str(exc)[:250])
+            except OSError:
+                pass
+        except (OSError, RuntimeError, ssl.SSLError, http.client.HTTPException):
             try:
                 self._error(502, "Upstream or TLS handling failed")
             except OSError:
