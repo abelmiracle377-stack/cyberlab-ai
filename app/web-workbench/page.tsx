@@ -6,7 +6,8 @@ import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldChe
 
 type ProxyHistoryItem = { id: string; method: string; url: string; status: number; queryOmitted?: boolean; requestBodyOmitted?: boolean; responseBodyOmitted?: boolean; durationMs: number; };
 type PendingIntercept = { id: string; method: string; url: string; path: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; body: string; bodyEditable: boolean; createdAt: string; decisionTimeoutSeconds: number; };
-type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
+type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyEditable: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
+type ResponseInterceptDraft = { status: number; reason: string; headersText: string; body: string };
 type InterceptDraft = { method: string; path: string; headersText: string; body: string };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
@@ -48,6 +49,7 @@ export default function WebWorkbenchPage() {
   const [proxyResponseInterceptConsent, setProxyResponseInterceptConsent] = useState(false);
   const [proxyResponseInterceptActive, setProxyResponseInterceptActive] = useState(false);
   const [pendingResponseIntercepts, setPendingResponseIntercepts] = useState<PendingResponseIntercept[]>([]);
+  const [responseInterceptDrafts, setResponseInterceptDrafts] = useState<Record<string, ResponseInterceptDraft>>({});
   const [responseInterceptBusyId, setResponseInterceptBusyId] = useState("");
   const [pendingIntercepts, setPendingIntercepts] = useState<PendingIntercept[]>([]);
   const [interceptDrafts, setInterceptDrafts] = useState<Record<string, InterceptDraft>>({});
@@ -135,10 +137,20 @@ export default function WebWorkbenchPage() {
     const response = await fetch("http://127.0.0.1:8765/proxy/response-intercepts", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load pending intercepted responses.");
-    setPendingResponseIntercepts(data.items || []);
+    const items: PendingResponseIntercept[] = data.items || [];
+    setPendingResponseIntercepts(items);
+    setResponseInterceptDrafts(current => {
+      const next = { ...current };
+      for (const item of items) if (!next[item.id]) next[item.id] = {
+        status: item.status, reason: item.reason,
+        headersText: JSON.stringify(item.headers, null, 2), body: item.body || "",
+      };
+      for (const id of Object.keys(next)) if (!items.some(item => item.id === id)) delete next[id];
+      return next;
+    });
   }
 
-  async function decidePendingResponseIntercept(id: string, action: "forward" | "drop") {
+  async function decidePendingResponseIntercept(id: string, action: "forward" | "forward_edited" | "drop") {
     setResponseInterceptBusyId(id); setProxyError("");
     try {
       const pairing = token();
@@ -146,7 +158,12 @@ export default function WebWorkbenchPage() {
       const response = await fetch("http://127.0.0.1:8765/proxy/response-intercepts/decision", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
-        body: JSON.stringify({ id, action }),
+        body: JSON.stringify({ id, action, edits: action === "forward_edited" ? {
+          status: responseInterceptDrafts[id]?.status,
+          reason: responseInterceptDrafts[id]?.reason,
+          headers: JSON.parse(responseInterceptDrafts[id]?.headersText || "[]"),
+          ...(pendingResponseIntercepts.find(item => item.id === id)?.bodyEditable ? { body: responseInterceptDrafts[id]?.body || "" } : {}),
+        } : undefined }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not apply the response interception decision.");
@@ -344,10 +361,13 @@ export default function WebWorkbenchPage() {
           {pendingResponseIntercepts.map(item=><div className="scope-warning" key={item.id}>
             <strong>{item.method} · {item.status} {item.reason} · {item.url}</strong>
             <p>Captured {item.createdAt}. Response body: {item.bodyLength} bytes. Headers are redacted where sensitive. Only text-like response bodies are previewed, up to 16 KB; binary bodies are not displayed. The origin response is held in companion memory until a decision or timeout.</p>
-            <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>{JSON.stringify(item.headers,null,2)}</pre>
-            {item.bodyVisible && <><label>Text response preview{item.bodyTruncated ? " · first 16 KB only" : ""}<textarea rows={8} readOnly value={item.body}/></label></>}
-            {!item.bodyVisible && <p>Response body preview unavailable for this content type or encoding.</p>}
-            <button className="report-download" type="button" disabled={Boolean(responseInterceptBusyId)} onClick={()=>decidePendingResponseIntercept(item.id,"forward")}>{responseInterceptBusyId===item.id ? "Applying…" : "Forward response"}</button>
+            <label>Status code<input type="number" min={200} max={599} value={responseInterceptDrafts[item.id]?.status ?? item.status} onChange={e=>setResponseInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],status:Number(e.target.value)}}))}/></label>
+            <label>Reason phrase<input value={responseInterceptDrafts[item.id]?.reason ?? item.reason} maxLength={120} onChange={e=>setResponseInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],reason:e.target.value}}))}/></label>
+            <label>Response headers · JSON array<textarea rows={6} spellCheck={false} value={responseInterceptDrafts[item.id]?.headersText || ""} onChange={e=>setResponseInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],headersText:e.target.value}}))}/></label>
+            {item.bodyEditable && <label>Response body · UTF-8 text<textarea rows={8} value={responseInterceptDrafts[item.id]?.body ?? ""} onChange={e=>setResponseInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],body:e.target.value}}))}/></label>}
+            {!item.bodyEditable && <p>Body editing is disabled for binary, non-UTF-8 or larger-than-16-KB response bodies. The original body will be preserved.</p>}
+            <button className="report-download" type="button" disabled={Boolean(responseInterceptBusyId)} onClick={()=>decidePendingResponseIntercept(item.id,"forward")}>Forward unchanged</button>
+            <button className="report-download" type="button" disabled={Boolean(responseInterceptBusyId)} onClick={()=>decidePendingResponseIntercept(item.id,"forward_edited")}>{responseInterceptBusyId===item.id ? "Applying…" : "Forward edited response"}</button>
             <button className="report-download" type="button" disabled={Boolean(responseInterceptBusyId)} onClick={()=>decidePendingResponseIntercept(item.id,"drop")}>Drop response</button>
           </div>)}
           {!pendingResponseIntercepts.length && <p>No origin responses are currently waiting.</p>}
