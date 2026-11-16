@@ -214,6 +214,15 @@ class _ProxyServer(socketserver.ThreadingTCPServer):
 
 
 class _ProxyHandler(socketserver.StreamRequestHandler):
+    def finish(self):
+        try:
+            super().finish()
+        finally:
+            try:
+                self.connection.close()
+            except OSError:
+                pass
+
     def handle(self):
         self.connection.settimeout(MAX_TIMEOUT)
         try:
