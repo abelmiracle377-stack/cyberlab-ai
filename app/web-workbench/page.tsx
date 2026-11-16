@@ -7,7 +7,7 @@ import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldChe
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
   durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
-  body: string; bodyBytes: number; truncated: boolean; capturedAt: string; responseBodyOmitted?: boolean; responseBodyLength?: number;
+  body: string; bodyBytes: number; truncated: boolean; capturedAt: string; responseBodyOmitted?: boolean; responseBodyLength?: number; targetQueryOmitted?: boolean;
   requestHeaders?: Record<string, string>; requestBodyOmitted?: boolean; requestBodyLength?: number;
 };
 
@@ -99,7 +99,7 @@ export default function WebWorkbenchPage() {
       {error && <div className="agent-error"><AlertTriangle size={14}/>{error}</div>}
       {result && <div className="network-results">
         <h2><ShieldCheck size={14}/> Response · {result.status} {result.reason}</h2>
-        <p>{result.method} {result.target} · {result.durationMs} ms · pinned address {result.resolvedAddress} · {result.bodyBytes} bytes{result.truncated?" · response truncated":""}</p>
+        <p>{result.method} {result.target} · {result.durationMs} ms · pinned address {result.resolvedAddress} · {result.bodyBytes} bytes{result.truncated?" · response truncated":""}{result.targetQueryOmitted?" · query omitted from history; re-enter it manually for replay":""}</p>
         <h3>Response headers</h3>
         <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{result.headers.map(h=>h.name+": "+h.value).join("\n")}</pre>
         <h3>Response body{result.responseBodyOmitted ? " · omitted from history" : ""}</h3>
