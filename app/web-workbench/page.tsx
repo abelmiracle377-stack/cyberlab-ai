@@ -59,6 +59,8 @@ export default function WebWorkbenchPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Native HTTP request failed.");
       setResult(data);
+      setHistoryBodyOmitted(false);
+      setHistorySecretsRedacted(false);
       await loadHistory();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Unexpected request error."); }
     finally { setBusy(false); }
