@@ -151,7 +151,8 @@ def _safe_history_response(result: dict) -> dict:
         name = str(item.get("name", ""))
         lowered = name.lower()
         sensitive = (lowered in SENSITIVE_RESPONSE_HEADERS or "token" in lowered
-                     or "secret" in lowered or "session" in lowered)
+                     or "secret" in lowered or "session" in lowered or "cookie" in lowered
+                     or "authorization" in lowered or lowered in {"location", "content-location", "refresh", "link"})
         safe_headers.append({"name": name, "value": "[REDACTED]" if sensitive else item.get("value", "")})
     safe["headers"] = safe_headers
     target = result.get("target", "")
