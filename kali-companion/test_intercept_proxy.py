@@ -288,5 +288,60 @@ class NativeInterceptProxyTests(unittest.TestCase):
             })
 
 
+    def test_edited_interception_request_is_validated_and_applied(self):
+        entry = {
+            "method": "GET", "path": "/original", "headers": [("Cookie", "session=secret"), ("Accept", "*/*")],
+            "body": b"", "bodyEditable": True, "allowStateChangingMethods": True,
+        }
+        edited = intercept_proxy._validated_intercept_edit(entry, {
+            "method": "POST", "path": "/edited?mode=1",
+            "headers": [{"name": "Cookie", "value": "[REDACTED]"}, {"name": "Content-Type", "value": "text/plain"}],
+            "body": "edited payload",
+        })
+        self.assertEqual(edited["method"], "POST")
+        self.assertEqual(edited["path"], "/edited?mode=1")
+        self.assertEqual(edited["body"], b"edited payload")
+        self.assertEqual(edited["headers"][0], ("Cookie", "session=secret"))
+
+    def test_edited_interception_rejects_scope_escape_and_header_injection(self):
+        entry = {
+            "method": "GET", "path": "/", "headers": [], "body": b"",
+            "bodyEditable": True, "allowStateChangingMethods": True,
+        }
+        for path in ("//evil.example/path", "https://evil.example/", "/\r\nHost: evil.example"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                intercept_proxy._validated_intercept_edit(entry, {"path": path})
+        with self.assertRaisesRegex(ValueError, "managed by CyberLab"):
+            intercept_proxy._validated_intercept_edit(entry, {
+                "headers": [{"name": "Host", "value": "evil.example"}],
+            })
+        with self.assertRaisesRegex(ValueError, "invalid characters"):
+            intercept_proxy._validated_intercept_edit(entry, {
+                "headers": [{"name": "X-Test", "value": "ok\r\nInjected: yes"}],
+            })
+
+    def test_edited_interception_enforces_body_limit_and_method_permissions(self):
+        entry = {
+            "method": "GET", "path": "/", "headers": [], "body": b"",
+            "bodyEditable": True, "allowStateChangingMethods": False,
+        }
+        with self.assertRaisesRegex(ValueError, "State-changing methods are disabled"):
+            intercept_proxy._validated_intercept_edit(entry, {"method": "DELETE"})
+        with self.assertRaisesRegex(ValueError, "exceeds 64 KB"):
+            intercept_proxy._validated_intercept_edit(entry, {"body": "x" * (intercept_proxy.MAX_REQUEST_BODY + 1)})
+
+    def test_stop_drops_pending_intercepts_using_decision_record(self):
+        event = threading.Event()
+        intercept_proxy._INTERCEPTS["a" * 32] = {
+            "event": event, "decision": None, "public": {},
+        }
+        try:
+            intercept_proxy._drop_all_pending_intercepts()
+            self.assertTrue(event.is_set())
+            self.assertEqual(intercept_proxy._INTERCEPTS["a" * 32]["decision"], {"action": "drop"})
+        finally:
+            intercept_proxy._INTERCEPTS.pop("a" * 32, None)
+
+
 if __name__ == "__main__":
     unittest.main()
