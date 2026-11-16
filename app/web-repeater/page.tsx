@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Copy, GitCompareArrows, Plus, Send, ShieldCheck, X } from "lucide-react";
 
@@ -29,6 +29,32 @@ export default function WebRepeaterPage() {
   const [localLabMode, setLocalLabMode] = useState(true);
   const [baselineId, setBaselineId] = useState("");
   const [candidateId, setCandidateId] = useState("");
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
+    if (!raw) return;
+    sessionStorage.removeItem("cyberlab.repeaterDraft");
+    try {
+      const draft = JSON.parse(raw);
+      if (!draft || typeof draft.url !== "string" || typeof draft.method !== "string") return;
+      const target = new URL(draft.url);
+      const allowedMethods = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"];
+      if (!["http:", "https:"].includes(target.protocol) || !allowedMethods.includes(draft.method)) return;
+      const headers = draft.headers && typeof draft.headers === "object" && !Array.isArray(draft.headers) ? draft.headers : {};
+      const next = newRequest(typeof draft.name === "string" ? draft.name.slice(0, 80) : "From proxy history");
+      next.url = target.toString();
+      next.confirmationUrl = target.origin;
+      next.method = draft.method;
+      next.headersText = JSON.stringify(headers, null, 2);
+      next.body = "";
+      setTabs([next]);
+      setActiveId(next.id);
+      setBaselineId("");
+      setCandidateId("");
+    } catch {
+      // Invalid session handoff data is ignored; no request is sent automatically.
+    }
+  }, []);
 
   const active = tabs.find(tab => tab.id === activeId) || tabs[0];
   const responses = tabs.filter(tab => tab.response);
@@ -167,7 +193,7 @@ export default function WebRepeaterPage() {
         </>}
         {!comparison && <p>Send at least two requests, or select two saved responses, to compare them.</p>}
       </div>
-      <div className="agent-disclaimer"><ShieldCheck size={12}/> This native repeater uses the existing bounded request engine. It is not a full Burp Repeater replacement yet: no raw binary editor, HTTP/2, WebSockets, automated Intruder/fuzzing or response-side editing. Request and response bodies are not persisted by the companion history.</div>
+      <div className="agent-disclaimer"><ShieldCheck size={12}/> Requests loaded from proxy history are drafts only. Query strings, request bodies and redacted credentials are not restored. Review the target and re-enter any required test data; every send still requires fresh explicit authorisation and confirmation. This native repeater is not full Burp Repeater parity: no raw binary editor, HTTP/2, WebSockets or automated Intruder/fuzzing.</div>
     </section>
   </main>;
 }
