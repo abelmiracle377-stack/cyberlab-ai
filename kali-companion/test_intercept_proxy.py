@@ -258,6 +258,12 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertNotIn("secret", safe)
         self.assertNotIn("?", safe)
 
+    def test_interception_decisions_reject_malformed_identifiers_and_actions(self):
+        with self.assertRaisesRegex(ValueError, "ID is invalid"):
+            intercept_proxy.decide_intercept([], "forward")
+        with self.assertRaisesRegex(ValueError, "forward or drop"):
+            intercept_proxy.decide_intercept("a" * 32, [])
+
     def test_proxy_start_requires_exact_origin_and_explicit_approval(self):
         proxy = intercept_proxy.NativeInterceptProxy()
         origin = "http://localhost:8080"
