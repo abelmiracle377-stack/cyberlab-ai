@@ -103,9 +103,8 @@ def run_active_scan(data: dict) -> dict:
         validate_request(request)
         if requests_sent:
             time.sleep(delay_ms / 1000)
-        response = execute_request(request)
         requests_sent += 1
-        return response
+        return execute_request(request)
 
     for url in clean_urls:
         if requests_sent >= max_requests or time.monotonic() - started >= MAX_RUNTIME_SECONDS:
