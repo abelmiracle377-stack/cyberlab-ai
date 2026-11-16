@@ -1,26 +1,42 @@
 # CyberLab Native Web Workbench
 
-The local companion exposes a native HTTP request workbench at `POST /web/request` and process-memory history at `GET /web/history`. It does not require Burp Suite or another proxy.
+CyberLab's web assessment direction is native-first. Burp Suite is not a required dependency or execution backend. The optional Burp metadata connector remains a separate interoperability feature and is not used by the native workbench.
 
-## Phase 1 capabilities
+## Native HTTP request workbench
 
-- HTTP/1.1 request composition for GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE.
-- Bounded headers and UTF-8 request body (16 KB maximum).
-- Exact hostname confirmation, written-authorisation reference and explicit send approval.
-- A separate confirmation for methods that can change server state.
-- DNS resolution is pinned to the selected address for the connection. Public mode rejects non-global addresses and mixed public/private DNS results. Local-lab mode accepts loopback only.
-- TLS certificate verification remains enabled.
-- Redirects are not followed automatically.
-- Response bodies are capped at 256 KB.
-- Last 25 request/response records remain in companion process memory only; they are not written to disk or sent to an AI provider automatically.
+The local Kali companion provides a scope-bound HTTP request sender and short-lived in-memory request history. Requests require:
+- An exact target hostname confirmation.
+- Written-authorisation confirmation and an engagement reference.
+- A separate send approval.
+- DNS resolution checks and pinned IP connection.
+- Bounded request and response sizes and timeouts.
+- No automatic redirect following.
+- A separate confirmation for state-changing HTTP methods.
 
-## Endpoints
+## Native bounded crawler and baseline audit
 
-- `POST /web/request`: authenticated request execution.
-- `GET /web/history?limit=20`: authenticated in-memory history.
+The companion's `POST /web/crawl` endpoint runs `kali-companion/web_crawler.py`. It:
+- Requires the exact scheme, hostname and port to be retyped, written authorisation, an engagement reference and explicit run approval.
+- Uses the native CyberLab HTTP sender; it does not invoke Burp Suite or another proxy.
+- Sends GET requests only, with a configurable delay and hard limits of 20 pages, depth 2 and 45 seconds.
+- Revalidates the target address policy for every page.
+- Follows same-origin links only; out-of-origin links are counted and blocked.
+- Does not follow redirects, submit forms, inject payloads or attempt exploitation.
+- Inventories forms without submitting them.
+- Records status, content type, response size and a SHA-256 digest of the response body.
+- Reviews baseline security headers and cookie attributes.
 
-The bridge remains bound to loopback and requires the existing pairing token and an allowed browser origin.
+The baseline findings are indicators, not proof of exploitability. A missing header is not automatically a vulnerability in every deployment.
 
-## Deliberate limitations
+## Not yet implemented
 
-This is a request workbench, not yet a full interception proxy, crawler, active vulnerability scanner, Intruder-equivalent fuzzer, WebSocket inspector or automated assessment engine. HTTPS CONNECT interception, a local CA, HTTP/2 and WebSocket support are not implemented in this phase. Test with an intentionally vulnerable local lab first.
+The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
+- Intercepting HTTP/HTTPS proxy with a user-managed local CA and browser integration.
+- Authenticated crawling and session/role handling.
+- Active, non-destructive vulnerability probes with per-check approval and evidence verification.
+- Native request repeater UI with response comparison.
+- Bounded parameter mutation and fuzzing engine.
+- WebSocket and GraphQL security testing.
+- AI specialist-agent orchestration across crawl, scan, verification and reporting.
+
+These capabilities must not be represented as complete until implemented and tested against intentionally vulnerable local labs. Public targets require explicit written authorisation and a defined scope.
