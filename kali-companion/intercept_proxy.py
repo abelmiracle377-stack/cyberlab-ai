@@ -74,7 +74,7 @@ def _redact_url_path(url: str) -> str:
     for segment in parsed.path.split("/"):
         lowered = segment.lower()
         if (any(word in lowered for word in ("token", "secret", "password", "passwd", "reset", "session", "auth", "key"))
-                or re.fullmatch(r"eyJ[A-Za-z0-9_-]{12,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}", segment)
+                or re.fullmatch(r"eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", segment)
                 or len(segment) >= 48 and re.fullmatch(r"[A-Za-z0-9_-]+", segment)):
             parts.append("[REDACTED]")
         else:
