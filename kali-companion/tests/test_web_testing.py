@@ -106,6 +106,27 @@ class WebTestingValidationTests(unittest.TestCase):
             web_testing.validate_request(data)
 
 
+    def test_history_omits_response_body_and_redacts_response_secrets(self):
+        live = {
+            "body": "session-token=secret-response",
+            "bodyBytes": 26,
+            "headers": [
+                {"name": "Content-Type", "value": "text/plain"},
+                {"name": "Set-Cookie", "value": "session=secret; HttpOnly"},
+                {"name": "X-Auth-Token", "value": "secret-token"},
+            ],
+        }
+        history = web_testing._safe_history_response(live)
+        self.assertEqual(history["body"], "")
+        self.assertTrue(history["responseBodyOmitted"])
+        self.assertEqual(history["responseBodyLength"], 26)
+        self.assertEqual(history["headers"][0]["value"], "text/plain")
+        self.assertEqual(history["headers"][1]["value"], "[REDACTED]")
+        self.assertEqual(history["headers"][2]["value"], "[REDACTED]")
+        self.assertNotIn("secret-response", str(history))
+        self.assertNotIn("secret-token", str(history))
+
+
     @patch("web_testing.socket.getaddrinfo")
     def test_rejects_unescaped_whitespace_in_request_target(self, resolve):
         resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
