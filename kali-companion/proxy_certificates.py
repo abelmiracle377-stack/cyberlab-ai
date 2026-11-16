@@ -57,8 +57,8 @@ def ca_status() -> dict:
         ready = False
         if (CA_KEY.is_file() and not CA_KEY.is_symlink() and CA_CERT.is_file()
                 and not CA_CERT.is_symlink() and CA_DIR.is_dir() and not CA_DIR.is_symlink()):
-            key_mode = stat.S_IMODE(CA_KEY.stat(follow_symlinks=False).st_mode)
-            directory_mode = stat.S_IMODE(CA_DIR.stat(follow_symlinks=False).st_mode)
+            key_mode = stat.S_IMODE(os.stat(CA_KEY, follow_symlinks=False).st_mode)
+            directory_mode = stat.S_IMODE(os.stat(CA_DIR, follow_symlinks=False).st_mode)
             ready = key_mode == 0o600 and directory_mode == 0o700
         return {
             "ready": ready,
