@@ -19,11 +19,37 @@ export default function BurpSuitePage() {
   const [siteMap,setSiteMap] = useState<{status:string;count:number;items:MapItem[]}|null>(null);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
+  const [repeaterConfirmed,setRepeaterConfirmed] = useState(false);
+  const [repeaterBusyId,setRepeaterBusyId] = useState<number|null>(null);
+  const [repeaterMessage,setRepeaterMessage] = useState("");
 
   useEffect(() => {
     const saved = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
     setToken(saved);
   }, []);
+
+  async function openInRepeater(historyId: number) {
+    if (!repeaterConfirmed) {
+      setRepeaterMessage("Confirm the Repeater handoff first.");
+      return;
+    }
+    setRepeaterBusyId(historyId);
+    setRepeaterMessage("");
+    try {
+      const response = await fetch(BRIDGE + "/burp/repeater/from-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token.trim() },
+        body: JSON.stringify({ historyId, confirmOpenInRepeater: true })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.status || "Could not open the request in Repeater.");
+      setRepeaterMessage("Request #" + historyId + " was placed in Burp Repeater. It has not been sent; review it and manually press Send in Burp.");
+    } catch (e) {
+      setRepeaterMessage(e instanceof Error ? e.message : "Repeater handoff failed.");
+    } finally {
+      setRepeaterBusyId(null);
+    }
+  }
 
   async function refresh() {
     if (!token.trim()) {
@@ -84,6 +110,8 @@ export default function BurpSuitePage() {
         <button className="report-download" onClick={()=>void refresh()} disabled={busy||!token.trim()}>
           <RefreshCw size={14}/> {busy ? "Refreshing…" : "Refresh Burp data"}
         </button>
+        <label><input type="checkbox" checked={repeaterConfirmed} onChange={e=>setRepeaterConfirmed(e.target.checked)}/> I confirm the selected captured request may be placed in Repeater. It will not be sent until I manually press Send in Burp.</label>
+        {repeaterMessage && <p>{repeaterMessage}</p>}
       </div>
       {error && <div className="agent-error"><AlertTriangle size={14}/>{error}</div>}
       {status && <section className="network-results">
@@ -96,7 +124,7 @@ export default function BurpSuitePage() {
       {history && <section className="network-results">
         <h2>Proxy HTTP history ({history.count})</h2>
         {history.status !== "connected" && <p>Montoya extension: {history.status}. Load the CyberLab Burp extension in Burp and ensure the paired Kali companion runs under the same OS user.</p>}
-        {history.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>ID</th><th>Time</th><th>Method</th><th>URL</th><th>Status</th></tr></thead><tbody>{history.items.map((item,i)=><tr key={item.id ?? i}><td>{item.id ?? "—"}</td><td>{item.timestamp || "—"}</td><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td></tr>)}</tbody></table></div> : <p>No in-scope proxy history entries were returned.</p>}
+        {history.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>ID</th><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Action</th></tr></thead><tbody>{history.items.map((item,i)=><tr key={item.id ?? i}><td>{item.id ?? "—"}</td><td>{item.timestamp || "—"}</td><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td><td><button className="report-download" disabled={item.id === null || !repeaterConfirmed || repeaterBusyId !== null} onClick={()=>item.id !== null && void openInRepeater(item.id)}>{repeaterBusyId === item.id ? "Opening…" : "Open in Repeater"}</button></td></tr>)}</tbody></table></div> : <p>No in-scope proxy history entries were returned.</p>}
       </section>}
       {siteMap && <section className="network-results">
         <h2><Network size={15}/> Site map ({siteMap.count})</h2>
