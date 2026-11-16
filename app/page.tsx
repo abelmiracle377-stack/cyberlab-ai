@@ -24,6 +24,7 @@ const groups = [
     { label: "Network Analysis", icon: Network, href: "/network-analysis" },
     { label: "Penetration Testing", icon: Radar, href: "/penetration-testing" },
     { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
+    { label: "Burp Suite", icon: ShieldCheck, href: "/burp-suite" },
     { label: "Vulnerability Lab", icon: Bug, href: "/vulnerability-lab" },
   ]},
   { title: "ANALYSIS & EVIDENCE", items: [
@@ -52,6 +53,7 @@ const modules = [
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
   { name:"Live Research", desc:"Research current CVEs, advisories and technical references.", icon:Globe, state:"PROVIDER REQUIRED", href:"/research" },
   { name:"Website Assessment", desc:"Passive HTTPS, headers and cookie security review.", icon:Globe2, state:"AVAILABLE", href:"/website-assessment" },
+  { name:"Burp Suite", desc:"Read-only in-scope proxy history and site-map metadata from paired Kali Burp.", icon:ShieldCheck, state:"PARTIAL / LOCAL", href:"/burp-suite" },
   { name:"Vulnerability Lab", desc:"Research CVEs, impact and remediation guidance.", icon:Bug, state:"AVAILABLE", href:"/vulnerability-lab" },
   { name:"Malware Lab", desc:"Static triage, inert threat fixtures, YARA/Sigma structural checks and SOC behaviour simulations.", icon:Shield, state:"DEFENSIVE ANALYSIS", href:"/malware-lab" },
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
