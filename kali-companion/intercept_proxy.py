@@ -11,6 +11,7 @@ from __future__ import annotations
 import http.client
 import ipaddress
 import json
+import re
 import socket
 import socketserver
 import ssl
@@ -29,6 +30,7 @@ MAX_HEADER_COUNT = 100
 MAX_REQUEST_BODY = 64 * 1024
 MAX_RESPONSE_BODY = 2 * 1024 * 1024
 MAX_TIMEOUT = 12
+MAX_CONCURRENT_CLIENTS = 16
 _HISTORY = deque(maxlen=100)
 _HISTORY_LOCK = threading.Lock()
 _SENSITIVE = {"authorization", "proxy-authorization", "cookie", "set-cookie",
@@ -66,11 +68,25 @@ def _safe_headers(headers: list[tuple[str, str]]) -> list[dict]:
     return output
 
 
+def _redact_url_path(url: str) -> str:
+    parsed = urlsplit(url)
+    parts = []
+    for segment in parsed.path.split("/"):
+        lowered = segment.lower()
+        if (any(word in lowered for word in ("token", "secret", "password", "passwd", "reset", "session", "auth", "key"))
+                or re.fullmatch(r"eyJ[A-Za-z0-9_-]{12,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}", segment)
+                or len(segment) >= 48 and re.fullmatch(r"[A-Za-z0-9_-]+", segment)):
+            parts.append("[REDACTED]")
+        else:
+            parts.append(segment[:160])
+    return urlunsplit((parsed.scheme, parsed.netloc, "/".join(parts), "", ""))
+
+
 def _history_entry(method: str, url: str, status: int, request_headers: list[tuple[str, str]],
                    response_headers: list[tuple[str, str]], request_size: int,
                    response_size: int, duration_ms: int) -> None:
     parsed = urlsplit(url)
-    safe_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
+    safe_url = _redact_url_path(url)
     item = {
         "id": str(time.time_ns()), "method": method, "url": safe_url,
         "queryOmitted": bool(parsed.query), "status": status,
@@ -120,6 +136,26 @@ class _ProxyServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
     block_on_close = False
+
+    def __init__(self, server_address, request_handler):
+        self._client_slots = threading.BoundedSemaphore(MAX_CONCURRENT_CLIENTS)
+        super().__init__(server_address, request_handler)
+
+    def process_request(self, request, client_address):
+        if not self._client_slots.acquire(blocking=False):
+            request.close()
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._client_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._client_slots.release()
 
 
 class _ProxyHandler(socketserver.StreamRequestHandler):
