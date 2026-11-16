@@ -7,7 +7,7 @@ import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldChe
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
   durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
-  body: string; bodyBytes: number; truncated: boolean; capturedAt: string;
+  body: string; bodyBytes: number; truncated: boolean; capturedAt: string; responseBodyOmitted?: boolean; responseBodyLength?: number;
   requestHeaders?: Record<string, string>; requestBodyOmitted?: boolean; requestBodyLength?: number;
 };
 
@@ -102,16 +102,16 @@ export default function WebWorkbenchPage() {
         <p>{result.method} {result.target} · {result.durationMs} ms · pinned address {result.resolvedAddress} · {result.bodyBytes} bytes{result.truncated?" · response truncated":""}</p>
         <h3>Response headers</h3>
         <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{result.headers.map(h=>h.name+": "+h.value).join("\n")}</pre>
-        <h3>Response body</h3>
+        <h3>Response body{result.responseBodyOmitted ? " · omitted from history" : ""}</h3>
         <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{result.body}</pre>
       </div>}
       <div className="network-results">
         <h2><History size={14}/> Recent request history</h2>
         <p>{history.length} recent entries · process memory only; cleared when the companion stops</p>
-        {history.map(item=><button key={item.id} type="button" className="nav-item" style={{width:"100%",marginTop:6,textAlign:"left"}} onClick={()=>{setUrl(item.target);setConfirmationUrl(item.target);setMethod(item.method);setHeadersText(JSON.stringify(Object.fromEntries(Object.entries(item.requestHeaders || {}).filter(([, value])=>value !== "[REDACTED]")), null, 2));setBody("");setHistoryBodyOmitted(Boolean(item.requestBodyOmitted));setHistorySecretsRedacted(Object.values(item.requestHeaders || {}).includes("[REDACTED]"));setResult(item);setConfirmSend(false);setAuthorised(false);setConfirmStateChange(false);}}>{item.method} · {item.status} · {item.target}</button>)}
+        {history.map(item=><button key={item.id} type="button" className="nav-item" style={{width:"100%",marginTop:6,textAlign:"left"}} onClick={()=>{setUrl(item.target);setConfirmationUrl(item.target);setMethod(item.method);setHeadersText(JSON.stringify(Object.fromEntries(Object.entries(item.requestHeaders || {}).filter(([, value])=>value !== "[REDACTED]")), null, 2));setBody("");setHistoryBodyOmitted(Boolean(item.requestBodyOmitted));setHistorySecretsRedacted(Object.values(item.requestHeaders || {}).includes("[REDACTED]"));setResult({...item,body:item.responseBodyOmitted?"[Response body omitted from history. Send a new approved request to inspect it.]":item.body});setConfirmSend(false);setAuthorised(false);setConfirmStateChange(false);}}>{item.method} · {item.status} · {item.target}</button>)}
         {!history.length && <p>No requests yet. Send an approved request to populate this list.</p>}
       </div>
-      <div className="agent-disclaimer"><ShieldCheck size={12}/> The native request workbench supports approved request replay from in-memory history. Secrets are redacted and request-body contents are not retained. The native crawler and limited safe active checks are available separately; intercepting browser proxy, advanced vulnerability checks, fuzzing and WebSocket testing remain in development.</div>
+      <div className="agent-disclaimer"><ShieldCheck size={12}/> The native request workbench supports approved request replay from in-memory history. Request and response bodies are not retained in history; sensitive request and response headers are redacted. The live response remains visible only in the current workbench session. The native crawler and limited safe active checks are available separately; intercepting browser proxy, advanced vulnerability checks, fuzzing and WebSocket testing remain in development.</div>
     </section>
   </main>;
 }
