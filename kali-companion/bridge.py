@@ -304,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body_limit = 600000 if path == "/evidence/case/export" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path in {"/web/request", "/web/crawl", "/web/active-scan"} else MAX_BODY))))
+            body_limit = 600000 if path == "/evidence/case/export" else (131072 if path == "/proxy/intercepts/decision" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path in {"/web/request", "/web/crawl", "/web/active-scan"} else MAX_BODY)))))
             if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
@@ -312,7 +312,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Request body must be a JSON object.")
             if path == "/proxy/intercepts/decision":
                 try:
-                    return self.send_json(200, decide_intercept(data.get("id", ""), data.get("action", "")), origin)
+                    return self.send_json(200, decide_intercept(data.get("id", ""), data.get("action", ""), data.get("edits")), origin)
                 except ValueError as exc:
                     return self.send_json(409, {"error": str(exc)}, origin)
             if path == "/proxy/start":
