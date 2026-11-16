@@ -16,7 +16,8 @@ The first integration slice provides:
 - Explicit states for missing configuration, unreachable service, authentication failure, invalid configuration and successful connection.
 - No Burp API key or extension token is returned in responses or logs.
 - A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50` and `GET http://127.0.0.1:8766/v1/site-map?limit=50`, authenticated by a local random bearer token.
-- Proxy history and site-map exports are metadata-only, in-scope-only and capped at 100 items each. The `/burp-suite` dashboard page displays these results.\n- A separately confirmed Repeater handoff can place one in-scope captured request into Burp Repeater. Burp does not send it; the analyst must review it and manually click Send.
+- Proxy history and site-map exports are metadata-only, in-scope-only and capped at 100 items each. The `/burp-suite` dashboard page displays these results.
+- A separately confirmed Repeater handoff can place one in-scope captured request into Burp Repeater. Burp does not send it; the analyst must review it and manually click Send.
 
 The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: in-dashboard request/response editing, automated Repeater replay, Intruder task execution, active scanning, crawl tasks, issue retrieval or automated remediation.
 
