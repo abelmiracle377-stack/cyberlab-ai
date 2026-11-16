@@ -66,7 +66,7 @@ The paired local bridge exposes proxy controls through `/proxy/status`, `/proxy/
 - Enforces that exact scheme/host/port for every request and blocks other hosts, including cross-origin redirects when the browser follows them.
 - Supports HTTP/1.1 absolute-form HTTP requests and HTTPS CONNECT with TLS termination using a CyberLab-issued exact-host certificate.
 - Validates the upstream HTTPS certificate using the operating system's normal trust roots and pins the resolved address for each upstream connection.
-- Forwards request and response bodies but never retains body contents in proxy history. History redacts credentials, cookies, token-like headers, redirect locations and URL query strings.
+- Forwards request and response bodies but never retains body contents in proxy history. History redacts credentials, cookies, token-like headers, redirect locations and URL query strings. The workbench provides searchable session history with method/status filters and a detail view for redacted request/response headers, body lengths and timing. A selected entry can be loaded into the native Repeater as an unsent draft; query strings, bodies and redacted credentials are deliberately not restored, and the Repeater still requires fresh authorisation and explicit send approval.
 - Uses bounded header sizes, request bodies (64 KB), response bodies (2 MB) and network timeouts; oversized responses are rejected rather than partially relayed.
 - Requires a local CA created by explicit approval. The operator must manually install the public CA certificate in a dedicated test browser profile; CyberLab never changes system/browser trust stores or exports the private key.
 
