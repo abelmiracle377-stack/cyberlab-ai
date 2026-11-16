@@ -29,6 +29,7 @@ on:
       - "app/web-workbench/**"
       - "docs/NATIVE_WEB_WORKBENCH.md"
       - "app/page.tsx"
+      - "app/agent/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/burp-integration.yml"
