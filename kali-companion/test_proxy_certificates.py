@@ -60,6 +60,8 @@ class ProxyCertificateTests(unittest.TestCase):
         os.chmod(certs.CA_KEY, 0o644)
         self.assertFalse(certs.ca_status()["ready"])
         self.assertEqual(certs.ca_status()["privateKeyPermissions"], "not verified")
+        with self.assertRaisesRegex(ValueError, "ownership or permissions are unsafe"):
+            certs.create_local_ca()
 
     def test_ca_creation_refuses_to_overwrite_existing_key_material(self):
         certs.create_local_ca()
