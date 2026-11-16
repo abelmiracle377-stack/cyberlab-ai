@@ -48,6 +48,12 @@ class ProxyCertificateTests(unittest.TestCase):
         ))
         self.assertEqual(certs.issue_host_certificate("lab.example.test")["reused"], True)
 
+    def test_ca_status_rejects_world_readable_private_key(self):
+        certs.create_local_ca()
+        os.chmod(certs.CA_KEY, 0o644)
+        self.assertFalse(certs.ca_status()["ready"])
+        self.assertEqual(certs.ca_status()["privateKeyPermissions"], "not verified")
+
     def test_ca_creation_refuses_to_overwrite_existing_key_material(self):
         certs.create_local_ca()
         original = certs.CA_KEY.read_bytes()
