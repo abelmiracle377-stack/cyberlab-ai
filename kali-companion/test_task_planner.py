@@ -36,8 +36,6 @@ class TaskPlannerTests(unittest.TestCase):
         result = self.plan("Please scan 192.0.2.10 ports 22 and 443 for my authorised lab.")
         self.assertEqual(result["target"], "192.0.2.10")
         self.assertTrue(result["requires_authorisation"])
-        self.assertIn("CyberLab HTTP Workbench", [tool["name"] for tool in result["suggested_tools"]])
-        self.assertNotIn("Burp Suite", [tool["name"] for tool in result["suggested_tools"]])
         self.assertEqual(result["status"], "plan_only")
         self.assertFalse(result["execution_started"])
         self.assertTrue(result["missing_information"])
@@ -53,6 +51,8 @@ class TaskPlannerTests(unittest.TestCase):
         self.assertIn("web_assessment", result["categories"])
         self.assertEqual(result["target"], "lab.example.org")
         self.assertTrue(result["requires_authorisation"])
+        self.assertIn("CyberLab HTTP Workbench", [tool["name"] for tool in result["suggested_tools"]])
+        self.assertNotIn("Burp Suite", [tool["name"] for tool in result["suggested_tools"]])
 
     def test_htb_question_without_target_asks_for_lab_address(self):
         result = self.plan("Help solve this Hack The Box question: what service runs on the unusual port?")
