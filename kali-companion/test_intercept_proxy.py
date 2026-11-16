@@ -425,5 +425,117 @@ class NativeInterceptProxyTests(unittest.TestCase):
             intercept_proxy._INTERCEPTS.pop("a" * 32, None)
 
 
+    def test_manual_response_interception_pauses_until_operator_forwards(self):
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                status = proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-RESPONSE-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptResponses": True, "confirmInterceptResponses": True,
+                })
+                self.assertTrue(status["interceptResponses"])
+                result = {}
+
+                def send_request():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/response-inspect HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        chunks = []
+                        while True:
+                            chunk = client.recv(8192)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        result["response"] = b"".join(chunks)
+
+                worker = threading.Thread(target=send_request)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_response_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                self.assertEqual(pending[0]["status"], 200)
+                self.assertIn("local-lab-response", pending[0]["body"])
+                self.assertNotIn("secret-cookie", str(pending[0]))
+                self.assertNotIn("secret-password", str(pending[0]))
+                self.assertTrue(worker.is_alive(), "Client must remain paused until the operator decides.")
+                intercept_proxy.decide_response_intercept(pending[0]["id"], "forward")
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                self.assertIn(b"200 OK", result["response"])
+                self.assertIn(b"local-lab-response", result["response"])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
+    def test_manual_response_interception_can_drop_origin_response(self):
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-RESPONSE-002",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptResponses": True, "confirmInterceptResponses": True,
+                })
+                result = {}
+
+                def send_request():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/response-drop HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        chunks = []
+                        while True:
+                            chunk = client.recv(8192)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        result["response"] = b"".join(chunks)
+
+                worker = threading.Thread(target=send_request)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_response_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                intercept_proxy.decide_response_intercept(pending[0]["id"], "drop")
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                self.assertIn(b"502 Error", result["response"])
+                self.assertIn(b"Response dropped by the CyberLab operator", result["response"])
+                self.assertNotIn(b"local-lab-response", result["response"])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
+
 if __name__ == "__main__":
     unittest.main()
