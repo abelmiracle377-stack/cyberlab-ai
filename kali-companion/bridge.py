@@ -24,6 +24,7 @@ from forensics import get_image_job, inspect_image_filesystem, inspect_image_par
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
 from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater
+from network_capture import list_capture_interfaces, capture_packets
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -47,6 +48,7 @@ evidence_lock = threading.Lock()
 artifact_lock = threading.Lock()
 case_lock = threading.Lock()
 case_export_lock = threading.Lock()
+network_capture_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -163,6 +165,7 @@ def system_snapshot() -> dict:
         "disk_root_bytes": {"total": disk.total, "used": disk.used, "free": disk.free},
         "process_count": process_count,
         "nmap_available": bool(shutil.which("nmap")),
+        "tcpdump_available": bool(shutil.which("tcpdump")),
         "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "scope": "Local host health summary only; no usernames, process names, command lines, files or network payloads are collected.",
     }
@@ -210,12 +213,14 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
         if path == "/tools":
             return self.send_json(200, inspect_tool_catalog(), origin)
+        if path == "/network/interfaces":
+            return self.send_json(200, list_capture_interfaces(), origin)
         if path == "/burp/status":
             return self.send_json(200, inspect_burp_status(), origin)
         if path == "/burp/proxy/history":
@@ -258,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -270,6 +275,23 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError("Request body must be a JSON object.")
+            if path == "/network/capture":
+                if not network_capture_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A packet capture is already running."}, origin)
+                try:
+                    result = capture_packets(
+                        interface=data.get("interface"),
+                        confirmation_interface=data.get("confirmationInterface"),
+                        authorization_confirmed=data.get("authorizationConfirmed") is True,
+                        authorization_reference=data.get("authorizationReference"),
+                        duration_seconds=data.get("durationSeconds", 10),
+                        packet_limit=data.get("packetLimit", 500),
+                        filter_name=data.get("filter", "ssh"),
+                    )
+                    status_code = 200 if result.get("status") == "completed" else (503 if result.get("status") == "unavailable" else 502)
+                    return self.send_json(status_code, result, origin)
+                finally:
+                    network_capture_lock.release()
             if path == "/burp/repeater/from-history":
                 if data.get("confirmOpenInRepeater") is not True:
                     return self.send_json(400, {"status": "confirmation_required", "request_sent": False}, origin)
