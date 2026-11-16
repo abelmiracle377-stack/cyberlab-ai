@@ -15,10 +15,10 @@ The first integration slice provides:
 - A paired Kali bridge endpoint: `GET /burp/status`.
 - Explicit states for missing configuration, unreachable service, authentication failure, invalid configuration and successful connection.
 - No Burp API key or extension token is returned in responses or logs.
-- A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50`, authenticated by a local random bearer token.
+- A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50` and `GET http://127.0.0.1:8766/v1/site-map?limit=50`, authenticated by a local random bearer token.
 - Proxy history export is metadata-only, in-scope-only and capped at 100 items.
 
-The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: site-map browsing, request/response editing, Repeater, Intruder, active scanning, crawl tasks, issue retrieval or automated remediation.
+The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: request/response editing, Repeater, Intruder, active scanning, crawl tasks, issue retrieval or automated remediation.
 
 ## Kali-side setup
 
@@ -71,7 +71,7 @@ Burp edition is reported as `unknown` until it can be verified. Scanner capabili
 ## Next implementation phases
 
 1. Add a first-party CyberLab Montoya extension with authenticated loopback endpoints. Do not depend on an unauthenticated third-party REST extension.
-2. Add read-only proxy-history and site-map retrieval with pagination, redaction and scope filtering.
+2. Add pagination and stronger query filtering for proxy-history and site-map retrieval; basic bounded read-only metadata retrieval is now implemented.
 3. Add controlled request handoff to Repeater, followed by explicitly approved request replay.
 4. Add Intruder task preparation with strict request-count and rate ceilings; require approval before sending.
 5. Add Professional-edition scanner detection, crawl/audit task creation and task/result polling, with an explicit edition gate.
