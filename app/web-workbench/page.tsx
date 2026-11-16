@@ -261,6 +261,7 @@ export default function WebWorkbenchPage() {
       <div className="agent-heading">
         <div className="agent-overline">NATIVE HTTP TESTING / 001</div>
         <h1>Web request workbench</h1>
+        <p><Link href="/web-repeater" className="nav-item">Open native request repeater →</Link></p>
         <p>Compose, send, inspect and replay HTTP requests using CyberLab's own local engine. No external proxy is required.</p>
       </div>
       <div className="scope-warning"><AlertTriangle size={14}/> Active requests contact the selected server. Use only an asset covered by written permission. The engine pins DNS resolution, blocks private addresses except explicit loopback lab mode, does not follow redirects, and caps request/response sizes.</div>\n      <div className="network-results">
