@@ -16,10 +16,12 @@ import java.security.SecureRandom;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
 
 public final class CyberLabBurpExtension implements BurpExtension {
     private HttpServer server;
+    private ExecutorService executor;
     private static final int PORT = 8766;
     private static final Pattern SECRET_QUERY = Pattern.compile(
         "(?i)([?&](?:access_token|api_key|apikey|auth|authorization|code|key|password|passwd|secret|session|signature|sig|token)=)[^&#]*"
@@ -35,11 +37,12 @@ public final class CyberLabBurpExtension implements BurpExtension {
             );
             server.createContext("/v1/health", e -> health(e, token));
             server.createContext("/v1/proxy/history", e -> history(e, token, api));
-            server.setExecutor(Executors.newFixedThreadPool(2, r -> {
+            executor = Executors.newFixedThreadPool(2, r -> {
                 Thread t = new Thread(r, "cyberlab-burp-api");
                 t.setDaemon(true);
                 return t;
-            }));
+            });
+            server.setExecutor(executor);
             server.start();
             api.logging().logToOutput("CyberLab local Burp connector listening on 127.0.0.1:"
                 + PORT + "; token stored in ~/.config/cyberlab/burp-extension-token.");
@@ -50,12 +53,14 @@ public final class CyberLabBurpExtension implements BurpExtension {
     }
 
     private static void health(HttpExchange e, String token) throws IOException {
+        if (!"/v1/health".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
         if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
         if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
         send(e, 200, "{\"status\":\"ok\",\"connector\":\"montoya\",\"read_only\":true}");
     }
 
     private static void history(HttpExchange e, String token, MontoyaApi api) throws IOException {
+        if (!"/v1/proxy/history".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
         if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
         if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
         int limit = limit(e.getRequestURI().getRawQuery());
@@ -68,6 +73,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
                 if (!request.isInScope()) continue;
                 var response = entry.hasResponse() ? entry.response() : null;
                 String url = SECRET_QUERY.matcher(request.url()).replaceAll("$1[REDACTED]");
+                url = url.replaceFirst("(?i)^(https?://)[^/@]+@", "$1");
                 items.add("{\"id\":" + entry.id()
                     + ",\"timestamp\":" + json(entry.time().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
                     + ",\"method\":" + json(request.method())
