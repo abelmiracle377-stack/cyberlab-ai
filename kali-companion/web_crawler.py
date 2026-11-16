@@ -190,11 +190,11 @@ def run_crawl(data: dict) -> dict:
         page = {"url": url, "depth": depth, "status": response.get("status"), "contentType": content_type,
                 "bodyBytes": response.get("bodyBytes", len(body.encode("utf-8"))),
                 "responseSha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
-                "truncated": response.get("truncated") is True, "linksDiscovered": 0, "redirectFollowed": False}
+                "truncated": response.get("truncated") is True, "linksDiscovered": 0, "redirectFollowed": False, "forms": []}
         pages.append(page)
         cookie_count += _review_response(url, response, findings, finding_keys)
 
-        if "text/html" not in content_type.lower() or depth >= max_depth or page["truncated"]:
+        if "text/html" not in content_type.lower() or page["truncated"]:
             continue
         parser = _PageParser()
         try:
@@ -202,6 +202,9 @@ def run_crawl(data: dict) -> dict:
         except Exception:
             continue
         form_count += len(parser.forms)
+        page["forms"] = [{"action": urljoin(url, form.get("action") or url), "method": form.get("method", "GET"), "fields": form.get("inputs", [])[:30], "submitted": False} for form in parser.forms[:50]]
+        if depth >= max_depth:
+            continue
         links_added = 0
         for href in parser.links[:MAX_LINKS_PER_PAGE]:
             if not isinstance(href, str) or len(href) > MAX_URL_LENGTH:
