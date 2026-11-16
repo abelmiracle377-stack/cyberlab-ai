@@ -7,7 +7,7 @@ A command-line research companion for Kali Linux and other Linux distributions. 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-sudo apt update && sudo apt install -y figlet chafa nmap gddrescue testdisk foremost ntfs-3g sleuth-kit
+sudo apt update && sudo apt install -y figlet chafa nmap openssl gddrescue testdisk foremost ntfs-3g sleuth-kit
 python3 kali-companion/cyberlab.py doctor
 python3 kali-companion/cyberlab.py --help
 ```
