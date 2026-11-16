@@ -115,6 +115,7 @@ class WebTestingValidationTests(unittest.TestCase):
                 {"name": "Content-Type", "value": "text/plain"},
                 {"name": "Set-Cookie", "value": "session=secret; HttpOnly"},
                 {"name": "X-Auth-Token", "value": "secret-token"},
+                {"name": "Location", "value": "https://lab.example.test/next?ticket=secret-redirect"},
             ],
         }
         history = web_testing._safe_history_response(live)
@@ -126,9 +127,11 @@ class WebTestingValidationTests(unittest.TestCase):
         self.assertEqual(history["headers"][0]["value"], "text/plain")
         self.assertEqual(history["headers"][1]["value"], "[REDACTED]")
         self.assertEqual(history["headers"][2]["value"], "[REDACTED]")
+        self.assertEqual(history["headers"][3]["value"], "[REDACTED]")
         self.assertNotIn("secret-response", str(history))
         self.assertNotIn("secret-token", str(history))
         self.assertNotIn("secret-query", str(history))
+        self.assertNotIn("secret-redirect", str(history))
 
 
     @patch("web_testing.socket.getaddrinfo")
