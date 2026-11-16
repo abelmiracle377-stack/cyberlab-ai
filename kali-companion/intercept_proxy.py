@@ -445,6 +445,7 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 method, path, headers, body = edited["method"], edited["path"], edited["headers"], edited["body"]
                 body_size = len(body)
                 connection_tokens = set()
+                url = scheme + "://" + (f"[{host}]" if ":" in host else host) + (f":{port}" if port not in (80, 443) else "") + path
         started = time.monotonic()
         connection = (_PinnedHTTPSConnection(host, port, address) if scheme == "https"
                       else _PinnedHTTPConnection(host, port, address))
