@@ -44,7 +44,7 @@ TOOL_CATALOG = [
     {"name": "Metasploit Framework", "category": "Exploitation research", "binary": "msfconsole", "package": "metasploit-framework", "mode": "safe_metadata_only", "purpose": "Module search, module information and safe checks; no unattended exploit or payload execution."},
     {"name": "SearchSploit", "category": "Exploitation research", "binary": "searchsploit", "package": "exploitdb", "mode": "passive", "purpose": "Local Exploit-DB reference search."},
     {"name": "BeEF", "category": "Exploitation research", "binary": "beef-xss", "package": "beef-xss", "mode": "blocked_automation", "purpose": "Browser exploitation framework; no unattended hook or control actions."},
-    {"name": "tcpdump", "category": "Traffic analysis", "binary": "tcpdump", "package": "tcpdump", "mode": "manual_only", "purpose": "Packet capture; capture requires explicit interface and consent."},
+    {"name": "tcpdump", "category": "Traffic analysis", "binary": "tcpdump", "package": "tcpdump", "mode": "passive_capture", "purpose": "Bounded passive packet capture through CyberLab's consent-gated local network capture module."},
     {"name": "Wireshark / TShark", "category": "Traffic analysis", "binary": "tshark", "package": "tshark", "mode": "local_analysis", "purpose": "Read and analyse packet captures."},
     {"name": "Bettercap", "category": "Traffic analysis", "binary": "bettercap", "package": "bettercap", "mode": "manual_only", "purpose": "Network analysis; active interception features are not automated."},
     {"name": "Impacket", "category": "Active Directory", "binary": "impacket-smbclient", "package": "python3-impacket", "mode": "manual_only", "purpose": "Protocol tooling for authorised Windows/AD labs."},
