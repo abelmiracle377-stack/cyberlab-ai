@@ -136,6 +136,30 @@ def _safe_history_request(request: dict) -> dict:
     }
 
 
+SENSITIVE_RESPONSE_HEADERS = {
+    "authorization", "proxy-authenticate", "www-authenticate", "authentication-info",
+    "proxy-authentication-info", "cookie", "set-cookie", "x-api-key", "api-key",
+    "x-auth-token", "x-access-token",
+}
+
+
+def _safe_history_response(result: dict) -> dict:
+    """Retain replay metadata and response summary, never response secrets or bodies."""
+    safe = dict(result)
+    safe_headers = []
+    for item in result.get("headers", []):
+        name = str(item.get("name", ""))
+        lowered = name.lower()
+        sensitive = (lowered in SENSITIVE_RESPONSE_HEADERS or "token" in lowered
+                     or "secret" in lowered or "session" in lowered)
+        safe_headers.append({"name": name, "value": "[REDACTED]" if sensitive else item.get("value", "")})
+    safe["headers"] = safe_headers
+    safe["responseBodyOmitted"] = bool(result.get("bodyBytes", 0))
+    safe["responseBodyLength"] = result.get("bodyBytes", 0)
+    safe["body"] = ""
+    return safe
+
+
 def execute_request(data: dict) -> dict:
     request = validate_request(data)
     started = time.monotonic()
@@ -172,7 +196,7 @@ def execute_request(data: dict) -> dict:
             "capturedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         with _HISTORY_LOCK:
-            _HISTORY.appendleft(result)
+            _HISTORY.appendleft(_safe_history_response(result))
         return {"status": "completed", **result}
     finally:
         try:
