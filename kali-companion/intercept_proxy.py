@@ -94,7 +94,9 @@ def pending_intercepts() -> dict:
 
 
 def decide_intercept(intercept_id: str, action: str) -> dict:
-    if action not in {"forward", "drop"}:
+    if not isinstance(intercept_id, str) or not re.fullmatch(r"[a-f0-9]{32}", intercept_id):
+        raise ValueError("Interception request ID is invalid.")
+    if not isinstance(action, str) or action not in {"forward", "drop"}:
         raise ValueError("Interception decision must be forward or drop.")
     with _INTERCEPT_LOCK:
         entry = _INTERCEPTS.get(intercept_id)
