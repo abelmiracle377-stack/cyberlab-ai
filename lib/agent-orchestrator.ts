@@ -15,7 +15,7 @@ export function routeSpecialist(prompt: string) {
   const text = prompt.toLowerCase();
   let specialist: Specialist = "general";
   if (/\b(burp|burpsuite|repeater|intruder|web application|web app|website security|web security|api security|owasp zap)\b/.test(text)) specialist = "web-application-security";
-  if (/\b(cve|cvss|vulnerab|exploitability|patch|advisory|kev|epss)\b/.test(text)) specialist = "vulnerability-intelligence";
+  else if (/\b(cve|cvss|vulnerab|exploitability|patch|advisory|kev|epss)\b/.test(text)) specialist = "vulnerability-intelligence";
   else if (/\b(malware|ransomware|trojan|sample|yara|hash|ioc|suspicious file)\b/.test(text)) specialist = "malware-analysis";
   else if (/\b(reverse engineer|disassembl|decompil|elf|pe file|mach-o|binary|firmware)\b/.test(text)) specialist = "reverse-engineering";
   else if (/\b(soc|incident|blue team|defend|mitre|att&ck|endpoint|telemetry|log analysis)\b/.test(text)) specialist = "blue-team";
