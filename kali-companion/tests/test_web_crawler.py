@@ -58,7 +58,8 @@ class WebCrawlerTests(unittest.TestCase):
         self.assertIn("CyberLab Web Crawler & Baseline Auditor", names)
         phases = {item["phase"]: item for item in plan["recommended_workflow"]}
         self.assertEqual(phases["application discovery"]["status"], "available")
-        self.assertEqual(phases["active vulnerability validation"]["status"], "not_implemented")
+        self.assertEqual(phases["safe active checks"]["status"], "available_limited")
+        self.assertEqual(phases["advanced vulnerability validation"]["status"], "not_implemented")
 
     @patch("web_crawler.time.sleep")
     @patch("web_crawler.validate_request", return_value={"addresses": ["127.0.0.1"]})
