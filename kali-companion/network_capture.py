@@ -78,7 +78,7 @@ def _validate_capture_request(
         raise ValueError("Capture duration must be between 1 and 30 seconds.")
     if type(packet_limit) is not int or not 1 <= packet_limit <= MAX_PACKETS:
         raise ValueError("Packet limit must be between 1 and 2,000.")
-    if filter_name not in CAPTURE_FILTERS:
+    if not isinstance(filter_name, str) or filter_name not in CAPTURE_FILTERS:
         raise ValueError("Choose one of the supported filters: ssh, dns, tcp, udp or icmp.")
     return interface, duration_seconds, packet_limit, filter_name
 
@@ -169,7 +169,10 @@ def capture_packets(
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
         if process.poll() is None:
-            process.send_signal(signal.SIGINT)
+            try:
+                process.send_signal(signal.SIGINT)
+            except ProcessLookupError:
+                pass
         try:
             _stdout, stderr = process.communicate(timeout=3)
         except subprocess.TimeoutExpired:
