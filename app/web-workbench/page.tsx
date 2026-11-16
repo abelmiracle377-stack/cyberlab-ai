@@ -6,6 +6,7 @@ import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldChe
 
 type ProxyHistoryItem = { id: string; method: string; url: string; status: number; queryOmitted?: boolean; requestBodyOmitted?: boolean; responseBodyOmitted?: boolean; durationMs: number; };
 type PendingIntercept = { id: string; method: string; url: string; path: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; body: string; bodyEditable: boolean; createdAt: string; decisionTimeoutSeconds: number; };
+type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type InterceptDraft = { method: string; path: string; headersText: string; body: string };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
@@ -44,6 +45,10 @@ export default function WebWorkbenchPage() {
   const [proxyMutatingConsent, setProxyMutatingConsent] = useState(false);
   const [proxyInterceptConsent, setProxyInterceptConsent] = useState(false);
   const [proxyInterceptActive, setProxyInterceptActive] = useState(false);
+  const [proxyResponseInterceptConsent, setProxyResponseInterceptConsent] = useState(false);
+  const [proxyResponseInterceptActive, setProxyResponseInterceptActive] = useState(false);
+  const [pendingResponseIntercepts, setPendingResponseIntercepts] = useState<PendingResponseIntercept[]>([]);
+  const [responseInterceptBusyId, setResponseInterceptBusyId] = useState("");
   const [pendingIntercepts, setPendingIntercepts] = useState<PendingIntercept[]>([]);
   const [interceptDrafts, setInterceptDrafts] = useState<Record<string, InterceptDraft>>({});
   const [interceptBusyId, setInterceptBusyId] = useState("");
@@ -92,6 +97,7 @@ export default function WebWorkbenchPage() {
     setProxyActiveScope(data.scope || "");
     setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
     setProxyInterceptActive(Boolean(data.interceptRequests));
+    setProxyResponseInterceptActive(Boolean(data.interceptResponses));
     if (data.listenPort) setProxyPort(data.listenPort);
   }
 
@@ -121,6 +127,32 @@ export default function WebWorkbenchPage() {
       for (const id of Object.keys(next)) if (!items.some(item => item.id === id)) delete next[id];
       return next;
     });
+  }
+
+  async function loadPendingResponseIntercepts() {
+    const pairing = token();
+    if (!pairing) return;
+    const response = await fetch("http://127.0.0.1:8765/proxy/response-intercepts", { headers: { Authorization: "Bearer " + pairing } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load pending intercepted responses.");
+    setPendingResponseIntercepts(data.items || []);
+  }
+
+  async function decidePendingResponseIntercept(id: string, action: "forward" | "drop") {
+    setResponseInterceptBusyId(id); setProxyError("");
+    try {
+      const pairing = token();
+      if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/proxy/response-intercepts/decision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+        body: JSON.stringify({ id, action }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not apply the response interception decision.");
+      await loadPendingResponseIntercepts();
+    } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected response interception decision error."); }
+    finally { setResponseInterceptBusyId(""); }
   }
 
   async function decidePendingIntercept(id: string, action: "forward" | "forward_edited" | "drop") {
@@ -158,7 +190,7 @@ export default function WebWorkbenchPage() {
       const response = await fetch("http://127.0.0.1:8765/proxy/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
-        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081, allowStateChangingMethods: proxyMutatingConsent, confirmStateChangingMethods: proxyMutatingConsent, interceptRequests: proxyInterceptConsent, confirmInterceptRequests: proxyInterceptConsent }),
+        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081, allowStateChangingMethods: proxyMutatingConsent, confirmStateChangingMethods: proxyMutatingConsent, interceptRequests: proxyInterceptConsent, confirmInterceptRequests: proxyInterceptConsent, interceptResponses: proxyResponseInterceptConsent, confirmInterceptResponses: proxyResponseInterceptConsent }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not start the native interception proxy.");
@@ -166,12 +198,15 @@ export default function WebWorkbenchPage() {
       setProxyActiveScope(data.scope || "");
       setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
       setProxyInterceptActive(Boolean(data.interceptRequests));
+      setProxyResponseInterceptActive(Boolean(data.interceptResponses));
       setProxyPort(data.listenPort || 8081);
       setProxyStartConsent(false);
       setProxyMutatingConsent(false);
       setProxyInterceptConsent(false);
+      setProxyResponseInterceptConsent(false);
       await loadProxyHistory();
       await loadPendingIntercepts();
+      await loadPendingResponseIntercepts();
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy start error."); }
     finally { setProxyBusy(false); }
   }
@@ -192,9 +227,12 @@ export default function WebWorkbenchPage() {
       setProxyActiveScope(data.scope || "");
       setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
       setProxyInterceptActive(Boolean(data.interceptRequests));
+      setProxyResponseInterceptActive(Boolean(data.interceptResponses));
       setProxyMutatingConsent(false);
       setProxyInterceptConsent(false);
+      setProxyResponseInterceptConsent(false);
       await loadPendingIntercepts();
+      await loadPendingResponseIntercepts();
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy stop error."); }
     finally { setProxyBusy(false); }
   }
@@ -220,10 +258,13 @@ export default function WebWorkbenchPage() {
 
   useEffect(() => { loadHistory().catch(() => undefined); loadCaStatus().catch(() => undefined); loadProxyStatus().catch(() => undefined); loadProxyHistory().catch(() => undefined); loadPendingIntercepts().catch(() => undefined); }, []);
   useEffect(() => {
-    if (!proxyInterceptActive) return;
-    const interval = window.setInterval(() => { loadPendingIntercepts().catch(() => undefined); }, 1000);
+    if (!proxyInterceptActive && !proxyResponseInterceptActive) return;
+    const interval = window.setInterval(() => {
+      if (proxyInterceptActive) loadPendingIntercepts().catch(() => undefined);
+      if (proxyResponseInterceptActive) loadPendingResponseIntercepts().catch(() => undefined);
+    }, 1000);
     return () => window.clearInterval(interval);
-  }, [proxyInterceptActive]);
+  }, [proxyInterceptActive, proxyResponseInterceptActive]);
 
   async function sendRequest(event: React.FormEvent) {
     event.preventDefault();
@@ -273,12 +314,13 @@ export default function WebWorkbenchPage() {
           <div className="scope-checks"><label><input type="checkbox" checked={proxyAuthorised} onChange={e=>setProxyAuthorised(e.target.checked)}/> I own this origin or have explicit written authorisation to inspect its traffic.</label></div>
           <div className="scope-checks"><label><input type="checkbox" checked={proxyStartConsent} onChange={e=>setProxyStartConsent(e.target.checked)}/> I explicitly approve starting the local proxy for this exact origin. Browser requests to this origin will be forwarded while it is running.</label></div>
           <div className="scope-checks"><label><input type="checkbox" checked={proxyMutatingConsent} onChange={e=>setProxyMutatingConsent(e.target.checked)}/> I separately approve forwarding POST, PUT, PATCH and DELETE requests. These methods are blocked unless I enable this.</label></div>
-          <div className="scope-checks"><label><input type="checkbox" checked={proxyInterceptConsent} onChange={e=>setProxyInterceptConsent(e.target.checked)}/> Enable manual interception: pause each in-scope request until I explicitly choose Forward or Drop in this workbench. Requests time out and are dropped if I do not decide within 120 seconds.</label></div>
+          <div className="scope-checks"><label><input type="checkbox" checked={proxyInterceptConsent} onChange={e=>setProxyInterceptConsent(e.target.checked)}/> Enable manual request interception: pause each in-scope request until I choose Forward, edit and forward, or Drop. Requests time out and are dropped after 120 seconds.</label></div>
+          <div className="scope-checks"><label><input type="checkbox" checked={proxyResponseInterceptConsent} onChange={e=>setProxyResponseInterceptConsent(e.target.checked)}/> Enable manual response interception: pause each origin response before it reaches the browser so I can inspect its status, redacted headers and bounded text preview, then Forward or Drop. Responses time out and are dropped after 120 seconds.</label></div>
           <button className="report-download" type="button" disabled={proxyBusy || !proxyAuthorised || !proxyStartConsent || proxyOrigin !== proxyConfirmation || !reference.trim() || (proxyOrigin.startsWith("https://") && !caReady)} onClick={startProxy}>{proxyBusy ? "Starting proxy…" : "Start native interception proxy"}</button>
         </>}
         {proxyActive && <button className="report-download" type="button" disabled={proxyBusy} onClick={stopProxy}>{proxyBusy ? "Stopping proxy…" : "Stop interception proxy"}</button>}
         {proxyError && <div className="agent-error"><AlertTriangle size={14}/>{proxyError}</div>}
-        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked. State-changing methods are {proxyMutatingActive ? "enabled for this session" : "blocked for this session"}. Manual interception is {proxyInterceptActive ? "enabled; requests wait for an operator decision" : "disabled"}.</p>
+        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked. State-changing methods are {proxyMutatingActive ? "enabled for this session" : "blocked for this session"}. Manual request interception is {proxyInterceptActive ? "enabled; requests wait for an operator decision" : "disabled"}; response interception is {proxyResponseInterceptActive ? "enabled; origin responses wait for an operator decision" : "disabled"}.</p>
         {proxyInterceptActive && <>
           <h3>Requests waiting for your decision</h3>
           <button className="report-download" type="button" onClick={()=>loadPendingIntercepts().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh pending requests."))}>Refresh pending requests</button>
@@ -294,6 +336,21 @@ export default function WebWorkbenchPage() {
             <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"drop")}>Drop request</button>
           </div>)}
           {!pendingIntercepts.length && <p>No requests are currently waiting.</p>}
+        </>}
+
+        {proxyResponseInterceptActive && <>
+          <h3>Responses waiting for your decision</h3>
+          <button className="report-download" type="button" onClick={()=>loadPendingResponseIntercepts().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh pending responses."))}>Refresh pending responses</button>
+          {pendingResponseIntercepts.map(item=><div className="scope-warning" key={item.id}>
+            <strong>{item.method} · {item.status} {item.reason} · {item.url}</strong>
+            <p>Captured {item.createdAt}. Response body: {item.bodyLength} bytes. Headers are redacted where sensitive. Only text-like response bodies are previewed, up to 16 KB; binary bodies are not displayed. The origin response is held in companion memory until a decision or timeout.</p>
+            <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>{JSON.stringify(item.headers,null,2)}</pre>
+            {item.bodyVisible && <><label>Text response preview{item.bodyTruncated ? " · first 16 KB only" : ""}<textarea rows={8} readOnly value={item.body}/></label></>}
+            {!item.bodyVisible && <p>Response body preview unavailable for this content type or encoding.</p>}
+            <button className="report-download" type="button" disabled={Boolean(responseInterceptBusyId)} onClick={()=>decidePendingResponseIntercept(item.id,"forward")}>{responseInterceptBusyId===item.id ? "Applying…" : "Forward response"}</button>
+            <button className="report-download" type="button" disabled={Boolean(responseInterceptBusyId)} onClick={()=>decidePendingResponseIntercept(item.id,"drop")}>Drop response</button>
+          </div>)}
+          {!pendingResponseIntercepts.length && <p>No origin responses are currently waiting.</p>}
         </>}
         <h3>Recent intercepted requests</h3>
         <button className="report-download" type="button" onClick={()=>loadProxyHistory().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh proxy history."))}>Refresh proxy history</button>
