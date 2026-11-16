@@ -106,6 +106,7 @@ export default function WebWorkbenchPage() {
       setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
       setProxyPort(data.listenPort || 8081);
       setProxyStartConsent(false);
+      setProxyMutatingConsent(false);
       await loadProxyHistory();
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy start error."); }
     finally { setProxyBusy(false); }
@@ -126,6 +127,7 @@ export default function WebWorkbenchPage() {
       setProxyActive(Boolean(data.active));
       setProxyActiveScope(data.scope || "");
       setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
+      setProxyMutatingConsent(false);
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy stop error."); }
     finally { setProxyBusy(false); }
   }
