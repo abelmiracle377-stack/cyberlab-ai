@@ -110,6 +110,28 @@ class BurpConnectorTests(unittest.TestCase):
         self.assertNotIn("other.example.net", repr(result))
         self.assertIn("limit=20", open_url.call_args.args[0].full_url)
 
+    def test_repeater_handoff_requires_explicit_confirmation(self):
+        with patch.object(burp_connector, "urlopen") as open_url:
+            result = burp_connector.open_burp_history_in_repeater(12, confirmed=False)
+        self.assertEqual(result["status"], "confirmation_required")
+        self.assertFalse(result["request_sent"])
+        open_url.assert_not_called()
+
+    def test_repeater_handoff_is_posted_and_never_claims_request_sent(self):
+        class RepeaterResponse(FakeResponse):
+            def read(self, _limit):
+                import json
+                return json.dumps({"status": "opened_in_repeater", "request_sent": False}).encode("utf-8")
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=RepeaterResponse()) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.open_burp_history_in_repeater(12, confirmed=True)
+        self.assertEqual(result["status"], "opened_in_repeater")
+        self.assertFalse(result["request_sent"])
+        request = open_url.call_args.args[0]
+        self.assertEqual(request.method, "POST")
+        self.assertIn("id=12&confirm=true", request.full_url)
+
     def test_rejects_url_credentials(self):
         result = burp_connector.inspect_burp_status(
             api_url="http://user:pass@127.0.0.1:1337",
