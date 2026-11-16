@@ -1,0 +1,148 @@
+package ai.cyberlab.burp;
+
+import burp.api.montoya.BurpExtension;
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.proxy.ProxyHttpRequestResponse;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermission;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
+
+public final class CyberLabBurpExtension implements BurpExtension {
+    private static final int PORT = 8766;
+    private static final Pattern SECRET_QUERY = Pattern.compile(
+        "(?i)([?&](?:access_token|api_key|apikey|auth|authorization|code|key|password|passwd|secret|session|signature|sig|token)=)[^&#]*"
+    );
+
+    @Override
+    public void initialize(MontoyaApi api) {
+        api.extension().setName("CyberLab AI — Local Burp Connector");
+        try {
+            String token = token();
+            HttpServer server = HttpServer.create(
+                new InetSocketAddress(InetAddress.getByName("127.0.0.1"), PORT), 16
+            );
+            server.createContext("/v1/health", e -> health(e, token));
+            server.createContext("/v1/proxy/history", e -> history(e, token, api));
+            server.setExecutor(Executors.newFixedThreadPool(2, r -> {
+                Thread t = new Thread(r, "cyberlab-burp-api");
+                t.setDaemon(true);
+                return t;
+            }));
+            server.start();
+            api.logging().logToOutput("CyberLab local Burp connector listening on 127.0.0.1:"
+                + PORT + "; token stored in ~/.config/cyberlab/burp-extension-token.");
+        } catch (Exception ex) {
+            api.logging().logToError("CyberLab Burp connector failed to start: "
+                + ex.getClass().getSimpleName());
+        }
+    }
+
+    private static void health(HttpExchange e, String token) throws IOException {
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        send(e, 200, "{\"status\":\"ok\",\"connector\":\"montoya\",\"read_only\":true}");
+    }
+
+    private static void history(HttpExchange e, String token, MontoyaApi api) throws IOException {
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        int limit = limit(e.getRequestURI().getRawQuery());
+        List<ProxyHttpRequestResponse> all = api.proxy().history();
+        List<String> items = new ArrayList<>();
+        for (int i = Math.max(0, all.size() - limit); i < all.size(); i++) {
+            ProxyHttpRequestResponse entry = all.get(i);
+            try {
+                var request = entry.finalRequest();
+                if (!request.isInScope()) continue;
+                var response = entry.hasResponse() ? entry.response() : null;
+                String url = SECRET_QUERY.matcher(request.url()).replaceAll("$1[REDACTED]");
+                items.add("{\"id\":" + entry.id()
+                    + ",\"timestamp\":" + json(entry.time().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                    + ",\"method\":" + json(request.method())
+                    + ",\"url\":" + json(url)
+                    + ",\"status_code\":" + (response == null ? "null" : Short.toString(response.statusCode()))
+                    + ",\"in_scope\":true}");
+            } catch (RuntimeException ignored) { }
+        }
+        send(e, 200, "{\"status\":\"ok\",\"source\":\"burp_proxy_history\","
+            + "\"read_only\":true,\"count\":" + items.size() + ",\"items\":["
+            + String.join(",", items) + "]}");
+    }
+
+    private static int limit(String query) {
+        if (query != null) for (String pair : query.split("&")) {
+            String[] p = pair.split("=", 2);
+            if (p.length == 2 && p[0].equals("limit")) {
+                try { return Math.max(1, Math.min(100, Integer.parseInt(p[1]))); }
+                catch (NumberFormatException ignored) { return 50; }
+            }
+        }
+        return 50;
+    }
+
+    private static boolean authorized(HttpExchange e, String token) {
+        String h = e.getRequestHeaders().getFirst("Authorization");
+        return h != null && h.startsWith("Bearer ")
+            && MessageDigest.isEqual(token.getBytes(StandardCharsets.UTF_8),
+                h.substring(7).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void send(HttpExchange e, int code, String body) throws IOException {
+        byte[] b = body.getBytes(StandardCharsets.UTF_8);
+        e.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        e.getResponseHeaders().set("Cache-Control", "no-store");
+        e.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        e.sendResponseHeaders(code, b.length);
+        try (var out = e.getResponseBody()) { out.write(b); }
+    }
+
+    private static String json(String s) {
+        StringBuilder b = new StringBuilder("\"");
+        for (char c : s.toCharArray()) {
+            switch (c) {
+                case '"': b.append("\\\""); break;
+                case '\\': b.append("\\\\"); break;
+                case '\n': b.append("\\n"); break;
+                case '\r': b.append("\\r"); break;
+                case '\t': b.append("\\t"); break;
+                default: if (c < 32) b.append(String.format("\\u%04x", (int)c)); else b.append(c);
+            }
+        }
+        return b.append('"').toString();
+    }
+
+    private static String token() throws IOException {
+        Path dir = Path.of(System.getProperty("user.home"), ".config", "cyberlab");
+        Files.createDirectories(dir);
+        Path file = dir.resolve("burp-extension-token");
+        if (Files.isSymbolicLink(file)) throw new IOException("Refusing symbolic-link token file");
+        if (!Files.exists(file)) {
+            byte[] raw = new byte[32];
+            new SecureRandom().nextBytes(raw);
+            String generated = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+            try { Files.writeString(file, generated, StandardOpenOption.CREATE_NEW); }
+            catch (FileAlreadyExistsException ignored) { }
+        }
+        try {
+            Files.setPosixFilePermissions(dir, EnumSet.of(PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
+            Files.setPosixFilePermissions(file, EnumSet.of(PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE));
+        } catch (UnsupportedOperationException ignored) { }
+        String value = Files.readString(file).trim();
+        if (value.length() < 32 || value.length() > 128 || !value.matches("[A-Za-z0-9_-]+"))
+            throw new IOException("Invalid local token file");
+        return value;
+    }
+}
