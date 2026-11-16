@@ -52,9 +52,6 @@ class WebCrawlerTests(unittest.TestCase):
             self.assertNotIn("confirmStateChange", call.args[0])
         self.assertEqual(result["pages"][1]["url"], "http://localhost:8080/account")
 
-    @patch("web_crawler.time.sleep")
-    @patch("web_crawler.validate_request", return_value={"addresses": ["127.0.0.1"]})
-    @patch("web_crawler.execute_request")
     def test_planner_recommends_native_crawler_and_labels_active_scan_as_pending(self):
         plan = plan_task("Assess this web app http://localhost:8080")
         names = {item["name"] for item in plan["suggested_tools"]}
@@ -63,6 +60,9 @@ class WebCrawlerTests(unittest.TestCase):
         self.assertEqual(phases["application discovery"]["status"], "available")
         self.assertEqual(phases["active vulnerability validation"]["status"], "not_implemented")
 
+    @patch("web_crawler.time.sleep")
+    @patch("web_crawler.validate_request", return_value={"addresses": ["127.0.0.1"]})
+    @patch("web_crawler.execute_request")
     def test_redirect_is_recorded_but_never_followed(self, execute, validate, sleep):
         execute.return_value = self.response("", "text/html", 302)
         execute.return_value["headers"].append({"name": "Location", "value": "http://outside.example/"})
