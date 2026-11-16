@@ -109,7 +109,7 @@ class WebTestingValidationTests(unittest.TestCase):
     def test_history_omits_response_body_and_redacts_response_secrets(self):
         live = {
             "body": "session-token=secret-response",
-            "bodyBytes": 26,
+            "bodyBytes": len("session-token=secret-response"),
             "headers": [
                 {"name": "Content-Type", "value": "text/plain"},
                 {"name": "Set-Cookie", "value": "session=secret; HttpOnly"},
@@ -119,7 +119,7 @@ class WebTestingValidationTests(unittest.TestCase):
         history = web_testing._safe_history_response(live)
         self.assertEqual(history["body"], "")
         self.assertTrue(history["responseBodyOmitted"])
-        self.assertEqual(history["responseBodyLength"], 26)
+        self.assertEqual(history["responseBodyLength"], len("session-token=secret-response"))
         self.assertEqual(history["headers"][0]["value"], "text/plain")
         self.assertEqual(history["headers"][1]["value"], "[REDACTED]")
         self.assertEqual(history["headers"][2]["value"], "[REDACTED]")
