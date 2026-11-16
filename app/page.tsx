@@ -22,6 +22,7 @@ const groups = [
   ]},
   { title: "ASSESSMENT", items: [
     { label: "Network Analysis", icon: Network, href: "/network-analysis" },
+    { label: "Network Intelligence", icon: Activity, href: "/network-intelligence" },
     { label: "Penetration Testing", icon: Radar, href: "/penetration-testing" },
     { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
     { label: "Burp Suite", icon: ShieldCheck, href: "/burp-suite" },
@@ -49,6 +50,7 @@ const modules = [
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
   { name:"Domain & Privacy Verification", desc:"Review SPF, DMARC, DKIM, CAA, historical URLs and local browser attributes.", icon:ShieldCheck, state:"NEW", href:"/verification" },
   { name:"Network Analysis", desc:"Import and interpret Nmap XML evidence.", icon:Network, state:"IMPORT / ANALYSE", href:"/network-analysis" },
+  { name:"Network Intelligence", desc:"Capture bounded passive traffic and inspect SSH, DNS, TCP, UDP and ICMP metadata locally.", icon:Activity, state:"PASSIVE / LOCAL", href:"/network-intelligence" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
   { name:"Live Research", desc:"Research current CVEs, advisories and technical references.", icon:Globe, state:"PROVIDER REQUIRED", href:"/research" },
