@@ -37,6 +37,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
             );
             server.createContext("/v1/health", e -> health(e, token));
             server.createContext("/v1/proxy/history", e -> history(e, token, api));
+            server.createContext("/v1/site-map", e -> siteMap(e, token, api));
             executor = Executors.newFixedThreadPool(2, r -> {
                 Thread t = new Thread(r, "cyberlab-burp-api");
                 t.setDaemon(true);
@@ -88,6 +89,32 @@ public final class CyberLabBurpExtension implements BurpExtension {
         }
         send(e, 200, "{\"status\":\"ok\",\"source\":\"burp_proxy_history\","
             + "\"read_only\":true,\"count\":" + items.size() + ",\"items\":["
+            + String.join(",", items) + "]}");
+    }
+
+    private static void siteMap(HttpExchange e, String token, MontoyaApi api) throws IOException {
+        if (!"/v1/site-map".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\\"error\\":\\"unauthorized\\"}"); return; }
+        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\\"error\\":\\"method_not_allowed\\"}"); return; }
+        List<burp.api.montoya.http.message.HttpRequestResponse> all = api.siteMap().requestResponses();
+        List<String> items = new ArrayList<>();
+        int start = Math.max(0, all.size() - limit(e.getRequestURI().getRawQuery()));
+        for (int i = start; i < all.size(); i++) {
+            var entry = all.get(i);
+            try {
+                var request = entry.request();
+                if (!request.isInScope()) continue;
+                String url = SECRET_QUERY.matcher(request.url()).replaceAll("$1[REDACTED]");
+                url = url.replaceFirst("(?i)^(https?://)[^/@]+@", "$1");
+                var response = entry.response();
+                items.add("{\\"method\\":" + json(request.method())
+                    + ",\\"url\\":" + json(url)
+                    + ",\\"status_code\\":" + (response == null ? "null" : Short.toString(response.statusCode()))
+                    + ",\\"in_scope\\":true}");
+            } catch (RuntimeException ignored) { }
+        }
+        send(e, 200, "{\\"status\\":\\"ok\\",\\"source\\":\\"burp_site_map\\","
+            + "\\"read_only\\":true,\\"count\\":" + items.size() + ",\\"items\\":["
             + String.join(",", items) + "]}");
     }
 
