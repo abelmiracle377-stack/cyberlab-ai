@@ -41,6 +41,7 @@ export default function WebWorkbenchPage() {
   const [proxyMutatingConsent, setProxyMutatingConsent] = useState(false);
   const [proxyActive, setProxyActive] = useState(false);
   const [proxyActiveScope, setProxyActiveScope] = useState("");
+  const [proxyMutatingActive, setProxyMutatingActive] = useState(false);
   const [proxyPort, setProxyPort] = useState(8081);
   const [proxyBusy, setProxyBusy] = useState(false);
   const [proxyError, setProxyError] = useState("");
@@ -75,6 +76,7 @@ export default function WebWorkbenchPage() {
     if (!response.ok) throw new Error(data.error || "Could not inspect proxy status.");
     setProxyActive(Boolean(data.active));
     setProxyActiveScope(data.scope || "");
+    setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
     if (data.listenPort) setProxyPort(data.listenPort);
   }
 
@@ -101,6 +103,7 @@ export default function WebWorkbenchPage() {
       if (!response.ok) throw new Error(data.error || "Could not start the native interception proxy.");
       setProxyActive(Boolean(data.active));
       setProxyActiveScope(data.scope || "");
+      setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
       setProxyPort(data.listenPort || 8081);
       setProxyStartConsent(false);
       await loadProxyHistory();
@@ -122,6 +125,7 @@ export default function WebWorkbenchPage() {
       if (!response.ok) throw new Error(data.error || "Could not stop the native interception proxy.");
       setProxyActive(Boolean(data.active));
       setProxyActiveScope(data.scope || "");
+      setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy stop error."); }
     finally { setProxyBusy(false); }
   }
@@ -197,7 +201,7 @@ export default function WebWorkbenchPage() {
         </>}
         {proxyActive && <button className="report-download" type="button" disabled={proxyBusy} onClick={stopProxy}>{proxyBusy ? "Stopping proxy…" : "Stop interception proxy"}</button>}
         {proxyError && <div className="agent-error"><AlertTriangle size={14}/>{proxyError}</div>}
-        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked.</p>
+        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked. State-changing methods are {proxyMutatingActive ? "enabled for this session" : "blocked for this session"}.</p>
         <h3>Recent intercepted requests</h3>
         <button className="report-download" type="button" onClick={()=>loadProxyHistory().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh proxy history."))}>Refresh proxy history</button>
         {proxyHistory.map(item=><p key={item.id}>{item.method} · {item.status} · {item.url}{item.queryOmitted ? " · query omitted" : ""} · {item.durationMs} ms</p>)}
