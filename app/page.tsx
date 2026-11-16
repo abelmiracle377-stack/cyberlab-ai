@@ -26,6 +26,7 @@ const groups = [
     { label: "Penetration Testing", icon: Radar, href: "/penetration-testing" },
     { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
     { label: "Native Web Workbench", icon: Globe, href: "/web-workbench" },
+    { label: "Native Web Crawler", icon: Radar, href: "/web-crawler" },
     { label: "Vulnerability Lab", icon: Bug, href: "/vulnerability-lab" },
   ]},
   { title: "ANALYSIS & EVIDENCE", items: [
@@ -54,6 +55,7 @@ const modules = [
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
   { name:"Native Web Workbench", desc:"Send, inspect and replay bounded HTTP requests through CyberLab native tooling.", icon:Globe, state:"NATIVE / AUTHORISED", href:"/web-workbench" },
+  { name:"Native Web Crawler", desc:"Discover same-origin pages and review baseline headers/cookies with bounded, approved GET requests.", icon:Radar, state:"NATIVE / GET ONLY", href:"/web-crawler" },
   { name:"Live Research", desc:"Research current CVEs, advisories and technical references.", icon:Globe, state:"PROVIDER REQUIRED", href:"/research" },
   { name:"Website Assessment", desc:"Passive HTTPS, headers and cookie security review.", icon:Globe2, state:"AVAILABLE", href:"/website-assessment" },
   { name:"Vulnerability Lab", desc:"Research CVEs, impact and remediation guidance.", icon:Bug, state:"AVAILABLE", href:"/vulnerability-lab" },
