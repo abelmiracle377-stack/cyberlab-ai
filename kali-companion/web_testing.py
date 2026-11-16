@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from collections import deque
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 MAX_REQUEST_BODY = 16 * 1024
 MAX_RESPONSE_BODY = 256 * 1024
@@ -154,6 +154,11 @@ def _safe_history_response(result: dict) -> dict:
                      or "secret" in lowered or "session" in lowered)
         safe_headers.append({"name": name, "value": "[REDACTED]" if sensitive else item.get("value", "")})
     safe["headers"] = safe_headers
+    target = result.get("target", "")
+    if isinstance(target, str) and target:
+        parsed_target = urlsplit(target)
+        safe["target"] = urlunsplit((parsed_target.scheme, parsed_target.netloc, parsed_target.path, "", ""))
+        safe["targetQueryOmitted"] = bool(parsed_target.query)
     safe["responseBodyOmitted"] = bool(result.get("bodyBytes", 0))
     safe["responseBodyLength"] = result.get("bodyBytes", 0)
     safe["body"] = ""
