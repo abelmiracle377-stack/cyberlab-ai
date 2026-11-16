@@ -210,16 +210,65 @@ def pending_response_intercepts() -> dict:
     return {"items": items, "count": len(items), "maxPending": MAX_PENDING_INTERCEPTS}
 
 
-def decide_response_intercept(intercept_id: str, action: str) -> dict:
+def _validated_response_edit(entry: dict, edits: dict) -> dict:
+    if not isinstance(edits, dict):
+        raise ValueError("Edited response must be a JSON object.")
+    status = edits.get("status", entry["status"])
+    if isinstance(status, bool) or not isinstance(status, int) or not 200 <= status <= 599:
+        raise ValueError("Edited response status must be an integer from 200 to 599.")
+    reason = edits.get("reason", entry["reason"])
+    if not isinstance(reason, str) or len(reason) > 120 or any(ord(ch) < 32 or ord(ch) == 127 for ch in reason):
+        raise ValueError("Edited response reason contains invalid characters or exceeds 120 characters.")
+    raw_headers = edits.get("headers")
+    if raw_headers is None:
+        headers = list(entry["headers"])
+    else:
+        if not isinstance(raw_headers, list) or len(raw_headers) > MAX_HEADER_COUNT:
+            raise ValueError("Edited response headers must be a list of at most 100 name/value entries.")
+        original_by_name = {}
+        for name, value in entry["headers"]:
+            original_by_name.setdefault(name.lower(), []).append(value)
+        headers = []
+        for item in raw_headers:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str) or not isinstance(item.get("value"), str):
+                raise ValueError("Each edited response header must contain string name and value fields.")
+            name, value = item["name"], item["value"]
+            if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}", name):
+                raise ValueError("Edited response header name is invalid.")
+            lowered = name.lower()
+            if lowered in _HOP_BY_HOP or lowered in {"content-length", "host"}:
+                raise ValueError("Content-Length and hop-by-hop response headers are managed by CyberLab.")
+            if any(ord(ch) in (10, 13, 127) or ord(ch) < 32 and ch != "\t" for ch in value) or len(value) > 8192:
+                raise ValueError("Edited response header value contains invalid characters or exceeds the limit.")
+            remaining = original_by_name.get(lowered, [])
+            if remaining and (value == "[REDACTED]" or value == remaining[0][:512]):
+                value = remaining.pop(0)
+            headers.append((name, value))
+    body = entry["body"]
+    if "body" in edits:
+        if not entry["bodyEditable"]:
+            raise ValueError("This response body is binary, non-UTF-8, or too large for safe text editing.")
+        if not isinstance(edits["body"], str):
+            raise ValueError("Edited response body must be UTF-8 text.")
+        body = edits["body"].encode("utf-8")
+        if len(body) > MAX_RESPONSE_BODY:
+            raise ValueError("Edited response body exceeds the 2 MB response limit.")
+    return {"status": status, "reason": reason, "headers": headers, "body": body}
+
+
+def decide_response_intercept(intercept_id: str, action: str, edits: dict | None = None) -> dict:
     if not isinstance(intercept_id, str) or not re.fullmatch(r"[a-f0-9]{32}", intercept_id):
         raise ValueError("Response interception request ID is invalid.")
-    if not isinstance(action, str) or action not in {"forward", "drop"}:
-        raise ValueError("Response interception decision must be forward or drop.")
+    if not isinstance(action, str) or action not in {"forward", "forward_edited", "drop"}:
+        raise ValueError("Response interception decision must be forward, forward_edited or drop.")
     with _INTERCEPT_LOCK:
         entry = _RESPONSE_INTERCEPTS.get(intercept_id)
         if entry is None:
             raise ValueError("This response is no longer pending; it may have timed out or already been handled.")
-        entry["decision"] = {"action": action}
+        decision = {"action": action}
+        if action == "forward_edited":
+            decision["edited"] = _validated_response_edit(entry, edits)
+        entry["decision"] = decision
         entry["event"].set()
     return {"id": intercept_id, "decision": action, "accepted": True}
 
@@ -244,7 +293,11 @@ def _await_response_decision(method: str, url: str, status: int, reason: str,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "decisionTimeoutSeconds": INTERCEPT_DECISION_TIMEOUT,
     }
-    entry = {"event": event, "decision": None, "public": public}
+    body_editable = body_visible and len(body) <= 16384
+    public["bodyEditable"] = body_editable
+    entry = {"event": event, "decision": None, "public": public,
+             "status": status, "reason": str(reason or ""),
+             "headers": list(headers), "body": body, "bodyEditable": body_editable}
     with _INTERCEPT_LOCK:
         if len(_RESPONSE_INTERCEPTS) >= MAX_PENDING_INTERCEPTS:
             raise ValueError("The response interception queue is full; forward or drop pending responses first.")
@@ -537,6 +590,12 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 if decision.get("action") == "drop":
                     self._error(502, "Response dropped by the CyberLab operator")
                     return
+                if decision.get("action") == "forward_edited":
+                    edited_response = decision["edited"]
+                    response.status = edited_response["status"]
+                    response.reason = edited_response["reason"]
+                    response_headers = edited_response["headers"]
+                    response_body = edited_response["body"]
             response_connection_tokens = {token.strip().lower() for name, value in response_headers
                                           if name.lower() == "connection"
                                           for token in value.split(",") if token.strip()}
