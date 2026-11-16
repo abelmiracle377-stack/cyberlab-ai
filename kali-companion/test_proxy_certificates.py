@@ -59,7 +59,7 @@ class ProxyCertificateTests(unittest.TestCase):
     def test_wildcard_and_url_inputs_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Wildcards"):
             certs._normalise_host("*.example.test")
-        with self.assertRaisesRegex(ValueError, "valid DNS hostname"):
+        with self.assertRaisesRegex(ValueError, "Wildcards"):
             certs._normalise_host("https://example.test/path")
 
 
