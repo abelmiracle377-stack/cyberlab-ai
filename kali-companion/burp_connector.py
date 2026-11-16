@@ -11,7 +11,8 @@ import shutil
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit, urlunsplit
-from urllib.request import Request, urlopen\nimport json
+from urllib.request import Request, urlopen
+import json
 
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 DEFAULT_API_URL = "http://127.0.0.1:1337"
