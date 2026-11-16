@@ -70,6 +70,18 @@ def ca_status() -> dict:
         }
 
 
+def ca_certificate_pem() -> dict:
+    """Return only the public root certificate for manual browser import."""
+    with _LOCK:
+        if not ca_status()["ready"]:
+            raise ValueError("Local inspection CA is missing or its private-key permissions are unsafe.")
+        pem = CA_CERT.read_text(encoding="ascii")
+        if len(pem) > 65536 or "-----BEGIN CERTIFICATE-----" not in pem:
+            raise ValueError("Local CA certificate file is invalid or exceeds the size limit.")
+        return {"filename": "cyberlab-local-inspection-ca.pem", "pem": pem,
+                "trustInstallation": "manual; import only into a dedicated test browser profile"}
+
+
 def create_local_ca() -> dict:
     """Create the local root CA once; never overwrite an existing key."""
     with _LOCK:
