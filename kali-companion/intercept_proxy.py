@@ -275,13 +275,13 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                             if name.lower() not in _HOP_BY_HOP and name.lower() != "content-length"
                             and not any(ord(char) in (10, 13) or (ord(char) < 32 and char != "\t") for char in value)]
             reason = str(response.reason).replace(chr(10), "").replace(chr(13), "")
-            self.wfile.write(f"HTTP/1.1 {response.status} {reason}\\r\\n".encode("iso-8859-1", errors="replace"))
+            self.wfile.write(f"HTTP/1.1 {response.status} {reason}\r\n".encode("iso-8859-1", errors="replace"))
             for name, value in safe_forward:
-                self.wfile.write(f"{name}: {value}\\r\\n".encode("iso-8859-1", errors="replace"))
+                self.wfile.write(f"{name}: {value}\r\n".encode("iso-8859-1", errors="replace"))
             upstream_length = response.getheader("Content-Length")
             outgoing_length = (int(upstream_length) if method.upper() == "HEAD" and upstream_length and upstream_length.isdigit()
                                else len(response_body))
-            self.wfile.write(f"Content-Length: {outgoing_length}\\r\\nConnection: close\\r\\n\\r\\n".encode("ascii"))
+            self.wfile.write(f"Content-Length: {outgoing_length}\r\nConnection: close\r\n\r\n".encode("ascii"))
             self.wfile.write(response_body)
             self.wfile.flush()
             _history_entry(method.upper(), url, response.status, headers, response_headers,
