@@ -59,14 +59,14 @@ public final class CyberLabBurpExtension implements BurpExtension {
     }
 
     private static void health(HttpExchange e, String token) throws IOException {
-        if (!"/v1/health".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
+        if (!"/v1/health".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
         if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
         if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
         send(e, 200, "{\"status\":\"ok\",\"connector\":\"montoya\",\"read_only\":true}");
     }
 
     private static void history(HttpExchange e, String token, MontoyaApi api) throws IOException {
-        if (!"/v1/proxy/history".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
+        if (!"/v1/proxy/history".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
         if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
         if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
         int limit = limit(e.getRequestURI().getRawQuery());
@@ -94,9 +94,9 @@ public final class CyberLabBurpExtension implements BurpExtension {
     }
 
     private static void repeaterFromHistory(HttpExchange e, String token, MontoyaApi api) throws IOException {
-        if (!"/v1/repeater/from-history".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
-        if (!authorized(e, token)) { send(e, 401, "{\\"error\\":\\"unauthorized\\"}"); return; }
-        if (!"POST".equals(e.getRequestMethod())) { send(e, 405, "{\\"error\\":\\"method_not_allowed\\"}"); return; }
+        if (!"/v1/repeater/from-history".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"POST".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
         String query = e.getRequestURI().getRawQuery();
         int historyId = -1;
         boolean confirmed = false;
@@ -108,28 +108,28 @@ public final class CyberLabBurpExtension implements BurpExtension {
             if (parts.length == 2 && "confirm".equals(parts[0])) confirmed = "true".equals(parts[1]);
         }
         if (historyId < 1 || !confirmed) {
-            send(e, 400, "{\\"error\\":\\"history_id_and_explicit_confirmation_required\\"}");
+            send(e, 400, "{\"error\":\"history_id_and_explicit_confirmation_required\"}");
             return;
         }
         for (ProxyHttpRequestResponse entry : api.proxy().history()) {
             if (entry.id() != historyId) continue;
             var request = entry.finalRequest();
             if (!request.isInScope()) {
-                send(e, 403, "{\\"error\\":\\"out_of_scope_request_blocked\\"}");
+                send(e, 403, "{\"error\":\"out_of_scope_request_blocked\"}");
                 return;
             }
             api.repeater().sendToRepeater(request, "CyberLab · Proxy #" + historyId);
-            send(e, 200, "{\\"status\\":\\"opened_in_repeater\\",\\"history_id\\":"
-                + historyId + ",\\"request_sent\\":false}");
+            send(e, 200, "{\"status\":\"opened_in_repeater\",\"history_id\":"
+                + historyId + ",\"request_sent\":false}");
             return;
         }
-        send(e, 404, "{\\"error\\":\\"proxy_history_item_not_found\\"}");
+        send(e, 404, "{\"error\":\"proxy_history_item_not_found\"}");
     }
 
     private static void siteMap(HttpExchange e, String token, MontoyaApi api) throws IOException {
-        if (!"/v1/site-map".equals(e.getRequestURI().getPath())) { send(e, 404, "{\\"error\\":\\"not_found\\"}"); return; }
-        if (!authorized(e, token)) { send(e, 401, "{\\"error\\":\\"unauthorized\\"}"); return; }
-        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\\"error\\":\\"method_not_allowed\\"}"); return; }
+        if (!"/v1/site-map".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
         List<burp.api.montoya.http.message.HttpRequestResponse> all = api.siteMap().requestResponses();
         List<String> items = new ArrayList<>();
         int start = Math.max(0, all.size() - limit(e.getRequestURI().getRawQuery()));
@@ -141,14 +141,14 @@ public final class CyberLabBurpExtension implements BurpExtension {
                 String url = SECRET_QUERY.matcher(request.url()).replaceAll("$1[REDACTED]");
                 url = url.replaceFirst("(?i)^(https?://)[^/@]+@", "$1");
                 var response = entry.response();
-                items.add("{\\"method\\":" + json(request.method())
-                    + ",\\"url\\":" + json(url)
-                    + ",\\"status_code\\":" + (response == null ? "null" : Short.toString(response.statusCode()))
-                    + ",\\"in_scope\\":true}");
+                items.add("{\"method\":" + json(request.method())
+                    + ",\"url\":" + json(url)
+                    + ",\"status_code\":" + (response == null ? "null" : Short.toString(response.statusCode()))
+                    + ",\"in_scope\":true}");
             } catch (RuntimeException ignored) { }
         }
-        send(e, 200, "{\\"status\\":\\"ok\\",\\"source\\":\\"burp_site_map\\","
-            + "\\"read_only\\":true,\\"count\\":" + items.size() + ",\\"items\\":["
+        send(e, 200, "{\"status\":\"ok\",\"source\":\"burp_site_map\","
+            + "\"read_only\":true,\"count\":" + items.size() + ",\"items\":["
             + String.join(",", items) + "]}");
     }
 
@@ -183,8 +183,8 @@ public final class CyberLabBurpExtension implements BurpExtension {
         StringBuilder b = new StringBuilder("\"");
         for (char c : s.toCharArray()) {
             switch (c) {
-                case '"': b.append("\\\""); break;
-                case '\\': b.append("\\\\"); break;
+                case '"': b.append("\\""); break;
+                case '\\': b.append("\\\"); break;
                 case '\n': b.append("\\n"); break;
                 case '\r': b.append("\\r"); break;
                 case '\t': b.append("\\t"); break;
