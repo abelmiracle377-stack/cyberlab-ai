@@ -12,7 +12,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 import threading
 from pathlib import Path
 
@@ -21,7 +20,7 @@ CA_DIR = CONFIG_ROOT / "proxy-ca"
 CA_KEY = CA_DIR / "ca-key.pem"
 CA_CERT = CA_DIR / "ca-cert.pem"
 LEAF_DIR = CA_DIR / "hosts"
-_HOST_RE = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.?$", re.I)
+_HOST_RE = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.?$", re.I)
 _LOCK = threading.RLock()
 
 
@@ -50,22 +49,6 @@ def _run(args: list[str], timeout: int = 30) -> None:
     if result.returncode:
         detail = result.stderr.decode("utf-8", errors="replace")[-500:]
         raise RuntimeError("OpenSSL operation failed: " + detail)
-
-
-def _atomic_private_output(command: list[str], destination: Path) -> None:
-    fd, temp_name = tempfile.mkstemp(prefix=".cyberlab-", dir=str(destination.parent))
-    os.close(fd)
-    temp = Path(temp_name)
-    try:
-        _run(command(temp))
-        os.chmod(temp, 0o600)
-        os.replace(temp, destination)
-        os.chmod(destination, 0o600)
-    finally:
-        try:
-            temp.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def ca_status() -> dict:
