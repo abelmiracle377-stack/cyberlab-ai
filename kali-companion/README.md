@@ -174,3 +174,20 @@ After creating a network evidence report and/or static artifact report, use **Un
 Each case creation appends one metadata-only JSONL record to `~/.local/state/cyberlab/case-audit.jsonl`. The directory is created with mode 0700 and the file with mode 0600 where supported. A file lock serialises writers, records are appended and fsynced, and each record includes the previous record hash. Before a new record is appended, the companion verifies the entire existing hash chain and refuses to continue if it detects malformed or altered records. The ledger has a 5 MB cap. It stores case identifiers, timestamps, source types and evidence digests—not raw banners, CVE descriptions, samples, credentials or recovered file contents.
 
 This is a local integrity-evident audit aid, not a digitally signed or tamper-proof chain of custody. A privileged local administrator can still replace the ledger or its host. Export and preserve the ledger under the organisation's evidence-retention policy, and retain original evidence separately. Add analyst identity, authorisation reference, scope, collection time and tool versions in the formal case-management process.
+
+
+## Native Network Intelligence and packet capture
+
+The paired dashboard includes a **Network Intelligence** workspace at `/network-intelligence`. It is independent of Burp Suite and uses the local `tcpdump` executable through the authenticated loopback bridge.
+
+- `GET /network/interfaces` lists interface names and operational state only.
+- `POST /network/capture` performs one short passive capture on an exact, re-confirmed interface.
+- Supported fixed filters: SSH/TCP port 22, DNS/port 53, TCP, UDP and ICMP/ICMPv6.
+- Maximum duration: 30 seconds. Maximum packet count: 2,000. Snap length: 96 bytes.
+- Each capture requires the bridge pairing token, exact interface retyping, an explicit authorisation confirmation and an engagement/lab reference.
+- PCAP files remain on the paired workstation under `~/.local/share/cyberlab/captures/`, with owner-only permissions and a SHA-256 evidence hash.
+- Only packet counts, protocol counts and bounded endpoint metadata are returned to the dashboard. Packet payloads are not forwarded to the AI.
+
+Install tcpdump separately if needed: `sudo apt install -y tcpdump`. The companion does not install it, invoke sudo or change interface capabilities. The bridge process must already have the OS permissions required for packet capture. Use only on networks you own or are authorised to monitor.
+
+The SSH filter captures TCP port 22 traffic. Packet capture can show endpoints and handshake metadata, but encrypted SSH session data does not expose passwords, commands or terminal contents. This first slice does not yet import external PCAP/PCAPNG files, reconstruct streams, perform deep TShark dissection or run AI anomaly detection. See `docs/NETWORK_INTELLIGENCE.md` for the detailed API and safety boundary.
