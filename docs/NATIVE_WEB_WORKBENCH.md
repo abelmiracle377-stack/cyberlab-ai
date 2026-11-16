@@ -53,7 +53,7 @@ The Agent Console recognises explicit web assessment requests that include an HT
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
-- Intercepting HTTP/HTTPS proxy with a user-managed local CA and browser integration.
+- Native HTTP/HTTPS proxy interception is still in development. The first supporting component now creates a local root CA only after explicit operator approval and issues exact-host, short-lived certificates. CA private keys are stored owner-only under `~/.config/cyberlab/proxy-ca`; trust installation remains manual, and CyberLab never modifies browser or operating-system trust stores. This CA foundation does not itself intercept traffic or provide a working proxy.
 - Authenticated crawling and session/role handling.
 - Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
 - Native request repeater UI with response comparison.
