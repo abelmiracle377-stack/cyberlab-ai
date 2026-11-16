@@ -18,12 +18,12 @@ import time
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
-from burp_connector import inspect_burp_status
+from burp_connector import inspect_burp_status, inspect_burp_proxy_history
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -210,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -218,6 +218,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, inspect_tool_catalog(), origin)
         if path == "/burp/status":
             return self.send_json(200, inspect_burp_status(), origin)
+        if path == "/burp/proxy/history":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["50"])[0])
+            except (TypeError, ValueError):
+                limit = 50
+            return self.send_json(200, inspect_burp_proxy_history(limit), origin)
         if path == "/evidence/case/ledger/verify":
             return self.send_json(200, verify_audit_ledger(), origin)
         if path == "/forensics/devices":
