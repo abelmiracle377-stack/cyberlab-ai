@@ -196,3 +196,6 @@ The SSH filter captures TCP port 22 traffic. Packet capture can show endpoints a
 ## Native web assessment
 
 CyberLab includes a native HTTP workbench and a bounded same-origin web crawler/baseline auditor. The crawler sends approved GET requests only, revalidates target scope for every page, blocks out-of-origin links and redirects, inventories forms without submitting them, and reports baseline header/cookie indicators. It does not perform payload-based vulnerability testing. See `docs/NATIVE_WEB_WORKBENCH.md` for current capability boundaries.
+
+
+CyberLab also includes limited native safe active web checks for CORS preflight and inert GET query-reflection indicators. These are bounded and approval-gated; they do not constitute a full exploit scanner. See `docs/NATIVE_WEB_WORKBENCH.md` for the current scope and limitations.
