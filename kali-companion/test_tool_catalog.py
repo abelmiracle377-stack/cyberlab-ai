@@ -18,6 +18,9 @@ class ToolCatalogTests(unittest.TestCase):
         native = next(tool for category in result["categories"] for tool in category["tools"] if tool["name"] == "CyberLab HTTP Workbench")
         self.assertTrue(native["installed"])
         self.assertEqual(native["mode"], "native_http")
+        proxy = next(tool for category in result["categories"] for tool in category["tools"] if tool["name"] == "CyberLab Native Interception Proxy")
+        self.assertTrue(proxy["installed"])
+        self.assertEqual(proxy["mode"], "native_intercept_proxy")
         self.assertNotIn("Burp Suite", {tool["name"] for category in result["categories"] for tool in category["tools"]})
 
     def test_missing_tools_receive_package_install_guidance(self):
