@@ -18,6 +18,7 @@ class _TargetHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Set-Cookie", "session=secret-cookie; HttpOnly")
+        self.send_header("X-Password-Reset", "secret-password")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -72,6 +73,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertNotIn("secret-query", str(entry))
                 self.assertTrue(entry["responseBodyOmitted"])
                 self.assertNotIn("secret-cookie", str(entry))
+                self.assertNotIn("secret-password", str(entry))
                 with socket.create_connection(("127.0.0.1", listen_port), timeout=3) as client:
                     client.sendall((f"GET http://127.0.0.1:{target.server_port}/outside HTTP/1.1\r\n"
                                     "Host: 127.0.0.1\r\nConnection: close\r\n\r\n").encode("ascii"))
