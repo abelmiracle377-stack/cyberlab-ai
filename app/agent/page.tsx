@@ -262,7 +262,7 @@ export default function AgentPage() {
       const targetUrl = /^https?:\/\//i.test(rawTarget) ? rawTarget : "https://" + rawTarget;
       try {
         const parsedTarget = new URL(targetUrl);
-        if (!["http:", "https:"].includes(parsedTarget.protocol)) throw new Error("Unsupported target protocol.");
+        if (!["http:", "https:"].includes(parsedTarget.protocol) || parsedTarget.username || parsedTarget.password || parsedTarget.hash) throw new Error("Use an HTTP(S) URL without embedded credentials or fragments.");
         setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can run CyberLab's native crawler and baseline audit, then optional bounded active checks against this exact origin. Nothing has been sent yet. Pair the local companion and approve each stage below." }]);
         setWebAssessmentRequest({ url: targetUrl });
         setWebConfirmationUrl(parsedTarget.origin);
@@ -278,7 +278,7 @@ export default function AgentPage() {
       }
     }
     const scanMatch = text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i);
-    if (scanMatch && submittedAttachments.length === 0) {
+    if (!skipLocalRouting && scanMatch && submittedAttachments.length === 0) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
       setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can prepare a bounded Nmap TCP scan on your paired local Kali machine. Before anything runs, confirm the exact target, authorisation reference and scope below. No scan has started." }]);
       setScanRequest({ target: scanMatch[1], ports: portsMatch?.[1]?.replace(/\s+/g, "") || "1-100" });
