@@ -27,6 +27,7 @@ from burp_connector import inspect_burp_status, inspect_burp_proxy_history, insp
 from network_capture import list_capture_interfaces, capture_packets
 from web_testing import execute_request, request_history
 from web_crawler import run_crawl
+from web_active_scan import run_active_scan
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -53,6 +54,7 @@ case_export_lock = threading.Lock()
 network_capture_lock = threading.Lock()
 web_request_lock = threading.Lock()
 web_crawl_lock = threading.Lock()
+web_active_scan_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -274,18 +276,26 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body_limit = 600000 if path == "/evidence/case/export" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path in {"/web/request", "/web/crawl"} else MAX_BODY))))
+            body_limit = 600000 if path == "/evidence/case/export" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path in {"/web/request", "/web/crawl", "/web/active-scan"} else MAX_BODY))))
             if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError("Request body must be a JSON object.")
+            if path == "/web/active-scan":
+                if not web_active_scan_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A native active web check is already running."}, origin)
+                try:
+                    result = run_active_scan(data)
+                    return self.send_json(200, result, origin)
+                finally:
+                    web_active_scan_lock.release()
             if path == "/web/crawl":
                 if not web_crawl_lock.acquire(blocking=False):
                     return self.send_json(409, {"error": "A native web crawl is already running."}, origin)
