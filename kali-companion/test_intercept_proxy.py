@@ -176,6 +176,77 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 for item in reversed(patches):
                     item.stop()
 
+    def test_manual_interception_waits_for_forward_or_drop_decision(self):
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                status = proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-INTERCEPT-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptRequests": True, "confirmInterceptRequests": True,
+                })
+                self.assertTrue(status["interceptRequests"])
+
+                def send_request(path):
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}{path} HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        response = b""
+                        while True:
+                            chunk = client.recv(8192)
+                            if not chunk:
+                                break
+                            response += chunk
+                        return response
+
+                forwarded = {}
+                first = threading.Thread(target=lambda: forwarded.setdefault("response", send_request("/manual-forward")))
+                first.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                self.assertEqual(pending[0]["method"], "GET")
+                self.assertNotIn("secret-cookie", str(pending[0]))
+                intercept_proxy.decide_intercept(pending[0]["id"], "forward")
+                first.join(timeout=5)
+                self.assertFalse(first.is_alive())
+                self.assertIn(b"200 OK", forwarded["response"])
+
+                dropped = {}
+                second = threading.Thread(target=lambda: dropped.setdefault("response", send_request("/manual-drop")))
+                second.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                intercept_proxy.decide_intercept(pending[0]["id"], "drop")
+                second.join(timeout=5)
+                self.assertFalse(second.is_alive())
+                self.assertIn(b"403 Error", dropped["response"])
+                self.assertIn(b"Request dropped by the CyberLab operator", dropped["response"])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_proxy_history_redacts_sensitive_path_segments_and_jwt(self):
         safe = intercept_proxy._redact_url_path(
             "https://lab.example.test/account/reset-password/eyJabcdefghijklmno.abcdefghijk.abcdefghijk/profile?token=secret"
