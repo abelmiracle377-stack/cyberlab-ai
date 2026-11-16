@@ -1,0 +1,49 @@
+name: Burp integration checks
+
+on:
+  push:
+    branches:
+      - feature/cyberlab-burp-integration
+    paths:
+      - "burp-extension/**"
+      - "kali-companion/burp_connector.py"
+      - "kali-companion/bridge.py"
+      - "kali-companion/tests/test_burp_connector.py"
+      - ".github/workflows/burp-integration.yml"
+  pull_request:
+    paths:
+      - "burp-extension/**"
+      - "kali-companion/burp_connector.py"
+      - "kali-companion/bridge.py"
+      - "kali-companion/tests/test_burp_connector.py"
+      - ".github/workflows/burp-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  companion-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Burp connector and planner
+        env:
+          PYTHONPATH: kali-companion
+        run: |
+          python -m unittest discover -s kali-companion/tests -p "test_burp_connector.py" -v
+          python -m unittest discover -s kali-companion -p "test_task_planner.py" -v
+
+  montoya-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Burp Montoya extension
+        run: gradle -p burp-extension clean jar
