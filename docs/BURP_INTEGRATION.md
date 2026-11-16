@@ -12,11 +12,11 @@ The first integration slice provides:
 - A read-only health probe for Burp's desktop REST API.
 - Loopback-only API URL validation.
 - API-key loading from a local file or process environment.
-- A paired Kali bridge endpoint: `GET /burp/status`.
+- Paired Kali bridge endpoints: `GET /burp/status`, `GET /burp/proxy/history`, and `GET /burp/site-map`.
 - Explicit states for missing configuration, unreachable service, authentication failure, invalid configuration and successful connection.
 - No Burp API key or extension token is returned in responses or logs.
 - A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50` and `GET http://127.0.0.1:8766/v1/site-map?limit=50`, authenticated by a local random bearer token.
-- Proxy history export is metadata-only, in-scope-only and capped at 100 items.
+- Proxy history and site-map exports are metadata-only, in-scope-only and capped at 100 items each. The `/burp-suite` dashboard page displays these read-only results.
 
 The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: request/response editing, Repeater, Intruder, active scanning, crawl tasks, issue retrieval or automated remediation.
 
