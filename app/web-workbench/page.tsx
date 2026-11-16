@@ -128,14 +128,15 @@ export default function WebWorkbenchPage() {
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-      let edits: { method: string; path: string; headers: { name: string; value: string }[]; body: string } | undefined;
+      let edits: { method: string; path: string; headers: { name: string; value: string }[]; body?: string } | undefined;
       if (action === "forward_edited") {
         const draft = interceptDrafts[id];
         if (!draft) throw new Error("The request editor is not ready.");
         let parsed: unknown;
         try { parsed = JSON.parse(draft.headersText); } catch { throw new Error("Edited headers must be valid JSON."); }
         if (!Array.isArray(parsed)) throw new Error("Edited headers must be a JSON array of name/value objects.");
-        edits = { method: draft.method, path: draft.path, headers: parsed, body: draft.body };
+        const pending = pendingIntercepts.find(item => item.id === id);
+        edits = { method: draft.method, path: draft.path, headers: parsed, ...(pending?.bodyEditable ? { body: draft.body } : {}) };
       }
       const response = await fetch("http://127.0.0.1:8765/proxy/intercepts/decision", {
         method: "POST",
@@ -288,7 +289,7 @@ export default function WebWorkbenchPage() {
             <label>Headers · JSON array<textarea rows={5} spellCheck={false} value={interceptDrafts[item.id]?.headersText || ""} onChange={e=>setInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],headersText:e.target.value}}))}/></label>
             <label>Body · UTF-8 text only<textarea rows={5} disabled={!item.bodyEditable} value={interceptDrafts[item.id]?.body ?? ""} onChange={e=>setInterceptDrafts(current=>({...current,[item.id]:{...current[item.id],body:e.target.value}}))} placeholder={item.bodyEditable ? "Request body" : "Binary body cannot be edited here; forward unchanged or drop"}/></label>
             <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"forward")}>Forward unchanged</button>
-            <button className="report-download" type="button" disabled={Boolean(interceptBusyId) || !item.bodyEditable} onClick={()=>decidePendingIntercept(item.id,"forward_edited")}>{interceptBusyId===item.id ? "Applying…" : "Forward edited request"}</button>
+            <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"forward_edited")}>{interceptBusyId===item.id ? "Applying…" : "Forward edited request"}</button>
             <button className="report-download" type="button" disabled={Boolean(interceptBusyId)} onClick={()=>decidePendingIntercept(item.id,"drop")}>Drop request</button>
           </div>)}
           {!pendingIntercepts.length && <p>No requests are currently waiting.</p>}
