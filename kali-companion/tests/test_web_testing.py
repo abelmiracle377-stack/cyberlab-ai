@@ -81,6 +81,23 @@ class WebTestingValidationTests(unittest.TestCase):
             web_testing.validate_request(data)
 
     @patch("web_testing.socket.getaddrinfo")
+    def test_history_metadata_redacts_secrets_and_never_stores_request_body(self, resolve):
+        resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
+        data = self.base()
+        data.update({"headers": {"Accept": "application/json", "Authorization": "Bearer secret",
+                                 "X-API-Key": "private-key", "X-Correlation-ID": "trace-1"},
+                     "method": "POST", "body": "password=do-not-store", "confirmStateChange": True})
+        request = web_testing.validate_request(data)
+        metadata = web_testing._safe_history_request(request)
+        self.assertEqual(metadata["requestHeaders"]["Accept"], "application/json")
+        self.assertEqual(metadata["requestHeaders"]["Authorization"], "[REDACTED]")
+        self.assertEqual(metadata["requestHeaders"]["X-API-Key"], "[REDACTED]")
+        self.assertEqual(metadata["requestHeaders"]["X-Correlation-ID"], "trace-1")
+        self.assertTrue(metadata["requestBodyOmitted"])
+        self.assertEqual(metadata["requestBodyLength"], len("password=do-not-store"))
+        self.assertNotIn("password=do-not-store", str(metadata))
+
+    @patch("web_testing.socket.getaddrinfo")
     def test_body_size_is_bounded(self, resolve):
         resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
         data = self.base()
