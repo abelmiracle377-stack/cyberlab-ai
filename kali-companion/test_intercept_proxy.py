@@ -425,6 +425,19 @@ class NativeInterceptProxyTests(unittest.TestCase):
             intercept_proxy._INTERCEPTS.pop("a" * 32, None)
 
 
+    def test_response_interception_requires_separate_explicit_approval(self):
+        proxy = intercept_proxy.NativeInterceptProxy()
+        origin = "http://localhost:8080"
+        with self.assertRaisesRegex(ValueError, "Separately approve pausing server responses"):
+            proxy.start({
+                "origin": origin, "confirmationOrigin": origin,
+                "authorizationConfirmed": True, "confirmStart": True,
+                "authorizationReference": "LOCAL-RESPONSE-APPROVAL",
+                "localLabMode": True, "listenPort": self._free_port(),
+                "interceptResponses": True, "confirmInterceptResponses": False,
+            })
+
+
     def test_manual_response_interception_pauses_until_operator_forwards(self):
         target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
         target_thread = threading.Thread(target=target.serve_forever, daemon=True)
