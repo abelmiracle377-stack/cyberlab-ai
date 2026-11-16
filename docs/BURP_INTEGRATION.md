@@ -14,7 +14,9 @@ The first integration slice provides:
 - API-key loading from a local file or process environment.
 - A paired Kali bridge endpoint: `GET /burp/status`.
 - Explicit states for missing configuration, unreachable service, authentication failure, invalid configuration and successful connection.
-- No Burp API key or extension token is returned in responses or logs.\n- A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50`, authenticated by a local random bearer token.\n- Proxy history export is metadata-only, in-scope-only and capped at 100 items.
+- No Burp API key or extension token is returned in responses or logs.
+- A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50`, authenticated by a local random bearer token.
+- Proxy history export is metadata-only, in-scope-only and capped at 100 items.
 
 The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: site-map browsing, request/response editing, Repeater, Intruder, active scanning, crawl tasks, issue retrieval or automated remediation.
 
@@ -37,7 +39,9 @@ The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HT
    ```
 
 6. If Burp uses a non-default loopback port, set `CYBERLAB_BURP_API_URL` for the Kali companion process, for example `http://127.0.0.1:1337`.
-7. Build `burp-extension` with JDK 21 and Gradle (`gradle clean jar`). Load `burp-extension/build/libs/cyberlab-burp-connector-0.1.0.jar` in Burp under **Extensions → Installed → Add**.\n8. The extension binds only to `127.0.0.1:8766` and creates `~/.config/cyberlab/burp-extension-token` with owner-only permissions. Do not share this token.\n9. Restart the Kali companion and request `GET /burp/status` and `GET /burp/proxy/history?limit=50` through the paired bridge.
+7. Build `burp-extension` with JDK 21 and Gradle (`gradle clean jar`). Load `burp-extension/build/libs/cyberlab-burp-connector-0.1.0.jar` in Burp under **Extensions → Installed → Add**.
+8. The extension binds only to `127.0.0.1:8766` and creates `~/.config/cyberlab/burp-extension-token` with owner-only permissions. Do not share this token.
+9. Restart the Kali companion and request `GET /burp/status` and `GET /burp/proxy/history?limit=50` through the paired bridge.
 
 The API key is never sent to the hosted AI model. Do not paste it into chat, dashboard prompts, source control, or issue reports.
 
@@ -61,7 +65,8 @@ Burp edition is reported as `unknown` until it can be verified. Scanner capabili
 - Require an explicit engagement reference, exact target confirmation and in-scope validation before active requests.
 - Treat proxy history, cookies, authorization headers, request bodies and scanner findings as sensitive evidence; redact secrets before model analysis.
 - Never run active scans, Intruder jobs or Repeater requests merely because the AI mentions them. Each active operation needs an explicit user-approved action and bounded settings.
-- Do not add unrestricted shell execution to the Burp connector.\n- Keep the Montoya connector bound to loopback, require bearer authentication, stop its server on extension unload, and never return out-of-scope proxy entries.
+- Do not add unrestricted shell execution to the Burp connector.
+- Keep the Montoya connector bound to loopback, require bearer authentication, stop its server on extension unload, and never return out-of-scope proxy entries.
 
 ## Next implementation phases
 
