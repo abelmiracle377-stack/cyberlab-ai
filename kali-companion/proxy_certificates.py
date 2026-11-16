@@ -101,13 +101,13 @@ def _normalise_host(host: str) -> tuple[str, str]:
     if not isinstance(host, str) or not host or len(host) > 253 or host != host.strip():
         raise ValueError("Enter one valid DNS hostname or IP address.")
     value = host.rstrip(".").lower()
-    if not value or "*" in value or "/" in value or ":" in value and not value.startswith("["):
+    if not value or "*" in value or "/" in value or "@" in value or "?" in value or "#" in value:
         raise ValueError("Wildcards, URL paths and malformed hostnames are not accepted.")
     try:
         address = ipaddress.ip_address(value.strip("[]"))
         return address.compressed, "IP"
     except ValueError:
-        if not _HOST_RE.fullmatch(value) or ".." in value:
+        if ":" in value or not _HOST_RE.fullmatch(value) or ".." in value:
             raise ValueError("Enter a valid DNS hostname or IP address.")
         return value, "DNS"
 
