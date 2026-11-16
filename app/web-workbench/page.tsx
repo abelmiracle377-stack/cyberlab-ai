@@ -28,6 +28,11 @@ export default function WebWorkbenchPage() {
   const [busy, setBusy] = useState(false);
   const [historyBodyOmitted, setHistoryBodyOmitted] = useState(false);
   const [historySecretsRedacted, setHistorySecretsRedacted] = useState(false);
+  const [caReady, setCaReady] = useState(false);
+  const [caCertificatePath, setCaCertificatePath] = useState("");
+  const [caConsent, setCaConsent] = useState(false);
+  const [caBusy, setCaBusy] = useState(false);
+  const [caError, setCaError] = useState("");
 
   const token = () => sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
 
@@ -40,7 +45,35 @@ export default function WebWorkbenchPage() {
     setHistory(data.items || []);
   }
 
-  useEffect(() => { loadHistory().catch(() => undefined); }, []);
+  async function loadCaStatus() {
+    const pairing = token();
+    if (!pairing) return;
+    const response = await fetch("http://127.0.0.1:8765/proxy/ca/status", { headers: { Authorization: "Bearer " + pairing } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not inspect local CA status.");
+    setCaReady(Boolean(data.ready));
+    setCaCertificatePath(data.caCertificate || "");
+  }
+
+  async function createLocalCa() {
+    setCaBusy(true); setCaError("");
+    try {
+      const pairing = token();
+      if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/proxy/ca/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+        body: JSON.stringify({ confirmCreateLocalCA: caConsent }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not create local inspection CA.");
+      setCaReady(Boolean(data.ready));
+      setCaCertificatePath(data.caCertificate || "");
+    } catch (cause) { setCaError(cause instanceof Error ? cause.message : "Unexpected CA setup error."); }
+    finally { setCaBusy(false); }
+  }
+
+  useEffect(() => { loadHistory().catch(() => undefined); loadCaStatus().catch(() => undefined); }, []);
 
   async function sendRequest(event: React.FormEvent) {
     event.preventDefault();
@@ -80,7 +113,17 @@ export default function WebWorkbenchPage() {
         <h1>Web request workbench</h1>
         <p>Compose, send, inspect and replay HTTP requests using CyberLab's own local engine. No external proxy is required.</p>
       </div>
-      <div className="scope-warning"><AlertTriangle size={14}/> Active requests contact the selected server. Use only an asset covered by written permission. The engine pins DNS resolution, blocks private addresses except explicit loopback lab mode, does not follow redirects, and caps request/response sizes.</div>
+      <div className="scope-warning"><AlertTriangle size={14}/> Active requests contact the selected server. Use only an asset covered by written permission. The engine pins DNS resolution, blocks private addresses except explicit loopback lab mode, does not follow redirects, and caps request/response sizes.</div>\n      <div className="network-results">
+        <h2><ShieldCheck size={14}/> HTTPS inspection certificate authority</h2>
+        <p>Foundation for CyberLab's native HTTPS interception. Creating this local CA does not install or trust it automatically. You must manually import the public certificate into a dedicated test browser profile. Never distribute the CA private key.</p>
+        <p>{caReady ? "Local CA is ready." : "No local inspection CA has been created."}</p>
+        {caCertificatePath && <p>Public CA certificate path: <code>{caCertificatePath}</code></p>}
+        {!caReady && <div className="scope-checks"><label><input type="checkbox" checked={caConsent} onChange={e=>setCaConsent(e.target.checked)}/> I explicitly approve generating a local CA and understand that trusting it enables HTTPS traffic decryption for traffic routed through CyberLab.</label></div>}
+        {!caReady && <button className="report-download" type="button" disabled={!caConsent || caBusy} onClick={createLocalCa}>{caBusy ? "Creating local CA…" : "Create local inspection CA"}</button>}
+        {caError && <div className="agent-error"><AlertTriangle size={14}/>{caError}</div>}
+        <p>Private key storage is owner-only under the Kali user's CyberLab configuration directory. Browser and operating-system trust stores are never modified by CyberLab.</p>
+      </div>
+
       <form className="report-editor" onSubmit={sendRequest}>
         <label>Target URL<input value={url} onChange={e=>setUrl(e.target.value)} required maxLength={2048} placeholder="https://your-authorised-domain.example/path"/></label>
         <label>Retype target URL to confirm hostname<input value={confirmationUrl} onChange={e=>setConfirmationUrl(e.target.value)} required maxLength={2048}/></label>
