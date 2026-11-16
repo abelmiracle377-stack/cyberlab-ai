@@ -25,7 +25,7 @@ TOOL_CATALOG = [
     {"name": "Greenbone / OpenVAS", "category": "Vulnerability analysis", "binary": "gvm-cli", "package": "gvm", "mode": "manual_only", "purpose": "Managed vulnerability assessment; requires configured services."},
     {"name": "Lynis", "category": "Vulnerability analysis", "binary": "lynis", "package": "lynis", "mode": "local_audit", "purpose": "Local Linux security configuration audit."},
     {"name": "Nuclei", "category": "Vulnerability analysis", "binary": "nuclei", "package": "nuclei", "mode": "manual_only", "purpose": "Template-based checks; templates and target scope must be reviewed."},
-    {"name": "Burp Suite", "category": "Web application analysis", "binary": "burpsuite", "package": "burpsuite", "mode": "manual_only", "purpose": "Interactive web application proxy and testing."},
+    {"name": "Burp Suite", "category": "Web application analysis", "binary": "burpsuite", "package": "burpsuite", "mode": "manual_only", "integration": {"kind": "local_rest_api", "status_endpoint": "/burp/status", "automation": "health_only"}, "purpose": "Burp Suite desktop proxy and web application testing; CyberLab currently verifies local REST API connectivity only."},
     {"name": "OWASP ZAP", "category": "Web application analysis", "binary": "zaproxy", "package": "zaproxy", "mode": "manual_only", "purpose": "Web application proxy and controlled scanning."},
     {"name": "sqlmap", "category": "Web application analysis", "binary": "sqlmap", "package": "sqlmap", "mode": "manual_only", "purpose": "SQL injection testing; potentially intrusive."},
     {"name": "WPScan", "category": "Web application analysis", "binary": "wpscan", "package": "wpscan", "mode": "manual_only", "purpose": "WordPress security enumeration."},
