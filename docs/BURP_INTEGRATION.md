@@ -16,9 +16,9 @@ The first integration slice provides:
 - Explicit states for missing configuration, unreachable service, authentication failure, invalid configuration and successful connection.
 - No Burp API key or extension token is returned in responses or logs.
 - A first-party Montoya extension exposes `GET http://127.0.0.1:8766/v1/health` and `GET http://127.0.0.1:8766/v1/proxy/history?limit=50` and `GET http://127.0.0.1:8766/v1/site-map?limit=50`, authenticated by a local random bearer token.
-- Proxy history and site-map exports are metadata-only, in-scope-only and capped at 100 items each. The `/burp-suite` dashboard page displays these read-only results.
+- Proxy history and site-map exports are metadata-only, in-scope-only and capped at 100 items each. The `/burp-suite` dashboard page displays these results.\n- A separately confirmed Repeater handoff can place one in-scope captured request into Burp Repeater. Burp does not send it; the analyst must review it and manually click Send.
 
-The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: request/response editing, Repeater, Intruder, active scanning, crawl tasks, issue retrieval or automated remediation.
+The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HTTP history. It exports only requests that Burp itself marks in scope, and redacts common credential-like query parameters. It does not export raw request/response headers or bodies. The following capabilities are **not implemented yet**: in-dashboard request/response editing, automated Repeater replay, Intruder task execution, active scanning, crawl tasks, issue retrieval or automated remediation.
 
 ## Kali-side setup
 
@@ -64,7 +64,7 @@ Burp edition is reported as `unknown` until it can be verified. Scanner capabili
 - Preserve the companion's pairing token, origin allowlist, request-size limits and audit trail.
 - Require an explicit engagement reference, exact target confirmation and in-scope validation before active requests.
 - Treat proxy history, cookies, authorization headers, request bodies and scanner findings as sensitive evidence; redact secrets before model analysis.
-- Never run active scans, Intruder jobs or Repeater requests merely because the AI mentions them. Each active operation needs an explicit user-approved action and bounded settings.
+- Never run active scans or Intruder jobs merely because the AI mentions them. Repeater handoff requires a separate user confirmation and only places an in-scope captured request in the Repeater tab; it does not send the request. Any replay is manually initiated by the analyst inside Burp.
 - Do not add unrestricted shell execution to the Burp connector.
 - Keep the Montoya connector bound to loopback, require bearer authentication, stop its server on extension unload, and never return out-of-scope proxy entries.
 
