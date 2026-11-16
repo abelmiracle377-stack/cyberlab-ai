@@ -84,9 +84,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertIn(b"403 Error", blocked)
                 self.assertIn(b"outside the approved proxy scope", blocked)
                 with socket.create_connection(("127.0.0.1", listen_port), timeout=3) as client:
-                    client.sendall((f"POST {origin}/change HTTP/1.1\\r\\n"
-                                    f"Host: localhost:{target.server_port}\\r\\n"
-                                    "Content-Length: 0\\r\\nConnection: close\\r\\n\\r\\n").encode("ascii"))
+                    client.sendall((f"POST {origin}/change HTTP/1.1\r\n"
+                                    f"Host: localhost:{target.server_port}\r\n"
+                                    "Content-Length: 0\r\nConnection: close\r\n\r\n").encode("ascii"))
                     denied = b""
                     while True:
                         chunk = client.recv(4096)
