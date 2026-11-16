@@ -8,6 +8,7 @@ type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
   durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
   body: string; bodyBytes: number; truncated: boolean; capturedAt: string;
+  requestHeaders?: Record<string, string>; requestBodyOmitted?: boolean; requestBodyLength?: number;
 };
 
 export default function WebWorkbenchPage() {
@@ -24,7 +25,7 @@ export default function WebWorkbenchPage() {
   const [result, setResult] = useState<HttpResult | null>(null);
   const [history, setHistory] = useState<HttpResult[]>([]);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);\n  const [historyBodyOmitted, setHistoryBodyOmitted] = useState(false);
 
   const token = () => sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
 
@@ -81,7 +82,7 @@ export default function WebWorkbenchPage() {
         <label>Retype target URL to confirm hostname<input value={confirmationUrl} onChange={e=>setConfirmationUrl(e.target.value)} required maxLength={2048}/></label>
         <label>HTTP method<select value={method} onChange={e=>setMethod(e.target.value)}>{["GET","HEAD","OPTIONS","POST","PUT","PATCH","DELETE"].map(item=><option key={item}>{item}</option>)}</select></label>
         <label>Request headers · JSON<textarea value={headersText} onChange={e=>setHeadersText(e.target.value)} rows={4} spellCheck={false}/></label>
-        <label>Request body · maximum 16 KB<textarea value={body} onChange={e=>setBody(e.target.value)} rows={5} spellCheck={false} placeholder="Optional request body for POST, PUT or PATCH"/></label>
+        <label>Request body · maximum 16 KB<textarea value={body} onChange={e=>{setBody(e.target.value);setHistoryBodyOmitted(false);}} rows={5} spellCheck={false} placeholder="Optional request body for POST, PUT or PATCH"/></label>\n        {historyBodyOmitted && <div className="scope-warning">The selected history item contained a request body. CyberLab deliberately did not store its contents; re-enter the body manually before replay.</div>}
         <label>Engagement / authorisation reference<input value={reference} onChange={e=>setReference(e.target.value)} required maxLength={160}/></label>
         <div className="scope-checks"><label><input type="checkbox" checked={localLabMode} onChange={e=>setLocalLabMode(e.target.checked)}/> Local lab mode (loopback only: localhost / 127.0.0.1 / ::1)</label></div>
         <div className="scope-checks"><label><input type="checkbox" checked={authorised} onChange={e=>setAuthorised(e.target.checked)}/> I own this target or have explicit written authorisation for this request.</label></div>
@@ -101,10 +102,10 @@ export default function WebWorkbenchPage() {
       <div className="network-results">
         <h2><History size={14}/> Recent request history</h2>
         <p>{history.length} recent entries · process memory only; cleared when the companion stops</p>
-        {history.map(item=><button key={item.id} type="button" className="nav-item" style={{width:"100%",marginTop:6,textAlign:"left"}} onClick={()=>{setUrl(item.target);setConfirmationUrl(item.target);setMethod(item.method);setResult(item);setConfirmSend(false);setAuthorised(false);}}>{item.method} · {item.status} · {item.target}</button>)}
+        {history.map(item=><button key={item.id} type="button" className="nav-item" style={{width:"100%",marginTop:6,textAlign:"left"}} onClick={()=>{setUrl(item.target);setConfirmationUrl(item.target);setMethod(item.method);setHeadersText(JSON.stringify(item.requestHeaders || {}, null, 2));setBody("");setHistoryBodyOmitted(Boolean(item.requestBodyOmitted));setResult(item);setConfirmSend(false);setAuthorised(false);setConfirmStateChange(false);}}>{item.method} · {item.status} · {item.target}</button>)}
         {!history.length && <p>No requests yet. Send an approved request to populate this list.</p>}
       </div>
-      <div className="agent-disclaimer"><ShieldCheck size={12}/> Phase 1 provides direct request/response testing and replay. Intercepting browser proxy, crawler, automated vulnerability checks, fuzzing and WebSocket testing are separate native components still to be built.</div>
+      <div className="agent-disclaimer"><ShieldCheck size={12}/> The native request workbench supports approved request replay from in-memory history. Secrets are redacted and request-body contents are not retained. The native crawler and limited safe active checks are available separately; intercepting browser proxy, advanced vulnerability checks, fuzzing and WebSocket testing remain in development.</div>
     </section>
   </main>;
 }
