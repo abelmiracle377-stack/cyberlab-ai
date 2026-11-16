@@ -181,7 +181,7 @@ export default function WebWorkbenchPage() {
       </div>
       <div className="scope-warning"><AlertTriangle size={14}/> Active requests contact the selected server. Use only an asset covered by written permission. The engine pins DNS resolution, blocks private addresses except explicit loopback lab mode, does not follow redirects, and caps request/response sizes.</div>\n      <div className="network-results">
         <h2><Globe size={14}/> CyberLab native interception proxy</h2>
-        <p>{proxyActive ? "Proxy is running." : "Proxy is stopped."} It listens only on 127.0.0.1 and enforces one exact approved origin. Configure your dedicated test browser to use 127.0.0.1:8081 as its HTTP and HTTPS proxy after starting it.</p>
+        <p>{proxyActive ? "Proxy is running." : "Proxy is stopped."} It listens only on 127.0.0.1 and enforces one exact approved origin. Configure your dedicated test browser to use 127.0.0.1:{proxyPort} as its HTTP and HTTPS proxy after starting it.</p>
         {!proxyActive && <>
           <label>Exact origin to intercept<input value={proxyOrigin} onChange={e=>{setProxyOrigin(e.target.value);setProxyConfirmation("");}} placeholder="https://your-authorised-domain.example"/></label>
           <label>Retype exact origin<input value={proxyConfirmation} onChange={e=>setProxyConfirmation(e.target.value)} placeholder="Retype the origin exactly"/></label>
@@ -193,6 +193,7 @@ export default function WebWorkbenchPage() {
         {proxyError && <div className="agent-error"><AlertTriangle size={14}/>{proxyError}</div>}
         <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked.</p>
         <h3>Recent intercepted requests</h3>
+        <button className="report-download" type="button" onClick={()=>loadProxyHistory().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh proxy history."))}>Refresh proxy history</button>
         {proxyHistory.map(item=><p key={item.id}>{item.method} · {item.status} · {item.url}{item.queryOmitted ? " · query omitted" : ""} · {item.durationMs} ms</p>)}
         {!proxyHistory.length && <p>No proxy requests recorded in this companion session.</p>}
       </div>
