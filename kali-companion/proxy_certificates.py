@@ -94,7 +94,10 @@ def create_local_ca() -> dict:
         _secure_directory(CA_DIR)
         if CA_KEY.exists() or CA_CERT.exists():
             if CA_KEY.is_file() and CA_CERT.is_file() and not CA_KEY.is_symlink() and not CA_CERT.is_symlink():
-                return ca_status()
+                status = ca_status()
+                if status["ready"]:
+                    return status
+                raise ValueError("Existing CA ownership or permissions are unsafe. Run the companion as the CA owner or securely repair/remove the old CA files before creating another.")
             raise ValueError("Incomplete or unsafe CA files exist. Refusing to overwrite them.")
         binary = _openssl()
         key_tmp = CA_DIR / ".ca-key.pending"
