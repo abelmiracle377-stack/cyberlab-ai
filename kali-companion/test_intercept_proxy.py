@@ -459,9 +459,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
                 def send_request():
                     with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
-                        client.sendall((f"GET {origin}/response-inspect HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        client.sendall((f"GET {origin}/response-inspect HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: close\r\n\r\n").encode("ascii"))
                         chunks = []
                         while True:
                             chunk = client.recv(8192)
@@ -517,9 +517,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
                 def send_request():
                     with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
-                        client.sendall((f"GET {origin}/response-edit HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        client.sendall((f"GET {origin}/response-edit HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: close\r\n\r\n").encode("ascii"))
                         chunks = []
                         while True:
                             chunk = client.recv(8192)
@@ -547,7 +547,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
                     })
                 with self.assertRaisesRegex(ValueError, "header value"):
                     intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
-                        "status": 201, "headers": [{"name": "X-Test", "value": "bad\\r\\nheader"}],
+                        "status": 201, "headers": [{"name": "X-Test", "value": "bad\r\nheader"}],
                         "body": "edited",
                     })
                 intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
@@ -595,9 +595,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
                 def send_request():
                     with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
-                        client.sendall((f"GET {origin}/response-drop HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        client.sendall((f"GET {origin}/response-drop HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: close\r\n\r\n").encode("ascii"))
                         chunks = []
                         while True:
                             chunk = client.recv(8192)
