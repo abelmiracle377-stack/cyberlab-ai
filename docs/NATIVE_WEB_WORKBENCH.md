@@ -28,12 +28,26 @@ The companion's `POST /web/crawl` endpoint runs `kali-companion/web_crawler.py`.
 
 The baseline findings are indicators, not proof of exploitability. A missing header is not automatically a vulnerability in every deployment.
 
+## Native safe active checks
+
+The companion's `POST /web/active-scan` endpoint runs `kali-companion/web_active_scan.py`. It is a deliberately limited active-check layer:
+- Requires written authorisation, exact scheme/host/port confirmation, an engagement reference and a separate active-run approval.
+- Accepts up to 10 same-origin URLs and sends no more than 10 requests per run, with a delay and a 30-second runtime limit.
+- Sends only OPTIONS CORS preflight requests and GET query-parameter reflection probes.
+- Uses a reserved `.invalid` Origin value for CORS testing; it does not contact that domain.
+- Skips query parameter names that look sensitive (token, key, auth, password, secret, session, code, signature, JWT, CSRF or nonce).
+- Counts failed request attempts against the request budget.
+- Does not submit forms, send state-changing methods, follow redirects, execute script or inject exploit payloads.
+- Records response digests and reports only potential indicators for manual verification.
+
+These checks are not a full vulnerability scanner. Reflection does not prove XSS, and permissive CORS headers do not by themselves prove sensitive data exposure.
+
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
 - Intercepting HTTP/HTTPS proxy with a user-managed local CA and browser integration.
 - Authenticated crawling and session/role handling.
-- Active, non-destructive vulnerability probes with per-check approval and evidence verification.
+- Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
 - Native request repeater UI with response comparison.
 - Bounded parameter mutation and fuzzing engine.
 - WebSocket and GraphQL security testing.
