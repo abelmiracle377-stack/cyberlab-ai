@@ -311,6 +311,28 @@ export default function WebWorkbenchPage() {
     finally { setBusy(false); }
   }
 
+  function openHistoryInRepeater(item: ProxyHistoryItem) {
+    try {
+      const target = new URL(item.url);
+      const safeHeaders = Object.fromEntries((item.requestHeaders || [])
+        .filter(header => header.value !== "[REDACTED]" && !["host", "content-length", "connection", "proxy-connection", "keep-alive", "te", "trailer", "transfer-encoding", "upgrade", "proxy-authenticate", "proxy-authorization", "expect"].includes(header.name.toLowerCase()))
+        .map(header => [header.name, header.value]));
+      sessionStorage.setItem("cyberlab.repeaterDraft", JSON.stringify({
+        name: "From proxy history",
+        url: item.url,
+        confirmationUrl: target.origin,
+        method: item.method,
+        headers: safeHeaders,
+        body: "",
+        queryOmitted: Boolean(item.queryOmitted),
+        requestBodyLength: item.requestBodyLength || 0,
+      }));
+      window.location.href = "/web-repeater";
+    } catch {
+      setProxyError("This history entry could not be loaded into the repeater because its recorded URL is invalid.");
+    }
+  }
+
   const stateChanging = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 
   return <main className="agent-shell">
@@ -398,6 +420,8 @@ export default function WebWorkbenchPage() {
             <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>{JSON.stringify(selected.requestHeaders || [],null,2)}</pre>
             <h4>Response headers · sensitive values redacted</h4>
             <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>{JSON.stringify(selected.responseHeaders || [],null,2)}</pre>
+            <button className="report-download" type="button" onClick={()=>openHistoryInRepeater(selected)}>Open request in native Repeater</button>
+            <p>The original query string and request body are not stored in history. Redacted credentials are deliberately not copied; review the request and re-enter any required test data before manually sending it.</p>
           </div>;
         })()}
       </div>
