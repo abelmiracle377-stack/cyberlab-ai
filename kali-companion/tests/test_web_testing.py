@@ -127,7 +127,7 @@ class WebTestingValidationTests(unittest.TestCase):
     def test_rejects_delete_control_character_in_header_value(self, resolve):
         resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
         data = self.base()
-        data["headers"] = {"X-Test": "value\\x7f"}
+        data["headers"] = {"X-Test": "value\x7f"}
         with self.assertRaisesRegex(ValueError, "HTTP field characters"):
             web_testing.validate_request(data)
 
@@ -146,7 +146,7 @@ class WebTestingValidationTests(unittest.TestCase):
             def sendall(self, payload):
                 self.sent += payload
             def makefile(self, *_args, **_kwargs):
-                return io.BytesIO(b"HTTP/1.1 200 OK\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n")
+                return io.BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
             def close(self):
                 pass
 
