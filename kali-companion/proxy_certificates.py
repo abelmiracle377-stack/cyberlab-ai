@@ -75,7 +75,8 @@ def ca_certificate_pem() -> dict:
     with _LOCK:
         if not ca_status()["ready"]:
             raise ValueError("Local inspection CA is missing or its private-key permissions are unsafe.")
-        pem = CA_CERT.read_text(encoding="ascii")
+        with CA_CERT.open("r", encoding="ascii") as certificate_file:
+            pem = certificate_file.read(65537)
         if len(pem) > 65536 or "-----BEGIN CERTIFICATE-----" not in pem:
             raise ValueError("Local CA certificate file is invalid or exceeds the size limit.")
         return {"filename": "cyberlab-local-inspection-ca.pem", "pem": pem,
