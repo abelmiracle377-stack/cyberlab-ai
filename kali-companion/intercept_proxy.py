@@ -231,6 +231,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         if method.upper() not in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}:
             self._error(405, "HTTP method is not supported")
             return
+        if method.upper() in {"POST", "PUT", "PATCH", "DELETE"} and not controller.allow_state_changing_methods:
+            self._error(403, "State-changing methods are disabled for this proxy session")
+            return
         headers = self._read_headers()
         lowered = {}
         for name, value in headers:
@@ -343,6 +346,7 @@ class NativeInterceptProxy:
         self.scope = None
         self.local_lab_mode = False
         self.authorization_reference = ""
+        self.allow_state_changing_methods = False
 
     def start(self, data: dict) -> dict:
         if not isinstance(data, dict):
@@ -361,6 +365,9 @@ class NativeInterceptProxy:
         if local_lab and scope[1] not in {"localhost", "127.0.0.1", "::1"}:
             raise ValueError("Local-lab mode accepts localhost or loopback IP addresses only.")
         _resolve_pinned(scope[1], scope[2], local_lab)
+        allow_mutating = data.get("allowStateChangingMethods") is True
+        if allow_mutating and data.get("confirmStateChangingMethods") is not True:
+            raise ValueError("Separately approve forwarding POST, PUT, PATCH and DELETE requests.")
         port = data.get("listenPort", DEFAULT_PORT)
         if isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
             raise ValueError("Proxy listen port must be between 1024 and 65535.")
@@ -374,6 +381,7 @@ class NativeInterceptProxy:
             self.scope = scope
             self.local_lab_mode = local_lab
             self.authorization_reference = reference.strip()
+            self.allow_state_changing_methods = allow_mutating
             self._server = server
             self._thread = threading.Thread(target=server.serve_forever, name="cyberlab-intercept-proxy", daemon=True)
             self._thread.start()
@@ -387,6 +395,7 @@ class NativeInterceptProxy:
             self.scope = None
             self.authorization_reference = ""
             self.local_lab_mode = False
+            self.allow_state_changing_methods = False
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -404,6 +413,7 @@ class NativeInterceptProxy:
                 "scope": (scope[0] + "://" + (f"[{scope[1]}]" if ":" in scope[1] else scope[1])
                           + (f":{scope[2]}" if scope[2] not in (80, 443) else "")) if scope else None,
                 "authorizationReference": self.authorization_reference if active else None,
+                "allowStateChangingMethods": self.allow_state_changing_methods if active else False,
                 "mode": "HTTP/1.1 request/response inspection; HTTPS CONNECT TLS termination" if active else "stopped",
                 "limitations": ["one approved origin", "one request per client connection", "no HTTP/2",
                                 "no WebSockets", "no chunked client request bodies", "no client certificates"],
