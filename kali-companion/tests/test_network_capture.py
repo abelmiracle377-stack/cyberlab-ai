@@ -59,7 +59,7 @@ class NetworkCaptureTests(unittest.TestCase):
              patch.object(network_capture, "CAPTURE_DIR", Path(directory)), \
              patch.object(network_capture.socket, "if_nameindex", return_value=self.interfaces), \
              patch.object(network_capture.shutil, "which", return_value="/usr/sbin/tcpdump"), \
-             patch.object(network_capture.subprocess, "Popen", FakeCaptureProcess) as popen, \
+             patch.object(network_capture.subprocess, "Popen", side_effect=FakeCaptureProcess) as popen, \
              patch.object(network_capture.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=packet_lines)):
             result = network_capture.capture_packets(
                 "eth0", "eth0", True, "LAB-2026-01",
