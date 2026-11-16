@@ -8,6 +8,8 @@ on:
       - "burp-extension/**"
       - "kali-companion/burp_connector.py"
       - "kali-companion/bridge.py"
+      - "kali-companion/network_capture.py"
+      - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/tests/test_burp_connector.py"
       - ".github/workflows/burp-integration.yml"
   pull_request:
@@ -34,6 +36,7 @@ jobs:
           PYTHONPATH: kali-companion
         run: |
           python -m unittest discover -s kali-companion/tests -p "test_burp_connector.py" -v
+          python -m unittest discover -s kali-companion/tests -p "test_network_capture.py" -v
           python -m unittest discover -s kali-companion -p "test_task_planner.py" -v
 
   montoya-build:
