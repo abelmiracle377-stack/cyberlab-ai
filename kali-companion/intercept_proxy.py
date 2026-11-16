@@ -233,6 +233,8 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         if "transfer-encoding" in lowered or "expect" in lowered:
             self._error(501, "Chunked request bodies and Expect are not supported")
             return
+        connection_tokens = {token.strip().lower() for value in lowered.get("connection", [])
+                             for token in value.split(",") if token.strip()}
         lengths = lowered.get("content-length", ["0"])
         if len(lengths) != 1 or not lengths[0].isdigit():
             self._error(400, "Invalid Content-Length")
@@ -253,7 +255,8 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                       else _PinnedHTTPConnection(host, port, address))
         try:
             clean = [(name, value) for name, value in headers
-                     if name.lower() not in _HOP_BY_HOP and name.lower() not in {"host", "content-length"}]
+                     if name.lower() not in _HOP_BY_HOP and name.lower() not in connection_tokens
+                     and name.lower() not in {"host", "content-length"}]
             host_header = f"[{host}]" if ":" in host else host
             if port not in (80, 443):
                 host_header += f":{port}"
@@ -271,8 +274,11 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self._error(502, "Upstream response exceeds the 2 MB inspection limit")
                 return
             response_headers = response.getheaders()
+            response_connection_tokens = {token.strip().lower() for value in response.getheaders()
+                                          if value and any(name.lower() == "connection" for name, _ in response_headers)
+                                          for token in (value.split(",") if value else []) if token.strip()}
             safe_forward = [(name, value) for name, value in response_headers
-                            if name.lower() not in _HOP_BY_HOP and name.lower() != "content-length"
+                            if name.lower() not in _HOP_BY_HOP and name.lower() not in response_connection_tokens and name.lower() != "content-length"
                             and not any(ord(char) in (10, 13) or (ord(char) < 32 and char != "\t") for char in value)]
             reason = str(response.reason).replace(chr(10), "").replace(chr(13), "")
             self.wfile.write(f"HTTP/1.1 {response.status} {reason}\r\n".encode("iso-8859-1", errors="replace"))
