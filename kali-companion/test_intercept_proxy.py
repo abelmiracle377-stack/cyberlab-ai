@@ -1,11 +1,15 @@
 """Integration tests for the native HTTP interception proxy using loopback only."""
 import http.server
 import socket
+import ssl
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import intercept_proxy
+import proxy_certificates as certs
 
 
 class _TargetHandler(http.server.BaseHTTPRequestHandler):
@@ -73,6 +77,80 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target.shutdown()
             target.server_close()
             target_thread.join(timeout=2)
+
+    def test_https_connect_terminates_client_tls_and_validates_upstream_tls(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / ".config" / "cyberlab"
+            patches = [
+                patch.object(certs, "CONFIG_ROOT", root),
+                patch.object(certs, "CA_DIR", root / "proxy-ca"),
+                patch.object(certs, "CA_KEY", root / "proxy-ca" / "ca-key.pem"),
+                patch.object(certs, "CA_CERT", root / "proxy-ca" / "ca-cert.pem"),
+                patch.object(certs, "LEAF_DIR", root / "proxy-ca" / "hosts"),
+            ]
+            for item in patches:
+                item.start()
+            target = None
+            proxy = intercept_proxy.NativeInterceptProxy()
+            target_thread = None
+            try:
+                certs.create_local_ca()
+                leaf = certs.issue_host_certificate("localhost")
+                target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+                server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                server_context.load_cert_chain(leaf["certificate"], leaf["privateKey"])
+                target.socket = server_context.wrap_socket(target.socket, server_side=True)
+                target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+                target_thread.start()
+
+                origin = f"https://localhost:{target.server_port}"
+                listen_port = self._free_port()
+                browser_context = ssl.create_default_context(cafile=str(certs.CA_CERT))
+                upstream_context = ssl.create_default_context(cafile=str(certs.CA_CERT))
+                with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]), \\
+                     patch.object(intercept_proxy.ssl, "create_default_context", return_value=upstream_context):
+                    proxy.start({
+                        "origin": origin, "confirmationOrigin": origin,
+                        "authorizationConfirmed": True, "confirmStart": True,
+                        "authorizationReference": "LOCAL-HTTPS-PROXY-001",
+                        "localLabMode": True, "listenPort": listen_port,
+                    })
+                    raw = socket.create_connection(("127.0.0.1", listen_port), timeout=5)
+                    raw.sendall((f"CONNECT localhost:{target.server_port} HTTP/1.1\\r\\n"
+                                 f"Host: localhost:{target.server_port}\\r\\n"
+                                 "Proxy-Connection: keep-alive\\r\\n\\r\\n").encode("ascii"))
+                    handshake_reply = b""
+                    while b"\\r\\n\\r\\n" not in handshake_reply:
+                        chunk = raw.recv(4096)
+                        if not chunk:
+                            break
+                        handshake_reply += chunk
+                    self.assertIn(b"200 Connection Established", handshake_reply)
+                    tls_client = browser_context.wrap_socket(raw, server_hostname="localhost")
+                    tls_client.sendall((f"GET /secure?session=secret HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                    response = b""
+                    while True:
+                        chunk = tls_client.recv(8192)
+                        if not chunk:
+                            break
+                        response += chunk
+                    tls_client.close()
+                    self.assertIn(b"200 OK", response)
+                    self.assertIn(b"local-lab-response", response)
+                    entry = intercept_proxy.proxy_history()["items"][0]
+                    self.assertTrue(entry["queryOmitted"])
+                    self.assertNotIn("secret", str(entry))
+            finally:
+                proxy.stop()
+                if target is not None:
+                    target.shutdown()
+                    target.server_close()
+                if target_thread is not None:
+                    target_thread.join(timeout=2)
+                for item in reversed(patches):
+                    item.stop()
 
     def test_proxy_start_requires_exact_origin_and_explicit_approval(self):
         proxy = intercept_proxy.NativeInterceptProxy()
