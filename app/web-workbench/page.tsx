@@ -38,6 +38,7 @@ export default function WebWorkbenchPage() {
   const [proxyConfirmation, setProxyConfirmation] = useState("http://localhost:3000");
   const [proxyAuthorised, setProxyAuthorised] = useState(false);
   const [proxyStartConsent, setProxyStartConsent] = useState(false);
+  const [proxyMutatingConsent, setProxyMutatingConsent] = useState(false);
   const [proxyActive, setProxyActive] = useState(false);
   const [proxyActiveScope, setProxyActiveScope] = useState("");
   const [proxyPort, setProxyPort] = useState(8081);
@@ -94,7 +95,7 @@ export default function WebWorkbenchPage() {
       const response = await fetch("http://127.0.0.1:8765/proxy/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
-        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081 }),
+        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081, allowStateChangingMethods: proxyMutatingConsent, confirmStateChangingMethods: proxyMutatingConsent }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not start the native interception proxy.");
@@ -191,11 +192,12 @@ export default function WebWorkbenchPage() {
           <label>Retype exact origin<input value={proxyConfirmation} onChange={e=>setProxyConfirmation(e.target.value)} placeholder="Retype the origin exactly"/></label>
           <div className="scope-checks"><label><input type="checkbox" checked={proxyAuthorised} onChange={e=>setProxyAuthorised(e.target.checked)}/> I own this origin or have explicit written authorisation to inspect its traffic.</label></div>
           <div className="scope-checks"><label><input type="checkbox" checked={proxyStartConsent} onChange={e=>setProxyStartConsent(e.target.checked)}/> I explicitly approve starting the local proxy for this exact origin. Browser requests to this origin will be forwarded while it is running.</label></div>
+          <div className="scope-checks"><label><input type="checkbox" checked={proxyMutatingConsent} onChange={e=>setProxyMutatingConsent(e.target.checked)}/> I separately approve forwarding POST, PUT, PATCH and DELETE requests. These methods are blocked unless I enable this.</label></div>
           <button className="report-download" type="button" disabled={proxyBusy || !proxyAuthorised || !proxyStartConsent || proxyOrigin !== proxyConfirmation || !reference.trim() || (proxyOrigin.startsWith("https://") && !caReady)} onClick={startProxy}>{proxyBusy ? "Starting proxy…" : "Start native interception proxy"}</button>
         </>}
         {proxyActive && <button className="report-download" type="button" disabled={proxyBusy} onClick={stopProxy}>{proxyBusy ? "Stopping proxy…" : "Stop interception proxy"}</button>}
         {proxyError && <div className="agent-error"><AlertTriangle size={14}/>{proxyError}</div>}
-        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked.</p>
+        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked.</p>
         <h3>Recent intercepted requests</h3>
         <button className="report-download" type="button" onClick={()=>loadProxyHistory().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh proxy history."))}>Refresh proxy history</button>
         {proxyHistory.map(item=><p key={item.id}>{item.method} · {item.status} · {item.url}{item.queryOmitted ? " · query omitted" : ""} · {item.durationMs} ms</p>)}
