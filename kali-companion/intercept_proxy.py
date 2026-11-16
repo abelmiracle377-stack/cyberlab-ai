@@ -98,7 +98,9 @@ def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
         raise ValueError("Edited request must be an object.")
     method = edits.get("method", entry["method"])
     path = edits.get("path", entry["path"])
-    headers = edits.get("headers", entry["headers"])
+    default_headers = [{"name": name, "value": value} for name, value in entry["headers"]
+                       if name.lower() not in _HOP_BY_HOP and name.lower() not in {"host", "content-length"}]
+    headers = edits.get("headers", default_headers)
     if not entry["bodyEditable"]:
         raise ValueError("This request body is binary and cannot be edited in the text editor.")
     body_text = edits.get("body", entry["body"].decode("utf-8"))
@@ -146,7 +148,7 @@ def decide_intercept(intercept_id: str, action: str, edits: dict | None = None) 
     if not isinstance(intercept_id, str) or not re.fullmatch(r"[a-f0-9]{32}", intercept_id):
         raise ValueError("Interception request ID is invalid.")
     if not isinstance(action, str) or action not in {"forward", "forward_edited", "drop"}:
-        raise ValueError("Interception decision must be forward, forward_edited or drop.")
+        raise ValueError("Interception decision must be forward or drop, or forward_edited.")
     with _INTERCEPT_LOCK:
         entry = _INTERCEPTS.get(intercept_id)
         if entry is None:
