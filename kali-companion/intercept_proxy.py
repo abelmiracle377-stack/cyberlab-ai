@@ -300,7 +300,7 @@ def _await_response_decision(method: str, url: str, status: int, reason: str,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "decisionTimeoutSeconds": INTERCEPT_DECISION_TIMEOUT,
     }
-    body_editable = body_visible and len(body) <= 16384
+    body_editable = body_visible and len(body) <= 16384 and method.upper() != "HEAD"
     public["bodyEditable"] = body_editable
     entry = {"event": event, "decision": None, "public": public,
              "status": status, "reason": str(reason or ""),
