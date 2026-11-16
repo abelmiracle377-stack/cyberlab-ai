@@ -106,5 +106,57 @@ class WebTestingValidationTests(unittest.TestCase):
             web_testing.validate_request(data)
 
 
+    @patch("web_testing.socket.getaddrinfo")
+    def test_rejects_unescaped_whitespace_in_request_target(self, resolve):
+        resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
+        data = self.base()
+        data["url"] = "http://localhost:8080/search term"
+        data["confirmationUrl"] = "http://localhost:8080/"
+        with self.assertRaisesRegex(ValueError, "percent-encoded"):
+            web_testing.validate_request(data)
+
+    @patch("web_testing.socket.getaddrinfo")
+    def test_rejects_header_values_that_cannot_be_encoded_as_http_bytes(self, resolve):
+        resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
+        data = self.base()
+        data["headers"] = {"X-Test": "漢字"}
+        with self.assertRaisesRegex(ValueError, "ISO-8859-1"):
+            web_testing.validate_request(data)
+
+    @patch("web_testing.socket.getaddrinfo")
+    def test_rejects_delete_control_character_in_header_value(self, resolve):
+        resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
+        data = self.base()
+        data["headers"] = {"X-Test": "value\\x7f"}
+        with self.assertRaisesRegex(ValueError, "HTTP field characters"):
+            web_testing.validate_request(data)
+
+    @patch("web_testing.socket.create_connection")
+    @patch("web_testing.socket.getaddrinfo")
+    def test_ipv6_host_header_uses_brackets(self, resolve, connect):
+        import io
+
+        resolve.return_value = [(None, None, None, None, ("::1", 8080, 0, 0))]
+
+        class FakeSocket:
+            def __init__(self):
+                self.sent = b""
+            def settimeout(self, _timeout):
+                pass
+            def sendall(self, payload):
+                self.sent += payload
+            def makefile(self, *_args, **_kwargs):
+                return io.BytesIO(b"HTTP/1.1 200 OK\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n")
+            def close(self):
+                pass
+
+        fake = FakeSocket()
+        connect.return_value = fake
+        data = self.base()
+        data.update({"url": "http://[::1]:8080/", "confirmationUrl": "http://[::1]:8080/"})
+        result = web_testing.execute_request(data)
+        self.assertEqual(result["status"], 200)
+        self.assertIn(b"Host: [::1]:8080", fake.sent)
+
 if ( __name__ == "__main__" ):
     unittest.main()
