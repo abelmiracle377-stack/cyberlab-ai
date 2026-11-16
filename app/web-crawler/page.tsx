@@ -94,6 +94,7 @@ export default function NativeWebCrawlerPage() {
           {result.findings.length===0 ? <p className="text-xs text-slate-400">No baseline indicators were recorded for the pages reached.</p> : <div className="space-y-3">{result.findings.map(f=><div key={f.id} className="border-b border-slate-800/70 pb-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded bg-slate-800 px-2 py-1 text-[9px] uppercase text-amber-200">{f.severity}</span><b className="text-xs">{f.title}</b></div><p className="mt-1 break-all text-[11px] text-slate-500">{f.url}</p><p className="mt-1 text-xs text-slate-400">{f.detail}</p></div>)}</div>}</div>
         <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">TEST BOUNDARIES</h2><ul className="list-disc space-y-1 pl-5 text-xs text-slate-400">{result.limitations.map(item=><li key={item}>{item}</li>)}</ul></div>
       </section>}
+      <a href="/web-scanner" className="mt-6 inline-flex items-center gap-2 rounded border border-amber-900/60 px-4 py-2 text-xs text-amber-200 hover:bg-amber-950/30">Continue to Safe Active Web Checks <ArrowRight size={14}/></a>
       <p className="mt-8 text-[10px] tracking-wide text-slate-600">CYBERLAB AI · NATIVE WEB DISCOVERY · LOCAL COMPANION EXECUTION</p>
     </div>
   </main>;
