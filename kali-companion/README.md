@@ -191,3 +191,8 @@ The paired dashboard includes a **Network Intelligence** workspace at `/network-
 Install tcpdump separately if needed: `sudo apt install -y tcpdump`. The companion does not install it, invoke sudo or change interface capabilities. The bridge process must already have the OS permissions required for packet capture. Use only on networks you own or are authorised to monitor.
 
 The SSH filter captures TCP port 22 traffic. Packet capture can show endpoints and handshake metadata, but encrypted SSH session data does not expose passwords, commands or terminal contents. This first slice does not yet import external PCAP/PCAPNG files, reconstruct streams, perform deep TShark dissection or run AI anomaly detection. See `docs/NETWORK_INTELLIGENCE.md` for the detailed API and safety boundary.
+
+
+## Native web assessment
+
+CyberLab includes a native HTTP workbench and a bounded same-origin web crawler/baseline auditor. The crawler sends approved GET requests only, revalidates target scope for every page, blocks out-of-origin links and redirects, inventories forms without submitting them, and reports baseline header/cookie indicators. It does not perform payload-based vulnerability testing. See `docs/NATIVE_WEB_WORKBENCH.md` for current capability boundaries.
