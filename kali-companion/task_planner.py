@@ -32,7 +32,7 @@ PATTERNS = [
 
 TOOL_MAP = {
     "network_recon": ["Nmap"],
-    "web_assessment": ["CyberLab Web Crawler & Baseline Auditor", "CyberLab HTTP Workbench", "WhatWeb", "Nmap"],
+    "web_assessment": ["CyberLab Web Crawler & Baseline Auditor", "CyberLab Safe Active Web Checks", "CyberLab HTTP Workbench", "WhatWeb", "Nmap"],
     "dns_osint": ["WHOIS", "theHarvester", "Amass", "dnsenum", "dnsrecon"],
     "vulnerability_research": ["SearchSploit", "Metasploit Framework"],
     "service_enumeration": ["Nmap", "FTP client", "Impacket", "NetExec"],
@@ -158,7 +158,8 @@ def plan_task(prompt: str) -> dict:
         recommended_workflow = [
             {"phase": "application discovery", "tool": "CyberLab Web Crawler & Baseline Auditor", "mode": "bounded same-origin GET-only crawl", "status": "available", "approval_required": True},
             {"phase": "manual request inspection", "tool": "CyberLab HTTP Workbench", "mode": "scope-bound HTTP request and response analysis", "status": "available", "approval_required": True},
-            {"phase": "active vulnerability validation", "tool": "CyberLab native active scanner", "mode": "non-destructive checks with evidence verification", "status": "not_implemented", "approval_required": True},
+            {"phase": "safe active checks", "tool": "CyberLab Safe Active Web Checks", "mode": "CORS preflight and inert GET query-reflection indicators", "status": "available_limited", "approval_required": True},
+            {"phase": "advanced vulnerability validation", "tool": "CyberLab native vulnerability scanner", "mode": "SQL injection, SSRF, IDOR, authentication and deeper checks with evidence verification", "status": "not_implemented", "approval_required": True},
             {"phase": "fuzzing and request replay", "tool": "CyberLab native repeater and fuzzer", "mode": "bounded parameter testing", "status": "not_implemented", "approval_required": True},
         ]
     return {
