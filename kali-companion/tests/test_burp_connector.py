@@ -50,6 +50,37 @@ class BurpConnectorTests(unittest.TestCase):
             )
         self.assertEqual(result["capabilities"]["scanner"], "not_implemented")
 
+    def test_proxy_history_requires_local_token(self):
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen") as open_url:
+            token_file.read_text.side_effect = OSError("missing")
+            result = burp_connector.inspect_burp_proxy_history(25)
+        self.assertEqual(result["status"], "not_configured")
+        open_url.assert_not_called()
+
+    def test_proxy_history_is_bounded_and_returns_only_metadata(self):
+        payload = {
+            "status": "ok",
+            "items": [
+                {"id": 7, "timestamp": "2026-11-16T12:00:00Z", "method": "GET",
+                 "url": "https://lab.example.org/", "status_code": 200, "in_scope": True,
+                 "request": "must not be forwarded"}
+            ]
+        }
+        class HistoryResponse(FakeResponse):
+            def read(self, _limit):
+                import json
+                return json.dumps(payload).encode("utf-8")
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=HistoryResponse()) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.inspect_burp_proxy_history(999)
+        self.assertEqual(result["status"], "connected")
+        self.assertEqual(result["count"], 1)
+        self.assertNotIn("request", result["items"][0])
+        request = open_url.call_args.args[0]
+        self.assertIn("limit=100", request.full_url)
+
     def test_rejects_url_credentials(self):
         result = burp_connector.inspect_burp_status(
             api_url="http://user:pass@127.0.0.1:1337",
