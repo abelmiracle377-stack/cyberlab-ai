@@ -9,6 +9,10 @@ const modelKey = (item: Model) => `${item.source}::${item.id}`;
 type Message = { role: "user" | "assistant"; content: string };
 type AgentAttachment = { name: string; mediaType: string; data: string; size: number };
 type LocalScanResult = { target: string; duration_seconds: number; method: string; state_summary: { open: number; closed: number; filtered: number }; hosts: { addresses: { address: string }[]; ports: { port: number; state: string; service: string; product: string; version: string }[] }[]; note: string };
+type NativeWebFinding = { id?: string; title: string; severity: string; url: string; detail: string; confidence?: string };
+type NativeWebCrawlResult = { status: string; scope: { origin: string; authorizationReference: string }; summary: Record<string, number>; pages: Array<{ url: string; status: number | null; contentType?: string; bodyBytes?: number; responseSha256?: string; error?: string; forms?: Array<{ action: string; method: string; fields: Array<{ name: string; type: string }>; submitted: boolean }> }>; findings: NativeWebFinding[]; limitations: string[] };
+type NativeWebActiveResult = { status: string; summary: Record<string, number>; checks: Array<{ type: string; url: string; status?: number; parameter?: string; error?: string }>; findings: NativeWebFinding[]; limitations: string[] };
+type NativeWebAssessmentResult = { crawl: NativeWebCrawlResult; activeScan?: NativeWebActiveResult; activeScanError?: string };
 
 export default function AgentPage() {
   const [models, setModels] = useState<Model[]>([]);
@@ -34,6 +38,16 @@ export default function AgentPage() {
   const [scanBusy, setScanBusy] = useState(false);
   const [scanStatus, setScanStatus] = useState("");
   const [scanResult, setScanResult] = useState<LocalScanResult | null>(null);
+  const [webAssessmentRequest, setWebAssessmentRequest] = useState<{ url: string } | null>(null);
+  const [webConfirmationUrl, setWebConfirmationUrl] = useState("");
+  const [webReference, setWebReference] = useState("");
+  const [webAuthorised, setWebAuthorised] = useState(false);
+  const [webApproveCrawl, setWebApproveCrawl] = useState(false);
+  const [webApproveActive, setWebApproveActive] = useState(false);
+  const [webBusy, setWebBusy] = useState(false);
+  const [webStatus, setWebStatus] = useState("");
+  const [webResult, setWebResult] = useState<NativeWebAssessmentResult | null>(null);
+
   const endRef = useRef<HTMLDivElement>(null);
   const providerModels = providerChoice === "openrouter" ? models.filter((item) => item.source === "openrouter") : providerChoice === "ollama" ? models.filter((item) => item.source === "ollama") : models;
   const availableModels = agentMode === "open-weight" ? providerModels.filter((item) => item.openWeight) : providerModels;
@@ -170,14 +184,99 @@ export default function AgentPage() {
     } catch { setError("Microphone access was denied or unavailable. You can upload an audio file instead."); }
   }
 
-  async function sendAgentPrompt(text: string, submittedAttachments: AgentAttachment[] = []) {
+  async function runLocalWebAssessment(event: FormEvent) {
+    event.preventDefault();
+    if (!webAssessmentRequest || webBusy) return;
+    const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+    if (!token) { setWebStatus("Pair the local Kali companion first in Kali Connection."); return; }
+    setWebBusy(true); setWebStatus("Running the approved native CyberLab web workflow…"); setWebResult(null);
+    try {
+      const parsed = new URL(webAssessmentRequest.url);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Only HTTP and HTTPS targets are supported.");
+      const localHost = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+      const localLabMode = ["localhost", "127.0.0.1", "::1"].includes(localHost);
+      const base = {
+        confirmationUrl: webConfirmationUrl.trim(),
+        authorizationReference: webReference.trim(),
+        authorizationConfirmed: webAuthorised,
+        localLabMode,
+      };
+      const crawlResponse = await fetch("http://127.0.0.1:8765/web/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ ...base, url: webAssessmentRequest.url, confirmRun: webApproveCrawl, maxPages: 10, maxDepth: 2, delayMs: 500 }),
+      });
+      const crawlData = await crawlResponse.json();
+      if (!crawlResponse.ok) throw new Error(crawlData.error || "Native crawler rejected the request.");
+      const crawl = crawlData as NativeWebCrawlResult;
+      let activeScan: NativeWebActiveResult | undefined;
+      let activeScanError: string | undefined;
+      if (webApproveActive) {
+        const discovered = crawl.pages.filter(page => typeof page.status === "number").map(page => page.url).slice(0, 10);
+        const urls = discovered.length ? discovered : [webAssessmentRequest.url];
+        try {
+          const scanResponse = await fetch("http://127.0.0.1:8765/web/active-scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+            body: JSON.stringify({ ...base, urls, confirmRun: true, maxRequests: 10, delayMs: 500 }),
+          });
+          const scanData = await scanResponse.json();
+          if (!scanResponse.ok) throw new Error(scanData.error || "Native active checks were rejected.");
+          activeScan = scanData as NativeWebActiveResult;
+        } catch (cause) {
+          activeScanError = cause instanceof Error ? cause.message : "Native active checks failed.";
+        }
+      }
+      const result: NativeWebAssessmentResult = { crawl, ...(activeScan ? { activeScan } : {}), ...(activeScanError ? { activeScanError } : {}) };
+      setWebResult(result);
+      setWebAssessmentRequest(null);
+      setWebStatus(activeScanError ? "Crawl completed; active checks did not complete. See the error below." : webApproveActive ? "Native crawl and approved active checks completed." : "Native crawl and baseline audit completed.");
+      const evidence = {
+        scope: crawl.scope,
+        crawlSummary: crawl.summary,
+        discoveredPages: crawl.pages.map(page => ({ url: page.url, status: page.status, contentType: page.contentType, bodyBytes: page.bodyBytes, responseSha256: page.responseSha256, forms: page.forms, error: page.error })),
+        crawlFindings: crawl.findings,
+        crawlLimitations: crawl.limitations,
+        activeScan: activeScan ? { summary: activeScan.summary, checks: activeScan.checks, findings: activeScan.findings, limitations: activeScan.limitations } : null,
+        activeScanError,
+      };
+      await sendAgentPrompt("Analyse these results returned by CyberLab's native local web assessment engine. Separate confirmed observations from candidate indicators, explain severity and confidence conservatively, and recommend the next safe validation steps. Do not claim checks beyond the evidence below.\n\n" + JSON.stringify(evidence), [], true);
+    } catch (cause) {
+      setWebStatus(cause instanceof Error ? cause.message : "Native web assessment failed.");
+    } finally { setWebBusy(false); }
+  }
+
+  async function sendAgentPrompt(text: string, submittedAttachments: AgentAttachment[] = [], skipLocalRouting = false) {
     if ((!text && submittedAttachments.length === 0) || busy) return;
     setError("");
     setScanRequest(null);
     setScanStatus("");
     setScanResult(null);
+    if (!skipLocalRouting) { setWebAssessmentRequest(null); setWebStatus(""); setWebResult(null); }
     setPrompt("");
     setAttachments([]);
+    const webIntent = /\b(?:scan|crawl|test|assess|audit)\b[\s\S]{0,100}\b(?:https?:\/\/|website|web\s+app|web\s+application)\b|\b(?:website|web\s+app|web\s+application)\b[\s\S]{0,100}\b(?:scan|crawl|test|assess|audit)\b/i.test(text);
+    const webTargetMatch = text.match(/https?:\/\/[^\s<>"']+|(?<![@\w-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{1,5})?(?:\/[^\s<>"']*)?/i);
+    if (!skipLocalRouting && webIntent && webTargetMatch && submittedAttachments.length === 0) {
+      const rawTarget = webTargetMatch[0].replace(/[),.;]+$/, "");
+      const targetUrl = /^https?:\/\//i.test(rawTarget) ? rawTarget : "https://" + rawTarget;
+      try {
+        const parsedTarget = new URL(targetUrl);
+        if (!["http:", "https:"].includes(parsedTarget.protocol)) throw new Error("Unsupported target protocol.");
+        setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can run CyberLab's native crawler and baseline audit, then optional bounded active checks against this exact origin. Nothing has been sent yet. Pair the local companion and approve each stage below." }]);
+        setWebAssessmentRequest({ url: targetUrl });
+        setWebConfirmationUrl(parsedTarget.origin);
+        setWebReference("");
+        setWebAuthorised(false);
+        setWebApproveCrawl(false);
+        setWebApproveActive(false);
+        setWebStatus("");
+        setBusy(false);
+        return;
+      } catch {
+        // Leave malformed or unsupported target text to the research agent for clarification.
+      }
+    }
     const scanMatch = text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i);
     if (scanMatch && submittedAttachments.length === 0) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
@@ -306,6 +405,29 @@ export default function AgentPage() {
             </div>
           )}
         </div>
+        {webAssessmentRequest && <section className="kali-panel" style={{ marginTop: 16 }}>
+          <h2>Approve native web assessment</h2>
+          <p>Target URL: <strong>{webAssessmentRequest.url}</strong>. CyberLab will run its own same-origin GET-only crawler and baseline review. You can separately approve up to 10 non-mutating active checks against discovered pages. No Burp Suite dependency is involved.</p>
+          <form className="report-editor" onSubmit={runLocalWebAssessment}>
+            <label>Retype exact origin (scheme, hostname and port)<input value={webConfirmationUrl} onChange={event => setWebConfirmationUrl(event.target.value)} placeholder="https://your-authorised-domain.example" required /></label>
+            <label>Written authorisation / engagement reference<input value={webReference} onChange={event => setWebReference(event.target.value)} placeholder="LAB-2026-001" required maxLength={160} /></label>
+            <div className="scope-checks"><label><input type="checkbox" checked={webAuthorised} onChange={event => setWebAuthorised(event.target.checked)} /> I own this target or have written permission to assess this exact origin.</label></div>
+            <div className="scope-checks"><label><input type="checkbox" checked={webApproveCrawl} onChange={event => setWebApproveCrawl(event.target.checked)} /> I approve a same-origin GET-only crawl of up to 10 pages, depth 2, with a 500 ms delay.</label></div>
+            <div className="scope-checks"><label><input type="checkbox" checked={webApproveActive} onChange={event => setWebApproveActive(event.target.checked)} /> I separately approve up to 10 bounded OPTIONS/GET active checks on discovered pages.</label></div>
+            <button className="report-download" type="submit" disabled={webBusy || !webAuthorised || !webApproveCrawl || !webReference.trim() || !webConfirmationUrl.trim()}>{webBusy ? "Running native assessment…" : "Confirm and run CyberLab web assessment"}</button>
+            <button className="report-download" type="button" onClick={() => setWebAssessmentRequest(null)} disabled={webBusy}>Cancel</button>
+          </form>
+          {webStatus && <p role="status">{webStatus}</p>}
+        </section>}
+        {webResult && <section className="network-results" style={{ marginTop: 16 }}>
+          <h2>Native CyberLab web assessment · {webResult.crawl.scope.origin}</h2>
+          <p>Crawl: {webResult.crawl.summary.pagesVisited ?? 0} pages · {webResult.crawl.summary.findings ?? 0} baseline findings · {webResult.activeScan ? String(webResult.activeScan.summary.requestsSent ?? 0) + " active requests" : "active checks not run"}</p>
+          {webResult.activeScanError && <p className="agent-error">{webResult.activeScanError}</p>}
+          {[...webResult.crawl.findings, ...(webResult.activeScan?.findings || [])].map((finding,index)=><div key={(finding.id || finding.title) + index} className="border-b border-slate-800 py-3">
+            <strong>{finding.severity.toUpperCase()} · {finding.title}</strong><p className="mt-1 break-all text-xs text-slate-400">{finding.url}</p><p className="mt-1 text-xs text-slate-400">{finding.detail}</p>
+          </div>)}
+          <p className="mt-3 text-xs text-slate-500">The AI analysis above uses the returned crawl and active-check evidence. Findings remain candidates until manually verified; this workflow is not yet a full SQLi/SSRF/IDOR/authenticated scanner.</p>
+        </section>}
         {scanRequest && <section className="kali-panel" style={{ marginTop: 16 }}>
           <h2>Approve local Nmap scan</h2>
           <p>Target detected from your message: <strong>{scanRequest.target}</strong>. Proposed TCP ports: <strong>{scanRequest.ports}</strong> (maximum 100). The request will run directly in your browser against the paired Kali bridge; it is not sent to the CyberLab server.</p>
