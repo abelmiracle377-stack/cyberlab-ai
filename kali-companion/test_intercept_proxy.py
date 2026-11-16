@@ -83,6 +83,18 @@ class NativeInterceptProxyTests(unittest.TestCase):
                         blocked += chunk
                 self.assertIn(b"403 Error", blocked)
                 self.assertIn(b"outside the approved proxy scope", blocked)
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=3) as client:
+                    client.sendall((f"POST {origin}/change HTTP/1.1\\r\\n"
+                                    f"Host: localhost:{target.server_port}\\r\\n"
+                                    "Content-Length: 0\\r\\nConnection: close\\r\\n\\r\\n").encode("ascii"))
+                    denied = b""
+                    while True:
+                        chunk = client.recv(4096)
+                        if not chunk:
+                            break
+                        denied += chunk
+                self.assertIn(b"403 Error", denied)
+                self.assertIn(b"State-changing methods are disabled", denied)
         finally:
             proxy.stop()
             target.shutdown()
@@ -176,6 +188,13 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 "origin": origin, "confirmationOrigin": origin,
                 "authorizationConfirmed": True, "confirmStart": False,
                 "authorizationReference": "LOCAL-PROXY-002", "localLabMode": True,
+            })
+        with self.assertRaisesRegex(ValueError, "Separately approve"):
+            proxy.start({
+                "origin": origin, "confirmationOrigin": origin,
+                "authorizationConfirmed": True, "confirmStart": True,
+                "authorizationReference": "LOCAL-PROXY-002", "localLabMode": True,
+                "allowStateChangingMethods": True, "confirmStateChangingMethods": False,
             })
 
 
