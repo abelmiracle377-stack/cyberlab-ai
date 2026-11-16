@@ -83,6 +83,11 @@ def validate_request(data: dict) -> dict:
     if not path.startswith("/") or any(ord(char) < 32 for char in path):
         raise ValueError("Invalid request path.")
     target = path + (("?" + parsed.query) if parsed.query else "")
+    # The companion writes an HTTP/1.1 request line directly. Reject raw
+    # whitespace and control bytes instead of emitting an ambiguous request
+    # target; callers must percent-encode them as required by URI syntax.
+    if any(ord(char) <= 32 or ord(char) == 127 for char in target):
+        raise ValueError("Request path and query must be percent-encoded; whitespace and control characters are not accepted.")
     headers = data.get("headers", {})
     if not isinstance(headers, dict) or len(headers) > 40:
         raise ValueError("Headers must be an object containing no more than 40 entries.")
@@ -97,8 +102,8 @@ def validate_request(data: dict) -> dict:
         lowered = key.lower()
         if lowered in BLOCKED_HEADERS or lowered.startswith("proxy-"):
             raise ValueError("Host, connection, proxy and framing headers are controlled by CyberLab.")
-        if "\r" in value or "\n" in value:
-            raise ValueError("Header values cannot contain line breaks.")
+        if any((ord(char) < 32 and char != "\t") or ord(char) == 127 or ord(char) > 255 for char in value):
+            raise ValueError("Header values must contain only valid HTTP field characters representable in ISO-8859-1.")
         clean_headers[key] = value
     body = data.get("body", "")
     if not isinstance(body, str) or len(body.encode("utf-8")) > MAX_REQUEST_BODY:
@@ -142,7 +147,8 @@ def execute_request(data: dict) -> dict:
             context = ssl.create_default_context()
             sock = context.wrap_socket(sock, server_hostname=request["host"])
         headers = dict(request["headers"])
-        headers["Host"] = request["host"] if request["port"] in (80, 443) else f'{request["host"]}:{request["port"]}'
+        host_header = f'[{request["host"]}]' if ":" in request["host"] else request["host"]
+        headers["Host"] = host_header if request["port"] in (80, 443) else f'{host_header}:{request["port"]}'
         headers["Connection"] = "close"
         if request["body"]:
             headers["Content-Length"] = str(len(request["body"]))
