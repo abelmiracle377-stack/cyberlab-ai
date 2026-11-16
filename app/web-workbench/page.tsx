@@ -39,6 +39,7 @@ export default function WebWorkbenchPage() {
   const [proxyAuthorised, setProxyAuthorised] = useState(false);
   const [proxyStartConsent, setProxyStartConsent] = useState(false);
   const [proxyActive, setProxyActive] = useState(false);
+  const [proxyActiveScope, setProxyActiveScope] = useState("");
   const [proxyPort, setProxyPort] = useState(8081);
   const [proxyBusy, setProxyBusy] = useState(false);
   const [proxyError, setProxyError] = useState("");
@@ -72,6 +73,7 @@ export default function WebWorkbenchPage() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not inspect proxy status.");
     setProxyActive(Boolean(data.active));
+    setProxyActiveScope(data.scope || "");
     if (data.listenPort) setProxyPort(data.listenPort);
   }
 
@@ -97,6 +99,7 @@ export default function WebWorkbenchPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not start the native interception proxy.");
       setProxyActive(Boolean(data.active));
+      setProxyActiveScope(data.scope || "");
       setProxyPort(data.listenPort || 8081);
       setProxyStartConsent(false);
       await loadProxyHistory();
@@ -117,6 +120,7 @@ export default function WebWorkbenchPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not stop the native interception proxy.");
       setProxyActive(Boolean(data.active));
+      setProxyActiveScope(data.scope || "");
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy stop error."); }
     finally { setProxyBusy(false); }
   }
