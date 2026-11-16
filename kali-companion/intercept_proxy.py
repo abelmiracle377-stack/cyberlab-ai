@@ -616,7 +616,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             upstream_length = response.getheader("Content-Length")
             outgoing_length = (int(upstream_length) if method.upper() == "HEAD" and upstream_length and upstream_length.isdigit()
                                else len(response_body))
-            self.wfile.write(f"Content-Length: {outgoing_length}\r\nConnection: close\r\n\r\n".encode("ascii"))
+            if response.status in {204, 304}:
+                self.wfile.write(b"Connection: close\\r\\n\\r\\n")
+            else:
+                self.wfile.write(f"Content-Length: {outgoing_length}\\r\\nConnection: close\\r\\n\\r\\n".encode("ascii"))
             self.wfile.write(response_body)
             self.wfile.flush()
             _history_entry(method.upper(), url, response.status, headers, response_headers,
