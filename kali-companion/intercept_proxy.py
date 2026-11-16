@@ -35,6 +35,7 @@ MAX_CONCURRENT_CLIENTS = 16
 MAX_PENDING_INTERCEPTS = 20
 INTERCEPT_DECISION_TIMEOUT = 120
 _INTERCEPTS = {}
+_RESPONSE_INTERCEPTS = {}
 _INTERCEPT_LOCK = threading.RLock()
 _HISTORY = deque(maxlen=100)
 _HISTORY_LOCK = threading.Lock()
@@ -199,11 +200,9 @@ def _await_intercept_decision(method: str, url: str, headers: list[tuple[str, st
 
 def _drop_all_pending_intercepts() -> None:
     with _INTERCEPT_LOCK:
-        entries = list(_INTERCEPTS.values())
-        for entry in entries:
+        for entry in list(_INTERCEPTS.values()) + list(_RESPONSE_INTERCEPTS.values()):
             entry["decision"] = {"action": "drop"}
             entry["event"].set()
-
 
 def _history_entry(method: str, url: str, status: int, request_headers: list[tuple[str, str]],
                    response_headers: list[tuple[str, str]], request_size: int,
@@ -470,6 +469,19 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self._error(502, "Upstream response exceeds the 2 MB inspection limit")
                 return
             response_headers = response.getheaders()
+            if controller.intercept_responses:
+                try:
+                    decision = _await_response_decision(method, url, response.status,
+                                                        response.reason or "", response_headers, response_body)
+                except ValueError as exc:
+                    self._error(503, str(exc))
+                    return
+                if decision.get("action") == "timeout":
+                    self._error(504, "Operator did not approve this response in time")
+                    return
+                if decision.get("action") == "drop":
+                    self._error(502, "Response dropped by the CyberLab operator")
+                    return
             response_connection_tokens = {token.strip().lower() for name, value in response_headers
                                           if name.lower() == "connection"
                                           for token in value.split(",") if token.strip()}
@@ -536,6 +548,7 @@ class NativeInterceptProxy:
         self.authorization_reference = ""
         self.allow_state_changing_methods = False
         self.intercept_requests = False
+        self.intercept_responses = False
 
     def start(self, data: dict) -> dict:
         if not isinstance(data, dict):
@@ -560,6 +573,9 @@ class NativeInterceptProxy:
         pause_requests = data.get("interceptRequests") is True
         if pause_requests and data.get("confirmInterceptRequests") is not True:
             raise ValueError("Separately approve pausing browser requests for manual forward or drop decisions.")
+        pause_responses = data.get("interceptResponses") is True
+        if pause_responses and data.get("confirmInterceptResponses") is not True:
+            raise ValueError("Separately approve pausing server responses for manual inspection and forward or drop decisions.")
         port = data.get("listenPort", DEFAULT_PORT)
         if isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
             raise ValueError("Proxy listen port must be between 1024 and 65535.")
@@ -575,6 +591,7 @@ class NativeInterceptProxy:
             self.authorization_reference = reference.strip()
             self.allow_state_changing_methods = allow_mutating
             self.intercept_requests = pause_requests
+            self.intercept_responses = pause_responses
             self._server = server
             self._thread = threading.Thread(target=server.serve_forever, name="cyberlab-intercept-proxy", daemon=True)
             self._thread.start()
@@ -590,6 +607,7 @@ class NativeInterceptProxy:
             self.local_lab_mode = False
             self.allow_state_changing_methods = False
             self.intercept_requests = False
+            self.intercept_responses = False
         _drop_all_pending_intercepts()
         if server is not None:
             server.shutdown()
@@ -610,9 +628,10 @@ class NativeInterceptProxy:
                 "authorizationReference": self.authorization_reference if active else None,
                 "allowStateChangingMethods": self.allow_state_changing_methods if active else False,
                 "interceptRequests": self.intercept_requests if active else False,
+                "interceptResponses": self.intercept_responses if active else False,
                 "mode": "HTTP/1.1 request/response inspection; HTTPS CONNECT TLS termination" if active else "stopped",
                 "limitations": ["one approved origin", "one request per client connection", "no HTTP/2",
-                                "no WebSockets", "no chunked client request bodies", "no client certificates", "manual interception queue is bounded to 20 pending requests"],
+                                "no WebSockets", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
                 "historyCount": len(_HISTORY),
             }
 
