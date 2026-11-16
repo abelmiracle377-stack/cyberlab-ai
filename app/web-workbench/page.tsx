@@ -116,7 +116,7 @@ export default function WebWorkbenchPage() {
       const next = { ...current };
       for (const item of items) if (!next[item.id]) next[item.id] = {
         method: item.method, path: item.path,
-        headersText: JSON.stringify(item.headers, null, 2), body: item.body || "",
+        headersText: JSON.stringify(item.headers.filter(header => !["host", "content-length", "connection", "proxy-connection", "keep-alive", "te", "trailer", "transfer-encoding", "upgrade", "proxy-authenticate", "proxy-authorization", "expect"].includes(header.name.toLowerCase())), null, 2), body: item.body || "",
       };
       for (const id of Object.keys(next)) if (!items.some(item => item.id === id)) delete next[id];
       return next;
