@@ -197,6 +197,11 @@ export default function WebWorkbenchPage() {
   }
 
   useEffect(() => { loadHistory().catch(() => undefined); loadCaStatus().catch(() => undefined); loadProxyStatus().catch(() => undefined); loadProxyHistory().catch(() => undefined); loadPendingIntercepts().catch(() => undefined); }, []);
+  useEffect(() => {
+    if (!proxyInterceptActive) return;
+    const interval = window.setInterval(() => { loadPendingIntercepts().catch(() => undefined); }, 1000);
+    return () => window.clearInterval(interval);
+  }, [proxyInterceptActive]);
 
   async function sendRequest(event: React.FormEvent) {
     event.preventDefault();
