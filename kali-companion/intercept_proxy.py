@@ -196,7 +196,7 @@ def _drop_all_pending_intercepts() -> None:
     with _INTERCEPT_LOCK:
         entries = list(_INTERCEPTS.values())
         for entry in entries:
-            entry["action"] = "drop"
+            entry["decision"] = {"action": "drop"}
             entry["event"].set()
 
 
