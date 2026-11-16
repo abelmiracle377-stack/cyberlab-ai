@@ -55,6 +55,13 @@ class ProxyCertificateTests(unittest.TestCase):
         self.assertNotIn("PRIVATE KEY", exported["pem"])
         self.assertEqual(exported["filename"], "cyberlab-local-inspection-ca.pem")
 
+    def test_existing_host_private_key_with_unsafe_permissions_is_rejected(self):
+        certs.create_local_ca()
+        issued = certs.issue_host_certificate("lab.example.test")
+        os.chmod(issued["privateKey"], 0o644)
+        with self.assertRaisesRegex(ValueError, "host certificate key ownership or permissions are unsafe"):
+            certs.issue_host_certificate("lab.example.test")
+
     def test_ca_status_rejects_world_readable_private_key(self):
         certs.create_local_ca()
         os.chmod(certs.CA_KEY, 0o644)
