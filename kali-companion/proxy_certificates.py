@@ -152,7 +152,14 @@ def issue_host_certificate(host: str) -> dict:
         key_path, cert_path = host_dir / "key.pem", host_dir / "cert.pem"
         if key_path.exists() or cert_path.exists():
             if key_path.is_file() and cert_path.is_file() and not key_path.is_symlink() and not cert_path.is_symlink():
-                return {"host": name, "certificate": str(cert_path), "privateKey": str(key_path), "reused": True}
+                key_stat = os.stat(key_path, follow_symlinks=False)
+                directory_stat = os.stat(host_dir, follow_symlinks=False)
+                current_uid = os.geteuid() if hasattr(os, "geteuid") else key_stat.st_uid
+                if (stat.S_IMODE(key_stat.st_mode) == 0o600
+                        and stat.S_IMODE(directory_stat.st_mode) == 0o700
+                        and key_stat.st_uid == current_uid and directory_stat.st_uid == current_uid):
+                    return {"host": name, "certificate": str(cert_path), "privateKey": str(key_path), "reused": True}
+                raise ValueError("Existing host certificate key ownership or permissions are unsafe.")
             raise ValueError("Incomplete or unsafe host certificate files exist. Refusing to overwrite them.")
         binary = _openssl()
         csr = host_dir / ".request.pending"
