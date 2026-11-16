@@ -73,8 +73,8 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertTrue(entry["responseBodyOmitted"])
                 self.assertNotIn("secret-cookie", str(entry))
                 with socket.create_connection(("127.0.0.1", listen_port), timeout=3) as client:
-                    client.sendall((f"GET http://127.0.0.1:{target.server_port}/outside HTTP/1.1\\r\\n"
-                                    "Host: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n").encode("ascii"))
+                    client.sendall((f"GET http://127.0.0.1:{target.server_port}/outside HTTP/1.1\r\n"
+                                    "Host: 127.0.0.1\r\nConnection: close\r\n\r\n").encode("ascii"))
                     blocked = b""
                     while True:
                         chunk = client.recv(4096)
