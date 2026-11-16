@@ -14,6 +14,7 @@ from tool_catalog import inspect_tool_catalog
 MAX_PROMPT_CHARS = 4000
 
 PATTERNS = [
+    ("burp_assessment", ("burp suite", "burpsuite", "burp scanner", "burp proxy", "repeater", "intruder", "proxy history")),
     ("network_recon", ("nmap", "port scan", "open ports", "service scan", "network scan", "scan ", "host discovery", "enumerate ports")),
     ("web_assessment", ("web app", "website", "http", "https", "web server", "directory scan", "wordpress", "sql injection", "xss", "api endpoint")),
     ("dns_osint", ("dns", "subdomain", "domain", "whois", "certificate transparency", "theharvester", "amass")),
@@ -31,6 +32,7 @@ PATTERNS = [
 ]
 
 TOOL_MAP = {
+    "burp_assessment": ["Burp Suite"],
     "network_recon": ["Nmap"],
     "web_assessment": ["WhatWeb", "Nmap", "OWASP ZAP", "Nikto", "ffuf", "Burp Suite"],
     "dns_osint": ["WHOIS", "theHarvester", "Amass", "dnsenum", "dnsrecon"],
@@ -111,13 +113,15 @@ def plan_task(prompt: str) -> dict:
     ]
 
     blocked = [message for term, message in BLOCKED_HINTS.items() if term in lowered]
-    active_categories = {"network_recon", "web_assessment", "service_enumeration", "wireless_assessment", "active_directory", "metasploit_research"}
+    active_categories = {"network_recon", "web_assessment", "burp_assessment", "service_enumeration", "wireless_assessment", "active_directory", "metasploit_research"}
     needs_authorisation = any(category in active_categories for category in categories)
     missing = []
     if needs_authorisation and not target:
         missing.append("A single in-scope IP address or hostname is needed before an active network assessment.")
     if needs_authorisation:
         missing.append("Confirm ownership or written permission and provide the engagement/ticket reference before any active scan.")
+    if "burp_assessment" in categories:
+        missing.append("Verify the local Burp REST API connection and confirm the exact in-scope host before any Burp action. This plan does not start a scan.")
     if "digital_forensics" in categories and not any(term in lowered for term in ("image", "disk", "drive", "memory", "file")):
         missing.append("Specify the evidence type (disk image, memory image, firmware or file).")
     if "password_audit" in categories:
