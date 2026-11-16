@@ -44,6 +44,10 @@ public final class CyberLabBurpExtension implements BurpExtension {
             });
             server.setExecutor(executor);
             server.start();
+            api.extension().registerUnloadingHandler(() -> {
+                if (server != null) server.stop(0);
+                if (executor != null) executor.shutdownNow();
+            });
             api.logging().logToOutput("CyberLab local Burp connector listening on 127.0.0.1:"
                 + PORT + "; token stored in ~/.config/cyberlab/burp-extension-token.");
         } catch (Exception ex) {
