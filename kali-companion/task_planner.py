@@ -32,7 +32,7 @@ PATTERNS = [
 
 TOOL_MAP = {
     "network_recon": ["Nmap"],
-    "web_assessment": ["CyberLab HTTP Workbench", "WhatWeb", "Nmap"],
+    "web_assessment": ["CyberLab Web Crawler & Baseline Auditor", "CyberLab HTTP Workbench", "WhatWeb", "Nmap"],
     "dns_osint": ["WHOIS", "theHarvester", "Amass", "dnsenum", "dnsrecon"],
     "vulnerability_research": ["SearchSploit", "Metasploit Framework"],
     "service_enumeration": ["Nmap", "FTP client", "Impacket", "NetExec"],
@@ -153,6 +153,14 @@ def plan_task(prompt: str) -> dict:
                 suggested_ports.append(port)
         if suggested_ports:
             service_suggestion = {"ports": suggested_ports[:8], "target": target}
+    recommended_workflow = []
+    if "web_assessment" in categories:
+        recommended_workflow = [
+            {"phase": "application discovery", "tool": "CyberLab Web Crawler & Baseline Auditor", "mode": "bounded same-origin GET-only crawl", "status": "available", "approval_required": True},
+            {"phase": "manual request inspection", "tool": "CyberLab HTTP Workbench", "mode": "scope-bound HTTP request and response analysis", "status": "available", "approval_required": True},
+            {"phase": "active vulnerability validation", "tool": "CyberLab native active scanner", "mode": "non-destructive checks with evidence verification", "status": "not_implemented", "approval_required": True},
+            {"phase": "fuzzing and request replay", "tool": "CyberLab native repeater and fuzzer", "mode": "bounded parameter testing", "status": "not_implemented", "approval_required": True},
+        ]
     return {
         "status": "plan_only",
         "summary": "Detected task type(s): " + ", ".join(categories).replace("_", " "),
@@ -164,6 +172,7 @@ def plan_task(prompt: str) -> dict:
         "requires_authorisation": needs_authorisation,
         "missing_information": list(dict.fromkeys(missing)),
         "suggested_tools": suggested_tools,
+        "recommended_workflow": recommended_workflow,
         "safety_notes": blocked,
         "steps": steps,
         "execution_started": False,
