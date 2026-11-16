@@ -390,7 +390,7 @@ export default function AgentPage() {
             <div className="agent-welcome">
               <div className="agent-welcome-icon"><Bot size={25} /></div>
               <h2>What are we investigating?</h2>
-              <p>The agent can research public sources, analyse passive IP/DNS intelligence and NVD CVEs. Ask “scan example.com” to prepare a local Kali Nmap scan; it will wait for your explicit scope approval.</p>
+              <p>The agent can research public sources and analyse IP/DNS intelligence and CVEs. Ask “scan example.com” for bounded Nmap TCP reconnaissance, or “scan my website https://example.com” for CyberLab’s native web crawler and optional safe active checks. Both wait for your explicit local approval.</p>
               <div className="agent-prompts">
                 {["Explain what information an IP address can reveal, and its limits.", "Look up public IP intelligence for an IP address I provide.", "Analyse DNS records for example.com", "Find NVD details for CVE-2024-3094", "Help me plan a safe, authorised assessment of my own web application."].map((item) => <button key={item} onClick={() => setPrompt(item)}>{item}<span>↗</span></button>)}
               </div>
