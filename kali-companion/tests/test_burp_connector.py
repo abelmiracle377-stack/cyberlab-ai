@@ -22,6 +22,13 @@ class BurpConnectorTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "invalid_configuration")
 
+    def test_rejects_localhost_hostname_to_avoid_dns_rebinding(self):
+        result = burp_connector.inspect_burp_status(
+            api_url="http://localhost:1337",
+            api_key="secret",
+        )
+        self.assertEqual(result["status"], "invalid_configuration")
+
     def test_reports_missing_key_without_network_request(self):
         with patch.object(burp_connector, "_load_api_key", return_value=None), \
              patch.object(burp_connector, "urlopen") as open_url:
