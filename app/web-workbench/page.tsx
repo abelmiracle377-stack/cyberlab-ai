@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldCheck } from "lucide-react";
 
+type ProxyHistoryItem = { id: string; method: string; url: string; status: number; queryOmitted?: boolean; requestBodyOmitted?: boolean; responseBodyOmitted?: boolean; durationMs: number; };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
   durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
@@ -33,6 +34,15 @@ export default function WebWorkbenchPage() {
   const [caConsent, setCaConsent] = useState(false);
   const [caBusy, setCaBusy] = useState(false);
   const [caError, setCaError] = useState("");
+  const [proxyOrigin, setProxyOrigin] = useState("http://localhost:3000");
+  const [proxyConfirmation, setProxyConfirmation] = useState("http://localhost:3000");
+  const [proxyAuthorised, setProxyAuthorised] = useState(false);
+  const [proxyStartConsent, setProxyStartConsent] = useState(false);
+  const [proxyActive, setProxyActive] = useState(false);
+  const [proxyPort, setProxyPort] = useState(8081);
+  const [proxyBusy, setProxyBusy] = useState(false);
+  const [proxyError, setProxyError] = useState("");
+  const [proxyHistory, setProxyHistory] = useState<ProxyHistoryItem[]>([]);
 
   const token = () => sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
 
@@ -55,6 +65,62 @@ export default function WebWorkbenchPage() {
     setCaCertificatePath(data.caCertificate || "");
   }
 
+  async function loadProxyStatus() {
+    const pairing = token();
+    if (!pairing) return;
+    const response = await fetch("http://127.0.0.1:8765/proxy/status", { headers: { Authorization: "Bearer " + pairing } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not inspect proxy status.");
+    setProxyActive(Boolean(data.active));
+    if (data.listenPort) setProxyPort(data.listenPort);
+  }
+
+  async function loadProxyHistory() {
+    const pairing = token();
+    if (!pairing) return;
+    const response = await fetch("http://127.0.0.1:8765/proxy/history", { headers: { Authorization: "Bearer " + pairing } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load proxy history.");
+    setProxyHistory(data.items || []);
+  }
+
+  async function startProxy() {
+    setProxyBusy(true); setProxyError("");
+    try {
+      const pairing = token();
+      if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/proxy/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081 }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not start the native interception proxy.");
+      setProxyActive(Boolean(data.active));
+      setProxyPort(data.listenPort || 8081);
+      setProxyStartConsent(false);
+      await loadProxyHistory();
+    } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy start error."); }
+    finally { setProxyBusy(false); }
+  }
+
+  async function stopProxy() {
+    setProxyBusy(true); setProxyError("");
+    try {
+      const pairing = token();
+      if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/proxy/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+        body: "{}",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not stop the native interception proxy.");
+      setProxyActive(Boolean(data.active));
+    } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy stop error."); }
+    finally { setProxyBusy(false); }
+  }
+
   async function createLocalCa() {
     setCaBusy(true); setCaError("");
     try {
@@ -73,7 +139,7 @@ export default function WebWorkbenchPage() {
     finally { setCaBusy(false); }
   }
 
-  useEffect(() => { loadHistory().catch(() => undefined); loadCaStatus().catch(() => undefined); }, []);
+  useEffect(() => { loadHistory().catch(() => undefined); loadCaStatus().catch(() => undefined); loadProxyStatus().catch(() => undefined); loadProxyHistory().catch(() => undefined); }, []);
 
   async function sendRequest(event: React.FormEvent) {
     event.preventDefault();
@@ -114,6 +180,23 @@ export default function WebWorkbenchPage() {
         <p>Compose, send, inspect and replay HTTP requests using CyberLab's own local engine. No external proxy is required.</p>
       </div>
       <div className="scope-warning"><AlertTriangle size={14}/> Active requests contact the selected server. Use only an asset covered by written permission. The engine pins DNS resolution, blocks private addresses except explicit loopback lab mode, does not follow redirects, and caps request/response sizes.</div>\n      <div className="network-results">
+        <h2><Globe size={14}/> CyberLab native interception proxy</h2>
+        <p>{proxyActive ? "Proxy is running." : "Proxy is stopped."} It listens only on 127.0.0.1 and enforces one exact approved origin. Configure your dedicated test browser to use 127.0.0.1:8081 as its HTTP and HTTPS proxy after starting it.</p>
+        {!proxyActive && <>
+          <label>Exact origin to intercept<input value={proxyOrigin} onChange={e=>{setProxyOrigin(e.target.value);setProxyConfirmation("");}} placeholder="https://your-authorised-domain.example"/></label>
+          <label>Retype exact origin<input value={proxyConfirmation} onChange={e=>setProxyConfirmation(e.target.value)} placeholder="Retype the origin exactly"/></label>
+          <div className="scope-checks"><label><input type="checkbox" checked={proxyAuthorised} onChange={e=>setProxyAuthorised(e.target.checked)}/> I own this origin or have explicit written authorisation to inspect its traffic.</label></div>
+          <div className="scope-checks"><label><input type="checkbox" checked={proxyStartConsent} onChange={e=>setProxyStartConsent(e.target.checked)}/> I explicitly approve starting the local proxy for this exact origin. Browser requests to this origin will be forwarded while it is running.</label></div>
+          <button className="report-download" type="button" disabled={proxyBusy || !proxyAuthorised || !proxyStartConsent || proxyOrigin !== proxyConfirmation || !reference.trim() || (proxyOrigin.startsWith("https://") && !caReady)} onClick={startProxy}>{proxyBusy ? "Starting proxy…" : "Start native interception proxy"}</button>
+        </>}
+        {proxyActive && <button className="report-download" type="button" disabled={proxyBusy} onClick={stopProxy}>{proxyBusy ? "Stopping proxy…" : "Stop interception proxy"}</button>}
+        {proxyError && <div className="agent-error"><AlertTriangle size={14}/>{proxyError}</div>}
+        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked.</p>
+        <h3>Recent intercepted requests</h3>
+        {proxyHistory.map(item=><p key={item.id}>{item.method} · {item.status} · {item.url}{item.queryOmitted ? " · query omitted" : ""} · {item.durationMs} ms</p>)}
+        {!proxyHistory.length && <p>No proxy requests recorded in this companion session.</p>}
+      </div>
+      <div className="network-results">
         <h2><ShieldCheck size={14}/> HTTPS inspection certificate authority</h2>
         <p>Foundation for CyberLab's native HTTPS interception. Creating this local CA does not install or trust it automatically. You must manually import the public certificate into a dedicated test browser profile. Never distribute the CA private key.</p>
         <p>{caReady ? "Local CA is ready." : "No local inspection CA has been created."}</p>
