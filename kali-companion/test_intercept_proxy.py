@@ -176,6 +176,16 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 for item in reversed(patches):
                     item.stop()
 
+    def test_proxy_history_redacts_sensitive_path_segments_and_jwt(self):
+        safe = intercept_proxy._redact_url_path(
+            "https://lab.example.test/account/reset-password/eyJabcdefghijklmno.abcdefghijk.abcdefghijk/profile?token=secret"
+        )
+        self.assertIn("/[REDACTED]/[REDACTED]/profile", safe)
+        self.assertNotIn("eyJabcdefghijklmno", safe)
+        self.assertNotIn("reset-password", safe)
+        self.assertNotIn("secret", safe)
+        self.assertNotIn("?", safe)
+
     def test_proxy_start_requires_exact_origin_and_explicit_approval(self):
         proxy = intercept_proxy.NativeInterceptProxy()
         origin = "http://localhost:8080"
