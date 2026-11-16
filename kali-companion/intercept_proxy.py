@@ -60,8 +60,8 @@ def _safe_headers(headers: list[tuple[str, str]]) -> list[dict]:
     output = []
     for name, value in headers:
         lowered = name.lower()
-        secret = (lowered in _SENSITIVE or "token" in lowered or "secret" in lowered
-                  or "session" in lowered or "authorization" in lowered)
+        secret = (lowered in _SENSITIVE or any(hint in lowered for hint in
+                  ("token", "secret", "session", "authorization", "password", "credential")))
         output.append({"name": name, "value": "[REDACTED]" if secret else value[:512]})
     return output
 
