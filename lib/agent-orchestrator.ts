@@ -1,7 +1,8 @@
-export type Specialist = "recon" | "vulnerability-intelligence" | "malware-analysis" | "reverse-engineering" | "blue-team" | "reporting" | "general";
+export type Specialist = "recon" | "web-application-security" | "vulnerability-intelligence" | "malware-analysis" | "reverse-engineering" | "blue-team" | "reporting" | "general";
 
 const profiles: Record<Specialist, { label: string; focus: string }> = {
   recon: { label: "Reconnaissance Analyst", focus: "Prioritise passive domain, IP, DNS, registration and certificate intelligence. Do not initiate active scans unless the dedicated approval workflow is used." },
+  "web-application-security": { label: "Web Application Security Analyst", focus: "Coordinate authorised web and API assessments through the paired Kali companion and installed Burp Suite. Confirm exact target scope, approval reference, local Burp connectivity and edition-specific capabilities before any active test. Prefer passive traffic analysis and evidence-backed findings; never claim a scan ran unless Burp confirms its task and results." },
   "vulnerability-intelligence": { label: "Vulnerability Intelligence Analyst", focus: "Prioritise CVE identifiers, CVSS context, affected-version verification, vendor advisories and remediation. A version match alone is not proof of exposure." },
   "malware-analysis": { label: "Malware Triage Analyst", focus: "Prioritise safe static triage, hashes, file format, entropy, strings and indicators. Never execute samples or recommend uploading private samples to third parties without consent." },
   "reverse-engineering": { label: "Reverse Engineering Analyst", focus: "Explain binary formats, headers, imports, disassembly concepts and supplied code. Keep analysis static unless an isolated lab workflow is explicitly configured." },
@@ -13,6 +14,7 @@ const profiles: Record<Specialist, { label: string; focus: string }> = {
 export function routeSpecialist(prompt: string) {
   const text = prompt.toLowerCase();
   let specialist: Specialist = "general";
+  if (/\b(burp|burpsuite|repeater|intruder|web application|web app|website security|web security|api security|owasp zap)\b/.test(text)) specialist = "web-application-security";
   if (/\b(cve|cvss|vulnerab|exploitability|patch|advisory|kev|epss)\b/.test(text)) specialist = "vulnerability-intelligence";
   else if (/\b(malware|ransomware|trojan|sample|yara|hash|ioc|suspicious file)\b/.test(text)) specialist = "malware-analysis";
   else if (/\b(reverse engineer|disassembl|decompil|elf|pe file|mach-o|binary|firmware)\b/.test(text)) specialist = "reverse-engineering";
