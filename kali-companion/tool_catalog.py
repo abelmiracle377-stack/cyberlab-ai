@@ -26,6 +26,7 @@ TOOL_CATALOG = [
     {"name": "Lynis", "category": "Vulnerability analysis", "binary": "lynis", "package": "lynis", "mode": "local_audit", "purpose": "Local Linux security configuration audit."},
     {"name": "Nuclei", "category": "Vulnerability analysis", "binary": "nuclei", "package": "nuclei", "mode": "manual_only", "purpose": "Template-based checks; templates and target scope must be reviewed."},
     {"name": "CyberLab HTTP Workbench", "category": "Web application analysis", "binary": None, "package": None, "mode": "native_http", "native": True, "purpose": "Native, scope-bound HTTP request inspection and replay through the authenticated local companion."},
+    {"name": "CyberLab Web Crawler & Baseline Auditor", "category": "Web application analysis", "binary": None, "package": None, "mode": "native_crawl", "native": True, "purpose": "Bounded same-origin GET-only page discovery, form inventory and baseline HTTP header/cookie review with explicit scope and approval."},
     {"name": "OWASP ZAP", "category": "Web application analysis", "binary": "zaproxy", "package": "zaproxy", "mode": "manual_only", "purpose": "Web application proxy and controlled scanning."},
     {"name": "sqlmap", "category": "Web application analysis", "binary": "sqlmap", "package": "sqlmap", "mode": "manual_only", "purpose": "SQL injection testing; potentially intrusive."},
     {"name": "WPScan", "category": "Web application analysis", "binary": "wpscan", "package": "wpscan", "mode": "manual_only", "purpose": "WordPress security enumeration."},
