@@ -496,6 +496,85 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target.server_close()
             target_thread.join(timeout=2)
 
+
+    def test_manual_response_interception_edits_status_headers_and_text_body(self):
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-RESPONSE-EDIT-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptResponses": True, "confirmInterceptResponses": True,
+                })
+                result = {}
+
+                def send_request():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/response-edit HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        chunks = []
+                        while True:
+                            chunk = client.recv(8192)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        result["response"] = b"".join(chunks)
+
+                worker = threading.Thread(target=send_request)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_response_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                item = pending[0]
+                self.assertTrue(item["bodyEditable"])
+                self.assertEqual(item["headers"][1]["value"], "[REDACTED]")
+                with self.assertRaisesRegex(ValueError, "status"):
+                    intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
+                        "status": 700, "headers": item["headers"], "body": "edited",
+                    })
+                with self.assertRaisesRegex(ValueError, "header value"):
+                    intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
+                        "status": 201, "headers": [{"name": "X-Test", "value": "bad\\r\\nheader"}],
+                        "body": "edited",
+                    })
+                intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
+                    "status": 201, "reason": "Created by CyberLab",
+                    "headers": [
+                        {"name": "Content-Type", "value": "text/plain"},
+                        {"name": "Set-Cookie", "value": "[REDACTED]"},
+                        {"name": "X-Password-Reset", "value": "[REDACTED]"},
+                        {"name": "X-CyberLab-Edited", "value": "yes"},
+                    ],
+                    "body": "edited-local-response",
+                })
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                response = result["response"]
+                self.assertIn(b"201 Created by CyberLab", response)
+                self.assertIn(b"X-CyberLab-Edited: yes", response)
+                self.assertIn(b"Set-Cookie: session=secret-cookie; HttpOnly", response)
+                self.assertIn(b"X-Password-Reset: secret-password", response)
+                self.assertIn(b"edited-local-response", response)
+                self.assertNotIn(b"local-lab-response", response)
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_manual_response_interception_can_drop_origin_response(self):
         target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
         target_thread = threading.Thread(target=target.serve_forever, daemon=True)
