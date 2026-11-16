@@ -41,7 +41,7 @@ The Montoya extension now exposes bounded, read-only metadata from Burp Proxy HT
    ```
 
 6. If Burp uses a non-default loopback port, set `CYBERLAB_BURP_API_URL` for the Kali companion process, for example `http://127.0.0.1:1337`.
-7. Build `burp-extension` with JDK 21 and Gradle (`gradle clean jar`). Load `burp-extension/build/libs/cyberlab-burp-connector-0.1.0.jar` in Burp under **Extensions → Installed → Add**.
+7. Build `burp-extension` from the repository root with JDK 21 and Gradle (`gradle -p burp-extension clean jar`). Load `burp-extension/build/libs/cyberlab-burp-connector-0.1.0.jar` in Burp under **Extensions → Installed → Add**. The passing GitHub Actions workflow also publishes this JAR as the `cyberlab-burp-extension` artifact for 14 days.
 8. The extension binds only to `127.0.0.1:8766` and creates `~/.config/cyberlab/burp-extension-token` with owner-only permissions. Do not share this token.
 9. Restart the Kali companion and request `GET /burp/status`, `GET /burp/proxy/history?limit=50`, and `GET /burp/issues?limit=50` through the paired bridge.
 
