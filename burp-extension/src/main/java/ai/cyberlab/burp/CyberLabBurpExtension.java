@@ -19,6 +19,7 @@ import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 public final class CyberLabBurpExtension implements BurpExtension {
+    private HttpServer server;
     private static final int PORT = 8766;
     private static final Pattern SECRET_QUERY = Pattern.compile(
         "(?i)([?&](?:access_token|api_key|apikey|auth|authorization|code|key|password|passwd|secret|session|signature|sig|token)=)[^&#]*"
