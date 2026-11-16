@@ -88,6 +88,28 @@ class BurpConnectorTests(unittest.TestCase):
         request = open_url.call_args.args[0]
         self.assertIn("limit=100", request.full_url)
 
+    def test_site_map_excludes_out_of_scope_items(self):
+        payload = {
+            "status": "ok",
+            "items": [
+                {"method": "GET", "url": "https://lab.example.org/", "status_code": 200, "in_scope": True},
+                {"method": "POST", "url": "https://other.example.net/", "status_code": 200, "in_scope": False},
+            ]
+        }
+        class SiteMapResponse(FakeResponse):
+            def read(self, _limit):
+                import json
+                return json.dumps(payload).encode("utf-8")
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=SiteMapResponse()) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.inspect_burp_site_map(20)
+        self.assertEqual(result["status"], "connected")
+        self.assertEqual(result["count"], 1)
+        self.assertTrue(result["items"][0]["in_scope"])
+        self.assertNotIn("other.example.net", repr(result))
+        self.assertIn("limit=20", open_url.call_args.args[0].full_url)
+
     def test_rejects_url_credentials(self):
         result = burp_connector.inspect_burp_status(
             api_url="http://user:pass@127.0.0.1:1337",
