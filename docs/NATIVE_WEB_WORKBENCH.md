@@ -15,7 +15,7 @@ The local Kali companion provides a scope-bound HTTP request sender and short-li
 
 ## Native request repeater foundation
 
-The native HTTP workbench can load an in-memory request-history item back into the editor for an explicitly approved replay. History retains safe request-header metadata, redacts Authorization/Cookie/API-key/token headers and does not retain request-body contents. If the original request had a body, the UI tells the operator to re-enter it. Loading a history item never sends it automatically; scope and send approval are required again.
+The native HTTP workbench can load an in-memory request-history item back into the editor for an explicitly approved replay. History retains safe request metadata only: sensitive request and response headers are redacted, response bodies are omitted, and URL query strings are omitted to avoid retaining credentials or tokens embedded in parameters. Request-body contents are not retained either. If the original request had a body or query string, the UI tells the operator to re-enter it. The live response remains visible in the current workbench session, but is not kept in history. Loading a history item never sends it automatically; scope and send approval are required again.
 
 ## Native bounded crawler and baseline audit
 
