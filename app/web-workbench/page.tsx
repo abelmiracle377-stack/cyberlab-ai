@@ -25,7 +25,8 @@ export default function WebWorkbenchPage() {
   const [result, setResult] = useState<HttpResult | null>(null);
   const [history, setHistory] = useState<HttpResult[]>([]);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);\n  const [historyBodyOmitted, setHistoryBodyOmitted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [historyBodyOmitted, setHistoryBodyOmitted] = useState(false);
 
   const token = () => sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
 
@@ -82,7 +83,8 @@ export default function WebWorkbenchPage() {
         <label>Retype target URL to confirm hostname<input value={confirmationUrl} onChange={e=>setConfirmationUrl(e.target.value)} required maxLength={2048}/></label>
         <label>HTTP method<select value={method} onChange={e=>setMethod(e.target.value)}>{["GET","HEAD","OPTIONS","POST","PUT","PATCH","DELETE"].map(item=><option key={item}>{item}</option>)}</select></label>
         <label>Request headers · JSON<textarea value={headersText} onChange={e=>setHeadersText(e.target.value)} rows={4} spellCheck={false}/></label>
-        <label>Request body · maximum 16 KB<textarea value={body} onChange={e=>{setBody(e.target.value);setHistoryBodyOmitted(false);}} rows={5} spellCheck={false} placeholder="Optional request body for POST, PUT or PATCH"/></label>\n        {historyBodyOmitted && <div className="scope-warning">The selected history item contained a request body. CyberLab deliberately did not store its contents; re-enter the body manually before replay.</div>}
+        <label>Request body · maximum 16 KB<textarea value={body} onChange={e=>{setBody(e.target.value);setHistoryBodyOmitted(false);}} rows={5} spellCheck={false} placeholder="Optional request body for POST, PUT or PATCH"/></label>
+        {historyBodyOmitted && <div className="scope-warning">The selected history item contained a request body. CyberLab deliberately did not store its contents; re-enter the body manually before replay.</div>}
         <label>Engagement / authorisation reference<input value={reference} onChange={e=>setReference(e.target.value)} required maxLength={160}/></label>
         <div className="scope-checks"><label><input type="checkbox" checked={localLabMode} onChange={e=>setLocalLabMode(e.target.checked)}/> Local lab mode (loopback only: localhost / 127.0.0.1 / ::1)</label></div>
         <div className="scope-checks"><label><input type="checkbox" checked={authorised} onChange={e=>setAuthorised(e.target.checked)}/> I own this target or have explicit written authorisation for this request.</label></div>
