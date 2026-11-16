@@ -330,6 +330,77 @@ class NativeInterceptProxyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds 64 KB"):
             intercept_proxy._validated_intercept_edit(entry, {"body": "x" * (intercept_proxy.MAX_REQUEST_BODY + 1)})
 
+    def test_proxy_forwards_operator_edited_request_to_same_origin(self):
+        received = {}
+        class EditHandler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                received["method"] = self.command
+                received["path"] = self.path
+                received["body"] = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                payload = b"edited-request-arrived"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), EditHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-EDIT-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptRequests": True, "confirmInterceptRequests": True,
+                    "allowStateChangingMethods": True, "confirmStateChangingMethods": True,
+                })
+                result = {}
+                def send_original():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/before HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        chunks = []
+                        while True:
+                            chunk = client.recv(4096)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        result["response"] = b"".join(chunks)
+                worker = threading.Thread(target=send_original)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                intercept_proxy.decide_intercept(pending[0]["id"], "forward_edited", {
+                    "method": "POST", "path": "/after?edited=1",
+                    "headers": [{"name": "Content-Type", "value": "text/plain"}],
+                    "body": "edited payload",
+                })
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                self.assertIn(b"200 OK", result["response"])
+                self.assertEqual(received, {
+                    "method": "POST", "path": "/after?edited=1", "body": b"edited payload",
+                })
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_stop_drops_pending_intercepts_using_decision_record(self):
         event = threading.Event()
         intercept_proxy._INTERCEPTS["a" * 32] = {
