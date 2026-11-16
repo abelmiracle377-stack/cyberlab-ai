@@ -107,10 +107,10 @@ def _summarise_pcap(pcap_path: Path, packet_limit: int) -> dict:
         endpoints[source[:100]] += 1
         endpoints[destination[:100]] += 1
         combined = source + " " + destination
-        if re.search(r"(?:\.22|:22)(?:\s|$)", combined):
+        if re.search(r"(?:\.22|:22)(?=[:\s]|$)", combined):
             protocol_counts["ssh"] += 1
             ssh_packets += 1
-        elif re.search(r"(?:\.53|:53)(?:\s|$)", combined):
+        elif re.search(r"(?:\.53|:53)(?=[:\s]|$)", combined):
             protocol_counts["dns"] += 1
         elif "ICMP" in detail.upper():
             protocol_counts["icmp"] += 1
