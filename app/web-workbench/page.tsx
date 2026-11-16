@@ -31,6 +31,7 @@ export default function WebWorkbenchPage() {
   const [historySecretsRedacted, setHistorySecretsRedacted] = useState(false);
   const [caReady, setCaReady] = useState(false);
   const [caCertificatePath, setCaCertificatePath] = useState("");
+  const [caPem, setCaPem] = useState("");
   const [caConsent, setCaConsent] = useState(false);
   const [caBusy, setCaBusy] = useState(false);
   const [caError, setCaError] = useState("");
@@ -66,6 +67,12 @@ export default function WebWorkbenchPage() {
     if (!response.ok) throw new Error(data.error || "Could not inspect local CA status.");
     setCaReady(Boolean(data.ready));
     setCaCertificatePath(data.caCertificate || "");
+    if (data.ready) {
+      const certificate = await fetch("http://127.0.0.1:8765/proxy/ca/certificate", { headers: { Authorization: "Bearer " + pairing } });
+      const certificateData = await certificate.json();
+      if (!certificate.ok) throw new Error(certificateData.error || "Could not retrieve public CA certificate.");
+      setCaPem(certificateData.pem || "");
+    } else setCaPem("");
   }
 
   async function loadProxyStatus() {
@@ -146,6 +153,7 @@ export default function WebWorkbenchPage() {
       if (!response.ok) throw new Error(data.error || "Could not create local inspection CA.");
       setCaReady(Boolean(data.ready));
       setCaCertificatePath(data.caCertificate || "");
+      await loadCaStatus();
     } catch (cause) { setCaError(cause instanceof Error ? cause.message : "Unexpected CA setup error."); }
     finally { setCaBusy(false); }
   }
@@ -213,7 +221,8 @@ export default function WebWorkbenchPage() {
         <h2><ShieldCheck size={14}/> HTTPS inspection certificate authority</h2>
         <p>Foundation for CyberLab's native HTTPS interception. Creating this local CA does not install or trust it automatically. You must manually import the public certificate into a dedicated test browser profile. Never distribute the CA private key.</p>
         <p>{caReady ? "Local CA is ready." : "No local inspection CA has been created."}</p>
-        {caCertificatePath && <p>Public CA certificate path: <code>{caCertificatePath}</code></p>}
+        {caCertificatePath && <p>Public CA certificate path on Kali: <code>{caCertificatePath}</code></p>}
+        {caPem && <p><a className="nav-item" href={"data:application/x-pem-file;charset=utf-8," + encodeURIComponent(caPem)} download="cyberlab-local-inspection-ca.pem">Download public CA certificate for manual browser import</a></p>}
         {!caReady && <div className="scope-checks"><label><input type="checkbox" checked={caConsent} onChange={e=>setCaConsent(e.target.checked)}/> I explicitly approve generating a local CA and understand that trusting it enables HTTPS traffic decryption for traffic routed through CyberLab.</label></div>}
         {!caReady && <button className="report-download" type="button" disabled={!caConsent || caBusy} onClick={createLocalCa}>{caBusy ? "Creating local CA…" : "Create local inspection CA"}</button>}
         {caError && <div className="agent-error"><AlertTriangle size={14}/>{caError}</div>}
