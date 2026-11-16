@@ -28,7 +28,7 @@ from network_capture import list_capture_interfaces, capture_packets
 from web_testing import execute_request, request_history
 from web_crawler import run_crawl
 from web_active_scan import run_active_scan
-from proxy_certificates import ca_status, create_local_ca
+from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
 from intercept_proxy import PROXY, proxy_history
 from task_planner import plan_task
 from research_workflows import run_research_action
@@ -223,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/status", "/proxy/history", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -231,6 +231,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, inspect_tool_catalog(), origin)
         if path == "/proxy/ca/status":
             return self.send_json(200, ca_status(), origin)
+        if path == "/proxy/ca/certificate":
+            try:
+                return self.send_json(200, ca_certificate_pem(), origin)
+            except ValueError as exc:
+                return self.send_json(400, {"error": str(exc)}, origin)
         if path == "/proxy/status":
             return self.send_json(200, PROXY.status(), origin)
         if path == "/proxy/history":
