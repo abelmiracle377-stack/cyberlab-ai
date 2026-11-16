@@ -14,6 +14,7 @@ class TaskPlannerTests(unittest.TestCase):
                 {"name": "Metasploit Framework", "installed": False, "mode": "safe_metadata_only", "purpose": "module research", "install_hint": "sudo apt install -y metasploit-framework"},
                 {"name": "FTP client", "installed": True, "mode": "manual_only", "purpose": "FTP diagnostics", "install_hint": None},
                 {"name": "WhatWeb", "installed": True, "mode": "passive", "purpose": "web fingerprinting", "install_hint": None},
+                {"name": "CyberLab HTTP Workbench", "installed": True, "mode": "native_http", "purpose": "native HTTP requests", "install_hint": None},
                 {"name": "John the Ripper", "installed": True, "mode": "manual_only", "purpose": "offline hash audit", "install_hint": None},
                 {"name": "Aircrack-ng", "installed": False, "mode": "manual_only", "purpose": "wireless assessment", "install_hint": "sudo apt install -y aircrack-ng"},
                 {"name": "Autopsy", "installed": True, "mode": "local_analysis", "purpose": "forensics", "install_hint": None},
@@ -35,6 +36,8 @@ class TaskPlannerTests(unittest.TestCase):
         result = self.plan("Please scan 192.0.2.10 ports 22 and 443 for my authorised lab.")
         self.assertEqual(result["target"], "192.0.2.10")
         self.assertTrue(result["requires_authorisation"])
+        self.assertIn("CyberLab HTTP Workbench", [tool["name"] for tool in result["suggested_tools"]])
+        self.assertNotIn("Burp Suite", [tool["name"] for tool in result["suggested_tools"]])
         self.assertEqual(result["status"], "plan_only")
         self.assertFalse(result["execution_started"])
         self.assertTrue(result["missing_information"])
