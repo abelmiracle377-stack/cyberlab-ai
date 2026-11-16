@@ -46,6 +46,10 @@ The companion's `POST /web/active-scan` endpoint runs `kali-companion/web_active
 
 These checks are not a full vulnerability scanner. Reflection does not prove XSS, and permissive CORS headers do not by themselves prove sensitive data exposure.
 
+## Agent Console handoff
+
+The Agent Console recognises explicit web assessment requests that include an HTTP(S) URL and opens a local approval panel. After the operator confirms the exact origin, written-authorisation reference and crawl approval, the browser calls the paired loopback companion directly. The operator can separately approve the limited active checks. Returned crawl and scanner evidence is then submitted to the selected AI model for interpretation. The server-side model does not receive the bridge token and cannot silently initiate local requests. This is a user-approved workflow handoff, not yet autonomous specialist-agent execution or full finding verification.
+
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
@@ -55,6 +59,6 @@ The crawler is a discovery and baseline layer, not a full active vulnerability s
 - Native request repeater UI with response comparison.
 - Bounded parameter mutation and fuzzing engine.
 - WebSocket and GraphQL security testing.
-- AI specialist-agent orchestration across crawl, scan, verification and reporting.
+- Full AI specialist-agent orchestration across crawl, scan, independent finding verification and reporting. The Agent Console currently provides a user-approved handoff and evidence-analysis step only.
 
 These capabilities must not be represented as complete until implemented and tested against intentionally vulnerable local labs. Public targets require explicit written authorisation and a defined scope.
