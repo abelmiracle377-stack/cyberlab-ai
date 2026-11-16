@@ -110,6 +110,32 @@ class BurpConnectorTests(unittest.TestCase):
         self.assertNotIn("other.example.net", repr(result))
         self.assertIn("limit=20", open_url.call_args.args[0].full_url)
 
+    def test_audit_issues_returns_only_in_scope_bounded_metadata(self):
+        payload = {
+            "status": "ok",
+            "items": [
+                {"name": "Reflected XSS", "base_url": "https://lab.example.org/",
+                 "severity": "HIGH", "confidence": "FIRM", "in_scope": True,
+                 "detail": "must not be forwarded"},
+                {"name": "Out of scope", "base_url": "https://other.example.net/",
+                 "severity": "HIGH", "confidence": "FIRM", "in_scope": False},
+            ]
+        }
+        class IssuesResponse(FakeResponse):
+            def read(self, _limit):
+                import json
+                return json.dumps(payload).encode("utf-8")
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=IssuesResponse()) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.inspect_burp_issues(500)
+        self.assertEqual(result["status"], "connected")
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["items"][0]["name"], "Reflected XSS")
+        self.assertNotIn("detail", result["items"][0])
+        self.assertNotIn("other.example.net", repr(result))
+        self.assertIn("limit=100", open_url.call_args.args[0].full_url)
+
     def test_repeater_handoff_requires_explicit_confirmation(self):
         with patch.object(burp_connector, "urlopen") as open_url:
             result = burp_connector.open_burp_history_in_repeater(12, confirmed=False)
