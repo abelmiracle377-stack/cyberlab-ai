@@ -113,6 +113,24 @@ def validate_request(data: dict) -> dict:
     }
 
 
+SENSITIVE_HISTORY_HEADERS = {"authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key", "x-auth-token", "x-access-token"}
+
+
+def _safe_history_request(request: dict) -> dict:
+    """Keep replayable non-secret request metadata, never credentials or body content."""
+    safe_headers = {}
+    for key, value in request.get("headers", {}).items():
+        lowered = key.lower()
+        sensitive = lowered in SENSITIVE_HISTORY_HEADERS or "token" in lowered or "secret" in lowered
+        safe_headers[key] = "[REDACTED]" if sensitive else value
+    body_length = len(request.get("body", b""))
+    return {
+        "requestHeaders": safe_headers,
+        "requestBodyOmitted": body_length > 0,
+        "requestBodyLength": body_length,
+    }
+
+
 def execute_request(data: dict) -> dict:
     request = validate_request(data)
     started = time.monotonic()
@@ -144,6 +162,7 @@ def execute_request(data: dict) -> dict:
             "truncated": truncated, "durationMs": round((time.monotonic() - started) * 1000),
             "target": request["url"], "method": request["method"], "resolvedAddress": address,
             "redirectFollowed": False, "authorizationReference": request["authorization_reference"],
+            **_safe_history_request(request),
             "capturedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         with _HISTORY_LOCK:
