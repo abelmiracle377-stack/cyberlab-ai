@@ -266,6 +266,59 @@ def inspect_burp_site_map(limit: int = 50) -> dict:
         return {"status": "unavailable", "items": [], "count": 0}
 
 
+
+EXTENSION_ISSUES_URL = "http://127.0.0.1:8766/v1/issues"
+
+
+def inspect_burp_issues(limit: int = 50) -> dict:
+    """Read bounded severity metadata for existing in-scope Burp audit issues."""
+    try:
+        bounded_limit = max(1, min(int(limit), 100))
+    except (TypeError, ValueError):
+        bounded_limit = 50
+    try:
+        token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {"status": "not_configured", "items": [], "count": 0}
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
+        return {"status": "invalid_configuration", "items": [], "count": 0}
+    request = Request(
+        EXTENSION_ISSUES_URL + "?limit=" + str(bounded_limit),
+        headers={"Accept": "application/json", "Authorization": "Bearer " + token},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=2.5) as response:
+            if getattr(response, "status", 200) != 200:
+                return {"status": "api_error", "items": [], "count": 0}
+            payload = json.loads(response.read(128 * 1024).decode("utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            return {"status": "invalid_response", "items": [], "count": 0}
+        safe_items = []
+        for item in payload["items"][:bounded_limit]:
+            if not isinstance(item, dict) or item.get("in_scope") is not True:
+                continue
+            name = item.get("name")
+            base_url = item.get("base_url")
+            severity = item.get("severity")
+            confidence = item.get("confidence")
+            if not all(isinstance(value, str) for value in (name, base_url, severity, confidence)):
+                continue
+            safe_items.append({
+                "name": name[:200],
+                "base_url": base_url[:2048],
+                "severity": severity[:40],
+                "confidence": confidence[:40],
+                "in_scope": True,
+            })
+        return {"status": "connected", "items": safe_items, "count": len(safe_items)}
+    except HTTPError as exc:
+        return {"status": "authentication_failed" if exc.code in {401, 403} else "api_error",
+                "items": [], "count": 0}
+    except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
+        return {"status": "unavailable", "items": [], "count": 0}
+
+
 EXTENSION_REPEATER_URL = "http://127.0.0.1:8766/v1/repeater/from-history"
 
 
