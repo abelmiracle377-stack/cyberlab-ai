@@ -107,8 +107,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 listen_port = self._free_port()
                 browser_context = ssl.create_default_context(cafile=str(certs.CA_CERT))
                 upstream_context = ssl.create_default_context(cafile=str(certs.CA_CERT))
-                with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]), \\
-                     patch.object(intercept_proxy.ssl, "create_default_context", return_value=upstream_context):
+                with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]), patch.object(intercept_proxy.ssl, "create_default_context", return_value=upstream_context):
                     proxy.start({
                         "origin": origin, "confirmationOrigin": origin,
                         "authorizationConfirmed": True, "confirmStart": True,
@@ -116,20 +115,20 @@ class NativeInterceptProxyTests(unittest.TestCase):
                         "localLabMode": True, "listenPort": listen_port,
                     })
                     raw = socket.create_connection(("127.0.0.1", listen_port), timeout=5)
-                    raw.sendall((f"CONNECT localhost:{target.server_port} HTTP/1.1\\r\\n"
-                                 f"Host: localhost:{target.server_port}\\r\\n"
-                                 "Proxy-Connection: keep-alive\\r\\n\\r\\n").encode("ascii"))
+                    raw.sendall((f"CONNECT localhost:{target.server_port} HTTP/1.1\r\n"
+                                 f"Host: localhost:{target.server_port}\r\n"
+                                 "Proxy-Connection: keep-alive\r\n\r\n").encode("ascii"))
                     handshake_reply = b""
-                    while b"\\r\\n\\r\\n" not in handshake_reply:
+                    while b"\r\n\r\n" not in handshake_reply:
                         chunk = raw.recv(4096)
                         if not chunk:
                             break
                         handshake_reply += chunk
                     self.assertIn(b"200 Connection Established", handshake_reply)
                     tls_client = browser_context.wrap_socket(raw, server_hostname="localhost")
-                    tls_client.sendall((f"GET /secure?session=secret HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                    tls_client.sendall((f"GET /secure?session=secret HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: close\r\n\r\n").encode("ascii"))
                     response = b""
                     while True:
                         chunk = tls_client.recv(8192)
