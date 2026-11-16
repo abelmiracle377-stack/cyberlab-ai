@@ -164,7 +164,7 @@ def issue_host_certificate(host: str) -> dict:
             _run([binary, "req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key_tmp),
                   "-out", str(csr), "-subj", "/CN=" + name], timeout=45)
             os.chmod(key_tmp, 0o600)
-            ext.write_text("basicConstraints=critical,CA:FALSE\\nkeyUsage=critical,digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth\\nsubjectAltName=" + san + "\\n", encoding="ascii")
+            ext.write_text("basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=" + san + "\n", encoding="ascii")
             os.chmod(ext, 0o600)
             serial = "0x" + os.urandom(16).hex()
             _run([binary, "x509", "-req", "-in", str(csr), "-CA", str(CA_CERT), "-CAkey", str(CA_KEY),
