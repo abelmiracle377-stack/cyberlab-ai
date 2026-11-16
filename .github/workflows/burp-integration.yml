@@ -1,4 +1,4 @@
-name: Burp integration checks
+name: Kali companion security checks
 
 on:
   push:
@@ -10,8 +10,6 @@ on:
       - "kali-companion/bridge.py"
       - "kali-companion/network_capture.py"
       - "kali-companion/tests/test_network_capture.py"
-      - "kali-companion/network_capture.py"
-      - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/tests/test_burp_connector.py"
       - ".github/workflows/burp-integration.yml"
   pull_request:
@@ -19,6 +17,8 @@ on:
       - "burp-extension/**"
       - "kali-companion/burp_connector.py"
       - "kali-companion/bridge.py"
+      - "kali-companion/network_capture.py"
+      - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/tests/test_burp_connector.py"
       - ".github/workflows/burp-integration.yml"
 
