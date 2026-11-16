@@ -319,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(409, {"error": str(exc)}, origin)
             if path == "/proxy/response-intercepts/decision":
                 try:
-                    return self.send_json(200, decide_response_intercept(data.get("id", ""), data.get("action", "")), origin)
+                    return self.send_json(200, decide_response_intercept(data.get("id", ""), data.get("action", ""), data.get("edits")), origin)
                 except ValueError as exc:
                     return self.send_json(409, {"error": str(exc)}, origin)
             if path == "/proxy/start":
