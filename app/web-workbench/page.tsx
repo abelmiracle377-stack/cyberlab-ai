@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, AlertTriangle, Globe, History, LoaderCircle, Send, ShieldCheck } from "lucide-react";
 
-type ProxyHistoryItem = { id: string; method: string; url: string; status: number; queryOmitted?: boolean; requestBodyOmitted?: boolean; responseBodyOmitted?: boolean; durationMs: number; };
+type ProxyHistoryItem = { id: string; method: string; url: string; status: number; queryOmitted?: boolean; requestHeaders?: { name: string; value: string }[]; responseHeaders?: { name: string; value: string }[]; requestBodyOmitted?: boolean; requestBodyLength?: number; responseBodyOmitted?: boolean; responseBodyLength?: number; durationMs: number; capturedAt?: string; };
 type PendingIntercept = { id: string; method: string; url: string; path: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; body: string; bodyEditable: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyEditable: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type ResponseInterceptDraft = { status: number; reason: string; headersText: string; body: string };
@@ -61,6 +61,10 @@ export default function WebWorkbenchPage() {
   const [proxyBusy, setProxyBusy] = useState(false);
   const [proxyError, setProxyError] = useState("");
   const [proxyHistory, setProxyHistory] = useState<ProxyHistoryItem[]>([]);
+  const [proxyHistoryFilter, setProxyHistoryFilter] = useState("");
+  const [proxyHistoryMethodFilter, setProxyHistoryMethodFilter] = useState("ALL");
+  const [proxyHistoryStatusFilter, setProxyHistoryStatusFilter] = useState("ALL");
+  const [selectedProxyHistoryId, setSelectedProxyHistoryId] = useState("");
 
   const token = () => sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
 
@@ -372,10 +376,30 @@ export default function WebWorkbenchPage() {
           </div>)}
           {!pendingResponseIntercepts.length && <p>No origin responses are currently waiting.</p>}
         </>}
-        <h3>Recent intercepted requests</h3>
+        <h3>HTTP history</h3>
+        <p>Session-only metadata. Request and response bodies are not retained; URL query strings and sensitive header values are redacted.</p>
+        <div className="scope-checks">
+          <label>Search history<input value={proxyHistoryFilter} onChange={e=>setProxyHistoryFilter(e.target.value)} placeholder="Filter by host, path or method"/></label>
+          <label>Method<select value={proxyHistoryMethodFilter} onChange={e=>setProxyHistoryMethodFilter(e.target.value)}><option value="ALL">All methods</option>{["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"].map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+          <label>Status<select value={proxyHistoryStatusFilter} onChange={e=>setProxyHistoryStatusFilter(e.target.value)}><option value="ALL">All statuses</option><option value="2">2xx success</option><option value="3">3xx redirect</option><option value="4">4xx client error</option><option value="5">5xx server error</option></select></label>
+        </div>
         <button className="report-download" type="button" onClick={()=>loadProxyHistory().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh proxy history."))}>Refresh proxy history</button>
-        {proxyHistory.map(item=><p key={item.id}>{item.method} · {item.status} · {item.url}{item.queryOmitted ? " · query omitted" : ""} · {item.durationMs} ms</p>)}
+        {proxyHistory.filter(item=>(proxyHistoryMethodFilter==="ALL"||item.method===proxyHistoryMethodFilter)&&(proxyHistoryStatusFilter==="ALL"||String(item.status).startsWith(proxyHistoryStatusFilter))&&(!proxyHistoryFilter||[item.method,item.url,String(item.status)].join(" ").toLowerCase().includes(proxyHistoryFilter.toLowerCase()))).map(item=><button className="report-download" type="button" key={item.id} aria-pressed={selectedProxyHistoryId===item.id} onClick={()=>setSelectedProxyHistoryId(item.id)}>{item.method} · {item.status} · {item.url}{item.queryOmitted ? " · query omitted" : ""} · {item.durationMs} ms</button>)}
         {!proxyHistory.length && <p>No proxy requests recorded in this companion session.</p>}
+        {proxyHistory.length>0 && !proxyHistory.some(item=>(proxyHistoryMethodFilter==="ALL"||item.method===proxyHistoryMethodFilter)&&(proxyHistoryStatusFilter==="ALL"||String(item.status).startsWith(proxyHistoryStatusFilter))&&(!proxyHistoryFilter||[item.method,item.url,String(item.status)].join(" ").toLowerCase().includes(proxyHistoryFilter.toLowerCase()))) && <p>No history entries match these filters.</p>}
+        {(() => {
+          const selected = proxyHistory.find(item=>item.id===selectedProxyHistoryId) || proxyHistory[0];
+          if (!selected) return null;
+          return <div className="scope-warning">
+            <strong>{selected.method} {selected.url} · HTTP {selected.status}</strong>
+            <p>Captured {selected.capturedAt || "during this session"} · {selected.durationMs} ms · request body {selected.requestBodyLength || 0} bytes not retained · response body {selected.responseBodyLength || 0} bytes not retained.</p>
+            {selected.queryOmitted && <p>Query string omitted from history to avoid retaining tokens or sensitive parameters.</p>}
+            <h4>Request headers · sensitive values redacted</h4>
+            <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>{JSON.stringify(selected.requestHeaders || [],null,2)}</pre>
+            <h4>Response headers · sensitive values redacted</h4>
+            <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>{JSON.stringify(selected.responseHeaders || [],null,2)}</pre>
+          </div>;
+        })()}
       </div>
       <div className="network-results">
         <h2><ShieldCheck size={14}/> HTTPS inspection certificate authority</h2>
