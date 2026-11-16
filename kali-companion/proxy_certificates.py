@@ -11,6 +11,7 @@ import ipaddress
 import os
 import re
 import shutil
+import stat
 import subprocess
 import threading
 from pathlib import Path
@@ -53,11 +54,17 @@ def _run(args: list[str], timeout: int = 30) -> None:
 
 def ca_status() -> dict:
     with _LOCK:
-        ready = CA_KEY.is_file() and not CA_KEY.is_symlink() and CA_CERT.is_file() and not CA_CERT.is_symlink()
+        ready = False
+        if (CA_KEY.is_file() and not CA_KEY.is_symlink() and CA_CERT.is_file()
+                and not CA_CERT.is_symlink() and CA_DIR.is_dir() and not CA_DIR.is_symlink()):
+            key_mode = stat.S_IMODE(CA_KEY.stat(follow_symlinks=False).st_mode)
+            directory_mode = stat.S_IMODE(CA_DIR.stat(follow_symlinks=False).st_mode)
+            ready = key_mode == 0o600 and directory_mode == 0o700
         return {
             "ready": ready,
             "caCertificate": str(CA_CERT) if ready else None,
             "privateKeyStored": ready,
+            "privateKeyPermissions": "owner-only (0600)" if ready else "not verified",
             "trustInstallation": "manual; CyberLab never modifies operating-system or browser trust stores",
             "storage": str(CA_DIR),
         }
