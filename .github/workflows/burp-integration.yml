@@ -11,6 +11,10 @@ on:
       - "kali-companion/network_capture.py"
       - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/tests/test_burp_connector.py"
+      - "app/network-intelligence/**"
+      - "app/page.tsx"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/burp-integration.yml"
   pull_request:
     paths:
@@ -20,6 +24,10 @@ on:
       - "kali-companion/network_capture.py"
       - "kali-companion/tests/test_network_capture.py"
       - "kali-companion/tests/test_burp_connector.py"
+      - "app/network-intelligence/**"
+      - "app/page.tsx"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/burp-integration.yml"
 
 permissions:
@@ -40,6 +48,18 @@ jobs:
           python -m unittest discover -s kali-companion/tests -p "test_burp_connector.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_network_capture.py" -v
           python -m unittest discover -s kali-companion -p "test_task_planner.py" -v
+
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --prefer-offline --no-audit --no-fund
+      - name: Build CyberLab web application
+        run: npm run build
 
   montoya-build:
     runs-on: ubuntu-latest
