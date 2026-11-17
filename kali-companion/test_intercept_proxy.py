@@ -31,6 +31,29 @@ class _TargetHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class ChunkedRequestBodyTests(unittest.TestCase):
+    def test_reads_multiple_chunks_and_discards_valid_trailers(self):
+        import io
+        stream = io.BytesIO(
+            b"4;ext=value\\r\\nWiki\\r\\n5\\r\\npedia\\r\\n"
+            b"0\\r\\nX-Checksum: ignored\\r\\n\\r\\n"
+        )
+        self.assertEqual(intercept_proxy._read_chunked_body(stream), b"Wikipedia")
+        self.assertEqual(stream.read(), b"")
+
+    def test_rejects_chunked_body_over_limit_before_reading_payload(self):
+        import io
+        stream = io.BytesIO(f"{intercept_proxy.MAX_REQUEST_BODY + 1:x}\\r\\n".encode("ascii"))
+        with self.assertRaisesRegex(ValueError, "exceeds 64 KB"):
+            intercept_proxy._read_chunked_body(stream)
+
+    def test_rejects_unsafe_framing_trailer(self):
+        import io
+        stream = io.BytesIO(b"0\\r\\nContent-Length: 5\\r\\n\\r\\n")
+        with self.assertRaisesRegex(ValueError, "Unsafe"):
+            intercept_proxy._read_chunked_body(stream)
+
+
 class NativeInterceptProxyTests(unittest.TestCase):
     def _free_port(self):
         with socket.socket() as sock:

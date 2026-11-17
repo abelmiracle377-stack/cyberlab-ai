@@ -75,7 +75,7 @@ This is an initial HTTP/1.1 proxy, not full Burp parity. It supports up to 50 se
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
-- Advanced interception features remain in development: binary and oversized response editing, response diff tooling, multi-origin profiles, HTTP/2, fragmented binary-message editing, extension negotiation, chunked client request bodies, client-certificate authentication and broader browser compatibility.
+- Advanced interception features remain in development: binary and oversized response editing, response diff tooling, multi-origin profiles, HTTP/2, fragmented binary-message editing, extension negotiation, client-certificate authentication and broader browser compatibility. Chunked HTTP/1.1 request bodies are now decoded with strict size/framing limits and forwarded upstream with a normalized Content-Length.
 - Authenticated crawling and session/role handling.
 - Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
 - Raw binary request/response editing and richer response-diff tooling.
@@ -101,3 +101,8 @@ This is a parameter-test planning foundation, not a full Intruder equivalent. Th
 ## Offline response-difference analysis
 
 The paired companion exposes `POST /web/parameters/analyze` for two responses already captured by explicit Repeater sends. It compares status, body digest, body length, response timing and response headers. Sensitive header values (authorization, cookies, token-like headers) are redacted before any difference is returned. The analysis is offline: it does not issue requests, retain response bodies or create an exploitability verdict. Timing differences are advisory and should be repeated under comparable conditions. The Repeater's comparison panel can submit the selected in-session responses to this analyser and display the resulting review indicators.
+
+
+## Chunked HTTP request handling
+
+The native HTTP/1.1 proxy accepts a single `Transfer-Encoding: chunked` request body when no `Content-Length` is present. It decodes chunks within the existing 64 KB request-body limit, bounds chunk-line and trailer overhead, validates trailer syntax, and rejects framing trailers that attempt to redefine Host or message length. The decoded body is forwarded upstream with a generated `Content-Length`; hop-by-hop transfer coding and trailers are not forwarded. Ambiguous transfer-coding combinations, unsupported expectations and malformed/incomplete chunks are rejected. This does not add chunked response streaming: responses continue to be bounded and buffered for inspection.

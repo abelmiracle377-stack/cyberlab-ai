@@ -99,6 +99,53 @@ def _origin(value: str) -> tuple[str, str, int]:
     return parsed.scheme.lower(), host, port
 
 
+def _read_chunked_body(stream) -> bytes:
+    """Read one bounded HTTP chunked body and discard validated trailers."""
+    body = bytearray()
+    overhead = 0
+    trailer_count = 0
+    while True:
+        line = stream.readline(1025)
+        overhead += len(line)
+        if (not line or len(line) > 1024 or not line.endswith(b"\\r\\n")
+                or overhead > MAX_HEADER_BYTES):
+            raise ValueError("Malformed or oversized chunked request framing.")
+        size_text = line[:-2].split(b";", 1)[0].strip()
+        if not size_text or not re.fullmatch(rb"[0-9A-Fa-f]+", size_text):
+            raise ValueError("Invalid chunk size.")
+        size = int(size_text, 16)
+        if size > MAX_REQUEST_BODY - len(body):
+            raise ValueError("Chunked request body exceeds 64 KB.")
+        if size == 0:
+            while True:
+                trailer = stream.readline(8193)
+                overhead += len(trailer)
+                if (not trailer or len(trailer) > 8192
+                        or overhead > MAX_HEADER_BYTES):
+                    raise ValueError("Malformed or oversized chunked request trailers.")
+                if trailer == b"\\r\\n":
+                    return bytes(body)
+                trailer_count += 1
+                if trailer_count > MAX_HEADER_COUNT or not trailer.endswith(b"\\r\\n"):
+                    raise ValueError("Invalid chunked request trailers.")
+                if trailer[:1] in (b" ", b"\\t") or b":" not in trailer:
+                    raise ValueError("Malformed chunked request trailer.")
+                name, value = trailer[:-2].split(b":", 1)
+                try:
+                    key = name.decode("ascii")
+                    val = value.decode("iso-8859-1").strip()
+                except UnicodeDecodeError as exc:
+                    raise ValueError("Invalid chunked request trailer.") from exc
+                if (not re.fullmatch(r"[!#$%&'*+.^_\x60|~0-9A-Za-z-]{1,128}", key)
+                        or key.lower() in {"content-length", "transfer-encoding", "host"}
+                        or any(ord(ch) < 32 and ch != "\\t" or ord(ch) == 127 for ch in val)):
+                    raise ValueError("Unsafe chunked request trailer.")
+        chunk = stream.read(size)
+        if len(chunk) != size or stream.read(2) != b"\\r\\n":
+            raise ValueError("Incomplete chunked request body.")
+        body.extend(chunk)
+
+
 def _safe_headers(headers: list[tuple[str, str]]) -> list[dict]:
     output = []
     for name, value in headers:
@@ -821,9 +868,14 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         lowered = {}
         for name, value in headers:
             lowered.setdefault(name.lower(), []).append(value)
-        if "transfer-encoding" in lowered or "expect" in lowered:
-            self._error(501, "Chunked request bodies and Expect are not supported")
-            return
+        if "expect" in lowered:
+            self._error(417, "Expect request handling is not supported")
+            return False
+        transfer_values = lowered.get("transfer-encoding", [])
+        if transfer_values and ("content-length" in lowered or len(transfer_values) != 1
+                                or transfer_values[0].strip().lower() != "chunked"):
+            self._error(400, "Only a single chunked transfer coding without Content-Length is supported")
+            return False
         connection_tokens = {token.strip().lower() for value in lowered.get("connection", [])
                              for token in value.split(",") if token.strip()}
         host_values = lowered.get("host", [])
@@ -846,15 +898,23 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         lengths = lowered.get("content-length", ["0"])
         if len(lengths) != 1 or not lengths[0].isdigit():
             self._error(400, "Invalid Content-Length")
-            return
-        body_size = int(lengths[0])
-        if body_size > MAX_REQUEST_BODY:
-            self._error(413, "Request body exceeds 64 KB")
-            return
-        body = self.rfile.read(body_size) if body_size else b""
-        if len(body) != body_size:
-            self._error(400, "Incomplete request body")
-            return
+            return False
+        if transfer_values:
+            try:
+                body = _read_chunked_body(self.rfile)
+            except ValueError as exc:
+                self._error(413 if "exceeds 64 KB" in str(exc) else 400, str(exc))
+                return False
+            body_size = len(body)
+        else:
+            body_size = int(lengths[0])
+            if body_size > MAX_REQUEST_BODY:
+                self._error(413, "Request body exceeds 64 KB")
+                return False
+            body = self.rfile.read(body_size) if body_size else b""
+            if len(body) != body_size:
+                self._error(400, "Incomplete request body")
+                return False
         if "upgrade" in lowered or "upgrade" in connection_tokens:
             if body_size:
                 self._error(400, "WebSocket upgrade requests cannot contain a request body")
