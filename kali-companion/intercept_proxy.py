@@ -520,10 +520,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 if any(ord(char) <= 32 or ord(char) == 127 for char in path):
                     self._error(400, "Request target contains unescaped whitespace or control characters")
                     return
+            self._request_limit_reached = request_number == MAX_REQUESTS_PER_CLIENT - 1
             keep_alive = self._process_request(method, scheme, host, port, path, version)
             if not keep_alive:
                 return
-        self._error(429, "Maximum requests per proxy connection reached")
 
 
     def _read_headers(self) -> list[tuple[str, str]]:
@@ -840,8 +840,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             if (header_host.rstrip(".").lower(), header_port) != (host.rstrip(".").lower(), port):
                 self._error(421, "Host header does not match the requested proxy origin")
                 return False
-        client_keep_alive = ("close" not in connection_tokens and
-                             (version == "HTTP/1.1" or "keep-alive" in connection_tokens))
+        client_keep_alive = (not getattr(self, "_request_limit_reached", False)
+                             and "close" not in connection_tokens
+                             and (version == "HTTP/1.1" or "keep-alive" in connection_tokens))
         lengths = lowered.get("content-length", ["0"])
         if len(lengths) != 1 or not lengths[0].isdigit():
             self._error(400, "Invalid Content-Length")
