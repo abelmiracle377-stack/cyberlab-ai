@@ -111,9 +111,13 @@ def _read_chunked_body(stream) -> bytes:
         if (not line or len(line) > 1024 or not line.endswith(b"\r\n")
                 or overhead > MAX_HEADER_BYTES):
             raise ValueError("Malformed or oversized chunked request framing.")
-        size_text = line[:-2].split(b";", 1)[0].strip()
-        if not size_text or not re.fullmatch(rb"[0-9A-Fa-f]+", size_text):
-            raise ValueError("Invalid chunk size.")
+        chunk_line = line[:-2]
+        # Accept token-only chunk extensions; reject ambiguous extension syntax.
+        if not re.fullmatch(
+                rb"[0-9A-Fa-f]+(?:;[!#$%&'*+.^_\\x60|~0-9A-Za-z-]+(?:=[!#$%&'*+.^_\\x60|~0-9A-Za-z-]+)?)*",
+                chunk_line):
+            raise ValueError("Invalid chunk size or extension.")
+        size_text = chunk_line.split(b";", 1)[0]
         size = int(size_text, 16)
         if size > MAX_REQUEST_BODY - len(body):
             raise ValueError("Chunked request body exceeds 64 KB.")

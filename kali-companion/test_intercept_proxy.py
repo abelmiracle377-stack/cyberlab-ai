@@ -49,6 +49,12 @@ class ChunkedRequestBodyTests(unittest.TestCase):
         self.assertEqual(intercept_proxy._read_chunked_body(stream), b"Wikipedia")
         self.assertEqual(stream.read(), b"")
 
+    def test_rejects_malformed_chunk_extensions(self):
+        import io
+        stream = io.BytesIO(b"1;bad extension\r\na\r\n0\r\n\r\n")
+        with self.assertRaisesRegex(ValueError, "extension"):
+            intercept_proxy._read_chunked_body(stream)
+
     def test_rejects_chunked_body_over_limit_before_reading_payload(self):
         import io
         stream = io.BytesIO(f"{intercept_proxy.MAX_REQUEST_BODY + 1:x}\r\n".encode("ascii"))
