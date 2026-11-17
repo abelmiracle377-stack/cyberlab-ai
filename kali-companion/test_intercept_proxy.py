@@ -1204,5 +1204,17 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertEqual(payload, b"new text")
 
 
+    def test_websocket_message_assembler_exposes_fragment_assembly_timeout(self):
+        from websocket_interception import WebSocketMessageAssembler
+        assembler = WebSocketMessageAssembler()
+        assembler.feed({"fin": False, "opcode": 1}, b"partial")
+        self.assertFalse(assembler.expired)
+        assembler._started -= 16
+        self.assertTrue(assembler.expired)
+        with self.assertRaises(ValueError):
+            assembler.feed({"fin": True, "opcode": 0}, b"tail")
+        self.assertFalse(assembler.pending)
+
+
 if __name__ == "__main__":
     unittest.main()

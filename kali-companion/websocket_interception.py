@@ -116,6 +116,11 @@ class WebSocketMessageAssembler:
     def pending(self):
         return self._opcode is not None
 
+    @property
+    def expired(self):
+        return self.pending and self._started is not None and (
+            time.monotonic() - self._started > MAX_FRAGMENT_ASSEMBLY_SECONDS)
+
     def feed(self, metadata, payload):
         if not isinstance(metadata, dict) or not isinstance(payload, bytes):
             raise ValueError("WebSocket message fragment is invalid.")

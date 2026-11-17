@@ -632,6 +632,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         controller = self.server.controller
         while open_read and not controller._stop_event.is_set():
             readable, _, _ = select.select(list(open_read), [], [], 1.0)
+            if controller.intercept_websocket_frames and any(
+                    assembler.expired for assembler in assemblers.values()):
+                # An incomplete fragmented message must not pin relay memory indefinitely.
+                break
             for candidate in open_read:
                 if isinstance(candidate, ssl.SSLSocket) and candidate.pending() > 0 and candidate not in readable:
                     readable.append(candidate)
