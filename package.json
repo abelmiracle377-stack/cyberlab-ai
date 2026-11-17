@@ -26,5 +26,8 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "csstype": "3.1.3"
   }
 }
