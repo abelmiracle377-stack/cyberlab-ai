@@ -26,8 +26,9 @@ class ParameterAnalysisTests(unittest.TestCase):
             response(headers=[{"name": "Set-Cookie", "value": "sid=secret"}]),
             response(headers=[{"name": "Set-Cookie", "value": "sid=other"}]),
         )
-        self.assertEqual(result["headers"][0]["before"], "[REDACTED]")
-        self.assertEqual(result["headers"][0]["after"], "[REDACTED]")
+        self.assertEqual(result["headers"], [])
+        self.assertNotIn("secret", repr(result))
+        self.assertNotIn("other", repr(result))
 
     def test_identical_responses_have_no_indicators(self):
         result = compare_responses(response(), response())
