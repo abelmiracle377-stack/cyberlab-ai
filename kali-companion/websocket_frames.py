@@ -31,26 +31,24 @@ class WebSocketFrameObserver:
     def feed(self, data: bytes) -> None:
         if self.disabled or not data:
             return
-        view = memoryview(data)
-        offset = 0
-        while offset < len(view):
+        self._buffer.extend(data)
+        if len(self._buffer) > MAX_OBSERVED_FRAME + MAX_HEADER_BUFFER:
+            self.disabled = True
+            self._buffer.clear()
+            return
+        while not self.disabled:
             if self._current is not None:
-                take = min(self._payload_remaining, len(view) - offset)
-                offset += take
-                self._payload_remaining -= take
+                take = min(self._payload_remaining, len(self._buffer))
+                if take:
+                    del self._buffer[:take]
+                    self._payload_remaining -= take
                 if self._payload_remaining == 0:
                     self._emit()
-                continue
-            needed = MAX_HEADER_BUFFER - len(self._buffer)
-            take = min(needed, len(view) - offset)
-            self._buffer.extend(view[offset:offset + take])
-            offset += take
+                    continue
+                return
             parsed = self._parse_header()
             if parsed is None:
-                if len(self._buffer) >= MAX_HEADER_BUFFER:
-                    self.disabled = True
-                    self._buffer.clear()
-                continue
+                return
             consumed, metadata = parsed
             del self._buffer[:consumed]
             self._current = metadata
