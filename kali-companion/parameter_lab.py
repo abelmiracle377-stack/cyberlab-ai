@@ -61,7 +61,7 @@ def inspect_parameters(url: str, body: str = "", content_type: str = "") -> dict
 
 
 def generate_cases(url: str, body: str, content_type: str, location: str,
-                   parameter_index: int, payloads: list[str]) -> dict:
+                   parameter_index: int, payloads: list[str], method: str = "GET") -> dict:
     inventory = inspect_parameters(url, body, content_type)
     if location not in {"query", "form"}:
         raise ValueError("Choose query or form parameter location.")
@@ -93,7 +93,7 @@ def generate_cases(url: str, body: str, content_type: str, location: str,
         mutated_body = urlencode(form, doseq=True) if form else ""
         cases.append({
             "case": number, "parameter": parameter["name"], "location": location,
-            "payload": payload, "method": "POST" if location == "form" else "GET",
+            "payload": payload, "method": method,
             "url": mutated_url, "body": mutated_body,
             "contentType": "application/x-www-form-urlencoded" if location == "form" else "",
             "sent": False,
