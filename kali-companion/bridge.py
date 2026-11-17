@@ -28,6 +28,7 @@ from network_capture import list_capture_interfaces, capture_packets
 from web_testing import execute_request, request_history
 from web_crawler import run_crawl
 from web_active_scan import run_active_scan
+from parameter_lab import inspect_parameters, generate_cases
 from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
 from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending_response_intercepts, decide_response_intercept, proxy_history
 from task_planner import plan_task
@@ -300,13 +301,13 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body_limit = 600000 if path == "/evidence/case/export" else (131072 if path == "/proxy/intercepts/decision" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path in {"/web/request", "/web/crawl", "/web/active-scan"} else MAX_BODY)))))
+            body_limit = 600000 if path == "/evidence/case/export" else (131072 if path == "/proxy/intercepts/decision" else (8192 if path == "/evidence/case/verify" else (131072 if path == "/evidence/case" else (65536 if path in {"/evidence/report", "/evidence/artifacts"} else (32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate"} else MAX_BODY)))))
             if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
@@ -356,6 +357,20 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, result, origin)
                 finally:
                     web_crawl_lock.release()
+            if path == "/web/parameters/inspect":
+                result = inspect_parameters(
+                    str(data.get("url", "")), str(data.get("body", "")),
+                    str(data.get("contentType", "")),
+                )
+                return self.send_json(200, result, origin)
+            if path == "/web/parameters/generate":
+                result = generate_cases(
+                    str(data.get("url", "")), str(data.get("body", "")),
+                    str(data.get("contentType", "")), data.get("location"),
+                    data.get("parameterIndex"), data.get("payloads"),
+                    data.get("method", "GET"),
+                )
+                return self.send_json(200, result, origin)
             if path == "/web/request":
                 if not web_request_lock.acquire(blocking=False):
                     return self.send_json(409, {"error": "A native HTTP request is already running."}, origin)
