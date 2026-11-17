@@ -8,6 +8,7 @@ type ProxyHistoryItem = { id: string; method: string; url: string; status: numbe
 type PendingIntercept = { id: string; method: string; url: string; path: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; body: string; bodyEditable: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyEditable: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type ResponseInterceptDraft = { status: number; reason: string; headersText: string; body: string };
+type WebSocketFrameMeta = { direction: string; fin: boolean; opcode: number; opcodeName: string; masked: boolean; payloadLength: number; capturedAt: string };
 type InterceptDraft = { method: string; path: string; headersText: string; body: string };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
@@ -65,6 +66,7 @@ export default function WebWorkbenchPage() {
   const [proxyHistoryMethodFilter, setProxyHistoryMethodFilter] = useState("ALL");
   const [proxyHistoryStatusFilter, setProxyHistoryStatusFilter] = useState("ALL");
   const [selectedProxyHistoryId, setSelectedProxyHistoryId] = useState("");
+  const [webSocketFrames, setWebSocketFrames] = useState<WebSocketFrameMeta[]>([]);
 
   const token = () => sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
 
@@ -114,6 +116,15 @@ export default function WebWorkbenchPage() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load proxy history.");
     setProxyHistory(data.items || []);
+  }
+
+  async function loadWebSocketFrames() {
+    const pairing = token();
+    if (!pairing) return;
+    const response = await fetch("http://127.0.0.1:8765/proxy/websocket-frames?limit=100", { headers: { Authorization: "Bearer " + pairing } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load WebSocket frame metadata.");
+    setWebSocketFrames(data.items || []);
   }
 
   async function loadPendingIntercepts() {
@@ -286,6 +297,12 @@ export default function WebWorkbenchPage() {
     }, 1000);
     return () => window.clearInterval(interval);
   }, [proxyInterceptActive, proxyResponseInterceptActive]);
+  useEffect(() => {
+    if (!proxyActive) return;
+    loadWebSocketFrames().catch(() => undefined);
+    const interval = window.setInterval(() => loadWebSocketFrames().catch(() => undefined), 1500);
+    return () => window.clearInterval(interval);
+  }, [proxyActive]);
 
   async function sendRequest(event: React.FormEvent) {
     event.preventDefault();
@@ -398,6 +415,14 @@ export default function WebWorkbenchPage() {
           </div>)}
           {!pendingResponseIntercepts.length && <p>No origin responses are currently waiting.</p>}
         </>}
+        <h3>WebSocket frame activity</h3>
+        <p>Frame metadata only: direction, opcode, FIN flag, masking and payload length. CyberLab does not retain or display WebSocket payloads yet. This is observation, not frame editing or interception.</p>
+        <button className="report-download" type="button" onClick={()=>loadWebSocketFrames().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh WebSocket frame metadata."))}>Refresh WebSocket frames</button>
+        {webSocketFrames.slice(0,50).map((frame,index)=><div className="scope-warning" key={frame.capturedAt+"-"+index}>
+          <strong>{frame.direction} · {frame.opcodeName} ({frame.opcode})</strong>
+          <p>{frame.payloadLength} payload bytes · {frame.fin ? "final frame" : "fragment"} · {frame.masked ? "masked" : "unmasked"} · {frame.capturedAt}</p>
+        </div>)}
+        {!webSocketFrames.length && <p>No WebSocket frames observed in this companion session.</p>}
         <h3>HTTP history</h3>
         <p>Session-only metadata. Request and response bodies are not retained; URL query strings and sensitive header values are redacted.</p>
         <div className="scope-checks">
