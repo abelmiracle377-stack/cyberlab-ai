@@ -383,7 +383,8 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertEqual(len(pending), 1)
                 intercept_proxy.decide_intercept(pending[0]["id"], "forward_edited", {
                     "path": "/connection-token-edited",
-                    "headers": pending[0]["headers"],
+                    "headers": [header for header in pending[0]["headers"]
+                                if header["name"].lower() != "connection"],
                 })
                 worker.join(timeout=5)
                 self.assertFalse(worker.is_alive())
