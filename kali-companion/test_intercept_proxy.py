@@ -965,6 +965,34 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target_thread.join(timeout=2)
 
 
+    def test_websocket_frame_observer_parses_fragmented_frames_without_payload(self):
+        from websocket_frames import WebSocketFrameObserver
+        captured = []
+        observer = WebSocketFrameObserver("client-to-server", captured.append)
+        mask = b"\\x01\\x02\\x03\\x04"
+        payload = b"hello"
+        masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+        frame = b"\\x81\\x85" + mask + masked
+        observer.feed(frame[:3])
+        self.assertEqual(captured, [])
+        observer.feed(frame[3:])
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0]["opcodeName"], "text")
+        self.assertEqual(captured[0]["payloadLength"], 5)
+        self.assertTrue(captured[0]["masked"])
+        self.assertNotIn("payload", captured[0])
+
+    def test_websocket_frame_observer_handles_extended_lengths_and_rejects_wrong_mask(self):
+        from websocket_frames import WebSocketFrameObserver
+        captured = []
+        server = WebSocketFrameObserver("server-to-client", captured.append)
+        server.feed(b"\\x82\\x7e\\x00\\x80" + (b"x" * 128))
+        self.assertEqual(captured[0]["payloadLength"], 128)
+        self.assertFalse(captured[0]["masked"])
+        client = WebSocketFrameObserver("client-to-server", captured.append)
+        client.feed(b"\\x81\\x01x")
+        self.assertTrue(client.disabled)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,6 +28,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from proxy_certificates import ca_status, issue_host_certificate
 from web_testing import _resolve_pinned
+from websocket_frames import WebSocketFrameObserver
 
 LISTEN_HOST = "127.0.0.1"
 DEFAULT_PORT = 8081
@@ -47,6 +48,27 @@ _HISTORY_LOCK = threading.Lock()
 _SENSITIVE = {"authorization", "proxy-authorization", "cookie", "set-cookie",
               "www-authenticate", "proxy-authenticate", "x-api-key", "api-key",
               "x-auth-token", "x-access-token", "referer", "location", "content-location", "refresh", "link"}
+_WEBSOCKET_FRAME_HISTORY = deque(maxlen=500)
+_WEBSOCKET_FRAME_LOCK = threading.Lock()
+
+
+def websocket_frame_history(limit: int = 100) -> dict:
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        limit = 100
+    limit = max(1, min(limit, 500))
+    with _WEBSOCKET_FRAME_LOCK:
+        items = list(_WEBSOCKET_FRAME_HISTORY)[:limit]
+    return {"items": items, "count": len(items),
+            "storage": "metadata only; WebSocket payloads are never retained"}
+
+
+def _record_websocket_frame(item: dict) -> None:
+    safe = {key: item[key] for key in
+            ("direction", "fin", "opcode", "opcodeName", "masked", "payloadLength", "capturedAt")}
+    with _WEBSOCKET_FRAME_LOCK:
+        _WEBSOCKET_FRAME_HISTORY.appendleft(safe)
+
+
 _HOP_BY_HOP = {"connection", "proxy-connection", "keep-alive", "te", "trailer",
                "transfer-encoding", "upgrade", "proxy-authenticate", "proxy-authorization", "expect"}
 
@@ -554,6 +576,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         client.settimeout(None)
         upstream.settimeout(None)
         open_read = {client, upstream}
+        observers = {
+            "client-to-server": WebSocketFrameObserver("client-to-server", _record_websocket_frame),
+            "server-to-client": WebSocketFrameObserver("server-to-client", _record_websocket_frame),
+        }
         controller = self.server.controller
         while open_read and not controller._stop_event.is_set():
             readable, _, _ = select.select(list(open_read), [], [], 1.0)
@@ -565,6 +591,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 try:
                     data = source.recv(65536)
                     if data:
+                        direction = "client-to-server" if source is client else "server-to-client"
+                        observer = observers[direction]
+                        observer.feed(data)
                         destination.sendall(data)
                     else:
                         open_read.discard(source)

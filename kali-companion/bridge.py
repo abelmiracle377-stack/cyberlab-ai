@@ -31,7 +31,7 @@ from web_active_scan import run_active_scan
 from parameter_lab import inspect_parameters, generate_cases
 from parameter_analysis import compare_responses
 from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
-from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending_response_intercepts, decide_response_intercept, proxy_history
+from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending_response_intercepts, decide_response_intercept, proxy_history, websocket_frame_history
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -225,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -251,6 +251,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, pending_intercepts(), origin)
         if path == "/proxy/response-intercepts":
             return self.send_json(200, pending_response_intercepts(), origin)
+        if path == "/proxy/websocket-frames":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            return self.send_json(200, websocket_frame_history(limit), origin)
         if path == "/network/interfaces":
             return self.send_json(200, list_capture_interfaces(), origin)
         if path == "/web/history":
