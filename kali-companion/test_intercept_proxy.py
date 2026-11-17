@@ -1,4 +1,6 @@
 """Integration tests for the native HTTP interception proxy using loopback only."""
+import base64
+import hashlib
 import http.server
 import socket
 import ssl
@@ -877,6 +879,79 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertIn(b"response-ok", result["response"])
                 self.assertNotIn(b"X-Private:", result["response"])
                 self.assertNotIn(b"must-not-reach-browser", result["response"])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
+
+
+    def test_websocket_upgrade_tunnels_masked_client_and_server_frames(self):
+        received = {}
+
+        class WebSocketHandler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_GET(self):
+                key = self.headers.get("Sec-WebSocket-Key")
+                accept = base64.b64encode(hashlib.sha1(
+                    (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
+                ).digest()).decode("ascii")
+                self.send_response(101, "Switching Protocols")
+                self.send_header("Upgrade", "websocket")
+                self.send_header("Connection", "Upgrade")
+                self.send_header("Sec-WebSocket-Accept", accept)
+                self.end_headers()
+                self.wfile.flush()
+                frame = self.rfile.read(8)
+                if len(frame) == 8:
+                    mask, payload = frame[2:6], frame[6:8]
+                    received["message"] = bytes(value ^ mask[index % 4]
+                                                for index, value in enumerate(payload))
+                    self.wfile.write(b"\x81\x02ok")
+                    self.wfile.flush()
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), WebSocketHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        key = base64.b64encode(b"cyberlab-websock").decode("ascii")
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-WEBSOCKET-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                    client.settimeout(5)
+                    client.sendall((f"GET {origin}/socket HTTP/1.1\r\n"
+                                    f"Host: localhost:{target.server_port}\r\n"
+                                    "Connection: keep-alive, Upgrade\r\n"
+                                    "Upgrade: websocket\r\n"
+                                    f"Sec-WebSocket-Key: {key}\r\n"
+                                    "Sec-WebSocket-Version: 13\r\n\r\n").encode("ascii"))
+                    response = bytearray()
+                    while not response.endswith(b"\r\n\r\n"):
+                        response.extend(client.recv(1))
+                    self.assertIn(b"101 Switching Protocols", response)
+                    self.assertIn(b"Upgrade: websocket", response)
+                    mask = b"\x01\x02\x03\x04"
+                    payload = b"hi"
+                    masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+                    client.sendall(b"\x81\x82" + mask + masked)
+                    frame = client.recv(4)
+                    self.assertEqual(frame, b"\x81\x02ok")
+                self.assertEqual(received.get("message"), b"hi")
+                history = intercept_proxy.proxy_history()["items"]
+                self.assertTrue(any(item["status"] == 101 and item["url"].endswith("/socket") for item in history))
         finally:
             proxy.stop()
             target.shutdown()

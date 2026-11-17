@@ -1,15 +1,20 @@
-"""CyberLab-native, scope-bound HTTP/1.1 interception proxy.
+"""CyberLab-native, scope-bound HTTP/1.1 interception proxy with WebSocket upgrade tunnelling.
 
 The listener is loopback-only. One exact origin is approved when starting it.
 HTTPS CONNECT is terminated with a CyberLab-managed leaf certificate and a
-separately verified upstream TLS connection. Request/response bodies and
-sensitive metadata are not retained in history. HTTP/2, WebSockets, chunked
+separately verified upstream TLS connection. Validated WebSocket upgrades are
+relayed as opaque bidirectional streams; frames are not decoded or retained.
+Request/response bodies and
+sensitive metadata are not retained in history. HTTP/2, WebSocket frame inspection, chunked
 client request bodies and client-certificate authentication are unsupported.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import http.client
 import ipaddress
+import select
 import json
 import re
 import socket
@@ -504,6 +509,153 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             return
         self._process_request(method, "https", host, port, path, version, tunneled=True)
 
+
+    def _read_upstream_response_head(self, upstream: socket.socket) -> tuple[int, str, list[tuple[str, str]]]:
+        raw = bytearray()
+        while not raw.endswith(b"\r\n\r\n"):
+            chunk = upstream.recv(1)
+            if not chunk:
+                raise OSError("Upstream closed during WebSocket handshake.")
+            raw.extend(chunk)
+            if len(raw) > MAX_HEADER_BYTES:
+                raise ValueError("Upstream WebSocket handshake headers exceed the size limit.")
+        lines = bytes(raw[:-4]).split(b"\r\n")
+        if not lines:
+            raise ValueError("Upstream WebSocket handshake is malformed.")
+        try:
+            status_parts = lines[0].decode("iso-8859-1").split(" ", 2)
+            if len(status_parts) < 2 or status_parts[0] not in {"HTTP/1.0", "HTTP/1.1"}:
+                raise ValueError
+            status = int(status_parts[1])
+            reason = status_parts[2] if len(status_parts) == 3 else ""
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ValueError("Upstream WebSocket status line is malformed.") from exc
+        headers = []
+        for line in lines[1:]:
+            if not line or line[:1] in (b" ", b"\t") or b":" not in line:
+                raise ValueError("Upstream WebSocket response contains a malformed header.")
+            name, value = line.split(b":", 1)
+            try:
+                key = name.decode("ascii")
+                val = value.decode("iso-8859-1").strip()
+            except UnicodeDecodeError as exc:
+                raise ValueError("Upstream WebSocket response contains an invalid header.") from exc
+            if not re.fullmatch(r"[!#$%&'*+.^_|~0-9A-Za-z-]{1,128}", key):
+                raise ValueError("Upstream WebSocket response contains an invalid header name.")
+            if any(ord(ch) < 32 and ch != "\t" or ord(ch) == 127 for ch in val):
+                raise ValueError("Upstream WebSocket response contains an invalid header value.")
+            headers.append((key, val))
+            if len(headers) > MAX_HEADER_COUNT:
+                raise ValueError("Upstream WebSocket response contains too many headers.")
+        return status, reason, headers
+
+    def _relay_websocket(self, upstream: socket.socket) -> None:
+        client = self.connection
+        client.settimeout(None)
+        upstream.settimeout(None)
+        open_read = {client, upstream}
+        controller = self.server.controller
+        while open_read and not controller._stop_event.is_set():
+            readable, _, _ = select.select(list(open_read), [], [], 1.0)
+            for source in readable:
+                destination = upstream if source is client else client
+                try:
+                    data = source.recv(65536)
+                    if data:
+                        destination.sendall(data)
+                    else:
+                        open_read.discard(source)
+                        try:
+                            destination.shutdown(socket.SHUT_WR)
+                        except OSError:
+                            pass
+                except (OSError, ssl.SSLError):
+                    open_read.discard(source)
+                    try:
+                        destination.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
+
+    def _forward_websocket(self, method: str, scheme: str, host: str, port: int,
+                           path: str, headers: list[tuple[str, str]], address: str,
+                           url: str) -> None:
+        lowered = {}
+        for name, value in headers:
+            lowered.setdefault(name.lower(), []).append(value)
+        connection_tokens = {token.strip().lower() for value in lowered.get("connection", [])
+                             for token in value.split(",") if token.strip()}
+        if method.upper() != "GET" or "upgrade" not in connection_tokens:
+            self._error(400, "WebSocket upgrade requires GET and Connection: Upgrade")
+            return
+        upgrades = [part.strip().lower() for value in lowered.get("upgrade", []) for part in value.split(",")]
+        keys = lowered.get("sec-websocket-key", [])
+        versions = lowered.get("sec-websocket-version", [])
+        if upgrades != ["websocket"] or len(keys) != 1 or versions != ["13"]:
+            self._error(400, "Only RFC 6455 WebSocket version 13 handshakes are supported")
+            return
+        try:
+            decoded_key = base64.b64decode(keys[0], validate=True)
+        except (ValueError, TypeError):
+            decoded_key = b""
+        if len(decoded_key) != 16:
+            self._error(400, "WebSocket key is invalid")
+            return
+        controller = self.server.controller
+        if controller.intercept_requests or controller.intercept_responses:
+            self._error(501, "WebSocket tunnelling is unavailable while manual HTTP interception is enabled")
+            return
+        started = time.monotonic()
+        connection = (_PinnedHTTPSConnection(host, port, address) if scheme == "https"
+                      else _PinnedHTTPConnection(host, port, address))
+        try:
+            connection.connect()
+            upstream = connection.sock
+            host_header = f"[{host}]" if ":" in host else host
+            if port not in (80, 443):
+                host_header += f":{port}"
+            request_lines = [f"GET {path} HTTP/1.1", f"Host: {host_header}",
+                             "Connection: Upgrade", "Upgrade: websocket"]
+            for name, value in headers:
+                lowered_name = name.lower()
+                if (lowered_name in _HOP_BY_HOP or lowered_name in connection_tokens
+                        or lowered_name in {"host", "content-length"}):
+                    continue
+                request_lines.append(f"{name}: {value}")
+            upstream.sendall(("\r\n".join(request_lines) + "\r\n\r\n").encode("iso-8859-1"))
+            status, reason, response_headers = self._read_upstream_response_head(upstream)
+            if status != 101:
+                self._error(502, f"Origin declined WebSocket upgrade ({status})")
+                return
+            response_lowered = {}
+            for name, value in response_headers:
+                response_lowered.setdefault(name.lower(), []).append(value)
+            response_connection_tokens = {token.strip().lower() for value in response_lowered.get("connection", [])
+                                           for token in value.split(",") if token.strip()}
+            response_upgrade = [part.strip().lower() for value in response_lowered.get("upgrade", [])
+                                for part in value.split(",")]
+            expected_accept = base64.b64encode(hashlib.sha1(
+                (keys[0] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
+            ).digest()).decode("ascii")
+            if ("upgrade" not in response_connection_tokens or response_upgrade != ["websocket"]
+                    or response_lowered.get("sec-websocket-accept") != [expected_accept]):
+                self._error(502, "Origin returned an invalid WebSocket upgrade handshake")
+                return
+            safe_headers = [(name, value) for name, value in response_headers
+                            if name.lower() not in _HOP_BY_HOP
+                            and name.lower() not in response_connection_tokens
+                            and name.lower() not in {"content-length", "transfer-encoding"}
+                            and not any(ord(ch) in (10, 13) or (ord(ch) < 32 and ch != "\t") for ch in value)]
+            self.wfile.write(f"HTTP/1.1 101 {reason or 'Switching Protocols'}\r\n".encode("iso-8859-1", errors="replace"))
+            for name, value in safe_headers:
+                self.wfile.write(f"{name}: {value}\r\n".encode("iso-8859-1", errors="replace"))
+            self.wfile.write(b"Connection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+            self.wfile.flush()
+            self._relay_websocket(upstream)
+            _history_entry(method.upper(), url, 101, headers, response_headers, 0, 0,
+                           round((time.monotonic() - started) * 1000))
+        finally:
+            connection.close()
+
     def _process_request(self, method: str, scheme: str, host: str, port: int,
                          path: str, version: str, tunneled: bool = False) -> None:
         controller = self.server.controller
@@ -536,6 +688,14 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         body = self.rfile.read(body_size) if body_size else b""
         if len(body) != body_size:
             self._error(400, "Incomplete request body")
+            return
+        if "upgrade" in lowered or "upgrade" in connection_tokens:
+            if body_size:
+                self._error(400, "WebSocket upgrade requests cannot contain a request body")
+                return
+            addresses = _resolve_pinned(host, port, controller.local_lab_mode)
+            url = scheme + "://" + (f"[{host}]" if ":" in host else host) + (f":{port}" if port not in (80, 443) else "") + path
+            self._forward_websocket(method, scheme, host, port, path, headers, addresses[0], url)
             return
         addresses = _resolve_pinned(host, port, controller.local_lab_mode)
         address = addresses[0]
@@ -669,6 +829,7 @@ def _parse_authority(authority: str, default_port: int) -> tuple[str, int]:
 class NativeInterceptProxy:
     def __init__(self):
         self._lock = threading.RLock()
+        self._stop_event = threading.Event()
         self._server = None
         self._thread = None
         self.scope = None
@@ -710,6 +871,7 @@ class NativeInterceptProxy:
         with self._lock:
             if self._server is not None:
                 raise ValueError("The native interception proxy is already running.")
+            self._stop_event.clear()
             if scope[0] == "https" and not ca_status()["ready"]:
                 raise ValueError("Create the local inspection CA before starting HTTPS interception.")
             server = _ProxyServer((LISTEN_HOST, port), _ProxyHandler)
@@ -736,6 +898,7 @@ class NativeInterceptProxy:
             self.allow_state_changing_methods = False
             self.intercept_requests = False
             self.intercept_responses = False
+            self._stop_event.set()
         _drop_all_pending_intercepts()
         if server is not None:
             server.shutdown()
