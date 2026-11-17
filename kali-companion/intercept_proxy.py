@@ -404,8 +404,14 @@ def _validated_response_edit(entry: dict, edits: dict) -> dict:
         if len(body) > MAX_RESPONSE_BODY:
             raise ValueError("Edited response body exceeds the 2 MB response limit.")
     if "body" in edits:
+        # A changed representation must not retain validators, digests or range
+        # metadata that describe the upstream bytes rather than the edited body.
+        stale_representation_headers = {
+            "content-encoding", "content-md5", "digest", "content-digest",
+            "repr-digest", "etag", "last-modified", "content-range", "accept-ranges",
+        }
         headers = [(name, value) for name, value in headers
-                   if name.lower() not in {"content-encoding", "content-md5", "digest", "etag", "content-range", "accept-ranges"}]
+                   if name.lower() not in stale_representation_headers]
     if status in {204, 205, 304}:
         body = b""
     return {"status": status, "reason": reason, "headers": headers, "body": body}

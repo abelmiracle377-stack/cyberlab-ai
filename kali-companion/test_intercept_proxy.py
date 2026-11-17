@@ -64,6 +64,41 @@ class DeflateResponseDecoderTests(unittest.TestCase):
             intercept_proxy._decode_deflate_response(compressed)
 
 
+class ResponseEditValidationTests(unittest.TestCase):
+    def test_editing_body_removes_stale_representation_metadata(self):
+        headers = [
+            ("Content-Type", "text/plain"),
+            ("Content-Encoding", "gzip"),
+            ("Content-MD5", "old-md5"),
+            ("Digest", "sha-256=old"),
+            ("Content-Digest", "sha-256=:old:"),
+            ("Repr-Digest", "sha-256=:old:"),
+            ("ETag", '"old-etag"'),
+            ("Last-Modified", "Tue, 01 Jan 2030 00:00:00 GMT"),
+            ("Content-Range", "bytes 0-3/4"),
+            ("Accept-Ranges", "bytes"),
+            ("X-Trace", "keep-me"),
+        ]
+        edited = intercept_proxy._validated_response_edit(
+            {"status": 200, "reason": "OK", "headers": headers,
+             "body": b"old", "bodyEditable": True},
+            {"body": "new representation"},
+        )
+        self.assertEqual(edited["body"], b"new representation")
+        self.assertEqual(edited["headers"], [
+            ("Content-Type", "text/plain"), ("X-Trace", "keep-me")
+        ])
+
+    def test_status_only_edit_preserves_representation_metadata(self):
+        headers = [("ETag", '"stable"'), ("Content-Digest", "sha-256=:value:")]
+        edited = intercept_proxy._validated_response_edit(
+            {"status": 200, "reason": "OK", "headers": headers,
+             "body": b"body", "bodyEditable": True},
+            {"status": 202},
+        )
+        self.assertEqual(edited["headers"], headers)
+
+
 class ChunkedRequestBodyTests(unittest.TestCase):
     def test_reads_multiple_chunks_and_discards_valid_trailers(self):
         import io
