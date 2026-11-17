@@ -943,7 +943,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
                         response.extend(client.recv(1))
                     self.assertIn(b"101 Switching Protocols", response)
                     self.assertIn(b"Upgrade: websocket", response)
-                    mask = b"\x01\x02\x03\x04"
+        mask = bytes([1, 2, 3, 4])
                     payload = b"hi"
                     masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
                     client.sendall(b"\x81\x82" + mask + masked)
@@ -969,10 +969,10 @@ class NativeInterceptProxyTests(unittest.TestCase):
         from websocket_frames import WebSocketFrameObserver
         captured = []
         observer = WebSocketFrameObserver("client-to-server", captured.append)
-        mask = b"\\x01\\x02\\x03\\x04"
+        mask = bytes([1, 2, 3, 4])
         payload = b"hello"
         masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
-        frame = b"\\x81\\x85" + mask + masked
+        frame = bytes([0x81, 0x85]) + mask + masked
         observer.feed(frame[:3])
         self.assertEqual(captured, [])
         observer.feed(frame[3:])
@@ -986,11 +986,11 @@ class NativeInterceptProxyTests(unittest.TestCase):
         from websocket_frames import WebSocketFrameObserver
         captured = []
         server = WebSocketFrameObserver("server-to-client", captured.append)
-        server.feed(b"\\x82\\x7e\\x00\\x80" + (b"x" * 128))
+        server.feed(bytes([0x82, 0x7e, 0x00, 0x80]) + (b'x' * 128))
         self.assertEqual(captured[0]["payloadLength"], 128)
         self.assertFalse(captured[0]["masked"])
         client = WebSocketFrameObserver("client-to-server", captured.append)
-        client.feed(b"\\x81\\x01x")
+        client.feed(bytes([0x81, 0x01, ord("x")]))
         self.assertTrue(client.disabled)
 
 
