@@ -44,14 +44,13 @@ class WebSocketFrameObserver:
                 continue
 
             # Buffer only enough bytes to parse one maximum-sized frame header.
-            room = MAX_HEADER_BUFFER - len(self._buffer)
-            if room <= 0:
+            if len(self._buffer) >= MAX_HEADER_BUFFER:
                 self.disabled = True
                 self._buffer.clear()
                 return
-            take = min(room, len(view) - offset)
-            self._buffer.extend(view[offset:offset + take])
-            offset += take
+            # Add one byte at a time so a header parse never pre-buffers payload.
+            self._buffer.append(view[offset])
+            offset += 1
             parsed = self._parse_header()
             if parsed is None:
                 if len(self._buffer) >= MAX_HEADER_BUFFER:

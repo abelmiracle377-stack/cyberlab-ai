@@ -1028,7 +1028,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
         captured = []
         observer = WebSocketFrameObserver("server-to-client", captured.append)
         payload = b"x" * (600 * 1024)
-        frame = bytes([0x82, 126]) + len(payload).to_bytes(2, "big") + payload
+        frame = bytes([0x82, 127]) + len(payload).to_bytes(8, "big") + payload
         observer.feed(frame + frame)
         self.assertFalse(observer.disabled)
         self.assertEqual(len(captured), 2)
