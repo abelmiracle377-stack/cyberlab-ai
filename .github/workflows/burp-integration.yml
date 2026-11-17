@@ -32,6 +32,7 @@ on:
       - "kali-companion/tests/test_burp_connector.py"
       - "app/network-intelligence/**"
       - "app/web-workbench/**"
+      - "app/web-repeater/**"
       - "docs/NATIVE_WEB_WORKBENCH.md"
       - "app/page.tsx"
       - "app/agent/**"
