@@ -9,6 +9,7 @@ type PendingIntercept = { id: string; method: string; url: string; path: string;
 type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyEditable: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type ResponseInterceptDraft = { status: number; reason: string; headersText: string; body: string };
 type WebSocketFrameMeta = { direction: string; fin: boolean; opcode: number; opcodeName: string; masked: boolean; payloadLength: number; messageId: number | null; fragmentIndex: number | null; messageComplete: boolean | null; capturedAt: string };
+type PendingWebSocketFrame = { id: string; direction: string; opcode: number; fin: boolean; payloadLength: number; payload: string; payloadOmitted: boolean; editable: boolean; createdAt: string; decisionTimeoutSeconds: number };
 type InterceptDraft = { method: string; path: string; headersText: string; body: string };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
@@ -49,6 +50,11 @@ export default function WebWorkbenchPage() {
   const [proxyInterceptActive, setProxyInterceptActive] = useState(false);
   const [proxyResponseInterceptConsent, setProxyResponseInterceptConsent] = useState(false);
   const [proxyResponseInterceptActive, setProxyResponseInterceptActive] = useState(false);
+  const [proxyWebSocketInterceptConsent, setProxyWebSocketInterceptConsent] = useState(false);
+  const [proxyWebSocketInterceptActive, setProxyWebSocketInterceptActive] = useState(false);
+  const [pendingWebSocketIntercepts, setPendingWebSocketIntercepts] = useState<PendingWebSocketFrame[]>([]);
+  const [webSocketDrafts, setWebSocketDrafts] = useState<Record<string, string>>({});
+  const [webSocketBusyId, setWebSocketBusyId] = useState("");
   const [pendingResponseIntercepts, setPendingResponseIntercepts] = useState<PendingResponseIntercept[]>([]);
   const [responseInterceptDrafts, setResponseInterceptDrafts] = useState<Record<string, ResponseInterceptDraft>>({});
   const [responseInterceptBusyId, setResponseInterceptBusyId] = useState("");
@@ -106,6 +112,7 @@ export default function WebWorkbenchPage() {
     setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
     setProxyInterceptActive(Boolean(data.interceptRequests));
     setProxyResponseInterceptActive(Boolean(data.interceptResponses));
+    setProxyWebSocketInterceptActive(Boolean(data.interceptWebSocketFrames));
     if (data.listenPort) setProxyPort(data.listenPort);
   }
 
@@ -125,6 +132,39 @@ export default function WebWorkbenchPage() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load WebSocket frame metadata.");
     setWebSocketFrames(data.items || []);
+  }
+
+  async function loadPendingWebSocketIntercepts() {
+    const pairing = token();
+    if (!pairing) return;
+    const response = await fetch("http://127.0.0.1:8765/proxy/websocket-intercepts", { headers: { Authorization: "Bearer " + pairing } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load pending WebSocket frames.");
+    const items: PendingWebSocketFrame[] = data.items || [];
+    setPendingWebSocketIntercepts(items);
+    setWebSocketDrafts(current => {
+      const next = { ...current };
+      for (const item of items) if (next[item.id] === undefined) next[item.id] = item.payload || "";
+      for (const id of Object.keys(next)) if (!items.some(item => item.id === id)) delete next[id];
+      return next;
+    });
+  }
+
+  async function decidePendingWebSocketFrame(id: string, action: "forward" | "forward_edited" | "drop") {
+    setWebSocketBusyId(id); setProxyError("");
+    try {
+      const pairing = token();
+      if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+      const response = await fetch("http://127.0.0.1:8765/proxy/websocket-intercepts/decision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+        body: JSON.stringify({ id, action, ...(action === "forward_edited" ? { payload: webSocketDrafts[id] ?? "" } : {}) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not apply the WebSocket frame decision.");
+      await loadPendingWebSocketIntercepts();
+    } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected WebSocket frame decision error."); }
+    finally { setWebSocketBusyId(""); }
   }
 
   async function loadPendingIntercepts() {
@@ -222,7 +262,7 @@ export default function WebWorkbenchPage() {
       const response = await fetch("http://127.0.0.1:8765/proxy/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
-        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081, allowStateChangingMethods: proxyMutatingConsent, confirmStateChangingMethods: proxyMutatingConsent, interceptRequests: proxyInterceptConsent, confirmInterceptRequests: proxyInterceptConsent, interceptResponses: proxyResponseInterceptConsent, confirmInterceptResponses: proxyResponseInterceptConsent }),
+        body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081, allowStateChangingMethods: proxyMutatingConsent, confirmStateChangingMethods: proxyMutatingConsent, interceptRequests: proxyInterceptConsent, confirmInterceptRequests: proxyInterceptConsent, interceptResponses: proxyResponseInterceptConsent, confirmInterceptResponses: proxyResponseInterceptConsent, interceptWebSocketFrames: proxyWebSocketInterceptConsent, confirmInterceptWebSocketFrames: proxyWebSocketInterceptConsent }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not start the native interception proxy.");
@@ -231,14 +271,17 @@ export default function WebWorkbenchPage() {
       setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
       setProxyInterceptActive(Boolean(data.interceptRequests));
       setProxyResponseInterceptActive(Boolean(data.interceptResponses));
+      setProxyWebSocketInterceptActive(Boolean(data.interceptWebSocketFrames));
       setProxyPort(data.listenPort || 8081);
       setProxyStartConsent(false);
       setProxyMutatingConsent(false);
       setProxyInterceptConsent(false);
       setProxyResponseInterceptConsent(false);
+      setProxyWebSocketInterceptConsent(false);
       await loadProxyHistory();
       await loadPendingIntercepts();
       await loadPendingResponseIntercepts();
+      await loadPendingWebSocketIntercepts();
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy start error."); }
     finally { setProxyBusy(false); }
   }
@@ -260,9 +303,11 @@ export default function WebWorkbenchPage() {
       setProxyMutatingActive(Boolean(data.allowStateChangingMethods));
       setProxyInterceptActive(Boolean(data.interceptRequests));
       setProxyResponseInterceptActive(Boolean(data.interceptResponses));
+      setProxyWebSocketInterceptActive(Boolean(data.interceptWebSocketFrames));
       setProxyMutatingConsent(false);
       setProxyInterceptConsent(false);
       setProxyResponseInterceptConsent(false);
+      setProxyWebSocketInterceptConsent(false);
       await loadPendingIntercepts();
       await loadPendingResponseIntercepts();
     } catch (cause) { setProxyError(cause instanceof Error ? cause.message : "Unexpected proxy stop error."); }
@@ -290,13 +335,14 @@ export default function WebWorkbenchPage() {
 
   useEffect(() => { loadHistory().catch(() => undefined); loadCaStatus().catch(() => undefined); loadProxyStatus().catch(() => undefined); loadProxyHistory().catch(() => undefined); loadPendingIntercepts().catch(() => undefined); }, []);
   useEffect(() => {
-    if (!proxyInterceptActive && !proxyResponseInterceptActive) return;
+    if (!proxyInterceptActive && !proxyResponseInterceptActive && !proxyWebSocketInterceptActive) return;
     const interval = window.setInterval(() => {
       if (proxyInterceptActive) loadPendingIntercepts().catch(() => undefined);
       if (proxyResponseInterceptActive) loadPendingResponseIntercepts().catch(() => undefined);
+      if (proxyWebSocketInterceptActive) loadPendingWebSocketIntercepts().catch(() => undefined);
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [proxyInterceptActive, proxyResponseInterceptActive]);
+  }, [proxyInterceptActive, proxyResponseInterceptActive, proxyWebSocketInterceptActive]);
   useEffect(() => {
     if (!proxyActive) return;
     loadWebSocketFrames().catch(() => undefined);
@@ -376,11 +422,12 @@ export default function WebWorkbenchPage() {
           <div className="scope-checks"><label><input type="checkbox" checked={proxyMutatingConsent} onChange={e=>setProxyMutatingConsent(e.target.checked)}/> I separately approve forwarding POST, PUT, PATCH and DELETE requests. These methods are blocked unless I enable this.</label></div>
           <div className="scope-checks"><label><input type="checkbox" checked={proxyInterceptConsent} onChange={e=>setProxyInterceptConsent(e.target.checked)}/> Enable manual request interception: pause each in-scope request until I choose Forward, edit and forward, or Drop. Requests time out and are dropped after 120 seconds.</label></div>
           <div className="scope-checks"><label><input type="checkbox" checked={proxyResponseInterceptConsent} onChange={e=>setProxyResponseInterceptConsent(e.target.checked)}/> Enable manual response interception: pause each origin response before it reaches the browser so I can inspect its status, redacted headers and bounded text preview, then Forward or Drop. Responses time out and are dropped after 120 seconds.</label></div>
+          <div className="scope-checks"><label><input type="checkbox" checked={proxyWebSocketInterceptConsent} onChange={e=>setProxyWebSocketInterceptConsent(e.target.checked)}/> Enable manual WebSocket frame interception (separate mode): pause each frame for up to 30 seconds. Inspect bounded text frames and explicitly Forward, Edit and Forward, or Drop. Frames above 64 KB close the WebSocket tunnel safely.</label></div>
           <button className="report-download" type="button" disabled={proxyBusy || !proxyAuthorised || !proxyStartConsent || proxyOrigin !== proxyConfirmation || !reference.trim() || (proxyOrigin.startsWith("https://") && !caReady)} onClick={startProxy}>{proxyBusy ? "Starting proxy…" : "Start native interception proxy"}</button>
         </>}
         {proxyActive && <button className="report-download" type="button" disabled={proxyBusy} onClick={stopProxy}>{proxyBusy ? "Stopping proxy…" : "Stop interception proxy"}</button>}
         {proxyError && <div className="agent-error"><AlertTriangle size={14}/>{proxyError}</div>}
-        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked. State-changing methods are {proxyMutatingActive ? "enabled for this session" : "blocked for this session"}. Manual request interception is {proxyInterceptActive ? "enabled; requests wait for an operator decision" : "disabled"}; response interception is {proxyResponseInterceptActive ? "enabled; origin responses wait for an operator decision" : "disabled"}.</p>
+        <p>Current implementation: HTTP/1.1 request/response inspection and HTTPS CONNECT TLS termination with upstream certificate validation. One request per client connection; no HTTP/2, WebSockets, chunked client request bodies or client certificates. POST, PUT, PATCH and DELETE are blocked unless separately approved. Bodies are forwarded but never retained in history. Out-of-scope hosts are blocked. State-changing methods are {proxyMutatingActive ? "enabled for this session" : "blocked for this session"}. Manual request interception is {proxyInterceptActive ? "enabled; requests wait for an operator decision" : "disabled"}; response interception is {proxyResponseInterceptActive ? "enabled; origin responses wait for an operator decision" : "disabled"}; WebSocket frame interception is {proxyWebSocketInterceptActive ? "enabled; frames wait for an operator decision" : "disabled"}.</p>
         {proxyInterceptActive && <>
           <h3>Requests waiting for your decision</h3>
           <button className="report-download" type="button" onClick={()=>loadPendingIntercepts().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh pending requests."))}>Refresh pending requests</button>
@@ -415,8 +462,23 @@ export default function WebWorkbenchPage() {
           </div>)}
           {!pendingResponseIntercepts.length && <p>No origin responses are currently waiting.</p>}
         </>}
+        {proxyWebSocketInterceptActive && <>
+          <h3>WebSocket frames awaiting operator decision</h3>
+          <p>Frames are paused in companion memory only. Text payload previews are available only while pending. Each frame must be explicitly forwarded, edited and forwarded, or dropped; timeout closes the tunnel.</p>
+          <button className="report-download" type="button" onClick={()=>loadPendingWebSocketIntercepts().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh pending WebSocket frames."))}>Refresh pending frames</button>
+          {pendingWebSocketIntercepts.map(item=><div className="scope-warning" key={item.id}>
+            <strong>{item.direction} · opcode {item.opcode} · {item.payloadLength} bytes</strong>
+            <p>Captured {item.createdAt}. Decision timeout: {item.decisionTimeoutSeconds}s. {item.editable ? "Complete UTF-8 text frame can be edited." : "Payload editing is unavailable for this frame; forward unchanged or drop."}</p>
+            {item.editable && <label>Text payload<textarea rows={5} value={webSocketDrafts[item.id] ?? item.payload} onChange={e=>setWebSocketDrafts(current=>({...current,[item.id]:e.target.value}))}/></label>}
+            {!item.editable && <p>Payload preview omitted. Only unchanged forwarding or dropping is allowed.</p>}
+            <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"forward")}>Forward unchanged</button>
+            {item.editable && <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"forward_edited")}>{webSocketBusyId===item.id ? "Applying…" : "Edit and forward"}</button>}
+            <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"drop")}>Drop frame</button>
+          </div>)}
+          {!pendingWebSocketIntercepts.length && <p>No WebSocket frames are currently waiting.</p>}
+        </>}
         <h3>WebSocket frame activity</h3>
-        <p>Frame metadata only: direction, opcode, FIN flag, masking and payload length. CyberLab does not retain or display WebSocket payloads yet. This is observation, not frame editing or interception.</p>
+        <p>Frame metadata is retained only in bounded companion memory. Payloads are not added to frame history.</p>
         <button className="report-download" type="button" onClick={()=>loadWebSocketFrames().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh WebSocket frame metadata."))}>Refresh WebSocket frames</button>
         {webSocketFrames.slice(0,50).map((frame,index)=><div className="scope-warning" key={frame.capturedAt+"-"+index}>
           <strong>{frame.direction} · {frame.opcodeName} ({frame.opcode})</strong>
