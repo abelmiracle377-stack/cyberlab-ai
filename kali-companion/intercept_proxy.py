@@ -557,6 +557,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         controller = self.server.controller
         while open_read and not controller._stop_event.is_set():
             readable, _, _ = select.select(list(open_read), [], [], 1.0)
+            for candidate in open_read:
+                if isinstance(candidate, ssl.SSLSocket) and candidate.pending() > 0 and candidate not in readable:
+                    readable.append(candidate)
             for source in readable:
                 destination = upstream if source is client else client
                 try:
@@ -650,9 +653,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self.wfile.write(f"{name}: {value}\r\n".encode("iso-8859-1", errors="replace"))
             self.wfile.write(b"Connection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
             self.wfile.flush()
-            self._relay_websocket(upstream)
             _history_entry(method.upper(), url, 101, headers, response_headers, 0, 0,
                            round((time.monotonic() - started) * 1000))
+            self._relay_websocket(upstream)
         finally:
             connection.close()
 
