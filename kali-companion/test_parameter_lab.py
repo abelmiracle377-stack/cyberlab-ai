@@ -27,7 +27,7 @@ class ParameterLabTests(unittest.TestCase):
     def test_form_cases_preserve_other_fields(self):
         result = generate_cases(
             "https://lab.example/login", "user=alice&role=reader",
-            "application/x-www-form-urlencoded", "form", 1, ["viewer"])
+            "application/x-www-form-urlencoded", "form", 1, ["viewer"], method="POST")
         self.assertEqual(result["cases"][0]["method"], "POST")
         self.assertEqual(result["cases"][0]["body"], "user=alice&role=viewer")
 
