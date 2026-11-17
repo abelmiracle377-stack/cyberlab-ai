@@ -1128,12 +1128,31 @@ class NativeInterceptProxyTests(unittest.TestCase):
     def test_websocket_proxy_frame_reader_rejects_frames_over_interception_limit(self):
         left, right = socket.socketpair()
         try:
-            right.sendall(bytes([0x82, 126, 0x01, 0x01]))
+            right.sendall(bytes([0x82, 127]) + (65537).to_bytes(8, "big"))
             with self.assertRaises(ValueError):
                 intercept_proxy._ProxyHandler._recv_websocket_frame(left, "server-to-client")
         finally:
             left.close()
             right.close()
+
+
+    def test_websocket_frame_queue_does_not_allow_editing_fragmented_text_frames(self):
+        from websocket_interception import WebSocketFrameDecisionQueue
+        queue = WebSocketFrameDecisionQueue(timeout=2)
+        result = []
+        worker = threading.Thread(target=lambda: result.append(
+            queue.submit("client-to-server", {"fin": False, "opcode": 1}, b"part")))
+        worker.start()
+        deadline = time.monotonic() + 1
+        while not queue.pending()["items"] and time.monotonic() < deadline:
+            time.sleep(0.005)
+        item = queue.pending()["items"][0]
+        self.assertFalse(item["editable"])
+        with self.assertRaises(ValueError):
+            queue.decide(item["id"], "forward_edited", "replacement")
+        queue.decide(item["id"], "forward")
+        worker.join(timeout=1)
+        self.assertEqual(result, [{"action": "forward"}])
 
 
 if __name__ == "__main__":

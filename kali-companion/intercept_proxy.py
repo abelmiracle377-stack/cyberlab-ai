@@ -74,7 +74,8 @@ def websocket_frame_history(limit: int = 100) -> dict:
 
 def _record_websocket_frame(item: dict) -> None:
     safe = {key: item[key] for key in
-            ("direction", "fin", "opcode", "opcodeName", "masked", "payloadLength", "capturedAt")}
+            ("direction", "fin", "opcode", "opcodeName", "masked", "payloadLength",
+             "messageId", "fragmentIndex", "messageComplete", "capturedAt")}
     with _WEBSOCKET_FRAME_LOCK:
         _WEBSOCKET_FRAME_HISTORY.appendleft(safe)
 
