@@ -183,6 +183,30 @@ def _decode_gzip_response(body: bytes) -> bytes:
     return bytes(output)
 
 
+def _decode_deflate_response(body: bytes) -> bytes:
+    """Decode a zlib-wrapped HTTP deflate representation under the response cap."""
+    decoder = zlib.decompressobj(zlib.MAX_WBITS)
+    output = bytearray()
+    pending = body
+    try:
+        while pending:
+            piece = decoder.decompress(pending, MAX_RESPONSE_BODY + 1 - len(output))
+            output.extend(piece)
+            if len(output) > MAX_RESPONSE_BODY:
+                raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
+            pending = decoder.unconsumed_tail
+            if pending and not piece:
+                raise ValueError("Compressed upstream response exceeds the decompression limit")
+        output.extend(decoder.flush(MAX_RESPONSE_BODY + 1 - len(output)))
+    except zlib.error as exc:
+        raise ValueError("Upstream returned an invalid deflate response") from exc
+    if len(output) > MAX_RESPONSE_BODY:
+        raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
+    if not decoder.eof or decoder.unused_data:
+        raise ValueError("Upstream deflate response is incomplete or contains trailing data")
+    return bytes(output)
+
+
 def _safe_headers(headers: list[tuple[str, str]]) -> list[dict]:
     output = []
     for name, value in headers:
@@ -1020,14 +1044,16 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             response_headers = response.getheaders()
             content_encodings = [value.strip().lower() for name, value in response_headers
                                  if name.lower() == "content-encoding"]
-            if method.upper() != "HEAD" and content_encodings == ["gzip"]:
+            if method.upper() != "HEAD" and content_encodings in (["gzip"], ["deflate"]):
                 try:
-                    response_body = _decode_gzip_response(response_body)
+                    response_body = (_decode_gzip_response(response_body) if content_encodings == ["gzip"]
+                                     else _decode_deflate_response(response_body))
                 except ValueError as exc:
                     self._error(502, str(exc))
                     return
-                invalidated = {"content-encoding", "content-md5", "digest", "etag",
-                               "content-range", "accept-ranges"}
+                invalidated = {"content-encoding", "content-md5", "digest", "content-digest",
+                               "repr-digest", "etag", "last-modified", "content-range",
+                               "accept-ranges"}
                 response_headers = [(name, value) for name, value in response_headers
                                     if name.lower() not in invalidated]
             response_connection_tokens = {token.strip().lower() for name, value in response_headers

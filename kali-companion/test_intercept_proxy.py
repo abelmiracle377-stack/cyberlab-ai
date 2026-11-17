@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+import zlib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,10 +34,34 @@ class _TargetHandler(http.server.BaseHTTPRequestHandler):
 
 
 class GzipResponseDecoderTests(unittest.TestCase):
+    def test_decodes_valid_gzip_response(self):
+        original = b"gzip response body"
+        self.assertEqual(intercept_proxy._decode_gzip_response(gzip.compress(original)), original)
+
+    def test_rejects_invalid_gzip_response(self):
+        with self.assertRaisesRegex(ValueError, "invalid gzip"):
+            intercept_proxy._decode_gzip_response(b"not-gzip")
+
     def test_rejects_decompression_expansion_over_response_limit(self):
         compressed = gzip.compress(b"x" * (intercept_proxy.MAX_RESPONSE_BODY + 1))
         with self.assertRaisesRegex(ValueError, "decompressed upstream response"):
             intercept_proxy._decode_gzip_response(compressed)
+
+
+class DeflateResponseDecoderTests(unittest.TestCase):
+    def test_decodes_valid_zlib_wrapped_deflate_response(self):
+        original = b"deflate response body"
+        compressed = zlib.compress(original)
+        self.assertEqual(intercept_proxy._decode_deflate_response(compressed), original)
+
+    def test_rejects_invalid_deflate_response(self):
+        with self.assertRaisesRegex(ValueError, "invalid deflate"):
+            intercept_proxy._decode_deflate_response(b"not-deflate")
+
+    def test_rejects_decompression_expansion_over_response_limit(self):
+        compressed = zlib.compress(b"x" * (intercept_proxy.MAX_RESPONSE_BODY + 1))
+        with self.assertRaisesRegex(ValueError, "decompressed upstream response"):
+            intercept_proxy._decode_deflate_response(compressed)
 
 
 class ChunkedRequestBodyTests(unittest.TestCase):
