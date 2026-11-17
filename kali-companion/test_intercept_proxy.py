@@ -843,9 +843,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
                 def send_request():
                     with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
-                        client.sendall((f"GET {origin}/response-connection-token HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        client.sendall((f"GET {origin}/response-connection-token HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: close\r\n\r\n").encode("ascii"))
                         chunks = []
                         while True:
                             chunk = client.recv(8192)
