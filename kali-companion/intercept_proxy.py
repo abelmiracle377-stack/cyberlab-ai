@@ -29,6 +29,7 @@ from urllib.parse import urlsplit, urlunsplit
 from proxy_certificates import ca_status, issue_host_certificate
 from web_testing import _resolve_pinned
 from websocket_frames import WebSocketFrameObserver
+from websocket_interception import WebSocketFrameDecisionQueue, decode_frame, encode_frame
 
 LISTEN_HOST = "127.0.0.1"
 DEFAULT_PORT = 8081
@@ -50,6 +51,15 @@ _SENSITIVE = {"authorization", "proxy-authorization", "cookie", "set-cookie",
               "x-auth-token", "x-access-token", "referer", "location", "content-location", "refresh", "link"}
 _WEBSOCKET_FRAME_HISTORY = deque(maxlen=500)
 _WEBSOCKET_FRAME_LOCK = threading.Lock()
+_WEBSOCKET_FRAME_QUEUE = WebSocketFrameDecisionQueue()
+
+
+def pending_websocket_frames() -> dict:
+    return _WEBSOCKET_FRAME_QUEUE.pending()
+
+
+def decide_websocket_frame(frame_id: str, action: str, edited_payload: str | None = None) -> dict:
+    return _WEBSOCKET_FRAME_QUEUE.decide(frame_id, action, edited_payload)
 
 
 def websocket_frame_history(limit: int = 100) -> dict:
@@ -870,6 +880,7 @@ class NativeInterceptProxy:
         self.allow_state_changing_methods = False
         self.intercept_requests = False
         self.intercept_responses = False
+        self.intercept_websocket_frames = False
 
     def start(self, data: dict) -> dict:
         if not isinstance(data, dict):
@@ -897,6 +908,11 @@ class NativeInterceptProxy:
         pause_responses = data.get("interceptResponses") is True
         if pause_responses and data.get("confirmInterceptResponses") is not True:
             raise ValueError("Separately approve pausing server responses for manual inspection and forward or drop decisions.")
+        pause_websocket_frames = data.get("interceptWebSocketFrames") is True
+        if pause_websocket_frames and data.get("confirmInterceptWebSocketFrames") is not True:
+            raise ValueError("Separately approve pausing WebSocket frames for manual inspection and forward, edit or drop decisions.")
+        if pause_websocket_frames and (pause_requests or pause_responses):
+            raise ValueError("WebSocket frame interception must be enabled separately from HTTP request/response interception.")
         port = data.get("listenPort", DEFAULT_PORT)
         if isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
             raise ValueError("Proxy listen port must be between 1024 and 65535.")
@@ -914,6 +930,7 @@ class NativeInterceptProxy:
             self.allow_state_changing_methods = allow_mutating
             self.intercept_requests = pause_requests
             self.intercept_responses = pause_responses
+            self.intercept_websocket_frames = pause_websocket_frames
             self._server = server
             self._thread = threading.Thread(target=server.serve_forever, name="cyberlab-intercept-proxy", daemon=True)
             self._thread.start()
@@ -930,8 +947,10 @@ class NativeInterceptProxy:
             self.allow_state_changing_methods = False
             self.intercept_requests = False
             self.intercept_responses = False
+            self.intercept_websocket_frames = False
             self._stop_event.set()
         _drop_all_pending_intercepts()
+        _WEBSOCKET_FRAME_QUEUE.drop_all()
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -952,9 +971,10 @@ class NativeInterceptProxy:
                 "allowStateChangingMethods": self.allow_state_changing_methods if active else False,
                 "interceptRequests": self.intercept_requests if active else False,
                 "interceptResponses": self.intercept_responses if active else False,
+                "interceptWebSocketFrames": self.intercept_websocket_frames if active else False,
                 "mode": "HTTP/1.1 request/response inspection and WebSocket tunnelling; HTTPS CONNECT TLS termination" if active else "stopped",
                 "limitations": ["one approved origin", "one request per client connection", "no HTTP/2",
-                                "WebSocket frames are opaque and not inspected", "WebSocket traffic unavailable with manual HTTP interception", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
+                                "WebSocket manual frame inspection is optional and limited to 64 KB frames", "WebSocket frame interception is separate from HTTP interception", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
                 "historyCount": len(_HISTORY),
             }
 

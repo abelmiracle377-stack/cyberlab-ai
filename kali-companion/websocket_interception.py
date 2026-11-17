@@ -152,7 +152,7 @@ class WebSocketFrameDecisionQueue:
             raise ValueError("WebSocket frame metadata is invalid.")
         frame_id = uuid.uuid4().hex
         event = threading.Event()
-        editable = metadata.get("opcode") == 0x1
+        editable = metadata.get("opcode") == 0x1 and metadata.get("fin") is True
         try:
             preview = payload.decode("utf-8") if editable else ""
             editable = editable and len(payload) <= MAX_FRAME_PAYLOAD
