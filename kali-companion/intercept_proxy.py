@@ -114,7 +114,7 @@ def _read_chunked_body(stream) -> bytes:
         chunk_line = line[:-2]
         # Accept token-only chunk extensions; reject ambiguous extension syntax.
         if not re.fullmatch(
-                rb"[0-9A-Fa-f]+(?:;[!#$%&'*+.^_\\x60|~0-9A-Za-z-]+(?:=[!#$%&'*+.^_\\x60|~0-9A-Za-z-]+)?)*",
+                rb"[0-9A-Fa-f]+(?:;[!#$%&'*+.^_\x60|~0-9A-Za-z-]+(?:=[!#$%&'*+.^_\x60|~0-9A-Za-z-]+)?)*",
                 chunk_line):
             raise ValueError("Invalid chunk size or extension.")
         size_text = chunk_line.split(b";", 1)[0]
