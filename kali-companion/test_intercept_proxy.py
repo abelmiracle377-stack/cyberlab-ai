@@ -1187,7 +1187,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             assembler.feed({"fin": True, "opcode": 0}, b"y")
         assembler.reset()
-        assembler.feed({"fin": False, "opcode": 1}, b"\\xff")
+        assembler.feed({"fin": False, "opcode": 1}, b"\xff")
         with self.assertRaises(UnicodeDecodeError):
             assembler.feed({"fin": True, "opcode": 0}, b"")
 
