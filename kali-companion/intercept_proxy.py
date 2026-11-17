@@ -1,12 +1,8 @@
-"""CyberLab-native, scope-bound HTTP/1.1 interception proxy with WebSocket upgrade tunnelling.
+"""CyberLab-native, scope-bound HTTP/1.1 proxy with optional WebSocket inspection.
 
-The listener is loopback-only. One exact origin is approved when starting it.
-HTTPS CONNECT is terminated with a CyberLab-managed leaf certificate and a
-separately verified upstream TLS connection. Validated WebSocket upgrades are
-relayed as opaque bidirectional streams; frames are not decoded or retained.
-Request/response bodies and
-sensitive metadata are not retained in history. HTTP/2, WebSocket frame inspection, chunked
-client request bodies and client-certificate authentication are unsupported.
+The listener is loopback-only and bound to one approved origin. HTTPS CONNECT
+uses a CyberLab leaf certificate and independently verified upstream TLS.
+Bodies and sensitive metadata are excluded from persistent history.
 """
 from __future__ import annotations
 
@@ -29,7 +25,8 @@ from urllib.parse import urlsplit, urlunsplit
 from proxy_certificates import ca_status, issue_host_certificate
 from web_testing import _resolve_pinned
 from websocket_frames import WebSocketFrameObserver
-from websocket_interception import WebSocketFrameDecisionQueue, decode_frame, encode_frame
+from websocket_interception import (WebSocketFrameDecisionQueue, WebSocketMessageAssembler,
+                                     decode_frame, encode_frame, forward_message_frames)
 
 LISTEN_HOST = "127.0.0.1"
 DEFAULT_PORT = 8081
@@ -628,6 +625,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             "client-to-server": WebSocketFrameObserver("client-to-server", _record_websocket_frame),
             "server-to-client": WebSocketFrameObserver("server-to-client", _record_websocket_frame),
         }
+        assemblers = {
+            "client-to-server": WebSocketMessageAssembler(),
+            "server-to-client": WebSocketMessageAssembler(),
+        }
         controller = self.server.controller
         while open_read and not controller._stop_event.is_set():
             readable, _, _ = select.select(list(open_read), [], [], 1.0)
@@ -643,15 +644,27 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                         observers[direction].feed(raw)
                         if observers[direction].disabled:
                             raise ValueError("Invalid WebSocket frame sequence.")
-                        decision = _WEBSOCKET_FRAME_QUEUE.submit(direction, metadata, payload)
-                        if decision["action"] == "timeout":
-                            raise TimeoutError("WebSocket frame decision timed out; tunnel closed safely.")
-                        if decision["action"] == "drop":
-                            if metadata["opcode"] in {0x0, 0x8} or not metadata["fin"]:
-                                raise ConnectionAbortedError("Dropped fragmented or closing frame; tunnel closed to preserve protocol state.")
+                        assembler = assemblers[direction]
+                        state, messages = assembler.feed(metadata, payload)
+                        if state == "pending":
                             continue
-                        forwarded_payload = decision.get("payload", payload)
-                        destination.sendall(encode_frame(metadata, forwarded_payload, direction))
+                        if state == "control" and assembler.pending:
+                            # Keep ping/pong traffic responsive during message assembly.
+                            destination.sendall(encode_frame(metadata, payload, direction))
+                            continue
+                        message = messages[0]
+                        decision = _WEBSOCKET_FRAME_QUEUE.submit(
+                            direction, message["metadata"], message["payload"])
+                        if decision["action"] == "timeout":
+                            raise TimeoutError("WebSocket message decision timed out; tunnel closed safely.")
+                        if decision["action"] == "drop":
+                            if message["metadata"]["opcode"] == 0x8:
+                                raise ConnectionAbortedError("Dropping a WebSocket close frame closes the tunnel.")
+                            continue
+                        edited = "payload" in decision
+                        forwarded_payload = decision.get("payload", message["payload"])
+                        for frame in forward_message_frames(message, forwarded_payload, direction, edited=edited):
+                            destination.sendall(frame)
                     else:
                         data = source.recv(65536)
                         if data:
