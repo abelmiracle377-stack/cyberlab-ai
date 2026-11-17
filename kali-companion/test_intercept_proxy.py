@@ -176,6 +176,78 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target.server_close()
             target_thread.join(timeout=2)
 
+    def test_chunked_response_is_decoded_before_manual_inspection(self):
+        class ChunkedHandler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(b"4\\r\\nWiki\\r\\n5\\r\\npedia\\r\\n0\\r\\nX-Origin-Trailer: hidden\\r\\n\\r\\n")
+                self.wfile.flush()
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ChunkedHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        result = {}
+
+        def send():
+            with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                client.sendall((
+                    f"GET {origin}/chunked HTTP/1.1\\r\\n"
+                    f"Host: localhost:{target.server_port}\\r\\n"
+                    "Connection: close\\r\\n\\r\\n"
+                ).encode("ascii"))
+                response = b""
+                while True:
+                    chunk = client.recv(8192)
+                    if not chunk:
+                        break
+                    response += chunk
+                result["response"] = response
+
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-CHUNKED-INSPECT-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptResponses": True, "confirmInterceptResponses": True,
+                })
+                worker = threading.Thread(target=send)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_response_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                self.assertEqual(pending[0]["body"], "Wikipedia")
+                self.assertNotIn("X-Origin-Trailer", str(pending[0]))
+                intercept_proxy.decide_response_intercept(pending[0]["id"], "forward")
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                head, body = result["response"].split(b"\\r\\n\\r\\n", 1)
+                self.assertIn(b"Content-Length: 9", head)
+                self.assertNotIn(b"Transfer-Encoding", head)
+                self.assertEqual(body, b"Wikipedia")
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_http_proxy_forwards_only_approved_origin_and_redacts_history(self):
         target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
         target_thread = threading.Thread(target=target.serve_forever, daemon=True)

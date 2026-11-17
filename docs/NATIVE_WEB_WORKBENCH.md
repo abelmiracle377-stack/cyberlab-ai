@@ -75,7 +75,7 @@ This is an initial HTTP/1.1 proxy, not full Burp parity. It supports up to 50 se
 ## Not yet implemented
 
 The crawler is a discovery and baseline layer, not a full active vulnerability scanner. The following native capabilities remain separate implementation work:
-- Advanced interception features remain in development: binary and oversized response editing, response diff tooling, multi-origin profiles, HTTP/2, fragmented binary-message editing, extension negotiation, client-certificate authentication and broader browser compatibility. 
+- Advanced interception features remain in development: binary and oversized response editing, response diff tooling, multi-origin profiles, HTTP/2, fragmented binary-message editing, extension negotiation, client-certificate authentication and broader browser compatibility.
 - Authenticated crawling and session/role handling.
 - Advanced vulnerability checks for SQL injection, SSRF, IDOR, authentication/session weaknesses and deeper API testing.
 - Raw binary request/response editing and richer response-diff tooling.
