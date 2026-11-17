@@ -28,6 +28,8 @@ class WebSocketFrameObserver:
         self._current = None
         self.disabled = False
         self._fragmented_message = False
+        self._message_id = 0
+        self._fragment_index = 0
 
     def feed(self, data: bytes) -> None:
         if self.disabled or not data:
@@ -115,24 +117,39 @@ class WebSocketFrameObserver:
             self.disabled = True
             self._buffer.clear()
             return None
+        message_id = None
+        fragment_index = None
+        message_complete = None
         if opcode == 0x0:
             if not self._fragmented_message:
                 self.disabled = True
                 self._buffer.clear()
                 return None
+            message_id = self._message_id
+            fragment_index = self._fragment_index
+            message_complete = fin
+            self._fragment_index += 1
             if fin:
                 self._fragmented_message = False
+                self._fragment_index = 0
         elif opcode in {0x1, 0x2}:
             if self._fragmented_message:
                 self.disabled = True
                 self._buffer.clear()
                 return None
+            self._message_id += 1
+            message_id = self._message_id
+            fragment_index = 0
+            message_complete = fin
             if not fin:
                 self._fragmented_message = True
+                self._fragment_index = 1
         return cursor, {
             "direction": self.direction, "fin": fin, "opcode": opcode,
             "opcodeName": OPCODES.get(opcode, "reserved"),
             "masked": masked, "payloadLength": length,
+            "messageId": message_id, "fragmentIndex": fragment_index,
+            "messageComplete": message_complete,
         }
 
     def _emit(self):

@@ -1036,5 +1036,22 @@ class NativeInterceptProxyTests(unittest.TestCase):
                          [len(payload), len(payload)])
 
 
+    def test_websocket_observer_assigns_message_and_fragment_metadata(self):
+        from websocket_frames import WebSocketFrameObserver
+        captured = []
+        observer = WebSocketFrameObserver("server-to-client", captured.append)
+        observer.feed(bytes([0x01, 0x01]) + b"a")
+        observer.feed(bytes([0x89, 0x00]))  # control frame is outside message sequence
+        observer.feed(bytes([0x00, 0x01]) + b"b")
+        observer.feed(bytes([0x80, 0x01]) + b"c")
+        observer.feed(bytes([0x82, 0x00]))  # next independent binary message
+        self.assertEqual([item["messageId"] for item in captured],
+                         [1, None, 1, 1, 2])
+        self.assertEqual([item["fragmentIndex"] for item in captured],
+                         [0, None, 1, 2, 0])
+        self.assertEqual([item["messageComplete"] for item in captured],
+                         [False, None, False, True, True])
+
+
 if __name__ == "__main__":
     unittest.main()
