@@ -330,6 +330,72 @@ class NativeInterceptProxyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds 64 KB"):
             intercept_proxy._validated_intercept_edit(entry, {"body": "x" * (intercept_proxy.MAX_REQUEST_BODY + 1)})
 
+    def test_edited_request_still_strips_connection_nominated_headers(self):
+        received = {}
+
+        class ConnectionHeaderHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                received["private"] = self.headers.get("X-Private")
+                received["connection"] = self.headers.get("Connection")
+                payload = b"ok"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ConnectionHeaderHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        result = {}
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-CONNECTION-TOKEN-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptRequests": True, "confirmInterceptRequests": True,
+                })
+
+                def send_request():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/connection-token HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: X-Private\\r\\n"
+                                        "X-Private: must-not-reach-origin\\r\\n\\r\\n").encode("ascii"))
+                        result["response"] = client.recv(4096)
+
+                worker = threading.Thread(target=send_request)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                intercept_proxy.decide_intercept(pending[0]["id"], "forward_edited", {
+                    "path": "/connection-token-edited",
+                    "headers": pending[0]["headers"],
+                })
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                self.assertIn(b"200 OK", result["response"])
+                self.assertIsNone(received.get("private"))
+                self.assertEqual(received.get("connection"), "close")
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_proxy_forwards_operator_edited_request_to_same_origin(self):
         received = {}
         class EditHandler(http.server.BaseHTTPRequestHandler):
