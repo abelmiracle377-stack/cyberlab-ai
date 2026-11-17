@@ -1155,5 +1155,54 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertEqual(result, [{"action": "forward"}])
 
 
+    def test_websocket_message_assembler_reassembles_fragmented_utf8_text(self):
+        from websocket_interception import WebSocketMessageAssembler
+        assembler = WebSocketMessageAssembler()
+        encoded = "café".encode("utf-8")
+        state, messages = assembler.feed({"fin": False, "opcode": 1}, encoded[:3])
+        self.assertEqual(state, "pending")
+        self.assertEqual(messages, [])
+        state, messages = assembler.feed({"fin": True, "opcode": 0}, encoded[3:])
+        self.assertEqual(state, "complete")
+        self.assertEqual(messages[0]["payload"], encoded)
+        self.assertEqual(len(messages[0]["originalFrames"]), 2)
+
+    def test_websocket_message_assembler_passes_control_frames_during_fragmented_message(self):
+        from websocket_interception import WebSocketMessageAssembler
+        assembler = WebSocketMessageAssembler()
+        state, _ = assembler.feed({"fin": False, "opcode": 1}, b"part")
+        self.assertEqual(state, "pending")
+        state, frames = assembler.feed({"fin": True, "opcode": 9}, b"ping")
+        self.assertEqual(state, "control")
+        self.assertEqual(frames[0]["payload"], b"ping")
+        self.assertTrue(assembler.pending)
+        state, messages = assembler.feed({"fin": True, "opcode": 0}, b"two")
+        self.assertEqual(state, "complete")
+        self.assertEqual(messages[0]["payload"], b"parttwo")
+
+    def test_websocket_message_assembler_bounds_total_message_and_validates_utf8(self):
+        from websocket_interception import WebSocketMessageAssembler, MAX_MESSAGE_PAYLOAD
+        assembler = WebSocketMessageAssembler()
+        assembler.feed({"fin": False, "opcode": 2}, b"x" * MAX_MESSAGE_PAYLOAD)
+        with self.assertRaises(ValueError):
+            assembler.feed({"fin": True, "opcode": 0}, b"y")
+        assembler.reset()
+        assembler.feed({"fin": False, "opcode": 1}, b"\\xff")
+        with self.assertRaises(UnicodeDecodeError):
+            assembler.feed({"fin": True, "opcode": 0}, b"")
+
+    def test_websocket_edited_fragmented_message_rebuilds_as_single_text_frame(self):
+        from websocket_interception import WebSocketMessageAssembler, forward_message_frames, decode_frame
+        assembler = WebSocketMessageAssembler()
+        assembler.feed({"fin": False, "opcode": 1}, b"old ")
+        _, messages = assembler.feed({"fin": True, "opcode": 0}, b"text")
+        rebuilt = forward_message_frames(messages[0], b"new text", "client-to-server", edited=True)
+        self.assertEqual(len(rebuilt), 1)
+        metadata, payload = decode_frame(rebuilt[0], "client-to-server")
+        self.assertTrue(metadata["fin"])
+        self.assertEqual(metadata["opcode"], 1)
+        self.assertEqual(payload, b"new text")
+
+
 if __name__ == "__main__":
     unittest.main()
