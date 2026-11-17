@@ -54,6 +54,16 @@ class ChunkedRequestBodyTests(unittest.TestCase):
             intercept_proxy._read_chunked_body(stream)
 
 
+    def test_rejects_connection_and_authentication_trailers(self):
+        import io
+        for trailer in (b"Connection: close", b"Authorization: Bearer secret",
+                        b"Content-Encoding: gzip", b"If-Match: *"):
+            with self.subTest(trailer=trailer):
+                stream = io.BytesIO(b"0\r\n" + trailer + b"\r\n\r\n")
+                with self.assertRaisesRegex(ValueError, "Unsafe"):
+                    intercept_proxy._read_chunked_body(stream)
+
+
 class NativeInterceptProxyTests(unittest.TestCase):
     def _free_port(self):
         with socket.socket() as sock:

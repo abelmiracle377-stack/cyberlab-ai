@@ -136,8 +136,16 @@ def _read_chunked_body(stream) -> bytes:
                     val = value.decode("iso-8859-1").strip()
                 except UnicodeDecodeError as exc:
                     raise ValueError("Invalid chunked request trailer.") from exc
+                forbidden_trailers = {
+                    "content-length", "transfer-encoding", "host", "trailer",
+                    "connection", "keep-alive", "proxy-connection", "upgrade", "te",
+                    "authorization", "proxy-authorization", "www-authenticate",
+                    "proxy-authenticate", "expect", "content-encoding", "content-type",
+                    "content-range", "range", "max-forwards",
+                }
                 if (not re.fullmatch(r"[!#$%&'*+.^_\x60|~0-9A-Za-z-]{1,128}", key)
-                        or key.lower() in {"content-length", "transfer-encoding", "host"}
+                        or key.lower() in forbidden_trailers
+                        or key.lower().startswith("if-")
                         or any(ord(ch) < 32 and ch != "\t" or ord(ch) == 127 for ch in val)):
                     raise ValueError("Unsafe chunked request trailer.")
         chunk = stream.read(size)
