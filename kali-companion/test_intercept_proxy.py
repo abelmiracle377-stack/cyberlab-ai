@@ -943,7 +943,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
                         response.extend(client.recv(1))
                     self.assertIn(b"101 Switching Protocols", response)
                     self.assertIn(b"Upgrade: websocket", response)
-        mask = bytes([1, 2, 3, 4])
+                    mask = bytes([1, 2, 3, 4])
                     payload = b"hi"
                     masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
                     client.sendall(b"\x81\x82" + mask + masked)
