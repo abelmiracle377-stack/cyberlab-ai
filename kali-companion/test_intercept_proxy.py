@@ -1053,5 +1053,59 @@ class NativeInterceptProxyTests(unittest.TestCase):
                          [False, None, False, True, True])
 
 
+    def test_websocket_frame_codec_round_trips_both_masking_directions(self):
+        from websocket_interception import decode_frame, encode_frame
+        for direction in ("client-to-server", "server-to-client"):
+            frame = encode_frame({"fin": True, "opcode": 1}, b"hello", direction)
+            metadata, payload = decode_frame(frame, direction)
+            self.assertEqual(payload, b"hello")
+            self.assertEqual(metadata["opcode"], 1)
+            self.assertEqual(metadata["masked"], direction == "client-to-server")
+
+    def test_websocket_frame_codec_rejects_incomplete_noncanonical_and_oversized_frames(self):
+        from websocket_interception import decode_frame
+        with self.assertRaises(ValueError):
+            decode_frame(b"\\x81", "server-to-client")
+        with self.assertRaises(ValueError):
+            decode_frame(b"\\x81\\x7e\\x00\\x05hello", "server-to-client")
+        with self.assertRaises(ValueError):
+            decode_frame(b"\\x82\\x7f" + (65537).to_bytes(8, "big"), "server-to-client")
+
+    def test_websocket_frame_decision_queue_requires_explicit_forward_and_bounds_pending(self):
+        from websocket_interception import WebSocketFrameDecisionQueue
+        queue = WebSocketFrameDecisionQueue(max_pending=1, timeout=2)
+        result = []
+        worker = threading.Thread(target=lambda: result.append(
+            queue.submit("client-to-server", {"fin": True, "opcode": 1}, b"hello")))
+        worker.start()
+        deadline = time.monotonic() + 1
+        while not queue.pending()["items"] and time.monotonic() < deadline:
+            time.sleep(0.005)
+        item = queue.pending()["items"][0]
+        with self.assertRaises(ValueError):
+            queue.submit("server-to-client", {"fin": True, "opcode": 1}, b"second")
+        queue.decide(item["id"], "forward_edited", "edited")
+        worker.join(timeout=1)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(result, [{"action": "forward", "payload": b"edited"}])
+
+    def test_websocket_frame_decision_queue_drops_on_timeout_and_rejects_binary_edits(self):
+        from websocket_interception import WebSocketFrameDecisionQueue
+        queue = WebSocketFrameDecisionQueue(timeout=1)
+        result = []
+        worker = threading.Thread(target=lambda: result.append(
+            queue.submit("server-to-client", {"fin": True, "opcode": 2}, b"\\x00\\xff")))
+        worker.start()
+        deadline = time.monotonic() + 1
+        while not queue.pending()["items"] and time.monotonic() < deadline:
+            time.sleep(0.005)
+        item = queue.pending()["items"][0]
+        with self.assertRaises(ValueError):
+            queue.decide(item["id"], "forward_edited", "text")
+        queue.decide(item["id"], "drop")
+        worker.join(timeout=1)
+        self.assertEqual(result, [{"action": "drop"}])
+
+
 if __name__ == "__main__":
     unittest.main()
