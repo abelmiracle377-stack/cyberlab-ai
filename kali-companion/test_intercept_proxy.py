@@ -994,5 +994,34 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertTrue(client.disabled)
 
 
+    def test_websocket_observer_rejects_reserved_bits_and_noncanonical_lengths(self):
+        from websocket_frames import WebSocketFrameObserver
+        cases = [
+            ("server-to-client", bytes([0xC1, 0x00])),  # RSV1 without extension
+            ("server-to-client", bytes([0x82, 126, 0x00, 0x7D])),  # 125 encoded as 16-bit
+            ("server-to-client", bytes([0x82, 127]) + (65535).to_bytes(8, "big")),
+            ("server-to-client", bytes([0x88, 1, 0x00])),  # invalid one-byte close payload
+            ("server-to-client", bytes([0x83, 0x00])),  # reserved opcode
+        ]
+        for direction, frame in cases:
+            with self.subTest(frame=frame):
+                observer = WebSocketFrameObserver(direction, lambda item: None)
+                observer.feed(frame)
+                self.assertTrue(observer.disabled)
+
+    def test_websocket_observer_tracks_fragmented_messages_and_allows_control_frames(self):
+        from websocket_frames import WebSocketFrameObserver
+        captured = []
+        observer = WebSocketFrameObserver("server-to-client", captured.append)
+        observer.feed(bytes([0x01, 0x01]) + b"a")  # non-final text
+        observer.feed(bytes([0x89, 0x00]))  # ping may interleave
+        observer.feed(bytes([0x80, 0x01]) + b"b")  # final continuation
+        self.assertEqual([item["opcodeName"] for item in captured],
+                         ["text", "ping", "continuation"])
+        invalid = WebSocketFrameObserver("server-to-client", lambda item: None)
+        invalid.feed(bytes([0x80, 0x00]))  # continuation without initial fragment
+        self.assertTrue(invalid.disabled)
+
+
 if __name__ == "__main__":
     unittest.main()

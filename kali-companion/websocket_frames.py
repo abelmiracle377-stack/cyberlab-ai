@@ -27,6 +27,7 @@ class WebSocketFrameObserver:
         self._payload_remaining = 0
         self._current = None
         self.disabled = False
+        self._fragmented_message = False
 
     def feed(self, data: bytes) -> None:
         if self.disabled or not data:
@@ -64,12 +65,21 @@ class WebSocketFrameObserver:
         opcode = first & 0x0F
         masked = bool(second & 0x80)
         length_code = second & 0x7F
+        # This observer supports no negotiated extensions, so RSV bits must be zero.
+        if first & 0x70 or opcode not in {0x0, 0x1, 0x2, 0x8, 0x9, 0xA}:
+            self.disabled = True
+            self._buffer.clear()
+            return None
         cursor = 2
         if length_code == 126:
             if len(self._buffer) < cursor + 2:
                 return None
             length = int.from_bytes(self._buffer[cursor:cursor + 2], "big")
             cursor += 2
+            if length < 126:
+                self.disabled = True
+                self._buffer.clear()
+                return None
         elif length_code == 127:
             if len(self._buffer) < cursor + 8:
                 return None
@@ -79,6 +89,10 @@ class WebSocketFrameObserver:
                 return None
             length = int.from_bytes(raw_length, "big")
             cursor += 8
+            if length < 65536:
+                self.disabled = True
+                self._buffer.clear()
+                return None
         else:
             length = length_code
         if masked:
@@ -90,10 +104,24 @@ class WebSocketFrameObserver:
             self.disabled = True
             self._buffer.clear()
             return None
-        if opcode >= 0x8 and (not fin or length > 125):
+        if opcode >= 0x8 and (not fin or length > 125 or (opcode == 0x8 and length == 1)):
             self.disabled = True
             self._buffer.clear()
             return None
+        if opcode == 0x0:
+            if not self._fragmented_message:
+                self.disabled = True
+                self._buffer.clear()
+                return None
+            if fin:
+                self._fragmented_message = False
+        elif opcode in {0x1, 0x2}:
+            if self._fragmented_message:
+                self.disabled = True
+                self._buffer.clear()
+                return None
+            if not fin:
+                self._fragmented_message = True
         return cursor, {
             "direction": self.direction, "fin": fin, "opcode": opcode,
             "opcodeName": OPCODES.get(opcode, "reserved"),
