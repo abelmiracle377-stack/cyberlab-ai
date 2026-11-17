@@ -169,13 +169,14 @@ def _decode_gzip_response(body: bytes) -> bytes:
             data = pending
             pending = b""
             while True:
+                previous_length = len(data)
                 piece = decoder.decompress(data, MAX_RESPONSE_BODY + 1 - len(output))
                 output.extend(piece)
                 if len(output) > MAX_RESPONSE_BODY:
                     raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
                 if decoder.unconsumed_tail:
                     data = decoder.unconsumed_tail
-                    if not piece and len(data) == len(decoder.unconsumed_tail):
+                    if not piece and len(decoder.unconsumed_tail) == previous_length:
                         raise ValueError("Compressed upstream response exceeds the decompression limit")
                     continue
                 if decoder.unused_data:
