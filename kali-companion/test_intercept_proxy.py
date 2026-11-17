@@ -1023,5 +1023,18 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertTrue(invalid.disabled)
 
 
+    def test_websocket_observer_handles_multiple_large_frames_in_one_read(self):
+        from websocket_frames import WebSocketFrameObserver
+        captured = []
+        observer = WebSocketFrameObserver("server-to-client", captured.append)
+        payload = b"x" * (600 * 1024)
+        frame = bytes([0x82, 126]) + len(payload).to_bytes(2, "big") + payload
+        observer.feed(frame + frame)
+        self.assertFalse(observer.disabled)
+        self.assertEqual(len(captured), 2)
+        self.assertEqual([item["payloadLength"] for item in captured],
+                         [len(payload), len(payload)])
+
+
 if __name__ == "__main__":
     unittest.main()
