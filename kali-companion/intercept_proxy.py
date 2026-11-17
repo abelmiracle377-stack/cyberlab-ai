@@ -920,9 +920,9 @@ class NativeInterceptProxy:
                 "allowStateChangingMethods": self.allow_state_changing_methods if active else False,
                 "interceptRequests": self.intercept_requests if active else False,
                 "interceptResponses": self.intercept_responses if active else False,
-                "mode": "HTTP/1.1 request/response inspection; HTTPS CONNECT TLS termination" if active else "stopped",
+                "mode": "HTTP/1.1 request/response inspection and WebSocket tunnelling; HTTPS CONNECT TLS termination" if active else "stopped",
                 "limitations": ["one approved origin", "one request per client connection", "no HTTP/2",
-                                "no WebSockets", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
+                                "WebSocket frames are opaque and not inspected", "WebSocket traffic unavailable with manual HTTP interception", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
                 "historyCount": len(_HISTORY),
             }
 
