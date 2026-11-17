@@ -581,6 +581,43 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 raise ValueError("Upstream WebSocket response contains too many headers.")
         return status, reason, headers
 
+    @staticmethod
+    def _recv_websocket_frame(source: socket.socket, direction: str) -> tuple[bytes, dict, bytes]:
+        def exact(count: int) -> bytes:
+            chunks = bytearray()
+            while len(chunks) < count:
+                part = source.recv(count - len(chunks))
+                if not part:
+                    raise EOFError("WebSocket peer closed during a frame.")
+                chunks.extend(part)
+            return bytes(chunks)
+
+        head = exact(2)
+        length_code = head[1] & 0x7F
+        extra = b""
+        if length_code == 126:
+            extra = exact(2)
+            length = int.from_bytes(extra, "big")
+            if length < 126:
+                raise ValueError("Non-canonical WebSocket frame length.")
+        elif length_code == 127:
+            extra = exact(8)
+            if extra[0] & 0x80:
+                raise ValueError("Invalid WebSocket frame length.")
+            length = int.from_bytes(extra, "big")
+            if length < 65536:
+                raise ValueError("Non-canonical WebSocket frame length.")
+        else:
+            length = length_code
+        masked = bool(head[1] & 0x80)
+        mask = exact(4) if masked else b""
+        if length > 64 * 1024:
+            raise ValueError("Frame exceeds the 64 KB manual-interception limit.")
+        payload = exact(length)
+        raw = head + extra + mask + payload
+        metadata, decoded = decode_frame(raw, direction)
+        return raw, metadata, decoded
+
     def _relay_websocket(self, upstream: socket.socket) -> None:
         client = self.connection
         client.settimeout(None)
@@ -598,23 +635,39 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                     readable.append(candidate)
             for source in readable:
                 destination = upstream if source is client else client
+                direction = "client-to-server" if source is client else "server-to-client"
                 try:
-                    data = source.recv(65536)
-                    if data:
-                        direction = "client-to-server" if source is client else "server-to-client"
-                        observer = observers[direction]
-                        observer.feed(data)
-                        destination.sendall(data)
+                    if controller.intercept_websocket_frames:
+                        raw, metadata, payload = self._recv_websocket_frame(source, direction)
+                        observers[direction].feed(raw)
+                        if observers[direction].disabled:
+                            raise ValueError("Invalid WebSocket frame sequence.")
+                        decision = _WEBSOCKET_FRAME_QUEUE.submit(direction, metadata, payload)
+                        if decision["action"] == "timeout":
+                            raise TimeoutError("WebSocket frame decision timed out; tunnel closed safely.")
+                        if decision["action"] == "drop":
+                            continue
+                        forwarded_payload = decision.get("payload", payload)
+                        destination.sendall(encode_frame(metadata, forwarded_payload, direction))
                     else:
-                        open_read.discard(source)
-                        try:
-                            destination.shutdown(socket.SHUT_WR)
-                        except OSError:
-                            pass
-                except (OSError, ssl.SSLError):
+                        data = source.recv(65536)
+                        if data:
+                            observers[direction].feed(data)
+                            destination.sendall(data)
+                        else:
+                            open_read.discard(source)
+                            try:
+                                destination.shutdown(socket.SHUT_WR)
+                            except OSError:
+                                pass
+                except (OSError, ssl.SSLError, ValueError, EOFError, TimeoutError):
                     open_read.discard(source)
                     try:
                         destination.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
+                    try:
+                        source.shutdown(socket.SHUT_RD)
                     except OSError:
                         pass
 
