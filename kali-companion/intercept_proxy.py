@@ -107,7 +107,7 @@ def _read_chunked_body(stream) -> bytes:
     while True:
         line = stream.readline(1025)
         overhead += len(line)
-        if (not line or len(line) > 1024 or not line.endswith(b"\\r\\n")
+        if (not line or len(line) > 1024 or not line.endswith(b"\r\n")
                 or overhead > MAX_HEADER_BYTES):
             raise ValueError("Malformed or oversized chunked request framing.")
         size_text = line[:-2].split(b";", 1)[0].strip()
@@ -123,12 +123,12 @@ def _read_chunked_body(stream) -> bytes:
                 if (not trailer or len(trailer) > 8192
                         or overhead > MAX_HEADER_BYTES):
                     raise ValueError("Malformed or oversized chunked request trailers.")
-                if trailer == b"\\r\\n":
+                if trailer == b"\r\n":
                     return bytes(body)
                 trailer_count += 1
-                if trailer_count > MAX_HEADER_COUNT or not trailer.endswith(b"\\r\\n"):
+                if trailer_count > MAX_HEADER_COUNT or not trailer.endswith(b"\r\n"):
                     raise ValueError("Invalid chunked request trailers.")
-                if trailer[:1] in (b" ", b"\\t") or b":" not in trailer:
+                if trailer[:1] in (b" ", b"\t") or b":" not in trailer:
                     raise ValueError("Malformed chunked request trailer.")
                 name, value = trailer[:-2].split(b":", 1)
                 try:
@@ -138,10 +138,10 @@ def _read_chunked_body(stream) -> bytes:
                     raise ValueError("Invalid chunked request trailer.") from exc
                 if (not re.fullmatch(r"[!#$%&'*+.^_\x60|~0-9A-Za-z-]{1,128}", key)
                         or key.lower() in {"content-length", "transfer-encoding", "host"}
-                        or any(ord(ch) < 32 and ch != "\\t" or ord(ch) == 127 for ch in val)):
+                        or any(ord(ch) < 32 and ch != "\t" or ord(ch) == 127 for ch in val)):
                     raise ValueError("Unsafe chunked request trailer.")
         chunk = stream.read(size)
-        if len(chunk) != size or stream.read(2) != b"\\r\\n":
+        if len(chunk) != size or stream.read(2) != b"\r\n":
             raise ValueError("Incomplete chunked request body.")
         body.extend(chunk)
 
