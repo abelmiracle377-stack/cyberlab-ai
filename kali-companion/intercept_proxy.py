@@ -160,26 +160,33 @@ def _read_chunked_body(stream) -> bytes:
 
 
 def _decode_gzip_response(body: bytes) -> bytes:
-    """Decode one gzip representation without allowing decompression expansion past the response cap."""
-    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    """Decode concatenated gzip members without exceeding the response cap."""
     output = bytearray()
     pending = body
     try:
-        while pending:
-            piece = decoder.decompress(pending, MAX_RESPONSE_BODY + 1 - len(output))
-            output.extend(piece)
-            if len(output) > MAX_RESPONSE_BODY:
-                raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
-            pending = decoder.unconsumed_tail
-            if pending and not piece:
-                raise ValueError("Compressed upstream response exceeds the decompression limit")
-        output.extend(decoder.flush(MAX_RESPONSE_BODY + 1 - len(output)))
+        while pending or not output:
+            decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            data = pending
+            pending = b""
+            while True:
+                piece = decoder.decompress(data, MAX_RESPONSE_BODY + 1 - len(output))
+                output.extend(piece)
+                if len(output) > MAX_RESPONSE_BODY:
+                    raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
+                if decoder.unconsumed_tail:
+                    data = decoder.unconsumed_tail
+                    if not piece and len(data) == len(decoder.unconsumed_tail):
+                        raise ValueError("Compressed upstream response exceeds the decompression limit")
+                    continue
+                if decoder.unused_data:
+                    pending = decoder.unused_data
+                break
+            if not decoder.eof:
+                raise ValueError("Upstream gzip response is incomplete")
+            if not pending:
+                break
     except zlib.error as exc:
         raise ValueError("Upstream returned an invalid gzip response") from exc
-    if len(output) > MAX_RESPONSE_BODY:
-        raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
-    if not decoder.eof or decoder.unused_data:
-        raise ValueError("Upstream gzip response is incomplete or contains trailing data")
     return bytes(output)
 
 

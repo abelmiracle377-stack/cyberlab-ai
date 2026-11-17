@@ -38,6 +38,23 @@ class GzipResponseDecoderTests(unittest.TestCase):
         original = b"gzip response body"
         self.assertEqual(intercept_proxy._decode_gzip_response(gzip.compress(original)), original)
 
+    def test_decodes_concatenated_gzip_members(self):
+        first, second = b"first gzip member", b"second member"
+        self.assertEqual(
+            intercept_proxy._decode_gzip_response(gzip.compress(first) + gzip.compress(second)),
+            first + second,
+        )
+
+    def test_rejects_trailing_non_member_data(self):
+        with self.assertRaisesRegex(ValueError, "invalid gzip"):
+            intercept_proxy._decode_gzip_response(gzip.compress(b"valid") + b"trailing")
+
+    def test_concatenated_members_remain_subject_to_combined_output_limit(self):
+        half = intercept_proxy.MAX_RESPONSE_BODY // 2 + 1
+        compressed = gzip.compress(b"a" * half) + gzip.compress(b"b" * half)
+        with self.assertRaisesRegex(ValueError, "decompressed upstream response"):
+            intercept_proxy._decode_gzip_response(compressed)
+
     def test_rejects_invalid_gzip_response(self):
         with self.assertRaisesRegex(ValueError, "invalid gzip"):
             intercept_proxy._decode_gzip_response(b"not-gzip")
