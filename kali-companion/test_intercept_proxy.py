@@ -113,6 +113,59 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target.server_close()
             target_thread.join(timeout=2)
 
+    def test_chunked_upstream_response_is_decoded_and_reframed(self):
+        class ChunkedHandler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(b"4\\r\\nWiki\\r\\n5\\r\\npedia\\r\\n0\\r\\nX-Origin-Trailer: hidden\\r\\n\\r\\n")
+                self.wfile.flush()
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ChunkedHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-CHUNKED-RESPONSE-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                    client.sendall((
+                        f"GET {origin}/chunked HTTP/1.1\\r\\n"
+                        f"Host: localhost:{target.server_port}\\r\\n"
+                        "Connection: close\\r\\n\\r\\n"
+                    ).encode("ascii"))
+                    response = b""
+                    while True:
+                        chunk = client.recv(8192)
+                        if not chunk:
+                            break
+                        response += chunk
+                head, body = response.split(b"\\r\\n\\r\\n", 1)
+                self.assertIn(b"200 OK", head)
+                self.assertIn(b"Content-Length: 9", head)
+                self.assertNotIn(b"Transfer-Encoding", head)
+                self.assertNotIn(b"X-Origin-Trailer", head)
+                self.assertEqual(body, b"Wikipedia")
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_http_proxy_forwards_only_approved_origin_and_redacts_history(self):
         target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
         target_thread = threading.Thread(target=target.serve_forever, daemon=True)
