@@ -91,13 +91,13 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 })
                 with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
                     client.sendall((
-                        f"POST {origin}/echo HTTP/1.1\\r\\n"
-                        f"Host: localhost:{target.server_port}\\r\\n"
-                        "Transfer-Encoding: chunked\\r\\n"
-                        "Connection: close\\r\\n\\r\\n"
-                        "4;part=one\\r\\nWiki\\r\\n"
-                        "5\\r\\npedia\\r\\n"
-                        "0\\r\\nX-Checksum: ignored\\r\\n\\r\\n"
+                        f"POST {origin}/echo HTTP/1.1\r\n"
+                        f"Host: localhost:{target.server_port}\r\n"
+                        "Transfer-Encoding: chunked\r\n"
+                        "Connection: close\r\n\r\n"
+                        "4;part=one\r\nWiki\r\n"
+                        "5\r\npedia\r\n"
+                        "0\r\nX-Checksum: ignored\r\n\r\n"
                     ).encode("ascii"))
                     response = b""
                     while True:
