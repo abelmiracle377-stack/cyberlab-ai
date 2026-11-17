@@ -46,6 +46,13 @@ on:
   pull_request:
     paths:
       - "burp-extension/**"
+      - "kali-companion/parameter_lab.py"
+      - "kali-companion/test_parameter_lab.py"
+      - "kali-companion/parameter_analysis.py"
+      - "kali-companion/test_parameter_analysis.py"
+      - "kali-companion/bridge.py"
+      - "app/web-repeater/**"
+      - "docs/NATIVE_WEB_WORKBENCH.md"
       - "kali-companion/burp_connector.py"
       - "kali-companion/intercept_proxy.py"
       - "kali-companion/proxy_certificates.py"
