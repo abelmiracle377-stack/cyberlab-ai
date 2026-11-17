@@ -37,6 +37,9 @@ export default function WebRepeaterPage() {
   const [mutationCases, setMutationCases] = useState<MutationCase[]>([]);
   const [plannerBusy, setPlannerBusy] = useState(false);
   const [plannerError, setPlannerError] = useState("");
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [analysisReport, setAnalysisReport] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState("");
 
   useEffect(() => {
     const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
@@ -170,6 +173,20 @@ export default function WebRepeaterPage() {
     setConfirmStateChange(false);
   }
 
+  async function analyzeResponses() {
+    if (!baseline || !candidate) return;
+    setAnalysisBusy(true); setAnalysisError(""); setAnalysisReport(null);
+    try {
+      const report = await plannerCall("/web/parameters/analyze", {
+        baseline: { status: baseline.status, durationMs: baseline.durationMs, headers: baseline.headers, bodyBytes: baseline.bodyBytes, body: baseline.body.slice(0, 14000) },
+        candidate: { status: candidate.status, durationMs: candidate.durationMs, headers: candidate.headers, bodyBytes: candidate.bodyBytes, body: candidate.body.slice(0, 14000) },
+      });
+      setAnalysisReport(report);
+    } catch (cause) {
+      setAnalysisError(cause instanceof Error ? cause.message : "Response analysis failed.");
+    } finally { setAnalysisBusy(false); }
+  }
+
   async function sendRequest() {
     if (!active) return;
     updateActive({ busy: true, error: "", response: null });
@@ -280,6 +297,15 @@ export default function WebRepeaterPage() {
             <div><h3>Baseline body</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:320,overflow:"auto",fontSize:11}}>{baseline?.body}</pre></div>
             <div><h3>Candidate body</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:320,overflow:"auto",fontSize:11}}>{candidate?.body}</pre></div>
           </div>
+        </>}
+        {comparison && <button className="report-download" type="button" disabled={analysisBusy} onClick={analyzeResponses}>{analysisBusy ? "Analysing…" : "Generate offline analysis report"}</button>}
+        {analysisError && <div className="agent-error">{analysisError}</div>}
+        {analysisReport && <>
+          <h3>Review indicators</h3>
+          <p>{analysisReport.summary?.changedHeaderCount ?? 0} changed header(s) · timing delta {analysisReport.summary?.durationDeltaMs ?? 0} ms</p>
+          {(analysisReport.indicators || []).map((item: {code:string;label:string;detail:string;level:string})=><div key={item.code} className="scope-warning"><strong>{item.label}</strong><p>{item.detail}</p></div>)}
+          {!analysisReport.indicators?.length && <p>No differences detected in the analysed response data.</p>}
+          <p className="agent-disclaimer">Offline comparison only. Bodies are hashed in memory and not returned in this report; only the first 14 KB of each displayed body preview is analysed. Differences are indicators, not proof of a vulnerability.</p>
         </>}
         {!comparison && <p>Send at least two requests, or select two saved responses, to compare them.</p>}
       </div>
