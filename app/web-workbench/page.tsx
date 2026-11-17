@@ -463,8 +463,8 @@ export default function WebWorkbenchPage() {
           {!pendingResponseIntercepts.length && <p>No origin responses are currently waiting.</p>}
         </>}
         {proxyWebSocketInterceptActive && <>
-          <h3>WebSocket frames awaiting operator decision</h3>
-          <p>Complete messages are paused in companion memory only. Text payload previews are available only while pending. Each frame must be explicitly forwarded, edited and forwarded, or dropped; timeout closes the tunnel.</p>
+          <h3>WebSocket messages awaiting operator decision</h3>
+          <p>Complete messages are paused in companion memory only. Text payload previews are available only while pending. Ping/pong control frames continue to pass during fragmented-message assembly. Each frame must be explicitly forwarded, edited and forwarded, or dropped; timeout closes the tunnel.</p>
           <button className="report-download" type="button" onClick={()=>loadPendingWebSocketIntercepts().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh pending WebSocket frames."))}>Refresh pending frames</button>
           {pendingWebSocketIntercepts.map(item=><div className="scope-warning" key={item.id}>
             <strong>{item.direction} · opcode {item.opcode} · {item.payloadLength} bytes</strong>
@@ -473,9 +473,9 @@ export default function WebWorkbenchPage() {
             {!item.editable && <p>Payload preview omitted. Only unchanged forwarding or dropping is allowed.</p>}
             <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"forward")}>Forward unchanged</button>
             {item.editable && <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"forward_edited")}>{webSocketBusyId===item.id ? "Applying…" : "Edit and forward"}</button>}
-            <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"drop")}>Drop frame</button>
+            <button className="report-download" type="button" disabled={Boolean(webSocketBusyId)} onClick={()=>decidePendingWebSocketFrame(item.id,"drop")}>Drop message</button>
           </div>)}
-          {!pendingWebSocketIntercepts.length && <p>No WebSocket frames are currently waiting.</p>}
+          {!pendingWebSocketIntercepts.length && <p>No WebSocket messages are currently waiting.</p>}
         </>}
         <h3>WebSocket frame activity</h3>
         <p>Frame metadata is retained only in bounded companion memory. Payloads are not added to frame history.</p>
