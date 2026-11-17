@@ -425,6 +425,61 @@ class NativeInterceptProxyTests(unittest.TestCase):
             intercept_proxy._INTERCEPTS.pop("a" * 32, None)
 
 
+    def test_proxy_stop_releases_paused_request_and_drops_it(self):
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        result = {}
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-STOP-REQUEST-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptRequests": True, "confirmInterceptRequests": True,
+                })
+
+                def send_request():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/request-stop HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        chunks = []
+                        while True:
+                            chunk = client.recv(8192)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        result["response"] = b"".join(chunks)
+
+                worker = threading.Thread(target=send_request)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                self.assertTrue(worker.is_alive(), "The browser request must pause before reaching the target.")
+                proxy.stop()
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive(), "Stopping the proxy must release the paused handler.")
+                self.assertIn(b"403 Error", result["response"])
+                self.assertIn(b"Request dropped by the CyberLab operator", result["response"])
+                self.assertNotIn(b"local-lab-response", result["response"])
+                self.assertEqual(intercept_proxy.pending_intercepts()["count"], 0)
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_proxy_stop_releases_paused_response_and_drops_it(self):
         target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
         target_thread = threading.Thread(target=target.serve_forever, daemon=True)
