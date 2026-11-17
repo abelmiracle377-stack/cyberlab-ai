@@ -1,6 +1,7 @@
 """Integration tests for the native HTTP interception proxy using loopback only."""
 import base64
 import hashlib
+import http.client
 import http.server
 import socket
 import ssl
@@ -1214,6 +1215,97 @@ class NativeInterceptProxyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             assembler.feed({"fin": True, "opcode": 0}, b"tail")
         self.assertFalse(assembler.pending)
+
+
+    def test_http_proxy_reuses_client_connection_for_sequential_keep_alive_requests(self):
+        received = []
+
+        class KeepAliveHandler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_GET(self):
+                received.append(self.path)
+                body = ("response:" + self.path).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), KeepAliveHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-KEEPALIVE-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                    client.settimeout(5)
+                    client.sendall((f"GET {origin}/first HTTP/1.1\r\n"
+                                    f"Host: localhost:{target.server_port}\r\n\r\n").encode("ascii"))
+                    first_response = http.client.HTTPResponse(client)
+                    first_response.begin()
+                    self.assertEqual(first_response.status, 200)
+                    self.assertIn("keep-alive", first_response.getheader("Connection", "").lower())
+                    self.assertEqual(first_response.read(), b"response:/first")
+
+                    client.sendall((f"GET {origin}/second HTTP/1.1\r\n"
+                                    f"Host: localhost:{target.server_port}\r\n"
+                                    "Connection: close\r\n\r\n").encode("ascii"))
+                    second_response = http.client.HTTPResponse(client)
+                    second_response.begin()
+                    self.assertEqual(second_response.status, 200)
+                    self.assertEqual(second_response.read(), b"response:/second")
+                    self.assertEqual(client.recv(1), b"")
+                self.assertEqual(received, ["/first", "/second"])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
+    def test_http_proxy_rejects_host_header_that_disagrees_with_absolute_target(self):
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _TargetHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-HOST-CHECK-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                    client.sendall((f"GET {origin}/ HTTP/1.1\r\n"
+                                    "Host: other.example\r\n\r\n").encode("ascii"))
+                    response = b""
+                    while True:
+                        chunk = client.recv(4096)
+                        if not chunk:
+                            break
+                        response += chunk
+                self.assertIn(b"421 Error", response)
+                self.assertIn(b"Host header does not match", response)
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
 
 
 if __name__ == "__main__":
