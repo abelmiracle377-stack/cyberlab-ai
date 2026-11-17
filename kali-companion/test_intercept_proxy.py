@@ -1107,5 +1107,34 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertEqual(result, [{"action": "drop"}])
 
 
+    def test_websocket_proxy_frame_reader_handles_fragmented_masked_input(self):
+        from websocket_interception import encode_frame
+        left, right = socket.socketpair()
+        try:
+            expected = b"hello"
+            raw = encode_frame({"fin": True, "opcode": 1}, expected, "client-to-server")
+            right.sendall(raw[:3])
+            right.sendall(raw[3:])
+            frame, metadata, payload = intercept_proxy._ProxyHandler._recv_websocket_frame(
+                left, "client-to-server")
+            self.assertEqual(frame, raw)
+            self.assertEqual(payload, expected)
+            self.assertEqual(metadata["opcode"], 1)
+            self.assertTrue(metadata["masked"])
+        finally:
+            left.close()
+            right.close()
+
+    def test_websocket_proxy_frame_reader_rejects_frames_over_interception_limit(self):
+        left, right = socket.socketpair()
+        try:
+            right.sendall(bytes([0x82, 126, 0x01, 0x01]))
+            with self.assertRaises(ValueError):
+                intercept_proxy._ProxyHandler._recv_websocket_frame(left, "server-to-client")
+        finally:
+            left.close()
+            right.close()
+
+
 if __name__ == "__main__":
     unittest.main()

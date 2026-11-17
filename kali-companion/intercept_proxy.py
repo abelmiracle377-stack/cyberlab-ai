@@ -646,6 +646,8 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                         if decision["action"] == "timeout":
                             raise TimeoutError("WebSocket frame decision timed out; tunnel closed safely.")
                         if decision["action"] == "drop":
+                            if metadata["opcode"] in {0x0, 0x8} or not metadata["fin"]:
+                                raise ConnectionAbortedError("Dropped fragmented or closing frame; tunnel closed to preserve protocol state.")
                             continue
                         forwarded_payload = decision.get("payload", payload)
                         destination.sendall(encode_frame(metadata, forwarded_payload, direction))
