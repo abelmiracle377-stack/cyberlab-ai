@@ -807,5 +807,83 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target_thread.join(timeout=2)
 
 
+    def test_edited_response_still_strips_origin_connection_nominated_headers(self):
+        received = {}
+
+        class ConnectionResponseHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                payload = b"response-ok"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Connection", "X-Private")
+                self.send_header("X-Private", "must-not-reach-browser")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ConnectionResponseHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        result = {}
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-RESPONSE-CONNECTION-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                    "interceptResponses": True, "confirmInterceptResponses": True,
+                })
+
+                def send_request():
+                    with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                        client.sendall((f"GET {origin}/response-connection-token HTTP/1.1\\r\\n"
+                                        f"Host: localhost:{target.server_port}\\r\\n"
+                                        "Connection: close\\r\\n\\r\\n").encode("ascii"))
+                        chunks = []
+                        while True:
+                            chunk = client.recv(8192)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        result["response"] = b"".join(chunks)
+
+                worker = threading.Thread(target=send_request)
+                worker.start()
+                pending = []
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    pending = intercept_proxy.pending_response_intercepts()["items"]
+                    if pending:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(len(pending), 1)
+                item = pending[0]
+                self.assertNotIn("connection", [header["name"].lower() for header in item["headers"]])
+                self.assertIn("x-private", [header["name"].lower() for header in item["headers"]])
+                intercept_proxy.decide_response_intercept(item["id"], "forward_edited", {
+                    "status": item["status"], "reason": item["reason"],
+                    "headers": item["headers"], "body": item["body"],
+                })
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                self.assertIn(b"200 OK", result["response"])
+                self.assertIn(b"response-ok", result["response"])
+                self.assertNotIn(b"X-Private:", result["response"])
+                self.assertNotIn(b"must-not-reach-browser", result["response"])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
+
+
 if __name__ == "__main__":
     unittest.main()

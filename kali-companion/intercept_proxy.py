@@ -585,6 +585,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self._error(502, "Upstream response exceeds the 2 MB inspection limit")
                 return
             response_headers = response.getheaders()
+            response_connection_tokens = {token.strip().lower() for name, value in response_headers
+                                          if name.lower() == "connection"
+                                          for token in value.split(",") if token.strip()}
             if controller.intercept_responses:
                 try:
                     decision = _await_response_decision(method, url, response.status,
@@ -604,9 +607,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                     response.reason = edited_response["reason"]
                     response_headers = edited_response["headers"]
                     response_body = edited_response["body"]
-            response_connection_tokens = {token.strip().lower() for name, value in response_headers
-                                          if name.lower() == "connection"
-                                          for token in value.split(",") if token.strip()}
+            response_connection_tokens.update(token.strip().lower() for name, value in response_headers
+                                               if name.lower() == "connection"
+                                               for token in value.split(",") if token.strip())
             safe_forward = [(name, value) for name, value in response_headers
                             if name.lower() not in _HOP_BY_HOP and name.lower() not in response_connection_tokens and name.lower() != "content-length"
                             and not any(ord(char) in (10, 13) or (ord(char) < 32 and char != "\t") for char in value)]
