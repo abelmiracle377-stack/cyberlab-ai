@@ -84,3 +84,15 @@ The crawler is a discovery and baseline layer, not a full active vulnerability s
 - Full AI specialist-agent orchestration across crawl, scan, independent finding verification and reporting. The Agent Console currently provides a user-approved handoff and evidence-analysis step only.
 
 These capabilities must not be represented as complete until implemented and tested against intentionally vulnerable local labs. Public targets require explicit written authorisation and a defined scope.
+
+## Native parameter mutation planner (offline draft generation)
+
+The companion's `parameter_lab.py` module provides a bounded parameter inventory and mutation-draft generator. It:
+- Parses URL query parameters and URL-encoded form bodies only; JSON and multipart bodies are not parsed.
+- Excludes parameter names that look like credentials, tokens, session identifiers, CSRF values, signatures or nonces.
+- Generates at most 25 cases per operation, with one selected parameter changed per case and at most 512 characters per supplied value.
+- Preserves other parameters and the operator-selected HTTP method. Form-body mutation requires POST, PUT or PATCH.
+- Performs no network activity and marks every generated case as unsent. The generated objects are drafts for review and manual entry into the native Repeater; they are not automatically dispatched.
+- Does not bypass Repeater's target confirmation, written-authorisation reference, state-change approval, DNS pinning or request limits.
+
+This is a parameter-test planning foundation, not a full Intruder equivalent. It does not yet provide a browser UI, payload wordlists, concurrent execution, automatic response anomaly scoring or evidence reporting. Each request must remain individually reviewed and explicitly sent.
