@@ -950,7 +950,13 @@ class NativeInterceptProxyTests(unittest.TestCase):
                     frame = client.recv(4)
                     self.assertEqual(frame, b"\x81\x02ok")
                 self.assertEqual(received.get("message"), b"hi")
-                history = intercept_proxy.proxy_history()["items"]
+                history = []
+                history_deadline = time.monotonic() + 3
+                while time.monotonic() < history_deadline:
+                    history = intercept_proxy.proxy_history()["items"]
+                    if any(item["status"] == 101 and item["url"].endswith("/socket") for item in history):
+                        break
+                    time.sleep(0.01)
                 self.assertTrue(any(item["status"] == 101 and item["url"].endswith("/socket") for item in history))
         finally:
             proxy.stop()
