@@ -95,4 +95,4 @@ The companion's `parameter_lab.py` module provides a bounded parameter inventory
 - Performs no network activity and marks every generated case as unsent. The generated objects are drafts for review and manual entry into the native Repeater; they are not automatically dispatched.
 - Does not bypass Repeater's target confirmation, written-authorisation reference, state-change approval, DNS pinning or request limits.
 
-This is a parameter-test planning foundation, not a full Intruder equivalent. It does not yet provide a browser UI, payload wordlists, concurrent execution, automatic response anomaly scoring or evidence reporting. Each request must remain individually reviewed and explicitly sent.
+This is a parameter-test planning foundation, not a full Intruder equivalent. The native Repeater now exposes parameter inspection, bounded case generation and a one-click handoff into unsent request tabs. It does not yet provide payload wordlists, concurrent execution, automatic response anomaly scoring or evidence reporting. Each request must remain individually reviewed and explicitly sent.
