@@ -1053,18 +1053,18 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self.wfile.write(f"{name}: {value}\r\n".encode("iso-8859-1", errors="replace"))
             upstream_length = response.getheader("Content-Length")
             reusable = client_keep_alive and response.status not in {101, 204, 304}
-            connection_header = ("Connection: keep-alive\\r\\nKeep-Alive: timeout=12, max=50\\r\\n"
-                                 if reusable else "Connection: close\\r\\n")
+            connection_header = ("Connection: keep-alive\r\nKeep-Alive: timeout=12, max=50\r\n"
+                                 if reusable else "Connection: close\r\n")
             if response.status in {204, 304}:
-                self.wfile.write(f"{connection_header}\\r\\n".encode("ascii"))
+                self.wfile.write(f"{connection_header}\r\n".encode("ascii"))
             elif response.status == 205:
-                self.wfile.write(f"Content-Length: 0\\r\\n{connection_header}\\r\\n".encode("ascii"))
+                self.wfile.write(f"Content-Length: 0\r\n{connection_header}\r\n".encode("ascii"))
             elif method.upper() == "HEAD":
                 if upstream_length and upstream_length.isdigit():
-                    self.wfile.write(f"Content-Length: {int(upstream_length)}\\r\\n".encode("ascii"))
-                self.wfile.write(f"{connection_header}\\r\\n".encode("ascii"))
+                    self.wfile.write(f"Content-Length: {int(upstream_length)}\r\n".encode("ascii"))
+                self.wfile.write(f"{connection_header}\r\n".encode("ascii"))
             else:
-                self.wfile.write(f"Content-Length: {len(response_body)}\\r\\n{connection_header}\\r\\n".encode("ascii"))
+                self.wfile.write(f"Content-Length: {len(response_body)}\r\n{connection_header}\r\n".encode("ascii"))
             self.wfile.write(response_body)
             self.wfile.flush()
             _history_entry(method.upper(), url, response.status, headers, response_headers,

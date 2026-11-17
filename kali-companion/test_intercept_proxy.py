@@ -108,9 +108,9 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 })
                 with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
                     client.sendall((
-                        f"GET {origin}/reset HTTP/1.1\\r\\n"
-                        f"Host: localhost:{target.server_port}\\r\\n"
-                        "Connection: close\\r\\n\\r\\n"
+                        f"GET {origin}/reset HTTP/1.1\r\n"
+                        f"Host: localhost:{target.server_port}\r\n"
+                        "Connection: close\r\n\r\n"
                     ).encode("ascii"))
                     response = b""
                     while True:
@@ -118,7 +118,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
                         if not chunk:
                             break
                         response += chunk
-                head, body = response.split(b"\\r\\n\\r\\n", 1)
+                head, body = response.split(b"\r\n\r\n", 1)
                 self.assertIn(b"205 Reset Content", head)
                 self.assertIn(b"Content-Length: 0", head)
                 self.assertEqual(body, b"")
