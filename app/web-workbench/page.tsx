@@ -8,7 +8,7 @@ type ProxyHistoryItem = { id: string; method: string; url: string; status: numbe
 type PendingIntercept = { id: string; method: string; url: string; path: string; headers: { name: string; value: string }[]; bodyLength: number; bodyOmitted: boolean; body: string; bodyEditable: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type PendingResponseIntercept = { id: string; method: string; url: string; status: number; reason: string; headers: { name: string; value: string }[]; bodyLength: number; body: string; bodyVisible: boolean; bodyEditable: boolean; bodyTruncated: boolean; createdAt: string; decisionTimeoutSeconds: number; };
 type ResponseInterceptDraft = { status: number; reason: string; headersText: string; body: string };
-type WebSocketFrameMeta = { direction: string; fin: boolean; opcode: number; opcodeName: string; masked: boolean; payloadLength: number; capturedAt: string };
+type WebSocketFrameMeta = { direction: string; fin: boolean; opcode: number; opcodeName: string; masked: boolean; payloadLength: number; messageId: number | null; fragmentIndex: number | null; messageComplete: boolean | null; capturedAt: string };
 type InterceptDraft = { method: string; path: string; headersText: string; body: string };
 type HttpResult = {
   id: string; status: number; reason: string; method: string; target: string;
@@ -420,7 +420,7 @@ export default function WebWorkbenchPage() {
         <button className="report-download" type="button" onClick={()=>loadWebSocketFrames().catch(cause=>setProxyError(cause instanceof Error ? cause.message : "Could not refresh WebSocket frame metadata."))}>Refresh WebSocket frames</button>
         {webSocketFrames.slice(0,50).map((frame,index)=><div className="scope-warning" key={frame.capturedAt+"-"+index}>
           <strong>{frame.direction} · {frame.opcodeName} ({frame.opcode})</strong>
-          <p>{frame.payloadLength} payload bytes · {frame.fin ? "final frame" : "fragment"} · {frame.masked ? "masked" : "unmasked"} · {frame.capturedAt}</p>
+          <p>{frame.payloadLength} payload bytes · {frame.masked ? "masked" : "unmasked"} · {frame.messageId === null ? "control frame" : `message ${frame.messageId}, fragment ${Number(frame.fragmentIndex) + 1}${frame.messageComplete ? " (message complete)" : ""}`} · {frame.capturedAt}</p>
         </div>)}
         {!webSocketFrames.length && <p>No WebSocket frames observed in this companion session.</p>}
         <h3>HTTP history</h3>
