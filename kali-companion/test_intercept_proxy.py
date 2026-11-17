@@ -365,10 +365,10 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
                 def send_request():
                     with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
-                        client.sendall((f"GET {origin}/connection-token HTTP/1.1\\r\\n"
-                                        f"Host: localhost:{target.server_port}\\r\\n"
-                                        "Connection: X-Private\\r\\n"
-                                        "X-Private: must-not-reach-origin\\r\\n\\r\\n").encode("ascii"))
+                        client.sendall((f"GET {origin}/connection-token HTTP/1.1\r\n"
+                                        f"Host: localhost:{target.server_port}\r\n"
+                                        "Connection: X-Private\r\n"
+                                        "X-Private: must-not-reach-origin\r\n\r\n").encode("ascii"))
                         result["response"] = client.recv(4096)
 
                 worker = threading.Thread(target=send_request)
