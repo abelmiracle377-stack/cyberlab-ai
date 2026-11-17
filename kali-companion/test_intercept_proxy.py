@@ -1,5 +1,6 @@
 """Integration tests for the native HTTP interception proxy using loopback only."""
 import base64
+import gzip
 import hashlib
 import http.client
 import http.server
@@ -170,6 +171,60 @@ class NativeInterceptProxyTests(unittest.TestCase):
                 self.assertNotIn(b"Transfer-Encoding", head)
                 self.assertNotIn(b"X-Origin-Trailer", head)
                 self.assertEqual(body, b"Wikipedia")
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
+    def test_gzip_response_is_decoded_and_reframed_for_browser(self):
+        compressed = gzip.compress(b"decoded gzip response")
+
+        class GzipHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Content-Length", str(len(compressed)))
+                self.send_header("ETag", '"compressed-version"')
+                self.end_headers()
+                self.wfile.write(compressed)
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GzipHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-GZIP-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                    client.sendall((
+                        f"GET {origin}/gzip HTTP/1.1\\r\\n"
+                        f"Host: localhost:{target.server_port}\\r\\n"
+                        "Connection: close\\r\\n\\r\\n"
+                    ).encode("ascii"))
+                    response = b""
+                    while True:
+                        chunk = client.recv(8192)
+                        if not chunk:
+                            break
+                        response += chunk
+                head, body = response.split(b"\\r\\n\\r\\n", 1)
+                self.assertIn(b"200 OK", head)
+                self.assertNotIn(b"Content-Encoding", head)
+                self.assertNotIn(b"ETag", head)
+                self.assertIn(b"Content-Length: 21", head)
+                self.assertEqual(body, b"decoded gzip response")
         finally:
             proxy.stop()
             target.shutdown()

@@ -19,6 +19,7 @@ import ssl
 import threading
 import time
 import uuid
+import zlib
 from collections import deque
 from urllib.parse import urlsplit, urlunsplit
 
@@ -152,6 +153,30 @@ def _read_chunked_body(stream) -> bytes:
         if len(chunk) != size or stream.read(2) != b"\r\n":
             raise ValueError("Incomplete chunked request body.")
         body.extend(chunk)
+
+
+def _decode_gzip_response(body: bytes) -> bytes:
+    """Decode one gzip representation without allowing decompression expansion past the response cap."""
+    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    output = bytearray()
+    pending = body
+    try:
+        while pending:
+            piece = decoder.decompress(pending, MAX_RESPONSE_BODY + 1 - len(output))
+            output.extend(piece)
+            if len(output) > MAX_RESPONSE_BODY:
+                raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
+            pending = decoder.unconsumed_tail
+            if pending and not piece:
+                raise ValueError("Compressed upstream response exceeds the decompression limit")
+        output.extend(decoder.flush(MAX_RESPONSE_BODY + 1 - len(output)))
+    except zlib.error as exc:
+        raise ValueError("Upstream returned an invalid gzip response") from exc
+    if len(output) > MAX_RESPONSE_BODY:
+        raise ValueError("Decompressed upstream response exceeds the 2 MB inspection limit")
+    if not decoder.eof or decoder.unused_data:
+        raise ValueError("Upstream gzip response is incomplete or contains trailing data")
+    return bytes(output)
 
 
 def _safe_headers(headers: list[tuple[str, str]]) -> list[dict]:
@@ -979,6 +1004,18 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self._error(502, "Upstream response exceeds the 2 MB inspection limit")
                 return
             response_headers = response.getheaders()
+            content_encodings = [value.strip().lower() for name, value in response_headers
+                                 if name.lower() == "content-encoding"]
+            if method.upper() != "HEAD" and content_encodings == ["gzip"]:
+                try:
+                    response_body = _decode_gzip_response(response_body)
+                except ValueError as exc:
+                    self._error(502, str(exc))
+                    return
+                invalidated = {"content-encoding", "content-md5", "digest", "etag",
+                               "content-range", "accept-ranges"}
+                response_headers = [(name, value) for name, value in response_headers
+                                    if name.lower() not in invalidated]
             response_connection_tokens = {token.strip().lower() for name, value in response_headers
                                           if name.lower() == "connection"
                                           for token in value.split(",") if token.strip()}
