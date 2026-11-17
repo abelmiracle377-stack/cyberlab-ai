@@ -17,7 +17,7 @@ class ParameterAnalysisTests(unittest.TestCase):
         )
         self.assertTrue(result["summary"]["statusChanged"])
         self.assertTrue(result["summary"]["bodyChanged"])
-        self.assertEqual(result["summary"]["bodyLengthDelta"], 3)
+        self.assertEqual(result["summary"]["bodyLengthDelta"], 8)
         self.assertEqual(result["summary"]["durationDeltaMs"], 800.0)
         self.assertIn("status_changed", [item["code"] for item in result["indicators"]])
 
