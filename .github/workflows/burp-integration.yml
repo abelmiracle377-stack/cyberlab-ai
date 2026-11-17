@@ -10,6 +10,8 @@ on:
       - "kali-companion/intercept_proxy.py"
       - "kali-companion/proxy_certificates.py"
       - "kali-companion/test_intercept_proxy.py"
+      - "kali-companion/parameter_lab.py"
+      - "kali-companion/test_parameter_lab.py"
       - "kali-companion/bridge.py"
       - "kali-companion/network_capture.py"
       - "kali-companion/tool_catalog.py"
@@ -81,6 +83,7 @@ jobs:
           PYTHONPATH: kali-companion
         run: |
           python -m unittest discover -s kali-companion -p "test_intercept_proxy.py" -v
+          python -m unittest discover -s kali-companion -p "test_parameter_lab.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_burp_connector.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_network_capture.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_web_testing.py" -v
