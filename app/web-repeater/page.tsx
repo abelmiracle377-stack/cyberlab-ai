@@ -9,6 +9,8 @@ type HttpResult = {
   durationMs: number; resolvedAddress: string; headers: { name: string; value: string }[];
   body: string; bodyBytes: number; truncated: boolean; capturedAt: string;
 };
+type ParameterItem = { location: "query" | "form"; index: number; name: string; value: string; eligible: boolean; reason: string };
+type MutationCase = { case: number; parameter: string; location: string; payload: string; method: string; url: string; body: string; contentType: string; sent: false };
 type RequestTab = {
   id: string; name: string; url: string; confirmationUrl: string; method: string;
   headersText: string; body: string; response: HttpResult | null; error: string; busy: boolean;
@@ -29,6 +31,12 @@ export default function WebRepeaterPage() {
   const [localLabMode, setLocalLabMode] = useState(true);
   const [baselineId, setBaselineId] = useState("");
   const [candidateId, setCandidateId] = useState("");
+  const [parameterItems, setParameterItems] = useState<ParameterItem[]>([]);
+  const [selectedParameter, setSelectedParameter] = useState("");
+  const [payloadText, setPayloadText] = useState("test\nvalue");
+  const [mutationCases, setMutationCases] = useState<MutationCase[]>([]);
+  const [plannerBusy, setPlannerBusy] = useState(false);
+  const [plannerError, setPlannerError] = useState("");
 
   useEffect(() => {
     const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
@@ -98,6 +106,70 @@ export default function WebRepeaterPage() {
     if (candidateId === id) setCandidateId("");
   }
 
+  async function plannerCall(path: string, payload: Record<string, unknown>) {
+    const pairing = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
+    if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
+    const response = await fetch("http://127.0.0.1:8765" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Parameter planner request failed.");
+    return data;
+  }
+
+  async function inspectParameters() {
+    if (!active) return;
+    setPlannerBusy(true); setPlannerError(""); setMutationCases([]);
+    try {
+      const headers = JSON.parse(active.headersText || "{}") as Record<string, string>;
+      const contentType = Object.entries(headers).find(([name]) => name.toLowerCase() === "content-type")?.[1] || "";
+      const data = await plannerCall("/web/parameters/inspect", {
+        url: active.url, body: active.body, contentType,
+      });
+      const items = Array.isArray(data.items) ? data.items as ParameterItem[] : [];
+      setParameterItems(items);
+      setSelectedParameter(items.find(item => item.eligible) ? items.find(item => item.eligible)!.location + ":" + items.find(item => item.eligible)!.index : "");
+      if (!items.length) setPlannerError("No query or URL-encoded form parameters were found.");
+    } catch (cause) {
+      setPlannerError(cause instanceof Error ? cause.message : "Parameter inspection failed.");
+    } finally { setPlannerBusy(false); }
+  }
+
+  async function generateMutationCases() {
+    if (!active || !selectedParameter) return;
+    setPlannerBusy(true); setPlannerError("");
+    try {
+      const [location, indexText] = selectedParameter.split(":");
+      const headers = JSON.parse(active.headersText || "{}") as Record<string, string>;
+      const contentType = Object.entries(headers).find(([name]) => name.toLowerCase() === "content-type")?.[1] || "";
+      const payloads = payloadText.split("\\n").filter(value => value.length > 0).slice(0, 25);
+      const data = await plannerCall("/web/parameters/generate", {
+        url: active.url, body: active.body, contentType, location,
+        parameterIndex: Number(indexText), payloads, method: active.method,
+      });
+      setMutationCases(Array.isArray(data.cases) ? data.cases as MutationCase[] : []);
+    } catch (cause) {
+      setPlannerError(cause instanceof Error ? cause.message : "Case generation failed.");
+    } finally { setPlannerBusy(false); }
+  }
+
+  function loadMutationCase(item: MutationCase) {
+    if (tabs.length >= 5) { setPlannerError("Close a request tab before loading another draft."); return; }
+    const next = newRequest("Parameter case " + item.case);
+    next.url = item.url; next.confirmationUrl = new URL(item.url).origin;
+    next.method = item.method;
+    next.body = item.body;
+    const headers = JSON.parse(active.headersText || "{}") as Record<string, string>;
+    if (item.contentType) headers["Content-Type"] = item.contentType;
+    next.headersText = JSON.stringify(headers, null, 2);
+    setTabs(current => [...current, next]);
+    setActiveId(next.id);
+    setAuthorised(false);
+    setConfirmStateChange(false);
+  }
+
   async function sendRequest() {
     if (!active) return;
     updateActive({ busy: true, error: "", response: null });
@@ -161,6 +233,24 @@ export default function WebRepeaterPage() {
         <label>HTTP method<select value={active.method} onChange={e=>updateActive({method:e.target.value})}>{["GET","HEAD","OPTIONS","POST","PUT","PATCH","DELETE"].map(item=><option key={item}>{item}</option>)}</select></label>
         <label>Headers · JSON object<textarea rows={5} spellCheck={false} value={active.headersText} onChange={e=>updateActive({headersText:e.target.value})}/></label>
         <label>Request body · maximum 16 KB<textarea rows={6} value={active.body} onChange={e=>updateActive({body:e.target.value})} placeholder="Optional request body for POST, PUT or PATCH"/></label>
+        <div className="network-results">
+          <h2>Parameter test planner · draft only</h2>
+          <p>Inspect URL query or URL-encoded form fields. Sensitive-looking names are excluded. This planner sends no traffic.</p>
+          <button className="report-download" type="button" disabled={plannerBusy} onClick={inspectParameters}>{plannerBusy ? "Working…" : "Inspect parameters"}</button>
+          {parameterItems.length > 0 && <>
+            <label>Parameter to mutate<select value={selectedParameter} onChange={e=>setSelectedParameter(e.target.value)}>
+              {parameterItems.map(item=><option key={item.location+":"+item.index} value={item.location+":"+item.index} disabled={!item.eligible}>{item.location} · {item.name} · {item.eligible ? "eligible" : item.reason}</option>)}
+            </select></label>
+            <label>Test values · one per line, maximum 25<textarea rows={4} value={payloadText} onChange={e=>setPayloadText(e.target.value)} /></label>
+            <button className="report-download" type="button" disabled={plannerBusy || !selectedParameter || !payloadText.trim()} onClick={generateMutationCases}>Generate unsent cases</button>
+          </>}
+          {plannerError && <div className="agent-error">{plannerError}</div>}
+          {mutationCases.map(item=><div key={item.case} className="scope-warning">
+            <strong>Case {item.case} · {item.parameter}</strong>
+            <p>{item.method} · {item.location} · value: {item.payload}</p>
+            <button className="report-download" type="button" disabled={tabs.length>=5} onClick={()=>loadMutationCase(item)}>Load as unsent Repeater draft</button>
+          </div>)}
+        </div>
         <label>Engagement / authorisation reference<input value={reference} onChange={e=>setReference(e.target.value)} maxLength={160}/></label>
         <div className="scope-checks"><label><input type="checkbox" checked={localLabMode} onChange={e=>setLocalLabMode(e.target.checked)}/> Local lab mode (loopback only)</label></div>
         <div className="scope-checks"><label><input type="checkbox" checked={authorised} onChange={e=>setAuthorised(e.target.checked)}/> I own this target or have explicit written authorisation.</label></div>
@@ -193,7 +283,7 @@ export default function WebRepeaterPage() {
         </>}
         {!comparison && <p>Send at least two requests, or select two saved responses, to compare them.</p>}
       </div>
-      <div className="agent-disclaimer"><ShieldCheck size={12}/> Requests loaded from proxy history are drafts only. Query strings, request bodies and redacted credentials are not restored. Review the target and re-enter any required test data; every send still requires fresh explicit authorisation and confirmation. Response editing is available in the proxy interception workbench, not in the Repeater response pane. This native repeater is not full Burp Repeater parity: no raw binary editor, HTTP/2, WebSockets or automated Intruder/fuzzing.</div>
+      <div className="agent-disclaimer"><ShieldCheck size={12}/> Requests loaded from proxy history are drafts only. Query strings, request bodies and redacted credentials are not restored. Review the target and re-enter any required test data; every send still requires fresh explicit authorisation and confirmation. Response editing is available in the proxy interception workbench, not in the Repeater response pane. This native repeater is not full Burp Repeater parity: no raw binary editor, HTTP/2, WebSockets or automated concurrent Intruder/fuzzing. The offline parameter planner can generate bounded unsent drafts for manual review.</div>
     </section>
   </main>;
 }
