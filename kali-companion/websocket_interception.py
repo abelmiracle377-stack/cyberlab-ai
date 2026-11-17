@@ -1,8 +1,7 @@
 """Bounded RFC 6455 frame decoding, rebuilding and operator decision queue.
 
-This module is a tested building block for the native frame-interception relay.
-It is not wired into the live relay yet; the existing relay remains opaque.
-Payloads enter the decision queue only when a future caller explicitly opts in.
+Payloads enter memory only when the operator explicitly enables WebSocket
+interception for an approved proxy scope.
 """
 from __future__ import annotations
 
@@ -97,6 +96,90 @@ def encode_frame(metadata: dict, payload: bytes, direction: str) -> bytes:
         masked = bytes(value ^ mask[index & 3] for index, value in enumerate(payload))
         return bytes((first, header[1] | 0x80)) + header[2:] + mask + masked
     return header + payload
+
+
+MAX_MESSAGE_PAYLOAD = 64 * 1024
+MAX_MESSAGE_FRAMES = 128
+MAX_FRAGMENT_ASSEMBLY_SECONDS = 15
+
+
+class WebSocketMessageAssembler:
+    """Reassemble bounded fragmented messages; pass control frames promptly."""
+
+    def __init__(self):
+        self._frames = []
+        self._payload = bytearray()
+        self._opcode = None
+        self._started = None
+
+    @property
+    def pending(self):
+        return self._opcode is not None
+
+    def feed(self, metadata, payload):
+        if not isinstance(metadata, dict) or not isinstance(payload, bytes):
+            raise ValueError("WebSocket message fragment is invalid.")
+        opcode, fin = metadata.get("opcode"), metadata.get("fin")
+        if not isinstance(fin, bool) or opcode not in _VALID_OPCODES:
+            raise ValueError("WebSocket frame metadata is invalid.")
+        frame = {"metadata": dict(metadata), "payload": payload}
+        if opcode >= 0x8:
+            return "control", [frame]
+        if self._started is not None and time.monotonic() - self._started > MAX_FRAGMENT_ASSEMBLY_SECONDS:
+            self.reset()
+            raise ValueError("Fragmented WebSocket message exceeded its assembly time limit.")
+        if opcode in {0x1, 0x2}:
+            if self.pending:
+                self.reset()
+                raise ValueError("A new WebSocket data message started before the previous one completed.")
+            if fin:
+                if len(payload) > MAX_MESSAGE_PAYLOAD:
+                    raise ValueError("WebSocket message exceeds the 64 KB inspection limit.")
+                if opcode == 0x1:
+                    payload.decode("utf-8")
+                return "complete", [{"metadata": {"fin": True, "opcode": opcode},
+                                     "payload": payload, "originalFrames": [frame]}]
+            self._opcode = opcode
+            self._started = time.monotonic()
+            self._frames = [frame]
+            self._payload = bytearray(payload)
+        elif opcode == 0x0:
+            if not self.pending:
+                raise ValueError("WebSocket continuation frame has no active message.")
+            self._frames.append(frame)
+            self._payload.extend(payload)
+        else:
+            raise ValueError("Unsupported WebSocket data opcode.")
+        if len(self._frames) > MAX_MESSAGE_FRAMES or len(self._payload) > MAX_MESSAGE_PAYLOAD:
+            self.reset()
+            raise ValueError("Fragmented WebSocket message exceeds its bounded assembly limits.")
+        if not fin:
+            return "pending", []
+        frames, message_payload, message_opcode = self._frames, bytes(self._payload), self._opcode
+        self.reset()
+        if message_opcode == 0x1:
+            message_payload.decode("utf-8")
+        return "complete", [{"metadata": {"fin": True, "opcode": message_opcode},
+                             "payload": message_payload, "originalFrames": frames}]
+
+    def reset(self):
+        self._frames = []
+        self._payload = bytearray()
+        self._opcode = None
+        self._started = None
+
+
+def forward_message_frames(message, payload, direction, edited=False):
+    """Rebuild approved data; edited messages become one valid data frame."""
+    if not isinstance(message, dict) or not isinstance(payload, bytes):
+        raise ValueError("WebSocket message is invalid.")
+    metadata = message.get("metadata", {})
+    if edited:
+        return [encode_frame({"fin": True, "opcode": metadata.get("opcode")}, payload, direction)]
+    frames = message.get("originalFrames")
+    if frames is None:
+        return [encode_frame(metadata, payload, direction)]
+    return [encode_frame(frame["metadata"], frame["payload"], direction) for frame in frames]
 
 
 class WebSocketFrameDecisionQueue:
