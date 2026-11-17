@@ -96,3 +96,8 @@ The companion's `parameter_lab.py` module provides a bounded parameter inventory
 - Does not bypass Repeater's target confirmation, written-authorisation reference, state-change approval, DNS pinning or request limits.
 
 This is a parameter-test planning foundation, not a full Intruder equivalent. The native Repeater now exposes parameter inspection, bounded case generation and a one-click handoff into unsent request tabs. It does not yet provide payload wordlists, concurrent execution, automatic response anomaly scoring or evidence reporting. Each request must remain individually reviewed and explicitly sent.
+
+
+## Offline response-difference analysis
+
+The paired companion exposes `POST /web/parameters/analyze` for two responses already captured by explicit Repeater sends. It compares status, body digest, body length, response timing and response headers. Sensitive header values (authorization, cookies, token-like headers) are redacted before any difference is returned. The analysis is offline: it does not issue requests, retain response bodies or create an exploitability verdict. Timing differences are advisory and should be repeated under comparable conditions. The Repeater's comparison panel can submit the selected in-session responses to this analyser and display the resulting review indicators.
