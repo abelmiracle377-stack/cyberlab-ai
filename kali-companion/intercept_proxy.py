@@ -258,6 +258,13 @@ def _validated_intercept_edit(entry: dict, edits: dict) -> dict:
             if remaining:
                 value = remaining.pop(0)
         clean_headers.append((name, value))
+    if "body" in edits:
+        stale_representation_headers = {
+            "content-encoding", "content-md5", "digest", "content-digest",
+            "repr-digest", "content-range",
+        }
+        clean_headers = [(name, value) for name, value in clean_headers
+                         if name.lower() not in stale_representation_headers]
     if len(body) > MAX_REQUEST_BODY:
         raise ValueError("Edited request body exceeds 64 KB.")
     return {"method": method, "path": path, "headers": clean_headers, "body": body}

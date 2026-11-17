@@ -629,6 +629,26 @@ class NativeInterceptProxyTests(unittest.TestCase):
         self.assertEqual(edited["body"], b"edited payload")
         self.assertEqual(edited["headers"][0], ("Cookie", "session=secret"))
 
+    def test_editing_request_body_removes_stale_representation_headers(self):
+        entry = {
+            "method": "POST", "path": "/submit",
+            "headers": [
+                ("Content-Type", "text/plain"),
+                ("Content-Encoding", "gzip"),
+                ("Content-MD5", "stale-md5"),
+                ("Digest", "sha-256=stale"),
+                ("Content-Digest", "sha-256=stale"),
+                ("Repr-Digest", "sha-256=stale"),
+                ("Content-Range", "bytes 0-4/5"),
+            ],
+            "body": b"compressed", "bodyEditable": True,
+            "allowStateChangingMethods": True,
+        }
+        edited = intercept_proxy._validated_intercept_edit(entry, {"body": "new plain text"})
+        names = {name.lower() for name, _ in edited["headers"]}
+        self.assertEqual(names, {"content-type"})
+        self.assertEqual(edited["body"], b"new plain text")
+
     def test_edited_interception_rejects_scope_escape_and_header_injection(self):
         entry = {
             "method": "GET", "path": "/", "headers": [], "body": b"",
