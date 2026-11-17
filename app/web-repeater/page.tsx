@@ -144,7 +144,7 @@ export default function WebRepeaterPage() {
       const [location, indexText] = selectedParameter.split(":");
       const headers = JSON.parse(active.headersText || "{}") as Record<string, string>;
       const contentType = Object.entries(headers).find(([name]) => name.toLowerCase() === "content-type")?.[1] || "";
-      const payloads = payloadText.split("\\n").filter(value => value.length > 0).slice(0, 25);
+      const payloads = payloadText.split("\n").filter(value => value.length > 0).slice(0, 25);
       const data = await plannerCall("/web/parameters/generate", {
         url: active.url, body: active.body, contentType, location,
         parameterIndex: Number(indexText), payloads, method: active.method,
