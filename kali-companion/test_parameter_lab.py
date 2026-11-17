@@ -42,6 +42,16 @@ class ParameterLabTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "512 characters"):
             generate_cases("https://lab.example/?q=x", "", "", "query", 0, ["x" * 513])
 
+    def test_mutation_method_is_validated_and_normalised(self):
+        result = generate_cases(
+            "https://lab.example/?q=x", "", "", "query", 0, ["y"], method="post")
+        self.assertEqual(result["cases"][0]["method"], "POST")
+        with self.assertRaisesRegex(ValueError, "supported HTTP method"):
+            generate_cases("https://lab.example/?q=x", "", "", "query", 0, ["y"], method="TRACE")
+        with self.assertRaisesRegex(ValueError, "require POST, PUT or PATCH"):
+            generate_cases("https://lab.example/", "q=x",
+                           "application/x-www-form-urlencoded", "form", 0, ["y"], method="GET")
+
     def test_non_form_body_is_not_parsed(self):
         with self.assertRaisesRegex(ValueError, "Only URL-encoded"):
             inspect_parameters("https://lab.example/", '{"x":1}', "application/json")
