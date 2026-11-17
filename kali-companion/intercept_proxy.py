@@ -1000,6 +1000,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             connection.endheaders(body if body else None)
             response = connection.getresponse()
             response_body = response.read(MAX_RESPONSE_BODY + 1) if method.upper() != "HEAD" else b""
+            # 205 Reset Content is bodyless; consume upstream framing but never relay payload bytes.
+            if response.status == 205:
+                response_body = b""
             if len(response_body) > MAX_RESPONSE_BODY:
                 self._error(502, "Upstream response exceeds the 2 MB inspection limit")
                 return
@@ -1049,16 +1052,19 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             for name, value in safe_forward:
                 self.wfile.write(f"{name}: {value}\r\n".encode("iso-8859-1", errors="replace"))
             upstream_length = response.getheader("Content-Length")
-            outgoing_length = (int(upstream_length) if method.upper() == "HEAD" and upstream_length and upstream_length.isdigit()
-                               else len(response_body))
             reusable = client_keep_alive and response.status not in {101, 204, 304}
-            if response.status in {204, 205, 304}:
-                self.wfile.write((b"Connection: keep-alive\r\nKeep-Alive: timeout=12, max=50\r\n\r\n"
-                                  if reusable else b"Connection: close\r\n\r\n"))
+            connection_header = ("Connection: keep-alive\\r\\nKeep-Alive: timeout=12, max=50\\r\\n"
+                                 if reusable else "Connection: close\\r\\n")
+            if response.status in {204, 304}:
+                self.wfile.write(f"{connection_header}\\r\\n".encode("ascii"))
+            elif response.status == 205:
+                self.wfile.write(f"Content-Length: 0\\r\\n{connection_header}\\r\\n".encode("ascii"))
+            elif method.upper() == "HEAD":
+                if upstream_length and upstream_length.isdigit():
+                    self.wfile.write(f"Content-Length: {int(upstream_length)}\\r\\n".encode("ascii"))
+                self.wfile.write(f"{connection_header}\\r\\n".encode("ascii"))
             else:
-                connection_header = ("Connection: keep-alive\r\nKeep-Alive: timeout=12, max=50\r\n"
-                                     if reusable else "Connection: close\r\n")
-                self.wfile.write(f"Content-Length: {outgoing_length}\r\n{connection_header}\r\n".encode("ascii"))
+                self.wfile.write(f"Content-Length: {len(response_body)}\\r\\n{connection_header}\\r\\n".encode("ascii"))
             self.wfile.write(response_body)
             self.wfile.flush()
             _history_entry(method.upper(), url, response.status, headers, response_headers,
