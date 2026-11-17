@@ -63,8 +63,13 @@ def inspect_parameters(url: str, body: str = "", content_type: str = "") -> dict
 def generate_cases(url: str, body: str, content_type: str, location: str,
                    parameter_index: int, payloads: list[str], method: str = "GET") -> dict:
     inventory = inspect_parameters(url, body, content_type)
+    if not isinstance(method, str) or method.upper() not in {"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"}:
+        raise ValueError("Choose a supported HTTP method.")
+    method = method.upper()
     if location not in {"query", "form"}:
         raise ValueError("Choose query or form parameter location.")
+    if location == "form" and method not in {"POST", "PUT", "PATCH"}:
+        raise ValueError("URL-encoded form mutations require POST, PUT or PATCH.")
     selected = [item for item in inventory["items"]
                 if item["location"] == location and item["index"] == parameter_index]
     if not selected:
