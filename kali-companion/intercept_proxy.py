@@ -1163,7 +1163,7 @@ class NativeInterceptProxy:
                 "interceptWebSocketFrames": self.intercept_websocket_frames if active else False,
                 "mode": "HTTP/1.1 request/response inspection and WebSocket tunnelling; HTTPS CONNECT TLS termination" if active else "stopped",
                 "limitations": ["one approved origin", "up to 50 sequential HTTP/1.1 requests per client connection", "no HTTP/2",
-                                "WebSocket manual frame inspection is optional and limited to 64 KB frames", "WebSocket frame interception is separate from HTTP interception", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
+                                "WebSocket manual frame inspection is optional and limited to 64 KB frames", "WebSocket frame interception is separate from HTTP interception", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
                 "historyCount": len(_HISTORY),
             }
 
