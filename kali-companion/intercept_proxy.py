@@ -558,7 +558,8 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 edited = decision["edited"]
                 method, path, headers, body = edited["method"], edited["path"], edited["headers"], edited["body"]
                 body_size = len(body)
-                connection_tokens = set()
+                # Preserve Connection-nominated hop-by-hop fields from the original
+                # client request even when the operator edits the request.
                 url = scheme + "://" + (f"[{host}]" if ":" in host else host) + (f":{port}" if port not in (80, 443) else "") + path
         started = time.monotonic()
         connection = (_PinnedHTTPSConnection(host, port, address) if scheme == "https"
