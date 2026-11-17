@@ -444,7 +444,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         self.connection.settimeout(MAX_TIMEOUT)
         try:
             line = self.rfile.readline(8193)
-            if not line or len(line) > 8192 or not line.endswith(b"\r\n"):
+            if not line:
+                return
+            if len(line) > 8192 or not line.endswith(b"\r\n"):
+                self._error(400, "Invalid or oversized request line")
                 return
             parts = line.decode("iso-8859-1").strip().split(" ")
             if len(parts) != 3:
@@ -457,18 +460,9 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             if method.upper() == "CONNECT":
                 self._handle_connect(target)
                 return
-            parsed = urlsplit(target)
-            if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
-                self._error(400, "Use an absolute HTTP URL or HTTPS CONNECT")
-                return
-            port = parsed.port or 80
-            path = parsed.path or "/"
-            if parsed.query:
-                path += "?" + parsed.query
-            if any(ord(char) <= 32 or ord(char) == 127 for char in path):
-                self._error(400, "Request target contains unescaped whitespace or control characters")
-                return
-            self._process_request(method, parsed.scheme, parsed.hostname, port, path, version)
+            self._serve_requests(line)
+        except socket.timeout:
+            return
         except ValueError as exc:
             try:
                 self._error(400, str(exc)[:250])
@@ -479,6 +473,58 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
                 self._error(502, "Upstream or TLS handling failed")
             except OSError:
                 pass
+
+    def _serve_requests(self, first_line: bytes | None = None, tunneled_host: str | None = None,
+                        tunneled_port: int | None = None) -> None:
+        # Requests are handled strictly in wire order. This safely supports
+        # sequential keep-alive and pipelined clients without concurrent writes.
+        for request_number in range(MAX_REQUESTS_PER_CLIENT):
+            line = first_line if first_line is not None else self.rfile.readline(8193)
+            first_line = None
+            if not line:
+                return
+            if len(line) > 8192 or not line.endswith(b"\r\n"):
+                self._error(400, "Invalid or oversized request line")
+                return
+            parts = line.decode("iso-8859-1").strip().split(" ")
+            if len(parts) != 3:
+                self._error(400, "Malformed request line")
+                return
+            method, target, version = parts
+            if version not in {"HTTP/1.0", "HTTP/1.1"}:
+                self._error(505, "HTTP version not supported")
+                return
+            if tunneled_host is not None:
+                parsed = urlsplit(target)
+                if (parsed.scheme or parsed.netloc or parsed.fragment or not target.startswith("/")
+                        or target.startswith("//") or "\\" in target
+                        or any(ord(char) <= 32 or ord(char) == 127 for char in target)):
+                    self._error(400, "HTTPS request target must be a valid origin-form path")
+                    return
+                host, port, scheme, path = tunneled_host, tunneled_port, "https", target
+            else:
+                parsed = urlsplit(target)
+                if (parsed.scheme != "http" or not parsed.hostname or parsed.username
+                        or parsed.password or parsed.fragment):
+                    self._error(400, "Use an absolute HTTP URL or HTTPS CONNECT")
+                    return
+                try:
+                    port = parsed.port or 80
+                except ValueError:
+                    self._error(400, "Request target contains an invalid port")
+                    return
+                host, scheme = parsed.hostname, parsed.scheme
+                path = parsed.path or "/"
+                if parsed.query:
+                    path += "?" + parsed.query
+                if any(ord(char) <= 32 or ord(char) == 127 for char in path):
+                    self._error(400, "Request target contains unescaped whitespace or control characters")
+                    return
+            keep_alive = self._process_request(method, scheme, host, port, path, version)
+            if not keep_alive:
+                return
+        self._error(429, "Maximum requests per proxy connection reached")
+
 
     def _read_headers(self) -> list[tuple[str, str]]:
         headers = []
@@ -525,19 +571,7 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         self.connection = tls
         self.rfile = tls.makefile("rb")
         self.wfile = tls.makefile("wb")
-        line = self.rfile.readline(8193)
-        if not line or len(line) > 8192 or not line.endswith(b"\r\n"):
-            return
-        parts = line.decode("iso-8859-1").strip().split(" ")
-        if len(parts) != 3 or parts[2] not in {"HTTP/1.0", "HTTP/1.1"}:
-            self._error(400, "Malformed HTTPS request line")
-            return
-        method, path, version = parts
-        parsed = urlsplit(path)
-        if parsed.scheme or parsed.netloc or parsed.fragment or not path.startswith("/") or path.startswith("//") or any(ord(char) <= 32 or ord(char) == 127 for char in path):
-            self._error(400, "HTTPS request target must be a valid origin-form path")
-            return
-        self._process_request(method, "https", host, port, path, version, tunneled=True)
+        self._serve_requests(tunneled_host=host, tunneled_port=port)
 
 
     def _read_upstream_response_head(self, upstream: socket.socket) -> tuple[int, str, list[tuple[str, str]]]:
@@ -772,7 +806,7 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             connection.close()
 
     def _process_request(self, method: str, scheme: str, host: str, port: int,
-                         path: str, version: str, tunneled: bool = False) -> None:
+                         path: str, version: str, tunneled: bool = False) -> bool:
         controller = self.server.controller
         if controller.scope != (scheme, host.rstrip(".").lower(), port):
             self._error(403, "Request is outside the approved proxy scope")
@@ -792,6 +826,22 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             return
         connection_tokens = {token.strip().lower() for value in lowered.get("connection", [])
                              for token in value.split(",") if token.strip()}
+        host_values = lowered.get("host", [])
+        if version == "HTTP/1.1" and len(host_values) != 1:
+            self._error(400, "HTTP/1.1 requires exactly one Host header")
+            return False
+        if host_values:
+            try:
+                header_host, header_port = _parse_authority(
+                    host_values[0], 443 if scheme == "https" else 80)
+            except ValueError:
+                self._error(400, "Invalid Host header")
+                return False
+            if (header_host.rstrip(".").lower(), header_port) != (host.rstrip(".").lower(), port):
+                self._error(421, "Host header does not match the requested proxy origin")
+                return False
+        client_keep_alive = ("close" not in connection_tokens and
+                             (version == "HTTP/1.1" or "keep-alive" in connection_tokens))
         lengths = lowered.get("content-length", ["0"])
         if len(lengths) != 1 or not lengths[0].isdigit():
             self._error(400, "Invalid Content-Length")
@@ -895,14 +945,19 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             upstream_length = response.getheader("Content-Length")
             outgoing_length = (int(upstream_length) if method.upper() == "HEAD" and upstream_length and upstream_length.isdigit()
                                else len(response_body))
-            if response.status in {204, 304}:
-                self.wfile.write(b"Connection: close\r\n\r\n")
+            reusable = client_keep_alive and response.status not in {101, 204, 304}
+            if response.status in {204, 205, 304}:
+                self.wfile.write((b"Connection: keep-alive\r\nKeep-Alive: timeout=12, max=50\r\n\r\n"
+                                  if reusable else b"Connection: close\r\n\r\n"))
             else:
-                self.wfile.write(f"Content-Length: {outgoing_length}\r\nConnection: close\r\n\r\n".encode("ascii"))
+                connection_header = ("Connection: keep-alive\r\nKeep-Alive: timeout=12, max=50\r\n"
+                                     if reusable else "Connection: close\r\n")
+                self.wfile.write(f"Content-Length: {outgoing_length}\r\n{connection_header}\r\n".encode("ascii"))
             self.wfile.write(response_body)
             self.wfile.flush()
             _history_entry(method.upper(), url, response.status, headers, response_headers,
                            body_size, len(response_body), round((time.monotonic() - started) * 1000))
+            return reusable
         finally:
             connection.close()
 
@@ -1046,7 +1101,7 @@ class NativeInterceptProxy:
                 "interceptResponses": self.intercept_responses if active else False,
                 "interceptWebSocketFrames": self.intercept_websocket_frames if active else False,
                 "mode": "HTTP/1.1 request/response inspection and WebSocket tunnelling; HTTPS CONNECT TLS termination" if active else "stopped",
-                "limitations": ["one approved origin", "one request per client connection", "no HTTP/2",
+                "limitations": ["one approved origin", "up to 50 sequential HTTP/1.1 requests per client connection", "no HTTP/2",
                                 "WebSocket manual frame inspection is optional and limited to 64 KB frames", "WebSocket frame interception is separate from HTTP interception", "no chunked client request bodies", "no client certificates", "manual request and response interception queues are each bounded to 20 pending items"],
                 "historyCount": len(_HISTORY),
             }
