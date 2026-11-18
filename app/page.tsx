@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop, FileCode2,
+  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, Camera, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop, FileCode2,
   Database, FileLock2, FileSearch, Fingerprint, HardDriveDownload, Globe, Globe2, Layers3, Menu, Network,
-  Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
+  Radar, Search, Server, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
 } from "lucide-react";
 
 const groups = [
@@ -48,6 +48,8 @@ const groups = [
     { label: "SOC Host Telemetry", icon: Activity, href: "/kali-connection" },
     { label: "Investigations", icon: FileSearch, href: "/investigations" },
     { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
+    { label: "Camera Intelligence", icon: Camera, href: "/kali-connection#camera-intelligence" },
+    { label: "Personal VPS Gateway", icon: Server, href: "/kali-connection#vps-gateway" },
     { label: "Settings", icon: Settings2, href: "/settings" },
   ]},
 ];
@@ -78,6 +80,8 @@ const modules = [
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
   { name:"Evidence Vault", desc:"Keep investigation notes in a browser-local encrypted vault.", icon:FileLock2, state:"LOCAL", href:"/evidence-vault" },
   { name:"SOC Host Telemetry", desc:"Read-only, on-demand health metrics from a paired local Kali host.", icon:Activity, state:"LOCAL / ON DEMAND", href:"/kali-connection" },
+  { name:"Camera Intelligence", desc:"Discover devices only on an operator-selected private LAN or view one explicitly authorised camera through the local Kali companion.", icon:Camera, state:"LOCAL / EXPLICIT CONSENT", href:"/kali-connection#camera-intelligence" },
+  { name:"Personal VPS Gateway", desc:"Optional separately deployed personal gateway with revocable per-device permissions; not hosted by Vercel.", icon:Server, state:"OPTIONAL / NOT DEPLOYED", href:"/kali-connection#vps-gateway" },
   { name:"Investigations", desc:"Persistent case records and analyst-authored event timelines across security modules.", icon:FileSearch, state:"SUPABASE REQUIRED", href:"/investigations" },
 ];
 
