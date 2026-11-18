@@ -7,9 +7,11 @@ The initial Wallet Recovery route is a browser-local triage workspace. It can:
 - Recognize a narrow Ethereum Web3 Secret Storage V3 JSON structure.
 - Recognize basic Electrum-style JSON markers without extracting wallet material.
 - Identify likely Bitcoin Core `wallet.dat` filenames without parsing the binary format.
-- Enforce a 50 MB file limit and a 2 MB JSON parsing limit.
+- Enforce a 50 MB file limit and a 2 MB JSON parsing limit before reading file contents.
+- Reject common plaintext seed, mnemonic, private-key and SSH-key filenames before reading or fingerprinting them.
+- Disable overlapping file selections while a local inspection is in progress.
 
-The browser page does not call a server endpoint, upload file bytes, persist the selected file, store secrets in local storage/session storage, send telemetry, request wallet access, or sign/broadcast transactions. Text/seed files are deliberately not read. A file-format match is not proof of wallet validity, ownership, recoverability or authenticity.
+The browser page does not call a server endpoint, upload file bytes, persist the selected file, store secrets in local storage/session storage, send telemetry, request wallet access, or sign/broadcast transactions. Common text/seed/private-key filenames are deliberately rejected before reading or fingerprinting; extension-based checks cannot identify every disguised secret file, so users must still select encrypted backups only. A file-format match is not proof of wallet validity, ownership, recoverability or authenticity.
 
 ## Not yet implemented
 
