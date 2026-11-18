@@ -106,9 +106,9 @@ class NativeWebExecutionTests(unittest.TestCase):
         )
         connect.return_value = fake
 
-        result = web_testing.execute_request(_request())
+        result = web_testing.execute_request(_request("http://example.test/path", "http://example.test/"))
 
-        connect.assert_called_once_with(("93.184.216.34", 443), timeout=web_testing.MAX_TIMEOUT)
+        connect.assert_called_once_with(("93.184.216.34", 80), timeout=web_testing.MAX_TIMEOUT)
         resolver.assert_called_once()
         self.assertEqual(result["status"], 302)
         self.assertFalse(result["redirectFollowed"])
