@@ -80,6 +80,10 @@ on:
       - "package-lock.json"
       - ".github/workflows/burp-integration.yml"
 
+concurrency:
+  group: burp-integration-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
