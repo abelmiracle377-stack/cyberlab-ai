@@ -32,6 +32,30 @@ class VPSCompatibilityTests(unittest.TestCase):
         self.assertIn("GET", route.methods)
         self.assertTrue(route.dependencies)
 
+    def test_owner_token_uses_exact_bearer_value(self):
+        from fastapi import HTTPException
+        with mock.patch.object(gateway, "OWNER_TOKEN", "owner-secret-token"):
+            self.assertTrue(gateway.owner_auth("Bearer owner-secret-token"))
+            with self.assertRaises(HTTPException) as wrong:
+                gateway.owner_auth("Bearer owner-secret-tokeX")
+            self.assertEqual(wrong.exception.status_code, 401)
+            with self.assertRaises(HTTPException) as missing:
+                gateway.owner_auth(None)
+            self.assertEqual(missing.exception.status_code, 401)
+
+    def test_owner_auth_fails_closed_without_configured_token(self):
+        from fastapi import HTTPException
+        with mock.patch.object(gateway, "OWNER_TOKEN", ""):
+            with self.assertRaises(HTTPException) as unavailable:
+                gateway.owner_auth("Bearer anything")
+            self.assertEqual(unavailable.exception.status_code, 503)
+
+    def test_device_auth_rejects_short_tokens_before_database_access(self):
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as invalid:
+            gateway.device_auth("Bearer short")
+        self.assertEqual(invalid.exception.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()
