@@ -1,18 +1,41 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authConfigurationDecision, isPublicPath } from "@/lib/auth-config.mjs";
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   const path = request.nextUrl.pathname;
   const adminPath = path === "/admin" || path.startsWith("/admin/") || path === "/learning" || path.startsWith("/learning/");
+  const adminApiPath = path.startsWith("/api/admin/");
+  const adminRequest = adminPath || adminApiPath;
   const adminLogin = path === "/admin/login";
-  if (!url || !key) {
-    if (adminPath) return new NextResponse(null, { status: 404 });
+  const isPublic = isPublicPath(path);
+  const authDecision = authConfigurationDecision(path, Boolean(url?.trim()), Boolean(key?.trim()));
+
+  if (authDecision === "allow-public") {
     return NextResponse.next({ request });
   }
+  if (authDecision === "unavailable") {
+    // Keep administrative routes indistinguishable from missing resources.
+    if (adminRequest) return new NextResponse(null, { status: 404 });
+    if (path.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "Authentication service is not configured. Protected API access is unavailable." },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return new NextResponse("Authentication service is not configured.", {
+      status: 503,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
+  }
+
   let response = NextResponse.next({ request });
-  const supabase = createServerClient(url, key, {
+  const supabase = createServerClient(url!, key!, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet) {
@@ -23,9 +46,8 @@ export async function proxy(request: NextRequest) {
     },
   });
   const { data: { user } } = await supabase.auth.getUser();
-  const isPublic = path === "/login" || path === "/pricing" || path === "/admin/login" || path.startsWith("/auth/callback") || path === "/api/paystack/webhook";
   const isBilling = path === "/billing" || path.startsWith("/api/billing/");
-  if (adminPath || path.startsWith("/api/admin/")) {
+  if (adminRequest) {
     if (!user) {
       if (adminLogin) return response;
       if (path.startsWith("/api/")) return NextResponse.json({ error: "Not found" }, { status: 404 });
