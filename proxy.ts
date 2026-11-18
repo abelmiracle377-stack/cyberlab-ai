@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authConfigurationDecision, isPublicPath } from "@/lib/auth-config.mjs";
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   const path = request.nextUrl.pathname;
   const adminPath = path === "/admin" || path.startsWith("/admin/") || path === "/learning" || path.startsWith("/learning/");
   const adminApiPath = path.startsWith("/api/admin/");
