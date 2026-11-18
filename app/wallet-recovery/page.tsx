@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, FileKey, Fingerprint, LockKeyhole, AlertTriangle, CheckCircle2, HardDrive, RefreshCw } from "lucide-react";
+import { inspectWalletJson, isSecretMaterialFilename } from "../../lib/wallet-backup-inspection";
 
 type Inspection = {
   name: string;
@@ -26,40 +27,6 @@ function hex(buffer: ArrayBuffer) {
   return Array.from(new Uint8Array(buffer), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-function inspectJson(value: unknown): { format: string; status: Inspection["status"]; details: string[] } {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { format: "JSON document (unclassified)", status: "unsupported", details: ["The JSON root is not an object."] };
-  }
-  const data = value as Record<string, unknown>;
-  const crypto = (data.Crypto ?? data.crypto) as Record<string, unknown> | undefined;
-  if (data.version === 3 && crypto && typeof crypto === "object") {
-    const cipher = typeof crypto.cipher === "string" ? crypto.cipher : "unspecified";
-    const kdf = crypto.kdf && typeof crypto.kdf === "string" ? crypto.kdf : "unspecified";
-    const addressPresent = typeof data.address === "string";
-    const idPresent = typeof data.id === "string";
-    return {
-      format: "Ethereum Web3 Secret Storage (V3) candidate",
-      status: "recognized",
-      details: [
-        "Version 3 structure detected; this is a format check, not decryption or proof of authenticity.",
-        "Cipher: " + cipher + ". Key derivation: " + kdf + ".",
-        "Address field: " + (addressPresent ? "present" : "absent") + "; UUID field: " + (idPresent ? "present" : "absent") + ".",
-        "No password was requested and no decryption was attempted."
-      ]
-    };
-  }
-  if (typeof data.wallet_type === "string" || data.keystore && typeof data.keystore === "object") {
-    return {
-      format: "Electrum-style JSON candidate",
-      status: "recognized",
-      details: [
-        "Wallet metadata markers detected; exact version and compatibility still require a trusted local adapter.",
-        "No seed, private key, password or wallet payload was extracted."
-      ]
-    };
-  }
-  return { format: "JSON wallet format not recognized", status: "unsupported", details: ["The file was not matched to a supported wallet backup schema."] };
-}
 
 export default function WalletRecoveryPage() {
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -73,22 +40,29 @@ export default function WalletRecoveryPage() {
     if (!file) return;
     if (file.size === 0) { setError("The selected file is empty."); return; }
     if (file.size > MAX_FILE_BYTES) { setError("File exceeds the 50 MB local inspection limit."); return; }
+    const lower = file.name.toLowerCase();
+    if (isSecretMaterialFilename(file.name)) {
+      setError("This filename may contain plaintext seed, mnemonic, private-key or secret material. It was rejected before reading or fingerprinting. Use an encrypted wallet backup instead.");
+      return;
+    }
+    if (lower.endsWith(".json") && file.size > MAX_JSON_BYTES) {
+      setError("JSON inspection is limited to 2 MB. The file was rejected before reading.");
+      return;
+    }
     setBusy(true);
     try {
       const bytes = await file.arrayBuffer();
       const digest = hex(await crypto.subtle.digest("SHA-256", bytes));
-      const lower = file.name.toLowerCase();
-      let result: ReturnType<typeof inspectJson> = {
+      let result: ReturnType<typeof inspectWalletJson> = {
         format: "Unclassified backup / binary wallet file",
         status: "opaque",
         details: ["The file was fingerprinted locally only. No binary parser or recovery adapter is enabled for this format."]
       };
       if (lower.endsWith(".json")) {
-        if (file.size > MAX_JSON_BYTES) throw new Error("JSON inspection is limited to 2 MB.");
         let parsed: unknown;
         try { parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
         catch { throw new Error("The selected .json file is not valid UTF-8 JSON."); }
-        result = inspectJson(parsed);
+        result = inspectWalletJson(parsed);
       } else if (lower === "wallet.dat" || lower.endsWith(".dat")) {
         result = {
           format: "Bitcoin Core wallet backup (binary candidate)",
