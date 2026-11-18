@@ -4,7 +4,6 @@ import { inspectWalletJson, isSecretMaterialFilename } from "../lib/wallet-backu
 
 test("refuses common plaintext secret and key file names before content handling", () => {
   for (const name of ["seed.txt", "backup.seed", "wallet.mnemonic", "private.pem", "wallet.key", "recovery_phrase.txt", "id_rsa"]) {
-    if (name === "id_rsa") continue;
     assert.equal(isSecretMaterialFilename(name), true, name);
   }
   assert.equal(isSecretMaterialFilename("wallet.json"), false);
