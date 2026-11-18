@@ -20,8 +20,27 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
+from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition
+from filesystem_analysis import inspect_partition_filesystem
+from tool_catalog import inspect_tool_catalog
+from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater
+from network_capture import list_capture_interfaces, capture_packets
+from web_testing import execute_request, request_history
+from web_crawler import run_crawl
+from web_active_scan import run_active_scan
+from parameter_lab import inspect_parameters, generate_cases
+from parameter_analysis import compare_responses
+from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
+from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending_response_intercepts, decide_response_intercept, proxy_history, websocket_frame_history, pending_websocket_frames, decide_websocket_frame
+from task_planner import plan_task
+from research_workflows import run_research_action
+from service_enumeration import enumerate_services
+from evidence_analysis import build_service_report, validate_report_payload
+from artifact_analysis import build_artifact_report, validate_artifact_payload
+from case_management import build_case_report, validate_case_payload, verify_audit_ledger
+from case_export import export_case_bundle, verify_case_archive
 from bridge_security import load_or_create_pairing_token
 
 HOST = "127.0.0.1"
@@ -31,19 +50,32 @@ MAX_OLLAMA_BODY = 65536
 MAX_SOLIDITY_BODY = 120000
 MAX_SOLIDITY_SOURCE = 100000
 MAX_SOLIDITY_OUTPUT = 2_000_000
+MAX_SOLIDITY_PROJECT_BODY = 700000
 SOLIDITY_RUNTIME = 30
 SOLIDITY_TEST_BODY = 700000
 SOLIDITY_TEST_RUNTIME = 120
 SOLIDITY_TEST_OUTPUT = 262144
+OLLAMA_URL = "http://127.0.0.1:11434"
 solidity_lock = threading.Lock()
 solidity_test_lock = threading.Lock()
-OLLAMA_URL = "http://127.0.0.1:11434"
 MAX_PORTS = 100
 MAX_RUNTIME = 55
-ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"}
+ALLOWED_ORIGINS = {"https://cyberlab-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"} | {origin.strip().rstrip("/") for origin in os.environ.get("CYBERLAB_ALLOWED_ORIGINS", "").split(",") if origin.strip()}
 CONFIG_DIR = Path.home() / ".config" / "cyberlab"
 TOKEN_FILE = CONFIG_DIR / "bridge-token"
 scan_lock = threading.Lock()
+research_lock = threading.Lock()
+service_lock = threading.Lock()
+evidence_lock = threading.Lock()
+artifact_lock = threading.Lock()
+case_lock = threading.Lock()
+case_export_lock = threading.Lock()
+network_capture_lock = threading.Lock()
+web_request_lock = threading.Lock()
+web_crawl_lock = threading.Lock()
+web_active_scan_lock = threading.Lock()
+proxy_ca_lock = threading.Lock()
+proxy_control_lock = threading.Lock()
 
 
 def load_token() -> str:
@@ -110,6 +142,44 @@ def parse_report(xml_text: str) -> dict:
     }
 
 
+def system_snapshot() -> dict:
+    """Return bounded, non-sensitive host health metrics; never process args or user data."""
+    memory = {}
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            key, value = line.split(":", 1)
+            if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
+                memory[key] = int(value.strip().split()[0]) * 1024
+    except (OSError, ValueError, IndexError):
+        memory = {}
+    try:
+        uptime_seconds = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
+    except (OSError, ValueError, IndexError):
+        uptime_seconds = None
+    try:
+        process_count = sum(1 for entry in Path("/proc").iterdir() if entry.name.isdigit())
+    except OSError:
+        process_count = None
+    disk = shutil.disk_usage("/")
+    try:
+        load_average = list(os.getloadavg())
+    except (AttributeError, OSError):
+        load_average = None
+    return {
+        "platform": platform.system(),
+        "release": platform.release(),
+        "architecture": platform.machine(),
+        "uptime_seconds": round(uptime_seconds) if uptime_seconds is not None else None,
+        "load_average_1_5_15": load_average,
+        "memory_bytes": memory,
+        "disk_root_bytes": {"total": disk.total, "used": disk.used, "free": disk.free},
+        "process_count": process_count,
+        "nmap_available": bool(shutil.which("nmap")),
+        "tcpdump_available": bool(shutil.which("tcpdump")),
+        "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "scope": "Local host health summary only; no usernames, process names, command lines, files or network payloads are collected.",
+    }
+
 
 def ollama_request(path: str, payload: dict | None = None, timeout: int = 12) -> dict:
     """Talk only to the fixed Ollama loopback service; callers cannot supply a host or URL."""
@@ -137,6 +207,7 @@ def ollama_request(path: str, payload: dict | None = None, timeout: int = 12) ->
         raise ValueError("Ollama returned invalid JSON.") from exc
 
 
+
 def ollama_models() -> list[dict]:
     result = ollama_request("/api/tags")
     models = result.get("models", [])
@@ -146,6 +217,7 @@ def ollama_models() -> list[dict]:
         {"name": str(item.get("name", "")), "size": item.get("size"), "modified_at": item.get("modified_at")}
         for item in models if isinstance(item, dict) and item.get("name")
     ][:100]
+
 
 
 def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
@@ -188,6 +260,7 @@ def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
     return {"model": model, "response": content[:50000], "done": bool(result.get("done", False))}
 
 
+
 def environment_capabilities() -> dict:
     """Read-only discovery for CyberLab OS; never installs or starts runtimes."""
     os_release = {}
@@ -220,43 +293,6 @@ def environment_capabilities() -> dict:
     }
 
 
-def system_snapshot() -> dict:
-    """Return bounded, non-sensitive host health metrics; never process args or user data."""
-    memory = {}
-    try:
-        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
-            key, value = line.split(":", 1)
-            if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
-                memory[key] = int(value.strip().split()[0]) * 1024
-    except (OSError, ValueError, IndexError):
-        memory = {}
-    try:
-        uptime_seconds = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
-    except (OSError, ValueError, IndexError):
-        uptime_seconds = None
-    try:
-        process_count = sum(1 for entry in Path("/proc").iterdir() if entry.name.isdigit())
-    except OSError:
-        process_count = None
-    disk = shutil.disk_usage("/")
-    try:
-        load_average = list(os.getloadavg())
-    except (AttributeError, OSError):
-        load_average = None
-    return {
-        "platform": platform.system(),
-        "release": platform.release(),
-        "architecture": platform.machine(),
-        "uptime_seconds": round(uptime_seconds) if uptime_seconds is not None else None,
-        "load_average_1_5_15": load_average,
-        "memory_bytes": memory,
-        "disk_root_bytes": {"total": disk.total, "used": disk.used, "free": disk.free},
-        "process_count": process_count,
-        "nmap_available": bool(shutil.which("nmap")),
-        "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "scope": "Local host health summary only; no usernames, process names, command lines, files or network payloads are collected.",
-    }
-
 
 def solidity_compiler_status() -> dict:
     """Discover only the fixed PATH-resolved solc executable; never install or accept a path."""
@@ -276,6 +312,7 @@ def solidity_compiler_status() -> dict:
         return {"available": True, "compiler": "solc", "version": match.group(1), "message": "Local compiler detected. Compilation runs on this machine."}
     except (OSError, subprocess.TimeoutExpired):
         return {"available": False, "compiler": "solc", "version": None, "message": "The installed solc executable could not be queried."}
+
 
 
 
@@ -365,6 +402,7 @@ def _validate_solidity_project(files: object, dependency_lock: object) -> tuple[
     return sources, remappings
 
 
+
 def compile_solidity_project(files: object, dependency_lock: object = None, expected_version: str = "") -> dict:
     """Compile a bounded multi-file project with explicit local source and SHA-256-locked OpenZeppelin inputs."""
     sources, remappings = _validate_solidity_project(files, dependency_lock if dependency_lock is not None else [])
@@ -448,6 +486,7 @@ def compile_solidity_project(files: object, dependency_lock: object = None, expe
         solidity_lock.release()
 
 
+
 def compile_solidity(source: str, expected_version: str = "") -> dict:
     """Backward-compatible single-file, import-free compiler entry point."""
     if not isinstance(source, str) or not source.strip() or len(source.encode("utf-8")) > MAX_SOLIDITY_SOURCE:
@@ -459,6 +498,7 @@ def compile_solidity(source: str, expected_version: str = "") -> dict:
     )
     result["note"] = "Single-file local compilation; imports are not supported by this compatibility endpoint. " + result["note"]
     return result
+
 
 
 def solidity_test_runner_status() -> dict:
@@ -483,6 +523,7 @@ def solidity_test_runner_status() -> dict:
         return {"available": False, "message": "Could not verify rootless Podman and the local image."}
 
 
+
 def _validate_solidity_test_files(files: object, dependency_lock: object = None) -> tuple[list[dict], list[str]]:
     if not isinstance(files, list) or not 2 <= len(files) <= 100:
         raise ValueError("Provide 2–100 project files, including a contract and a Foundry test.")
@@ -502,6 +543,7 @@ def _validate_solidity_test_files(files: object, dependency_lock: object = None)
         raise ValueError("Include at least one src/*.sol contract and one test/*.t.sol test.")
     sources, remappings = _validate_solidity_project(files, dependency_lock if dependency_lock is not None else [])
     return [{"path": path, "content": content} for path, content in sources.items()], remappings
+
 
 def run_solidity_tests(files: object, dependency_lock: object = None) -> dict:
     """Run Foundry only in a preloaded rootless Podman sandbox; never on host."""
@@ -574,6 +616,7 @@ def run_solidity_tests(files: object, dependency_lock: object = None) -> dict:
         solidity_test_lock.release()
 
 
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CyberLabKaliBridge/1.0"
 
@@ -616,18 +659,16 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status"}:
+        if not (path in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
+        if path == "/capabilities":
+            return self.send_json(200, {"status": "ok", "capabilities": environment_capabilities()}, origin)
         if path == "/solidity/compiler":
             return self.send_json(200, solidity_compiler_status(), origin)
         if path == "/solidity/tests/status":
             return self.send_json(200, solidity_test_runner_status(), origin)
-        if path == "/system":
-            return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
-        if path == "/capabilities":
-            return self.send_json(200, {"status": "ok", "capabilities": environment_capabilities()}, origin)
         if path == "/ollama/health":
             try:
                 models = ollama_models()
@@ -639,21 +680,106 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"models": ollama_models()}, origin)
             except (ConnectionError, ValueError) as exc:
                 return self.send_json(503, {"error": str(exc)}, origin)
-        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap")), "ollama": True}, origin)
+        if path == "/tools":
+            return self.send_json(200, inspect_tool_catalog(), origin)
+        if path == "/proxy/ca/status":
+            return self.send_json(200, ca_status(), origin)
+        if path == "/proxy/ca/certificate":
+            try:
+                return self.send_json(200, ca_certificate_pem(), origin)
+            except ValueError as exc:
+                return self.send_json(400, {"error": str(exc)}, origin)
+        if path == "/proxy/status":
+            return self.send_json(200, PROXY.status(), origin)
+        if path == "/proxy/history":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["50"])[0])
+            except (TypeError, ValueError):
+                limit = 50
+            return self.send_json(200, proxy_history(limit), origin)
+        if path == "/proxy/intercepts":
+            return self.send_json(200, pending_intercepts(), origin)
+        if path == "/proxy/response-intercepts":
+            return self.send_json(200, pending_response_intercepts(), origin)
+        if path == "/proxy/websocket-frames":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            return self.send_json(200, websocket_frame_history(limit), origin)
+        if path == "/proxy/websocket-intercepts":
+            return self.send_json(200, pending_websocket_frames(), origin)
+        if path == "/network/interfaces":
+            return self.send_json(200, list_capture_interfaces(), origin)
+        if path == "/web/history":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["20"])[0])
+            except (TypeError, ValueError):
+                limit = 20
+            return self.send_json(200, request_history(limit), origin)
+        if path == "/burp/status":
+            return self.send_json(200, inspect_burp_status(), origin)
+        if path == "/burp/proxy/history":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["50"])[0])
+            except (TypeError, ValueError):
+                limit = 50
+            return self.send_json(200, inspect_burp_proxy_history(limit), origin)
+        if path == "/burp/site-map":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["50"])[0])
+            except (TypeError, ValueError):
+                limit = 50
+            return self.send_json(200, inspect_burp_site_map(limit), origin)
+        if path == "/burp/issues":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", ["50"])[0])
+            except (TypeError, ValueError):
+                limit = 50
+            return self.send_json(200, inspect_burp_issues(limit), origin)
+        if path == "/evidence/case/ledger/verify":
+            return self.send_json(200, verify_audit_ledger(), origin)
+        if path == "/forensics/devices":
+            try:
+                return self.send_json(200, list_block_devices(), origin)
+            except (ValueError, OSError, json.JSONDecodeError) as exc:
+                return self.send_json(400, {"error": str(exc)}, origin)
+        if path.startswith("/forensics/jobs/"):
+            job = get_image_job(path.rsplit("/", 1)[-1])
+            return self.send_json(200 if job else 404, job or {"error": "Unknown or expired acquisition job."}, origin)
+        if path == "/system":
+            return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
+        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
 
     def do_POST(self):
         origin = self.headers.get("Origin", "")
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/scan", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = MAX_OLLAMA_BODY if path == "/ollama/chat" else MAX_SOLIDITY_PROJECT_BODY if path == "/solidity/tests/run" else MAX_SOLIDITY_PROJECT_BODY if path == "/solidity/project/compile" else MAX_SOLIDITY_BODY if path == "/solidity/compile" else MAX_BODY
-            if length < 2 or length > limit:
+            body_limit = (
+                MAX_OLLAMA_BODY if path == "/ollama/chat" else
+                MAX_SOLIDITY_PROJECT_BODY if path in {"/solidity/project/compile", "/solidity/tests/run"} else
+                MAX_SOLIDITY_BODY if path == "/solidity/compile" else
+                600000 if path == "/evidence/case/export" else
+                131072 if path in {"/proxy/intercepts/decision", "/proxy/websocket-intercepts/decision"} else
+                8192 if path == "/evidence/case/verify" else
+                131072 if path == "/evidence/case" else
+                65536 if path in {"/evidence/report", "/evidence/artifacts"} else
+                32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
+            )
+            if length < 2 or length > body_limit:
                 raise ValueError("Request body is missing or too large.")
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
@@ -670,6 +796,205 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/solidity/tests/run":
                 result = run_solidity_tests(data.get("files"), data.get("dependencyLock", []))
                 return self.send_json(200, result, origin)
+            if path == "/proxy/intercepts/decision":
+                try:
+                    return self.send_json(200, decide_intercept(data.get("id", ""), data.get("action", ""), data.get("edits")), origin)
+                except ValueError as exc:
+                    return self.send_json(409, {"error": str(exc)}, origin)
+            if path == "/proxy/response-intercepts/decision":
+                try:
+                    return self.send_json(200, decide_response_intercept(data.get("id", ""), data.get("action", ""), data.get("edits")), origin)
+                except ValueError as exc:
+                    return self.send_json(409, {"error": str(exc)}, origin)
+            if path == "/proxy/websocket-intercepts/decision":
+                try:
+                    return self.send_json(200, decide_websocket_frame(
+                        data.get("id", ""), data.get("action", ""), data.get("payload")), origin)
+                except ValueError as exc:
+                    return self.send_json(409, {"error": str(exc)}, origin)
+            if path == "/proxy/start":
+                if not proxy_control_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A proxy control operation is already running."}, origin)
+                try:
+                    return self.send_json(201, PROXY.start(data), origin)
+                finally:
+                    proxy_control_lock.release()
+            if path == "/proxy/stop":
+                return self.send_json(200, PROXY.stop(), origin)
+            if path == "/proxy/ca/create":
+                if data.get("confirmCreateLocalCA") is not True:
+                    return self.send_json(400, {"error": "Explicitly confirm creation of a local CA whose certificate must be manually trusted by the operator."}, origin)
+                if not proxy_ca_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "Local inspection CA creation is already running."}, origin)
+                try:
+                    return self.send_json(201, create_local_ca(), origin)
+                finally:
+                    proxy_ca_lock.release()
+            if path == "/web/active-scan":
+                if not web_active_scan_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A native active web check is already running."}, origin)
+                try:
+                    result = run_active_scan(data)
+                    return self.send_json(200, result, origin)
+                finally:
+                    web_active_scan_lock.release()
+            if path == "/web/crawl":
+                if not web_crawl_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A native web crawl is already running."}, origin)
+                try:
+                    result = run_crawl(data)
+                    return self.send_json(200, result, origin)
+                finally:
+                    web_crawl_lock.release()
+            if path == "/web/parameters/inspect":
+                result = inspect_parameters(
+                    str(data.get("url", "")), str(data.get("body", "")),
+                    str(data.get("contentType", "")),
+                )
+                return self.send_json(200, result, origin)
+            if path == "/web/parameters/generate":
+                result = generate_cases(
+                    str(data.get("url", "")), str(data.get("body", "")),
+                    str(data.get("contentType", "")), data.get("location"),
+                    data.get("parameterIndex"), data.get("payloads"),
+                    data.get("method", "GET"),
+                )
+                return self.send_json(200, result, origin)
+            if path == "/web/parameters/analyze":
+                result = compare_responses(data.get("baseline"), data.get("candidate"))
+                return self.send_json(200, result, origin)
+            if path == "/web/request":
+                if not web_request_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A native HTTP request is already running."}, origin)
+                try:
+                    result = execute_request(data)
+                    return self.send_json(200, result, origin)
+                finally:
+                    web_request_lock.release()
+            if path == "/network/capture":
+                if not network_capture_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A packet capture is already running."}, origin)
+                try:
+                    result = capture_packets(
+                        interface=data.get("interface"),
+                        confirmation_interface=data.get("confirmationInterface"),
+                        authorization_confirmed=data.get("authorizationConfirmed") is True,
+                        authorization_reference=data.get("authorizationReference"),
+                        duration_seconds=data.get("durationSeconds", 10),
+                        packet_limit=data.get("packetLimit", 500),
+                        filter_name=data.get("filter", "ssh"),
+                    )
+                    status_code = 200 if result.get("status") == "completed" else (503 if result.get("status") == "unavailable" else 502)
+                    return self.send_json(status_code, result, origin)
+                finally:
+                    network_capture_lock.release()
+            if path == "/burp/repeater/from-history":
+                if data.get("confirmOpenInRepeater") is not True:
+                    return self.send_json(400, {"status": "confirmation_required", "request_sent": False}, origin)
+                history_id = data.get("historyId")
+                if isinstance(history_id, bool) or not isinstance(history_id, int):
+                    return self.send_json(400, {"status": "invalid_request", "request_sent": False}, origin)
+                result = open_burp_history_in_repeater(history_id, confirmed=True)
+                status_code = 200 if result.get("status") == "opened_in_repeater" else 400
+                return self.send_json(status_code, result, origin)
+            if path == "/plan":
+                return self.send_json(200, plan_task(data.get("prompt", "")), origin)
+            if path == "/research":
+                if not research_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A passive research request is already running."}, origin)
+                try:
+                    return self.send_json(200, run_research_action(data), origin)
+                finally:
+                    research_lock.release()
+            if path == "/evidence/case/verify":
+                return self.send_json(200, verify_case_archive(data.get("caseId")), origin)
+            if path == "/evidence/case/export":
+                case_report = data.get("caseReport")
+                if not case_export_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A case export is already being written."}, origin)
+                try:
+                    return self.send_json(200, export_case_bundle(case_report), origin)
+                finally:
+                    case_export_lock.release()
+            if path == "/evidence/case":
+                service_evidence, artifact_evidence = validate_case_payload(data)
+                if not case_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A case report is already being written."}, origin)
+                try:
+                    report = build_case_report(service_evidence, artifact_evidence)
+                    return self.send_json(201, report, origin)
+                finally:
+                    case_lock.release()
+            if path == "/evidence/artifacts":
+                triage_evidence, recovery_evidence = validate_artifact_payload(data)
+                if not artifact_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "An artifact analysis request is already running."}, origin)
+                try:
+                    report = build_artifact_report(triage_evidence, recovery_evidence)
+                    return self.send_json(200, report, origin)
+                finally:
+                    artifact_lock.release()
+            if path == "/evidence/report":
+                scan_evidence, service_evidence = validate_report_payload(data)
+                if not evidence_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "An evidence analysis request is already running."}, origin)
+                try:
+                    report = build_service_report(scan_evidence, service_evidence)
+                    return self.send_json(200, report, origin)
+                finally:
+                    evidence_lock.release()
+            if path == "/services":
+                target_value = data.get("target")
+                if not isinstance(target_value, str):
+                    raise ValueError("Enter one IP address or hostname.")
+                target = valid_target(target_value)
+                confirmation = data.get("confirmationTarget")
+                reference = data.get("authorizationReference")
+                if (data.get("authorizationConfirmed") is not True or not isinstance(confirmation, str)
+                        or confirmation.strip().lower().rstrip(".") != target_value.strip().lower().rstrip(".")
+                        or not isinstance(reference, str) or not reference.strip() or len(reference) > 160):
+                    raise ValueError("Confirm ownership or written permission, provide an approval reference and retype the exact target.")
+                if not service_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A service-identification request is already running."}, origin)
+                try:
+                    result = enumerate_services(target, data.get("ports"))
+                    return self.send_json(200, result, origin)
+                finally:
+                    service_lock.release()
+            if path == "/forensics/fsstat":
+                result = inspect_partition_filesystem(
+                    str(data.get("imageJobId", "")),
+                    str(data.get("confirmationImage", "")),
+                    data.get("startSector"),
+                )
+                return self.send_json(200, result, origin)
+            if path == "/forensics/partitions":
+                result = inspect_image_partitions(
+                    str(data.get("imageJobId", "")),
+                    str(data.get("confirmationImage", "")),
+                )
+                return self.send_json(200, result, origin)
+            if path == "/forensics/inspect":
+                result = inspect_image_filesystem(
+                    str(data.get("imageJobId", "")),
+                    str(data.get("confirmationImage", "")),
+                )
+                return self.send_json(200, result, origin)
+            if path == "/forensics/foremost":
+                result = start_foremost_recovery(
+                    str(data.get("imageJobId", "")),
+                    str(data.get("outputDirectory", "")),
+                    str(data.get("confirmationImage", "")),
+                )
+                return self.send_json(202, result, origin)
+            if path == "/forensics/image":
+                result = start_image_acquisition(
+                    str(data.get("source", "")),
+                    str(data.get("destinationDirectory", "")),
+                    str(data.get("filename", "")),
+                    str(data.get("confirmationSource", "")),
+                )
+                return self.send_json(202, result, origin)
             target = valid_target(str(data.get("target", "")))
             confirmation = str(data.get("confirmationTarget", "")).strip().lower().rstrip(".")
             reference = str(data.get("authorizationReference", "")).strip()
@@ -709,12 +1034,6 @@ class Handler(BaseHTTPRequestHandler):
                 scan_lock.release()
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json(400, {"error": str(exc)}, origin)
-        except (ConnectionError, FileNotFoundError) as exc:
-            self.send_json(503, {"error": str(exc)}, origin)
-        except BlockingIOError as exc:
-            self.send_json(409, {"error": str(exc)}, origin)
-        except TimeoutError as exc:
-            self.send_json(504, {"error": str(exc)}, origin)
         except subprocess.TimeoutExpired:
             self.send_json(504, {"error": "Assessment exceeded the 55-second time limit."}, origin)
         except Exception as exc:
@@ -742,6 +1061,7 @@ def main():
     except KeyboardInterrupt:
         print("\nStopping CyberLab Kali Bridge...")
     finally:
+        PROXY.stop()
         server.server_close()
 
 
