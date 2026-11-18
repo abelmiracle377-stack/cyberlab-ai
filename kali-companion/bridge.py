@@ -9,7 +9,6 @@ import json
 import os
 import platform
 import re
-import secrets
 import shutil
 import socket
 import subprocess
@@ -17,9 +16,10 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from bridge_security import load_or_create_pairing_token
 from pathlib import Path
 from urllib.parse import urlparse
+
+from bridge_security import load_or_create_pairing_token
 
 HOST = "127.0.0.1"
 PORT = 8765
