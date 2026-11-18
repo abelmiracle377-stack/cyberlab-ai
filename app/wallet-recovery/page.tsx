@@ -55,8 +55,8 @@ export default function WalletRecoveryPage() {
       let digest = "";
       let result: ReturnType<typeof inspectWalletJson> = {
         format: "Unclassified backup / binary wallet file",
-        status: "opaque",
-        details: ["The file was fingerprinted locally only. No binary parser or recovery adapter is enabled for this format."]
+        status: "unsupported",
+        details: ["No trusted parser or recovery adapter is enabled for this file type; no fingerprint was generated."]
       };
       if (lower.endsWith(".json")) {
         let parsed: unknown;
@@ -79,8 +79,6 @@ export default function WalletRecoveryPage() {
           status: "opaque",
           details: ["The filename suggests a Bitcoin Core wallet backup, but its contents were not parsed.", "Use a verified offline Bitcoin Core-compatible recovery environment; do not upload this file."]
         };
-      }
-      if (!lower.endsWith(".json")) {
         digest = hex(await crypto.subtle.digest("SHA-256", bytes));
       }
       setInspection({ name: file.name, size: file.size, sha256: digest, ...result });
