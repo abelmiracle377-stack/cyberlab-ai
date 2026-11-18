@@ -98,6 +98,11 @@ The companion's `parameter_lab.py` module provides a bounded parameter inventory
 This is a parameter-test planning foundation, not a full Intruder equivalent. The native Repeater now exposes parameter inspection, bounded case generation and a one-click handoff into unsent request tabs. It does not yet provide payload wordlists, concurrent execution, automatic response anomaly scoring or evidence reporting. Each request must remain individually reviewed and explicitly sent.
 
 
+## Repeater response inspection
+
+The native Repeater response pane supports case-insensitive filtering across response header names and values, an explicit copy of the captured response preview, and JSON pretty-printing when the response Content-Type indicates JSON. Raw display remains available. The pane reports when the companion truncated a response preview; copying cannot restore bytes that were not captured. Clipboard export is user-triggered and may include sensitive response data, so copied material must be handled as test evidence.
+
+
 ## Offline response-difference analysis
 
 The paired companion exposes `POST /web/parameters/analyze` for two responses already captured by explicit Repeater sends. It compares status, body digest, body length, response timing and response headers. Sensitive header values (authorization, cookies, token-like headers) are redacted before any difference is returned. The analysis is offline: it does not issue requests, retain response bodies or create an exploitability verdict. Timing differences are advisory and should be repeated under comparable conditions. The Repeater's comparison panel can submit the selected in-session responses to this analyser and display the resulting review indicators.

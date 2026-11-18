@@ -41,6 +41,9 @@ export default function WebRepeaterPage() {
   const [analysisReport, setAnalysisReport] = useState<any>(null);
   const [analysisError, setAnalysisError] = useState("");
   const [copyRequestStatus, setCopyRequestStatus] = useState("");
+  const [responseHeaderFilter, setResponseHeaderFilter] = useState("");
+  const [responseBodyMode, setResponseBodyMode] = useState<"raw" | "pretty">("pretty");
+  const [responseCopyStatus, setResponseCopyStatus] = useState("");
 
   useEffect(() => {
     const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
@@ -209,6 +212,20 @@ export default function WebRepeaterPage() {
     }
   }
 
+  async function copyResponse() {
+    if (!active?.response) return;
+    const response = active.response;
+    const statusLine = `HTTP response ${response.status} ${response.reason}`;
+    const headerLines = response.headers.map(header => header.name + ": " + header.value);
+    const exportText = [statusLine, ...headerLines, "", response.body].join("\\n");
+    try {
+      await navigator.clipboard.writeText(exportText);
+      setResponseCopyStatus("Response copied to clipboard. Treat copied headers and body as potentially sensitive.");
+    } catch (cause) {
+      setResponseCopyStatus(cause instanceof Error ? cause.message : "Could not copy the response.");
+    }
+  }
+
   async function sendRequest() {
     if (!active) return;
     updateActive({ busy: true, error: "", response: null });
@@ -303,11 +320,26 @@ export default function WebRepeaterPage() {
       </div>}
       {active?.response && <div className="network-results">
         <h2>Response · {active.response.status} {active.response.reason}</h2>
-        <p>{active.response.method} {active.response.target} · {active.response.durationMs} ms · {active.response.resolvedAddress} · {active.response.bodyBytes} bytes</p>
-        <h3>Headers</h3>
-        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{active.response.headers.map(h=>h.name+": "+h.value).join("\n")}</pre>
-        <h3>Body</h3>
-        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{active.response.body}</pre>
+        <p>{active.response.method} {active.response.target} · {active.response.durationMs} ms · {active.response.resolvedAddress} · {active.response.bodyBytes} bytes{active.response.truncated ? " · preview truncated" : ""}</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <button className="report-download" type="button" onClick={copyResponse}><Copy size={13}/> Copy response</button>
+          {responseCopyStatus && <span role="status">{responseCopyStatus}</span>}
+        </div>
+        <h3>Headers · {active.response.headers.length}</h3>
+        <input aria-label="Filter response headers" placeholder="Filter header names or values" value={responseHeaderFilter} onChange={event=>setResponseHeaderFilter(event.target.value)} />
+        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{active.response.headers.filter(header => (header.name + ": " + header.value).toLowerCase().includes(responseHeaderFilter.toLowerCase())).map(header=>header.name+": "+header.value).join("\\n") || "No matching response headers."}</pre>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <h3>Body</h3>
+          <button className="report-download" type="button" onClick={()=>setResponseBodyMode(mode=>mode==="pretty" ? "raw" : "pretty")}>{responseBodyMode==="pretty" ? "Show raw" : "Pretty-print JSON"}</button>
+        </div>
+        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{(() => {
+          if (responseBodyMode !== "pretty") return active.response.body;
+          const contentType = active.response.headers.find(header=>header.name.toLowerCase()==="content-type")?.value || "";
+          if (!/json/i.test(contentType)) return active.response.body;
+          try { return JSON.stringify(JSON.parse(active.response.body), null, 2); }
+          catch { return active.response.body; }
+        })()}</pre>
+        {active.response.truncated && <p className="agent-disclaimer">Only a bounded response preview is available here; copying does not recover bytes omitted by the companion.</p>}
       </div>}
       <div className="network-results">
         <h2>Response comparison</h2>
