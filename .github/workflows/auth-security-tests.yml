@@ -1,0 +1,39 @@
+name: Auth configuration regression tests
+
+on:
+  push:
+    branches: [main, fix/auth-middleware-fail-closed]
+    paths:
+      - "proxy.ts"
+      - "lib/auth-config.mjs"
+      - "lib/auth-config.d.mts"
+      - "tests/auth-config.test.mjs"
+      - "package.json"
+      - ".github/workflows/auth-security-tests.yml"
+  pull_request:
+    paths:
+      - "proxy.ts"
+      - "lib/auth-config.mjs"
+      - "lib/auth-config.d.mts"
+      - "tests/auth-config.test.mjs"
+      - "package.json"
+      - ".github/workflows/auth-security-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-security-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test authentication configuration policy
+        run: npm run test:security
