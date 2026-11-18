@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop, FileCode2,
   Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
-  Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
+  Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
 } from "lucide-react";
 
 const groups = [
@@ -28,6 +28,7 @@ const groups = [
     { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
     { label: "Vulnerability Lab", icon: Bug, href: "/vulnerability-lab" },
     { label: "Solidity Lab", icon: FileCode2, href: "/solidity" },
+    { label: "Crypto Wallet Recovery", icon: Wallet, href: "/wallet-recovery" },
   ]},
   { title: "ANALYSIS & EVIDENCE", items: [
     { label: "Malware Lab", icon: Shield, href: "/malware-lab" },
@@ -57,6 +58,7 @@ const modules = [
   { name:"Website Assessment", desc:"Passive HTTPS, headers and cookie security review.", icon:Globe2, state:"AVAILABLE", href:"/website-assessment" },
   { name:"Vulnerability Lab", desc:"Research CVEs, impact and remediation guidance.", icon:Bug, state:"AVAILABLE", href:"/vulnerability-lab" },
   { name:"Solidity Lab", desc:"Review Solidity source for security-sensitive patterns and contract surface.", icon:FileCode2, state:"HEURISTIC REVIEW", href:"/solidity" },
+  { name:"Crypto Wallet Recovery", desc:"Inspect owned wallet backup formats locally without uploading recovery secrets.", icon:Wallet, state:"LOCAL TRIAGE", href:"/wallet-recovery" },
   { name:"Malware Lab", desc:"Static triage, inert threat fixtures, YARA/Sigma structural checks and SOC behaviour simulations.", icon:Shield, state:"DEFENSIVE ANALYSIS", href:"/malware-lab" },
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
