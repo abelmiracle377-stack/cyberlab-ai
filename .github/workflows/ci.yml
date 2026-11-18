@@ -39,3 +39,20 @@ jobs:
           node --test .test-build/tests/solidity-static-analysis.test.js .test-build/tests/wallet-backup-inspection.test.js
       - name: Build Next.js application
         run: npm run build
+
+  os-definition-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate OS shell syntax
+        run: |
+          for script in scripts/os/*.sh; do bash -n "$script"; done
+      - name: Test OS build definitions and guest security checks
+        run: |
+          bash scripts/os/test-build-definition.sh
+          bash scripts/os/test-guest-security-check.sh
+          bash scripts/os/test-live-build-definition.sh
+          python scripts/os/test_cyberlab_menu.py
