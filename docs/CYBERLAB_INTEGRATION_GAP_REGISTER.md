@@ -160,7 +160,21 @@ A capability is **Done** only when all applicable items are satisfied:
 | CL-INT-011 | P2 | Add active testing engine | Controlled Intruder-style execution with rate limits, cancellation and per-request scope enforcement |
 | CL-INT-012 | P2 | Complete forensics resilience | Interrupted imaging, hash verification, recovery manifests and case archive tamper tests pass |
 
-## 8. Audit caveats and next review requirements
+## 8. Progress snapshot — 2026-11-18
+
+| Backlog item | Status | Work |
+|---|---|---|
+| CL-INT-001 — Auth middleware fail-closed | **In review — PR #4** | Public-route policy isolated and tested; protected pages/APIs now return 503 when Supabase config is absent; admin routes remain concealed. GitHub Actions passed on the PR head and Vercel checks passed at the time checked. |
+| CL-INT-002 — Local bridge token permissions | **In review — PR #5** | Token storage extracted; owner-only permissions, symlink rejection, malformed-token rejection and four regression tests added. GitHub CI was queued when last checked; not yet green. |
+| CL-INT-003 — Branch/PR integration checklist | **Created — PR #3** | This register is the initial checklist and branch ownership record. |
+| CL-INT-004 onward | **Not started** | Continue in dependency order; re-check exact branch heads and PR checks before implementation. |
+
+PR links:
+- [PR #3 — Integration and gap register](https://github.com/abelmiracle377-stack/cyberlab-ai/pull/3)
+- [PR #4 — Fail-closed authentication middleware](https://github.com/abelmiracle377-stack/cyberlab-ai/pull/4)
+- [PR #5 — Secure bridge pairing token storage](https://github.com/abelmiracle377-stack/cyberlab-ai/pull/5)
+
+## 9. Audit caveats and next review requirements
 
 - Branches are moving targets. Re-fetch all branch heads and compare against the current integration base before taking action.
 - Historical commit counts include shared ancestry and must not be summed as unique commits.
@@ -169,7 +183,7 @@ A capability is **Done** only when all applicable items are satisfied:
 - This register does not authorize merging, deleting branches, changing production configuration, running active scans, or accessing user devices.
 - Keep this file updated in every integration PR when a task's status, implementation owner, test evidence or known limitation changes.
 
-## 9. Source locations reviewed
+## 10. Source locations reviewed
 
 - `proxy.ts`
 - `app/api/agent/route.ts`
