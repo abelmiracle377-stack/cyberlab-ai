@@ -1732,7 +1732,7 @@ class NativeInterceptProxyTests(unittest.TestCase):
 
 
     def test_websocket_proxy_frame_reader_bounds_partial_frame_reads_and_restores_timeout(self):
-        for partial in (b"\\x81", b"\\x81\\x82\\x01"):
+        for partial in (b"\x81", b"\x81\x82\x01"):
             left, right = socket.socketpair()
             try:
                 right.sendall(partial)
