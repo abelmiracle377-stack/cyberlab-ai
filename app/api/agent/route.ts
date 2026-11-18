@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       if (bytes.byteLength > 2 * 1024 * 1024 || attachmentBytes > 2 * 1024 * 1024) {
         return Response.json({ error: "Attachments must total no more than 2 MB; each file is also limited to 2 MB." }, { status: 413 });
       }
-      const safeName = item.name.replace(/[\\r\\n\\u0000-\\u001f]/g, " ").slice(0, 180) || "attachment";
+      const safeName = item.name.replace(/[\r\n\u0000-\u001f]/g, " ").slice(0, 180) || "attachment";
       if (mediaType.startsWith("image/")) {
         attachmentParts.push({ type: "image", image: "data:" + mediaType + ";base64," + bytes.toString("base64") });
       } else if (mediaType === "application/pdf") {
@@ -210,15 +210,15 @@ export async function POST(request: Request) {
         let textContent: string;
         try { textContent = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
         catch { return Response.json({ error: "A text attachment contains invalid UTF-8 data." }, { status: 415 }); }
-        attachmentText.push("[Attached file: " + safeName + "]\\n" + textContent.slice(0, 100000));
+        attachmentText.push("[Attached file: " + safeName + "]\n" + textContent.slice(0, 100000));
       }
     }
     if (!prompt && incomingAttachments.length > 0) prompt = "Please inspect the attached material and summarise its security-relevant contents.";
-    if (attachmentText.length) prompt = [prompt, ...attachmentText].filter(Boolean).join("\\n\\n");
+    if (attachmentText.length) prompt = [prompt, ...attachmentText].filter(Boolean).join("\n\n");
     const model = modelSchema.safeParse(body.model || "openai/gpt-5.5");
     const agentMode = body.agentMode === "open-weight" ? "open-weight" : "standard";
     const learningContext: Array<{ title: string; category: string; source: string; content: string }> = await (async () => { try { const db = adminDb(); const { data } = await db.from("knowledge_items").select("title,category,source,content").eq("status","approved").order("updated_at",{ascending:false}).limit(30); return (data || []).flatMap((item:any) => typeof item.content === "string" ? [{title:String(item.title||"Untitled").slice(0,160),category:String(item.category||"Other").slice(0,80),source:String(item.source||"Admin curated").slice(0,120),content:item.content.slice(0,3000)}] : []); } catch { return []; } })();
-    const learningText = learningContext.map((item, index) => `[Approved item ${index+1}] ${item.title} | ${item.category} | Source: ${item.source}\\n${item.content}`).join("\\n\\n").slice(0, 12000);
+    const learningText = learningContext.map((item, index) => `[Approved item ${index+1}] ${item.title} | ${item.category} | Source: ${item.source}\n${item.content}`).join("\n\n").slice(0, 12000);
     const history = Array.isArray(body.history)
       ? body.history.slice(-12).flatMap((entry: unknown) => {
           if (!entry || typeof entry !== "object") return [];
