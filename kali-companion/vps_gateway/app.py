@@ -6,6 +6,7 @@ a companion must obtain and maintain explicit OS/browser permission locally.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import platform
@@ -65,7 +66,8 @@ def digest(value: str) -> str:
 def owner_auth(authorization: Optional[str] = Header(default=None)):
     if not OWNER_TOKEN:
         raise HTTPException(503, "Gateway owner token is not configured.")
-    if authorization != "Bearer " + OWNER_TOKEN:
+    supplied = authorization[7:] if isinstance(authorization, str) and authorization.startswith("Bearer ") else ""
+    if not supplied or len(supplied) > 512 or not hmac.compare_digest(supplied, OWNER_TOKEN):
         raise HTTPException(401, "Owner authentication required.")
     return True
 
@@ -74,6 +76,8 @@ def device_auth(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Device authentication required.")
     token = authorization[7:]
+    if not 32 <= len(token) <= 512:
+        raise HTTPException(401, "Device token is invalid or revoked.")
     con = db()
     row = con.execute("SELECT * FROM devices WHERE token_hash=?", (digest(token),)).fetchone()
     con.close()
