@@ -213,11 +213,11 @@ export async function POST(request: Request) {
         let textContent: string;
         try { textContent = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
         catch { return Response.json({ error: "A text attachment contains invalid UTF-8 data." }, { status: 415 }); }
-        const extractedText = "[Attached file: " + safeName + "]\\n" + textContent.slice(0, 100000);
-      if (attachmentText.reduce((total, value) => total + value.length, 0) + extractedText.length > 200000) {
-        return Response.json({ error: "Extracted text attachments exceed the 200 KB combined text limit." }, { status: 413 });
-      }
-      attachmentText.push(extractedText);
+        const extractedText = "[Attached file: " + safeName + "]\n" + textContent.slice(0, 100000);
+        if (attachmentText.reduce((total, value) => total + value.length, 0) + extractedText.length > 200000) {
+          return Response.json({ error: "Extracted text attachments exceed the 200 KB combined text limit." }, { status: 413 });
+        }
+        attachmentText.push(extractedText);
       }
     }
     if (!prompt && incomingAttachments.length > 0) prompt = "Please inspect the attached material and summarise its security-relevant contents.";
