@@ -61,20 +61,39 @@ export async function POST(request: Request) {
         port: Number(portAttr.portid),
         state: stateAttr.state || "unknown",
         reason: stateAttr.reason || "",
+        reason_ttl: stateAttr.reason_ttl || null,
         service: serviceAttr.name || "unknown",
         product: serviceAttr.product || "",
         version: serviceAttr.version || "",
+        extra_info: serviceAttr.extrainfo || "",
+        tunnel: serviceAttr.tunnel || "",
+        method: serviceAttr.method || "",
+        confidence: serviceAttr.conf || null,
       };
     }).filter((item) => Number.isInteger(item.port) && item.port > 0 && item.port <= 65535);
-    return { index: index + 1, status, addresses, hostnames, ports };
+    return { index: index + 1, status, status_reason: attributes(statusTag || "").reason || "", addresses, hostnames, ports };
   });
 
+  const allPorts = hosts.flatMap((host) => host.ports);
+  const states = ["open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "unknown"];
   const openPorts = hosts.flatMap((host) => host.ports.filter((port) => port.state === "open").map((port) => ({ host: host.addresses[0]?.address || `Host ${host.index}`, ...port })));
+  const scaninfo = tags(xml, "scaninfo").map((tag) => attributes(tag));
+  const runstatsBlock = xml.match(/<runstats\b[^>]*>([\s\S]*?)<\/runstats>/i)?.[1] || "";
+  const finishedTag = tags(runstatsBlock, "finished")[0];
+  const hostStatsTag = tags(runstatsBlock, "hosts")[0];
+  const completion = {
+    finished: attributes(finishedTag || ""),
+    hosts: attributes(hostStatsTag || ""),
+    scanner: attributes(tags(xml, "nmaprun")[0] || "").scanner || "",
+    version: attributes(tags(xml, "nmaprun")[0] || "").version || "",
+    args: attributes(tags(xml, "nmaprun")[0] || "").args || "",
+    start: attributes(tags(xml, "nmaprun")[0] || "").start || "",
+  };
   return Response.json({
-    summary: { hosts: hosts.length, up: hosts.filter((host) => host.status === "up").length, ports: hosts.reduce((sum, host) => sum + host.ports.length, 0), openPorts: openPorts.length },
-    hosts,
-    openPorts,
+    summary: { hosts: hosts.length, up: hosts.filter((host) => host.status === "up").length, ports: allPorts.length, openPorts: openPorts.length, stateCounts: Object.fromEntries(states.map((state) => [state, allPorts.filter((port) => port.state === state).length])) },
+    hosts, openPorts, scaninfo, completion,
+    evidenceStatus: completion.finished.exit === "success" ? "completed" : (hosts.length || Object.keys(completion.finished).length ? "partial" : "no_port_evidence"),
     source: "User-supplied Nmap XML",
-    note: "This tool parses an existing report only. It does not run Nmap, contact hosts, validate authorisation, or determine exploitability.",
+    note: "This tool parses an existing report only. It does not run Nmap, contact hosts, validate authorisation, or determine exploitability. Missing evidence is not interpreted as zero findings.",
   });
 }
