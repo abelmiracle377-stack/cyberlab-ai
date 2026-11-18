@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/cyberlab-burp-integration
+      - integration/cyberlab-unified-workstation
     paths:
       - "burp-extension/**"
       - "kali-companion/burp_connector.py"
