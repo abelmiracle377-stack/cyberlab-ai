@@ -31,3 +31,23 @@ test("rejects non-object JSON roots", () => {
   assert.equal(inspectWalletJson(["not", "a", "wallet"]).status, "unsupported");
   assert.equal(inspectWalletJson(null).status, "unsupported");
 });
+
+
+test("detects secret-bearing fields recursively before JSON fingerprinting", async () => {
+  const { containsSecretMaterialField } = await import("../lib/wallet-backup-inspection");
+  assert.equal(containsSecretMaterialField({ wallet: { seed_phrase: "synthetic" } }), true);
+  assert.equal(containsSecretMaterialField({ crypto: { privateKey: "synthetic" } }), true);
+  assert.equal(containsSecretMaterialField({ metadata: { label: "cold storage" } }), false);
+});
+
+test("fails closed on excessively deep JSON structures", async () => {
+  const { containsSecretMaterialField } = await import("../lib/wallet-backup-inspection");
+  let value: Record<string, unknown> = {};
+  const root = value;
+  for (let index = 0; index < 26; index += 1) {
+    const next: Record<string, unknown> = {};
+    value.child = next;
+    value = next;
+  }
+  assert.equal(containsSecretMaterialField(root), true);
+});
