@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Copy, GitCompareArrows, Plus, Send, ShieldCheck, X } from "lucide-react";
 
@@ -46,6 +46,12 @@ export default function WebRepeaterPage() {
   const [responseCopyStatus, setResponseCopyStatus] = useState("");
   const [responseBodySearch, setResponseBodySearch] = useState("");
   const [responseBodyMatchIndex, setResponseBodyMatchIndex] = useState(0);
+  const responseBodyRef = useRef<HTMLPreElement | null>(null);
+
+  useEffect(() => {
+    const activeMatch = responseBodyRef.current?.querySelector<HTMLElement>('mark[data-active-match="true"]');
+    activeMatch?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [responseBodyMatchIndex, responseBodySearch, activeId, responseBodyMode]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
@@ -385,7 +391,7 @@ export default function WebRepeaterPage() {
               <button className="report-download" type="button" disabled={!matchCount} onClick={()=>setResponseBodyMatchIndex(index=>(index-1+Math.min(matchCount,5000))%Math.min(matchCount,5000))}>Previous</button>
               <button className="report-download" type="button" disabled={!matchCount} onClick={()=>setResponseBodyMatchIndex(index=>(index+1)%Math.min(matchCount,5000))}>Next</button>
             </div>
-            <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{renderSearchableBody(body)}</pre>
+            <pre ref={responseBodyRef} style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{renderSearchableBody(body)}</pre>
           </>;
         })()}
         {active.response.truncated && <p className="agent-disclaimer">Only a bounded response preview is available here; copying does not recover bytes omitted by the companion.</p>}
