@@ -217,7 +217,7 @@ export default function WebRepeaterPage() {
     const response = active.response;
     const statusLine = `HTTP response ${response.status} ${response.reason}`;
     const headerLines = response.headers.map(header => header.name + ": " + header.value);
-    const exportText = [statusLine, ...headerLines, "", response.body].join("\\n");
+    const exportText = [statusLine, ...headerLines, "", response.body].join("\n");
     try {
       await navigator.clipboard.writeText(exportText);
       setResponseCopyStatus("Response copied to clipboard. Treat copied headers and body as potentially sensitive.");
@@ -327,7 +327,7 @@ export default function WebRepeaterPage() {
         </div>
         <h3>Headers · {active.response.headers.length}</h3>
         <input aria-label="Filter response headers" placeholder="Filter header names or values" value={responseHeaderFilter} onChange={event=>setResponseHeaderFilter(event.target.value)} />
-        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{active.response.headers.filter(header => (header.name + ": " + header.value).toLowerCase().includes(responseHeaderFilter.toLowerCase())).map(header=>header.name+": "+header.value).join("\\n") || "No matching response headers."}</pre>
+        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:11}}>{active.response.headers.filter(header => (header.name + ": " + header.value).toLowerCase().includes(responseHeaderFilter.toLowerCase())).map(header=>header.name+": "+header.value).join("\n") || "No matching response headers."}</pre>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <h3>Body</h3>
           <button className="report-download" type="button" onClick={()=>setResponseBodyMode(mode=>mode==="pretty" ? "raw" : "pretty")}>{responseBodyMode==="pretty" ? "Show raw" : "Pretty-print JSON"}</button>
