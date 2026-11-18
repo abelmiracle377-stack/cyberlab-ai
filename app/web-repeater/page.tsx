@@ -195,7 +195,7 @@ export default function WebRepeaterPage() {
       if (!parsedHeaders || Array.isArray(parsedHeaders) || typeof parsedHeaders !== "object") {
         throw new Error("Headers must be a JSON object before exporting.");
       }
-      const quote = (value: string) => "'" + value.split("'").join("'\\u0022'\\u0022'") + "'";
+      const quote = (value: string) => "'" + value.split("'").join("'\"'\"'") + "'";
       const args = ["curl", "--request", quote(active.method), "--url", quote(active.url)];
       for (const [name, value] of Object.entries(parsedHeaders as Record<string, unknown>)) {
         if (typeof value !== "string") throw new Error("Every header value must be text before exporting.");
