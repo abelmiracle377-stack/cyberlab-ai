@@ -51,3 +51,32 @@ export function inspectWalletJson(value: unknown): WalletFormatInspection {
 
   return { format: "JSON wallet format not recognized", status: "unsupported", details: ["The file was not matched to a supported wallet backup schema."] };
 }
+
+
+const SECRET_FIELD_NAMES = new Set([
+  "seed", "seedphrase", "mnemonic", "mnemonicphrase", "privatekey",
+  "privatekeyhex", "secret", "secretkey", "password", "walletpassword",
+  "keystorepassword", "passphrase", "recoveryphrase", "xprv", "yprv",
+  "zprv", "wif", "extendedprivatekey"
+]);
+
+/**
+ * Detects obvious secret-bearing JSON properties before any fingerprint is
+ * computed. Fails closed when the document is excessively deep or large.
+ * This is a guardrail, not a proof that arbitrary JSON contains no secrets.
+ */
+export function containsSecretMaterialField(value: unknown): boolean {
+  let visited = 0;
+  const visit = (current: unknown, depth: number): boolean => {
+    visited += 1;
+    if (visited > 10_000 || depth > 24) return true;
+    if (Array.isArray(current)) return current.some((item) => visit(item, depth + 1));
+    if (!current || typeof current !== "object") return false;
+    for (const [key, nested] of Object.entries(current as Record<string, unknown>)) {
+      const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (SECRET_FIELD_NAMES.has(normalized) || visit(nested, depth + 1)) return true;
+    }
+    return false;
+  };
+  return visit(value, 0);
+}
