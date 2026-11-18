@@ -215,6 +215,63 @@ class NativeInterceptProxyTests(unittest.TestCase):
             target.server_close()
             target_thread.join(timeout=2)
 
+    def test_rejects_ambiguous_request_body_framing_before_upstream(self):
+        received = []
+
+        class FramingHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                received.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FramingHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        malformed_headers = (
+            ("Content-Length: 0\\r\\nContent-Length: 0\\r\\n",),
+            ("Content-Length: 0\\r\\nTransfer-Encoding: chunked\\r\\n",),
+            ("Transfer-Encoding: chunked\\r\\nTransfer-Encoding: chunked\\r\\n",),
+            ("Transfer-Encoding: gzip\\r\\n",),
+        )
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-FRAMING-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                for index, (headers,) in enumerate(malformed_headers):
+                    with self.subTest(headers=headers):
+                        with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                            request = (
+                                f"GET {origin}/malformed-{index} HTTP/1.1\\r\\n"
+                                f"Host: localhost:{target.server_port}\\r\\n"
+                                + headers
+                                + "Connection: close\\r\\n\\r\\n"
+                            )
+                            client.sendall(request.encode("ascii"))
+                            response = b""
+                            while True:
+                                chunk = client.recv(8192)
+                                if not chunk:
+                                    break
+                                response += chunk
+                        self.assertIn(b"400 Error", response)
+                self.assertEqual(received, [])
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_205_response_is_reframed_as_empty(self):
         class ResetHandler(http.server.BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
