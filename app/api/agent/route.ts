@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     if (!Array.isArray(incomingAttachments) || incomingAttachments.length > 4) {
       return Response.json({ error: "Attach up to four supported files per message." }, { status: 400 });
     }
-    const attachmentParts: Array<Record<string, unknown>> = [];
+    const attachmentParts: Array<{ type: "image"; image: string } | { type: "file"; data: string; mediaType: "application/pdf"; filename: string }> = [];
     const attachmentText: string[] = [];
     let attachmentBytes = 0;
     const allowedAttachmentTypes = new Set([
