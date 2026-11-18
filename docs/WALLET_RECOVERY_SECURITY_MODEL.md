@@ -3,7 +3,7 @@
 ## Current release: local backup triage
 
 The initial Wallet Recovery route is a browser-local triage workspace. It can:
-- Fingerprint opaque binary backup candidates and narrow Ethereum V3 keystore candidates with SHA-256 using Web Crypto.
+- Fingerprint only `.dat` binary backup candidates and narrowly validated encrypted Ethereum V3 keystore candidates with SHA-256 using Web Crypto; unknown binary formats are not fingerprinted.
 - Scan JSON property names for common secret-bearing fields before any fingerprint is considered; fail closed on excessive JSON depth/size.
 - Recognize a narrow Ethereum Web3 Secret Storage V3 JSON structure.
 - Recognize basic Electrum-style JSON markers without extracting wallet material.
@@ -12,7 +12,7 @@ The initial Wallet Recovery route is a browser-local triage workspace. It can:
 - Reject common plaintext seed, mnemonic, private-key and SSH-key filenames before reading or fingerprinting them.
 - Disable overlapping file selections while a local inspection is in progress.
 
-The browser page does not call a server endpoint, upload file bytes, persist the selected file, store secrets in local storage/session storage, send telemetry, request wallet access, or sign/broadcast transactions. Common text/seed/private-key filenames are deliberately rejected before reading or fingerprinting. JSON is parsed locally before fingerprinting; obvious nested secret-bearing property names are rejected, and only the narrow Ethereum V3 candidate receives a JSON fingerprint. Electrum and unknown JSON receive no fingerprint because they may contain wallet secrets. These structural checks cannot identify every disguised or unlabelled secret value, so users must still select encrypted backups only. A file-format match is not proof of wallet validity, ownership, recoverability or authenticity.
+The browser page does not call a server endpoint, upload file bytes, persist the selected file, store secrets in local storage/session storage, send telemetry, request wallet access, or sign/broadcast transactions. Common text/seed/private-key filenames are deliberately rejected before reading or fingerprinting. JSON is parsed locally before fingerprinting; obvious nested secret-bearing property names are rejected, and only an Ethereum V3 candidate with the expected AES-128-CTR cipher, supported KDF marker, IV, ciphertext, MAC and KDF-parameter structure receives a JSON fingerprint. Electrum and unknown JSON receive no fingerprint because they may contain wallet secrets. These structural checks cannot identify every disguised or unlabelled secret value, so users must still select encrypted backups only. A file-format match is not proof of wallet validity, ownership, recoverability or authenticity.
 
 ## Not yet implemented
 
