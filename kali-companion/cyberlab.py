@@ -342,6 +342,8 @@ def main() -> int:
     cve = sub.add_parser("cve", help="Search the public NIST NVD vulnerability database")
     cve.add_argument("query", help="Vendor, product, version or CVE keyword")
     cve.add_argument("--limit", type=int, default=10)
+    sub.add_parser("camera", help="Discover authorised cameras on your private LAN or view one explicitly approved camera")
+    sub.add_parser("camera-assess", help="Run an offline owner-authorised camera security checklist")
     for command in (triage, nmap, dns, domain, ip, cve):
         command.add_argument("-o", "--output", help="Save JSON results to this file")
     args = parser.parse_args()
@@ -371,6 +373,14 @@ def main() -> int:
             result = ip_intelligence(args.address, args.timeout)
         elif args.command == "cve":
             result = cve_search(args.query, args.limit, args.timeout)
+        elif args.command == "camera":
+            from camera_intelligence import camera_intelligence_menu
+            camera_intelligence_menu()
+            return 0
+        elif args.command == "camera-assess":
+            from camera_exposure_defence import run_camera_exposure_assessment
+            run_camera_exposure_assessment()
+            return 0
         save_or_print(result, args.output)
         return 0
     except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
