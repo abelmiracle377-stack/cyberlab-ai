@@ -74,5 +74,56 @@ class NativeWebScopeTests(unittest.TestCase):
             web_testing.validate_request(data)
 
 
+class _FakeSocket:
+    def __init__(self, response: bytes):
+        from io import BytesIO
+        self._response = BytesIO(response)
+        self.sent = b""
+        self.closed = False
+
+    def settimeout(self, value):
+        self.timeout = value
+
+    def sendall(self, data):
+        self.sent += data
+
+    def makefile(self, mode):
+        return self._response
+
+    def close(self):
+        self.closed = True
+
+
+class NativeWebExecutionTests(unittest.TestCase):
+    @patch("web_testing.socket.getaddrinfo", return_value=[_addr("93.184.216.34")])
+    @patch("web_testing.socket.create_connection")
+    def test_connects_to_validated_ip_and_does_not_follow_redirect(self, connect, resolver):
+        fake = _FakeSocket(
+            b"HTTP/1.1 302 Found\\r\\n"
+            b"Location: http://127.0.0.1/private\\r\\n"
+            b"Content-Length: 0\\r\\n"
+            b"Connection: close\\r\\n\\r\\n"
+        )
+        connect.return_value = fake
+
+        result = web_testing.execute_request(_request())
+
+        connect.assert_called_once_with(("93.184.216.34", 443), timeout=web_testing.MAX_TIMEOUT)
+        resolver.assert_called_once()
+        self.assertEqual(result["status"], 302)
+        self.assertFalse(result["redirectFollowed"])
+        self.assertEqual(result["resolvedAddress"], "93.184.216.34")
+        self.assertNotIn(b"127.0.0.1", fake.sent)
+        self.assertTrue(fake.closed)
+
+    @patch("web_testing.socket.getaddrinfo", return_value=[_addr("93.184.216.34"), _addr("fd00::1")])
+    @patch("web_testing.socket.create_connection")
+    def test_mixed_dns_answer_is_rejected_before_socket_creation(self, connect, resolver):
+        with self.assertRaisesRegex(ValueError, "Private, loopback"):
+            web_testing.execute_request(_request())
+        connect.assert_not_called()
+        resolver.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
