@@ -9,7 +9,7 @@ export function isSecretMaterialFilename(filename: string): boolean {
   const normalized = filename.trim().toLowerCase();
   const extension = normalized.includes(".") ? normalized.slice(normalized.lastIndexOf(".")) : "";
   return SECRET_MATERIAL_EXTENSIONS.has(extension) ||
-    /(^|[._-])(seed|mnemonic|private[-_]?key|secret|recovery[-_]?phrase)([._-]|$)/i.test(normalized);
+    /(^|[._-])(seed|mnemonic|private[-_]?key|secret|recovery[-_]?phrase|id_rsa|id_ed25519)([._-]|$)/i.test(normalized);
 }
 
 export function inspectWalletJson(value: unknown): WalletFormatInspection {
