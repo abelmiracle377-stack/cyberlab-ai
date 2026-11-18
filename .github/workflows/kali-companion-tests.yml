@@ -3,8 +3,17 @@ name: Kali Companion Tests
 on:
   push:
     branches: [main, feature/kali-command-centre, integration/cyberlab-unified-workstation]
+    paths:
+      - "kali-companion/**"
+      - "scripts/os/**"
+      - "os/**"
+      - ".github/workflows/kali-companion-tests.yml"
   pull_request:
     branches: [main]
+
+concurrency:
+  group: kali-companion-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
