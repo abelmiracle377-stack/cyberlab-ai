@@ -100,6 +100,8 @@ This is a parameter-test planning foundation, not a full Intruder equivalent. Th
 
 ## Repeater response inspection
 
+The response body can also be searched case-insensitively. Matches are highlighted in the captured preview, with previous/next navigation; rendering is capped at 5,000 matches to keep large responses bounded.
+
 The native Repeater response pane supports case-insensitive filtering across response header names and values, an explicit copy of the captured response preview, and JSON pretty-printing when the response Content-Type indicates JSON. Raw display remains available. The pane reports when the companion truncated a response preview; copying cannot restore bytes that were not captured. Clipboard export is user-triggered and may include sensitive response data, so copied material must be handled as test evidence.
 
 

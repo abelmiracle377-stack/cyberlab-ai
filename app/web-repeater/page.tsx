@@ -44,6 +44,8 @@ export default function WebRepeaterPage() {
   const [responseHeaderFilter, setResponseHeaderFilter] = useState("");
   const [responseBodyMode, setResponseBodyMode] = useState<"raw" | "pretty">("pretty");
   const [responseCopyStatus, setResponseCopyStatus] = useState("");
+  const [responseBodySearch, setResponseBodySearch] = useState("");
+  const [responseBodyMatchIndex, setResponseBodyMatchIndex] = useState(0);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
@@ -212,6 +214,32 @@ export default function WebRepeaterPage() {
     }
   }
 
+  function renderSearchableBody(value: string) {
+    const query = responseBodySearch.trim();
+    if (!query) return value;
+    const lowerValue = value.toLocaleLowerCase();
+    const lowerQuery = query.toLocaleLowerCase();
+    const matches: number[] = [];
+    let cursor = 0;
+    while (matches.length < 5000) {
+      const found = lowerValue.indexOf(lowerQuery, cursor);
+      if (found < 0) break;
+      matches.push(found);
+      cursor = found + lowerQuery.length;
+    }
+    if (!matches.length) return value;
+    const parts = [];
+    let last = 0;
+    for (let index = 0; index < matches.length; index += 1) {
+      const start = matches[index];
+      if (start > last) parts.push(value.slice(last, start));
+      parts.push(<mark key={start} data-active-match={index === responseBodyMatchIndex ? "true" : "false"} style={index === responseBodyMatchIndex ? {outline:"2px solid currentColor"} : undefined}>{value.slice(start, start + query.length)}</mark>);
+      last = start + query.length;
+    }
+    if (last < value.length) parts.push(value.slice(last));
+    return <>{parts}{matches.length === 5000 && <span> [match display capped at 5,000]</span>}</>;
+  }
+
   async function copyResponse() {
     if (!active?.response) return;
     const response = active.response;
@@ -332,13 +360,34 @@ export default function WebRepeaterPage() {
           <h3>Body</h3>
           <button className="report-download" type="button" onClick={()=>setResponseBodyMode(mode=>mode==="pretty" ? "raw" : "pretty")}>{responseBodyMode==="pretty" ? "Show raw" : "Pretty-print JSON"}</button>
         </div>
-        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{(() => {
-          if (responseBodyMode !== "pretty") return active.response.body;
+        {(() => {
           const contentType = active.response.headers.find(header=>header.name.toLowerCase()==="content-type")?.value || "";
-          if (!/json/i.test(contentType)) return active.response.body;
-          try { return JSON.stringify(JSON.parse(active.response.body), null, 2); }
-          catch { return active.response.body; }
-        })()}</pre>
+          let body = active.response.body;
+          if (responseBodyMode === "pretty" && /json/i.test(contentType)) {
+            try { body = JSON.stringify(JSON.parse(body), null, 2); } catch { /* Keep malformed JSON visible as captured. */ }
+          }
+          const query = responseBodySearch.trim().toLocaleLowerCase();
+          let matchCount = 0;
+          if (query) {
+            let cursor = 0;
+            const lowerBody = body.toLocaleLowerCase();
+            while (matchCount < 5001) {
+              const found = lowerBody.indexOf(query, cursor);
+              if (found < 0) break;
+              matchCount += 1;
+              cursor = found + query.length;
+            }
+          }
+          return <>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
+              <input aria-label="Search response body" placeholder="Find text in response body" value={responseBodySearch} onChange={event=>{setResponseBodySearch(event.target.value);setResponseBodyMatchIndex(0);}} />
+              <span role="status">{query ? (matchCount > 5000 ? "5,000+ matches" : matchCount + " match(es)") : "Search captured body"}</span>
+              <button className="report-download" type="button" disabled={!matchCount} onClick={()=>setResponseBodyMatchIndex(index=>(index-1+Math.min(matchCount,5000))%Math.min(matchCount,5000))}>Previous</button>
+              <button className="report-download" type="button" disabled={!matchCount} onClick={()=>setResponseBodyMatchIndex(index=>(index+1)%Math.min(matchCount,5000))}>Next</button>
+            </div>
+            <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:360,overflow:"auto",fontSize:11}}>{renderSearchableBody(body)}</pre>
+          </>;
+        })()}
         {active.response.truncated && <p className="agent-disclaimer">Only a bounded response preview is available here; copying does not recover bytes omitted by the companion.</p>}
       </div>}
       <div className="network-results">
