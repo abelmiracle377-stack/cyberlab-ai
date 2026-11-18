@@ -56,6 +56,18 @@ class VPSCompatibilityTests(unittest.TestCase):
             gateway.device_auth("Bearer short")
         self.assertEqual(invalid.exception.status_code, 401)
 
+    def test_pairing_acceptance_is_rate_limited(self):
+        from fastapi import HTTPException
+        gateway._PAIRING_ATTEMPTS.clear()
+        try:
+            with mock.patch.object(gateway, "PAIRING_ATTEMPT_LIMIT", 1):
+                gateway.enforce_pairing_rate_limit()
+                with self.assertRaises(HTTPException) as limited:
+                    gateway.enforce_pairing_rate_limit()
+                self.assertEqual(limited.exception.status_code, 429)
+        finally:
+            gateway._PAIRING_ATTEMPTS.clear()
+
 
 if __name__ == "__main__":
     unittest.main()
