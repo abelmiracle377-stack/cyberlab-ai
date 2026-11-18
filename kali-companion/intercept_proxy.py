@@ -743,41 +743,58 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
         return status, reason, headers
 
     @staticmethod
-    def _recv_websocket_frame(source: socket.socket, direction: str) -> tuple[bytes, dict, bytes]:
+    def _recv_websocket_frame(source: socket.socket, direction: str,
+                              timeout: float = MAX_TIMEOUT) -> tuple[bytes, dict, bytes]:
+        """Read one complete frame under a single deadline, including partial reads."""
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+            raise ValueError("WebSocket frame timeout must be positive.")
+        previous_timeout = source.gettimeout()
+        deadline = time.monotonic() + timeout
+
         def exact(count: int) -> bytes:
             chunks = bytearray()
             while len(chunks) < count:
-                part = source.recv(count - len(chunks))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("WebSocket peer did not complete a frame before the read deadline.")
+                source.settimeout(remaining)
+                try:
+                    part = source.recv(count - len(chunks))
+                except socket.timeout as exc:
+                    raise TimeoutError("WebSocket peer did not complete a frame before the read deadline.") from exc
                 if not part:
                     raise EOFError("WebSocket peer closed during a frame.")
                 chunks.extend(part)
             return bytes(chunks)
 
-        head = exact(2)
-        length_code = head[1] & 0x7F
-        extra = b""
-        if length_code == 126:
-            extra = exact(2)
-            length = int.from_bytes(extra, "big")
-            if length < 126:
-                raise ValueError("Non-canonical WebSocket frame length.")
-        elif length_code == 127:
-            extra = exact(8)
-            if extra[0] & 0x80:
-                raise ValueError("Invalid WebSocket frame length.")
-            length = int.from_bytes(extra, "big")
-            if length < 65536:
-                raise ValueError("Non-canonical WebSocket frame length.")
-        else:
-            length = length_code
-        masked = bool(head[1] & 0x80)
-        mask = exact(4) if masked else b""
-        if length > 64 * 1024:
-            raise ValueError("Frame exceeds the 64 KB manual-interception limit.")
-        payload = exact(length)
-        raw = head + extra + mask + payload
-        metadata, decoded = decode_frame(raw, direction)
-        return raw, metadata, decoded
+        try:
+            head = exact(2)
+            length_code = head[1] & 0x7F
+            extra = b""
+            if length_code == 126:
+                extra = exact(2)
+                length = int.from_bytes(extra, "big")
+                if length < 126:
+                    raise ValueError("Non-canonical WebSocket frame length.")
+            elif length_code == 127:
+                extra = exact(8)
+                if extra[0] & 0x80:
+                    raise ValueError("Invalid WebSocket frame length.")
+                length = int.from_bytes(extra, "big")
+                if length < 65536:
+                    raise ValueError("Non-canonical WebSocket frame length.")
+            else:
+                length = length_code
+            masked = bool(head[1] & 0x80)
+            mask = exact(4) if masked else b""
+            if length > 64 * 1024:
+                raise ValueError("Frame exceeds the 64 KB manual-interception limit.")
+            payload = exact(length)
+            raw = head + extra + mask + payload
+            metadata, decoded = decode_frame(raw, direction)
+            return raw, metadata, decoded
+        finally:
+            source.settimeout(previous_timeout)
 
     def _relay_websocket(self, upstream: socket.socket) -> None:
         client = self.connection
