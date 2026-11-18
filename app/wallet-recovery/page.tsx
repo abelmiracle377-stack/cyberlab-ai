@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, FileKey, Fingerprint, LockKeyhole, AlertTriangle, CheckCircle2, HardDrive, RefreshCw } from "lucide-react";
-import { inspectWalletJson, isSecretMaterialFilename } from "../../lib/wallet-backup-inspection";
+import { containsSecretMaterialField, inspectWalletJson, isSecretMaterialFilename } from "../../lib/wallet-backup-inspection";
 
 type Inspection = {
   name: string;
@@ -52,7 +52,7 @@ export default function WalletRecoveryPage() {
     setBusy(true);
     try {
       const bytes = await file.arrayBuffer();
-      const digest = hex(await crypto.subtle.digest("SHA-256", bytes));
+      let digest = "";
       let result: ReturnType<typeof inspectWalletJson> = {
         format: "Unclassified backup / binary wallet file",
         status: "opaque",
@@ -62,19 +62,26 @@ export default function WalletRecoveryPage() {
         let parsed: unknown;
         try { parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
         catch { throw new Error("The selected .json file is not valid UTF-8 JSON."); }
+        if (containsSecretMaterialField(parsed)) {
+          throw new Error("This JSON contains fields commonly used for plaintext wallet secrets. It was not fingerprinted. Keep the original file offline and use a trusted wallet-specific recovery tool.");
+        }
         result = inspectWalletJson(parsed);
+        // Only the narrow encrypted Ethereum V3 candidate receives a digest.
+        // Electrum and unknown JSON can contain secret-bearing payloads.
+        if (/^Ethereum Web3 Secret Storage \(V3\) candidate$/.test(result.format)) {
+          digest = hex(await crypto.subtle.digest("SHA-256", bytes));
+        } else {
+          result.details.push("No fingerprint was generated for this JSON format because it may contain wallet-secret material.");
+        }
       } else if (lower === "wallet.dat" || lower.endsWith(".dat")) {
         result = {
           format: "Bitcoin Core wallet backup (binary candidate)",
           status: "opaque",
           details: ["The filename suggests a Bitcoin Core wallet backup, but its contents were not parsed.", "Use a verified offline Bitcoin Core-compatible recovery environment; do not upload this file."]
         };
-      } else if (lower.endsWith(".txt") || lower.endsWith(".seed")) {
-        result = {
-          format: "Text/seed material — not inspected",
-          status: "unsupported",
-          details: ["For safety, text and seed files are not read, parsed, displayed or retained by this module.", "Never paste a seed phrase or private key into CyberLab chat or a hosted website."]
-        };
+      }
+      if (!lower.endsWith(".json")) {
+        digest = hex(await crypto.subtle.digest("SHA-256", bytes));
       }
       setInspection({ name: file.name, size: file.size, sha256: digest, ...result });
       setNotice("Inspection completed in this browser tab. The file bytes are not retained after the operation.");
@@ -119,12 +126,12 @@ export default function WalletRecoveryPage() {
             <input id="wallet-backup-file" type="file" disabled={busy} onChange={(event) => inspectFile(event.target.files?.[0])} />
           </label>
           <div className="wallet-inline-note"><ShieldCheck size={13}/> Only select a backup you own or are explicitly authorised to recover.</div>
-          {busy && <div className="wallet-progress"><RefreshCw size={14}/> Computing SHA-256 and inspecting file structure locally…</div>}
+          {busy && <div className="wallet-progress"><RefreshCw size={14}/> Inspecting file structure locally; fingerprinting is limited to approved backup types…</div>}
           {error && <div className="wallet-error"><AlertTriangle size={15}/>{error}</div>}
           {inspection && <div className="wallet-inspection">
             <div className="wallet-inspection-head"><div><span>LOCAL INSPECTION RESULT</span><h3>{inspection.format}</h3></div><span className={"wallet-state wallet-state-" + inspection.status}>{inspection.status.toUpperCase()}</span></div>
             <div className="wallet-file-meta"><div><span>FILE</span><b>{inspection.name}</b></div><div><span>SIZE</span><b>{formatSize(inspection.size)}</b></div></div>
-            <div className="wallet-hash"><span>SHA-256 FINGERPRINT</span><code>{inspection.sha256}</code></div>
+            {inspection.sha256 && <div className="wallet-hash"><span>SHA-256 FINGERPRINT</span><code>{inspection.sha256}</code></div>}
             <ul>{inspection.details.map((detail, index) => <li key={index}>{detail}</li>)}</ul>
             <button type="button" className="wallet-reset" onClick={reset}>Clear inspection</button>
           </div>}
