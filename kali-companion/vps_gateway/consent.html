@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>CyberLab — Device consent</title>
+<style>
+:root{color-scheme:dark;--bg:#090d12;--panel:#111923;--line:#263443;--muted:#9aabba;--accent:#65d6a4}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4f8;font:15px/1.5 system-ui,sans-serif}
+main{max-width:720px;margin:5vh auto;padding:24px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px}
+h1{margin:0 0 8px;font-size:26px}p,.muted{color:var(--muted)}.notice{border-left:3px solid var(--accent);padding:10px 14px;background:#14231f;margin:18px 0}
+label.choice{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-bottom:1px solid var(--line)}
+input[type=checkbox]{margin-top:5px;accent-color:var(--accent)}input[type=text],input[type=password]{width:100%;padding:12px;background:#0b1118;border:1px solid var(--line);border-radius:8px;color:white}
+button{border:0;border-radius:9px;padding:12px 16px;background:var(--accent);color:#07120d;font-weight:700;cursor:pointer;margin:12px 8px 0 0}
+button.secondary{background:#283645;color:white}button.danger{background:#9b3945;color:white}
+video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-top:14px}
+#status{white-space:pre-wrap;margin-top:16px;color:var(--accent)}.small{font-size:13px}
+</style>
+</head>
+<body><main><section class="card">
+<h1>CyberLab device connection</h1>
+<p>Someone has invited this device to connect to their CyberLab personal VPS. Enter the one-time pairing code they gave you.</p>
+<div class="notice"><strong>Your control matters.</strong> Nothing is accessed until you choose permissions and approve the browser or operating-system prompt. You can stop at any time. Closing this page stops local media tracks and ends this companion session.</div>
+<label>One-time pairing code<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Enter pairing code"></label>
+<p><label>Device name<input id="label" type="text" maxlength="80" placeholder="e.g. My phone"></label></p>
+<h2>Choose permissions</h2>
+<p class="muted small">Each permission is optional. Browser prompts will appear only after you press “Grant selected permissions”.</p>
+<label class="choice"><input type="checkbox" id="camera"><span><strong>Camera</strong><br><span class="muted small">Allow camera access while this page is open. A local preview will be visible.</span></span></label>
+<label class="choice"><input type="checkbox" id="microphone"><span><strong>Microphone</strong><br><span class="muted small">Allow microphone access while this page is open.</span></span></label>
+<label class="choice"><input type="checkbox" id="screen_capture"><span><strong>Screen sharing</strong><br><span class="muted small">Choose the specific screen or window to share using the browser picker.</span></span></label>
+<label class="choice"><input type="checkbox" id="location"><span><strong>Location</strong><br><span class="muted small">Request location once through the browser's location prompt. No continuous tracking.</span></span></label>
+<label class="choice"><input type="checkbox" id="file_upload"><span><strong>File upload</strong><br><span class="muted small">Allow a future, explicit file upload from this device. No files are uploaded by this page.</span></span></label>
+<label class="choice"><input type="checkbox" id="terms"><span>I have read the permission descriptions and agree to connect this device with only the permissions I selected.</span></label>
+<button id="grant">Grant selected permissions</button><button id="stop" class="danger" disabled>Stop and disconnect</button>
+<video id="preview" autoplay playsinline muted hidden></video>
+<div id="filehub" hidden>
+<h2>My File Hub</h2>
+<p class="muted small">Choose a file and upload it yourself. Maximum 25 MB per file. Your files are private to this device unless you create a separate share link.</p>
+<input id="fileinput" type="file">
+<button id="uploadfile" class="secondary">Upload selected file</button>
+<button id="refreshfiles" class="secondary">Refresh files</button>
+<div id="filelist"></div><div id="filepreview"></div>
+</div>
+<div id="status" role="status" aria-live="polite">Not connected.</div>
+<p class="muted small">This page does not record, upload, or stream media. Keep it open only while you want the connection active. The browser's own permission indicators remain in effect.</p>
+</section></main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let token = null, deviceId = null, streams = [], heartbeat = null, locationGranted = false;
+  const status = message => $('status').textContent = message;
+  const stopTracks = () => { for (const stream of streams) for (const track of stream.getTracks()) track.stop(); streams = []; $('preview').srcObject = null; $('preview').hidden = true; };
+  const getLocation = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('Location is not supported by this browser.'));
+    navigator.geolocation.getCurrentPosition(() => resolve(true), error => reject(new Error(error.message)), {enableHighAccuracy:false,timeout:12000,maximumAge:0});
+  });
+  async function disconnect() {
+    if (heartbeat) clearInterval(heartbeat);
+    heartbeat = null; stopTracks();
+    if (token) {
+      try { await fetch('/v1/consent/withdraw',{method:'POST',headers:{Authorization:'Bearer '+token}}); } catch (_) {}
+    }
+    token = null; deviceId = null; $('stop').disabled = true;
+    status('Disconnected. Local media tracks have been stopped. You may close this page.');
+  }
+  let previewUrl = null;
+  const allowedPreview = new Set(['image/jpeg','image/png','image/webp','image/gif','audio/mpeg','audio/wav','audio/ogg','audio/webm','video/mp4','video/webm','application/pdf','text/plain']);
+  async function refreshFiles() {
+    if (!token) return;
+    const response = await fetch('/v1/files',{headers:{Authorization:'Bearer '+token}});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Could not load files.');
+    const list = $('filelist'); list.replaceChildren();
+    for (const file of data.files) {
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:10px 0;border-bottom:1px solid #263443';
+      const name = document.createElement('strong'); name.textContent = file.name+' ';
+      const meta = document.createElement('span'); meta.className='muted small'; meta.textContent = (file.media_type||'unknown type')+' · '+file.size+' bytes ';
+      const view = document.createElement('button'); view.className='secondary'; view.textContent='Preview / open';
+      view.addEventListener('click', () => previewFile(file)); item.append(name,meta,view); list.append(item);
+    }
+    if (!data.files.length) list.textContent='No files uploaded yet.';
+  }
+  async function previewFile(file) {
+    const response = await fetch('/v1/files/'+encodeURIComponent(file.file_id),{headers:{Authorization:'Bearer '+token}});
+    if (!response.ok) throw new Error('File preview is unavailable.');
+    const blob = await response.blob();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(blob);
+    const panel = $('filepreview'); panel.replaceChildren();
+    const heading = document.createElement('p'); heading.textContent='Selected: '+file.name; panel.append(heading);
+    let element;
+    if (allowedPreview.has(file.media_type) && file.media_type.startsWith('image/')) { element=document.createElement('img'); element.style.maxWidth='100%'; element.style.maxHeight='360px'; element.src=previewUrl; }
+    else if (allowedPreview.has(file.media_type) && file.media_type.startsWith('audio/')) { element=document.createElement('audio'); element.controls=true; element.src=previewUrl; }
+    else if (allowedPreview.has(file.media_type) && file.media_type.startsWith('video/')) { element=document.createElement('video'); element.controls=true; element.playsInline=true; element.style.maxWidth='100%'; element.src=previewUrl; }
+    else if (file.media_type==='text/plain') { element=document.createElement('pre'); element.style.cssText='white-space:pre-wrap;max-height:300px;overflow:auto'; element.textContent=await blob.text(); }
+    else { element=document.createElement('a'); element.href=previewUrl; element.target='_blank'; element.rel='noopener noreferrer'; element.textContent='Open or download '+file.name; }
+    panel.append(element);
+  }
+  $('uploadfile').addEventListener('click', async () => {
+    if (!token) return;
+    const file = $('fileinput').files[0];
+    if (!file) { status('Choose a file first.'); return; }
+    if (file.size > 25*1024*1024) { status('File is larger than the 25 MB limit.'); return; }
+    const form = new FormData(); form.append('upload',file,file.name);
+    $('uploadfile').disabled=true;
+    try {
+      const response=await fetch('/v1/files',{method:'POST',headers:{Authorization:'Bearer '+token},body:form});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.detail||'Upload failed.');
+      status('Uploaded '+data.name+' ('+data.size+' bytes).');
+      await refreshFiles();
+    } catch(error) { status('Upload failed: '+error.message); }
+    finally { $('uploadfile').disabled=false; }
+  });
+  $('refreshfiles').addEventListener('click', () => refreshFiles().catch(error=>status(error.message)));
+  $('grant').addEventListener('click', async () => {
+    $('grant').disabled = true;
+    const requested = ['camera','microphone','screen_capture','location','file_upload'].filter(id => $(id).checked);
+    if (!requested.length || !$('terms').checked || !$('code').value.trim() || !$('label').value.trim()) {
+      status('Enter the pairing code and device name, select at least one permission, and accept the terms.');
+      $('grant').disabled = false; return;
+    }
+    const granted = {};
+    try {
+      if (requested.includes('camera') || requested.includes('microphone')) {
+        const stream = await navigator.mediaDevices.getUserMedia({video:requested.includes('camera'),audio:requested.includes('microphone')});
+        streams.push(stream); granted.camera = requested.includes('camera'); granted.microphone = requested.includes('microphone');
+        $('preview').srcObject = stream; $('preview').hidden = false;
+      }
+      if (requested.includes('screen_capture')) {
+        const screen = await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+        streams.push(screen); granted.screen_capture = true;
+        screen.getVideoTracks()[0].addEventListener('ended', () => { status('Screen sharing was stopped in the browser.'); });
+        $('preview').srcObject = screen; $('preview').hidden = false;
+      }
+      if (requested.includes('location')) { await getLocation(); granted.location = true; locationGranted = true; }
+      if (requested.includes('file_upload')) granted.file_upload = true;
+      const response = await fetch('/v1/pairing/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        code:$('code').value.trim(),participant_label:$('label').value.trim(),
+        terms_accepted:true,permissions:granted
+      })});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Pairing was not accepted.');
+      token = data.device_token; deviceId = data.device_id;
+      $('stop').disabled = false;
+      if (granted.file_upload) { $('filehub').hidden=false; await refreshFiles(); }
+      status('Connected. Device ID: '+deviceId+'\nGranted permissions: '+Object.keys(granted).filter(k=>granted[k]).join(', ')+'\nNo recording or upload is running.');
+      heartbeat = setInterval(async () => {
+        if (!token) return;
+        try { await fetch('/v1/heartbeat',{method:'POST',headers:{Authorization:'Bearer '+token}}); }
+        catch (_) { status('Connection lost. Stop sharing and reconnect if needed.'); }
+      },30000);
+    } catch (error) {
+      stopTracks(); status('Connection not established: '+error.message+'\nReview your selections and browser permissions, then try again.');
+    } finally { $('grant').disabled = false; }
+  });
+  $('stop').addEventListener('click', disconnect);
+  window.addEventListener('pagehide', () => { if (heartbeat) clearInterval(heartbeat); stopTracks(); if (token) { fetch('/v1/consent/withdraw',{method:'POST',headers:{Authorization:'Bearer '+token},keepalive:true}).catch(()=>{}); token=null; } });
+})();
+</script></body></html>
