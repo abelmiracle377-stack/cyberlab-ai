@@ -15,7 +15,9 @@ import sys
 import secrets
 import sqlite3
 import time
+import threading
 import uuid
+from collections import deque
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +30,21 @@ DATA_DIR = Path(os.environ.get("CYBERLAB_GATEWAY_FILES", "/var/lib/cyberlab-gate
 OWNER_TOKEN = os.environ.get("CYBERLAB_OWNER_TOKEN", "")
 PAIR_TTL = 600
 MAX_UPLOAD = 25 * 1024 * 1024
+PAIRING_ATTEMPT_LIMIT = 30
+PAIRING_WINDOW_SECONDS = 15 * 60
+_PAIRING_ATTEMPTS = deque()
+_PAIRING_ATTEMPTS_LOCK = threading.Lock()
+
+
+def enforce_pairing_rate_limit() -> None:
+    """Bound short-code guesses per gateway process; deploy behind a firewall/WAF too."""
+    now = time.monotonic()
+    with _PAIRING_ATTEMPTS_LOCK:
+        while _PAIRING_ATTEMPTS and now - _PAIRING_ATTEMPTS[0] >= PAIRING_WINDOW_SECONDS:
+            _PAIRING_ATTEMPTS.popleft()
+        if len(_PAIRING_ATTEMPTS) >= PAIRING_ATTEMPT_LIMIT:
+            raise HTTPException(429, "Too many pairing attempts. Wait before trying again.")
+        _PAIRING_ATTEMPTS.append(now)
 app = FastAPI(title="CyberLab Personal VPS Gateway", version="0.1.0")
 
 
@@ -165,6 +182,7 @@ def create_pairing(body: PairRequest):
 
 @app.post("/v1/pairing/accept")
 def accept_pairing(body: AcceptPairing):
+    enforce_pairing_rate_limit()
     if not body.terms_accepted:
         raise HTTPException(403, "The participant must accept the disclosed terms.")
     if not body.permissions or not any(body.permissions.values()):
