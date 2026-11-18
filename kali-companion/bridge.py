@@ -9,7 +9,6 @@ import json
 import os
 import platform
 import re
-import secrets
 import shutil
 import socket
 import subprocess
@@ -19,6 +18,8 @@ import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+
+from bridge_security import load_or_create_pairing_token
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -32,25 +33,7 @@ scan_lock = threading.Lock()
 
 
 def load_token() -> str:
-    CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    try:
-        os.chmod(CONFIG_DIR, 0o700)
-    except OSError:
-        pass
-    if TOKEN_FILE.exists():
-        token = TOKEN_FILE.read_text(encoding="utf-8").strip()
-        if len(token) >= 40:
-            return token
-    token = secrets.token_urlsafe(48)
-    fd = os.open(str(TOKEN_FILE), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(token + "\n")
-    try:
-        os.chmod(TOKEN_FILE, 0o600)
-    except OSError:
-        pass
-    return token
-
+    return load_or_create_pairing_token(CONFIG_DIR, TOKEN_FILE)
 
 def valid_target(value: str) -> str:
     value = value.strip().lower().rstrip(".")
