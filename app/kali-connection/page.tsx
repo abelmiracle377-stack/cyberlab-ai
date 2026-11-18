@@ -367,6 +367,20 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <p>{result.note}</p>
       </section>}
 
+      <section className="kali-panel" id="camera-intelligence">
+        <h2>12. Authorised Camera Intelligence</h2>
+        <p>Camera discovery is limited to an operator-selected private LAN (maximum /24). Viewing requires one manually entered camera, a separate ownership/authorisation confirmation and a local ffplay viewer. The module does not scan public IP ranges or harvest exposed CCTV feeds.</p>
+        <p>On the paired Kali companion, run <code>python3 kali-companion/cyberlab.py camera</code>. For the offline configuration checklist, run <code>python3 kali-companion/cyberlab.py camera-assess</code>. The checklist is based on operator-supplied answers and does not contact a device.</p>
+        <p className="network-note">Optional Windy public webcam catalogue access requires a separately configured <code>WINDY_WEBCAMS_API_KEY</code>. This is distinct from private camera discovery and is not required for local operation.</p>
+      </section>
+
+      <section className="kali-panel" id="vps-gateway">
+        <h2>13. Optional personal VPS gateway</h2>
+        <p>The gateway source is included in the repository but is not deployed by Vercel and is not installed on your VPS. It is a separate FastAPI service intended for a VPS you control, behind TLS, with a private owner token, short-lived pairing codes and revocable per-device permissions.</p>
+        <p>Camera, microphone, screen-capture, location and file-upload permissions are separate opt-ins. Do not enable a permission unless the device owner understands and approves the exact use. Review <code>kali-companion/vps_gateway/consent.html</code>, <code>.env.example</code> and the installer before provisioning a server.</p>
+        <p className="network-note">No VPS endpoint, owner token or device pairing has been configured by this integration work.</p>
+      </section>
+
       <section className="kali-panel">
         <h2>Other local companion modules</h2>
         <div className="kali-module-grid">{modules.map(({icon:Icon,title,detail})=><div className="kali-module" key={title}><Icon size={17}/><div><strong>{title}</strong><p>{detail}</p></div></div>)}</div>
