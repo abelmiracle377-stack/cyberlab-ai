@@ -62,9 +62,20 @@ def validate_request(data: dict) -> dict:
     if not 1 <= port <= 65535:
         raise ValueError("Target port must be between 1 and 65535.")
     host = parsed.hostname.rstrip(".").lower()
-    confirmed = urlsplit(confirmation).hostname.rstrip(".").lower() if isinstance(confirmation, str) and confirmation else ""
-    if not host or confirmed != host:
-        raise ValueError("Retype the exact target hostname in the scope confirmation field.")
+    if not isinstance(confirmation, str) or len(confirmation) > 2048:
+        raise ValueError("Retype the exact HTTP(S) origin in the scope confirmation field.")
+    confirmed = urlsplit(confirmation)
+    if confirmed.scheme not in {"http", "https"} or not confirmed.hostname or confirmed.username or confirmed.password:
+        raise ValueError("Scope confirmation must be an HTTP(S) URL without embedded credentials.")
+    try:
+        confirmed_port = confirmed.port or (443 if confirmed.scheme == "https" else 80)
+    except ValueError as exc:
+        raise ValueError("Scope confirmation contains an invalid port.") from exc
+    target_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    confirmed_host = confirmed.hostname.rstrip(".").lower()
+    if (not host or confirmed.scheme.lower() != parsed.scheme.lower()
+            or confirmed_host != host or confirmed_port != target_port):
+        raise ValueError("Retype the exact target scheme, hostname and port in the scope confirmation field.")
     if data.get("authorizationConfirmed") is not True or data.get("confirmSend") is not True:
         raise ValueError("Confirm written authorisation and explicitly approve sending this request.")
     if not isinstance(reference, str) or not reference.strip() or len(reference) > 160:
