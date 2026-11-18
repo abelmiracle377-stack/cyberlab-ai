@@ -21,20 +21,31 @@ export function inspectWalletJson(value: unknown): WalletFormatInspection {
   const cryptoValue = data.Crypto ?? data.crypto;
   if (data.version === 3 && cryptoValue && typeof cryptoValue === "object" && !Array.isArray(cryptoValue)) {
     const crypto = cryptoValue as Record<string, unknown>;
-    const cipher = typeof crypto.cipher === "string" && /^[a-z0-9_-]{1,40}$/i.test(crypto.cipher) ? crypto.cipher : "unspecified";
-    const kdf = typeof crypto.kdf === "string" && /^[a-z0-9_-]{1,40}$/i.test(crypto.kdf) ? crypto.kdf : "unspecified";
-    const addressPresent = typeof data.address === "string" && /^[0-9a-f]{40}$/i.test(data.address.replace(/^0x/i, ""));
-    const idPresent = typeof data.id === "string" && /^[0-9a-f-]{16,64}$/i.test(data.id);
-    return {
-      format: "Ethereum Web3 Secret Storage (V3) candidate",
-      status: "recognized",
-      details: [
-        "Version 3 structure detected; this is a format check, not decryption or proof of authenticity.",
-        "Cipher: " + cipher + ". Key derivation: " + kdf + ".",
-        "Address field: " + (addressPresent ? "valid-looking" : "absent or malformed") + "; UUID field: " + (idPresent ? "present" : "absent or malformed") + ".",
-        "No password was requested and no decryption was attempted."
-      ]
-    };
+    const cipherParams = crypto.cipherparams;
+    const kdfParams = crypto.kdfparams;
+    const cipherValid = crypto.cipher === "aes-128-ctr";
+    const kdfValid = crypto.kdf === "scrypt" || crypto.kdf === "pbkdf2";
+    const ciphertextValid = typeof crypto.ciphertext === "string" &&
+      crypto.ciphertext.length >= 2 && crypto.ciphertext.length % 2 === 0 && /^[0-9a-f]+$/i.test(crypto.ciphertext);
+    const macValid = typeof crypto.mac === "string" && /^[0-9a-f]{64}$/i.test(crypto.mac);
+    const ivValid = !!cipherParams && typeof cipherParams === "object" && !Array.isArray(cipherParams) &&
+      typeof (cipherParams as Record<string, unknown>).iv === "string" &&
+      /^[0-9a-f]{32}$/i.test((cipherParams as Record<string, string>).iv);
+    const kdfParamsValid = !!kdfParams && typeof kdfParams === "object" && !Array.isArray(kdfParams);
+    if (cipherValid && kdfValid && ciphertextValid && macValid && ivValid && kdfParamsValid) {
+      const addressPresent = typeof data.address === "string" && /^[0-9a-f]{40}$/i.test(data.address.replace(/^0x/i, ""));
+      const idPresent = typeof data.id === "string" && /^[0-9a-f-]{16,64}$/i.test(data.id);
+      return {
+        format: "Ethereum Web3 Secret Storage (V3) candidate",
+        status: "recognized",
+        details: [
+          "Encrypted V3 structure detected; this is a format check, not decryption or proof of authenticity.",
+          "Cipher: AES-128-CTR. Key derivation: " + String(crypto.kdf) + ".",
+          "Address field: " + (addressPresent ? "valid-looking" : "absent or malformed") + "; UUID field: " + (idPresent ? "present" : "absent or malformed") + ".",
+          "No password was requested and no decryption was attempted."
+        ]
+      };
+    }
   }
 
   if (typeof data.wallet_type === "string" && data.wallet_type.length <= 40 &&
