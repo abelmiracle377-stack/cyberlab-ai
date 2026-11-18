@@ -1731,6 +1731,21 @@ class NativeInterceptProxyTests(unittest.TestCase):
             right.close()
 
 
+    def test_websocket_proxy_frame_reader_bounds_partial_frame_reads_and_restores_timeout(self):
+        for partial in (b"\\x81", b"\\x81\\x82\\x01"):
+            left, right = socket.socketpair()
+            try:
+                right.sendall(partial)
+                self.assertIsNone(left.gettimeout())
+                with self.assertRaises(TimeoutError):
+                    intercept_proxy._ProxyHandler._recv_websocket_frame(
+                        left, "client-to-server", timeout=0.05)
+                self.assertIsNone(left.gettimeout())
+            finally:
+                left.close()
+                right.close()
+
+
     def test_websocket_frame_queue_does_not_allow_editing_fragmented_text_frames(self):
         from websocket_interception import WebSocketFrameDecisionQueue
         queue = WebSocketFrameDecisionQueue(timeout=2)
