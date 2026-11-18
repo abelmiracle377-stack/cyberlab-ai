@@ -40,6 +40,7 @@ export default function WebRepeaterPage() {
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<any>(null);
   const [analysisError, setAnalysisError] = useState("");
+  const [copyRequestStatus, setCopyRequestStatus] = useState("");
 
   useEffect(() => {
     const raw = sessionStorage.getItem("cyberlab.repeaterDraft");
@@ -187,6 +188,27 @@ export default function WebRepeaterPage() {
     } finally { setAnalysisBusy(false); }
   }
 
+  async function copyRequestAsCurl() {
+    if (!active) return;
+    try {
+      const parsedHeaders: unknown = JSON.parse(active.headersText);
+      if (!parsedHeaders || Array.isArray(parsedHeaders) || typeof parsedHeaders !== "object") {
+        throw new Error("Headers must be a JSON object before exporting.");
+      }
+      const quote = (value: string) => "'" + value.split("'").join("'\\u0022'\\u0022'") + "'";
+      const args = ["curl", "--request", quote(active.method), "--url", quote(active.url)];
+      for (const [name, value] of Object.entries(parsedHeaders as Record<string, unknown>)) {
+        if (typeof value !== "string") throw new Error("Every header value must be text before exporting.");
+        args.push("--header", quote(name + ": " + value));
+      }
+      if (active.body) args.push("--data-binary", quote(active.body));
+      await navigator.clipboard.writeText(args.join(" "));
+      setCopyRequestStatus("cURL command copied. Review it before running; it does not carry CyberLab's approval gates.");
+    } catch (cause) {
+      setCopyRequestStatus(cause instanceof Error ? cause.message : "Could not copy the cURL command.");
+    }
+  }
+
   async function sendRequest() {
     if (!active) return;
     updateActive({ busy: true, error: "", response: null });
@@ -272,7 +294,11 @@ export default function WebRepeaterPage() {
         <div className="scope-checks"><label><input type="checkbox" checked={localLabMode} onChange={e=>setLocalLabMode(e.target.checked)}/> Local lab mode (loopback only)</label></div>
         <div className="scope-checks"><label><input type="checkbox" checked={authorised} onChange={e=>setAuthorised(e.target.checked)}/> I own this target or have explicit written authorisation.</label></div>
         {["POST","PUT","PATCH","DELETE"].includes(active.method) && <div className="scope-checks"><label><input type="checkbox" checked={confirmStateChange} onChange={e=>setConfirmStateChange(e.target.checked)}/> I separately approve this state-changing request.</label></div>}
-        <button className="report-download" type="button" disabled={active.busy || !authorised || !reference.trim() || (["POST","PUT","PATCH","DELETE"].includes(active.method) && !confirmStateChange)} onClick={sendRequest}>{active.busy ? "Sending…" : <><Send size={14}/> Send request</>}</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button className="report-download" type="button" disabled={active.busy || !authorised || !reference.trim() || (["POST","PUT","PATCH","DELETE"].includes(active.method) && !confirmStateChange)} onClick={sendRequest}>{active.busy ? "Sending…" : <><Send size={14}/> Send request</>}</button>
+          <button className="report-download" type="button" onClick={copyRequestAsCurl}><Copy size={13}/> Copy as cURL</button>
+        </div>
+        {copyRequestStatus && <p role="status">{copyRequestStatus}</p>}
         {active.error && <div className="agent-error">{active.error}</div>}
       </div>}
       {active?.response && <div className="network-results">
