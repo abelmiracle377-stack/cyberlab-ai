@@ -2,7 +2,7 @@ name: Kali Companion Tests
 
 on:
   push:
-    branches: [main, feature/kali-command-centre]
+    branches: [main, feature/kali-command-centre, integration/cyberlab-unified-workstation]
   pull_request:
     branches: [main]
 
