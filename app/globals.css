@@ -568,3 +568,76 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 
 /* Local-first crypto wallet backup triage */
 .wallet-recovery-shell{min-height:100vh;background:#050806;color:#e6eee7;font-family:var(--sans,Arial,sans-serif)}.wallet-recovery-top{height:58px;border-bottom:1px solid #26352a;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.wallet-recovery-back,.wallet-recovery-brand{display:flex;align-items:center;gap:8px;color:#a8b8aa;text-decoration:none;font:10px var(--mono)}.wallet-recovery-brand{color:#c3d6c4;letter-spacing:1px}.wallet-local-label{color:#a8cf91;font:9px var(--mono)}.wallet-recovery-main{max-width:900px;margin:auto;padding:44px 22px 70px}.wallet-recovery-kicker,.wallet-panel-head>div>span,.wallet-inspection-head>div>span,.wallet-hash>span,.wallet-file-meta span{font:8px var(--mono);letter-spacing:1px;color:#9fc38a}.wallet-recovery-main h1{font-size:clamp(30px,5vw,44px);margin:12px 0}.wallet-recovery-intro{max-width:740px;color:#9ba99e;font-size:13px;line-height:1.8}.wallet-security-notice,.wallet-disclaimer{display:flex;gap:13px;padding:16px;border:1px solid #40583a;background:#0c160d;margin:23px 0;color:#bfe0ae}.wallet-security-notice p,.wallet-disclaimer p{color:#a2b19f;font-size:11px;line-height:1.7;margin:7px 0 0}.wallet-panel{border:1px solid #2b3a2e;background:#090f0b;padding:18px;margin:14px 0}.wallet-panel-head,.wallet-inspection-head,.wallet-adapter{display:flex;align-items:center;justify-content:space-between;gap:12px}.wallet-panel-head h2{font-size:19px;margin:6px 0}.wallet-file-drop{min-height:150px;border:1px dashed #52664b;background:#070c08;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;cursor:pointer;padding:18px}.wallet-file-drop input{max-width:240px;font:10px var(--mono)}.wallet-inline-note,.wallet-foot{display:flex;gap:7px;color:#8fa18e;font:9px var(--mono);margin-top:13px}.wallet-progress,.wallet-error{padding:12px;margin-top:13px;border:1px solid #3b533a;color:#c0d8ad;font:10px var(--mono)}.wallet-error{border-color:#633b3b;color:#e0aaaa}.wallet-status-line{color:#859487;font:9px var(--mono)}.wallet-inspection{margin-top:17px;border-top:1px solid #29382d;padding-top:16px}.wallet-inspection-head h3{font-size:14px}.wallet-state{border:1px solid #3b513b;padding:5px 7px;font:8px var(--mono)}.wallet-state-recognized{color:#b8dc9b}.wallet-state-opaque,.wallet-state-partial{color:#d4bd7d}.wallet-state-unsupported,.wallet-state-planned{color:#9ba69c}.wallet-file-meta{display:grid;grid-template-columns:1fr 120px;gap:9px;margin:13px 0}.wallet-file-meta>div,.wallet-hash{display:grid;gap:6px;background:#070c08;border:1px solid #26352a;padding:10px}.wallet-file-meta b,.wallet-hash code{font:10px var(--mono);color:#c7d5c8;overflow-wrap:anywhere}.wallet-inspection ul{padding-left:18px;color:#a4b0a5;font-size:11px;line-height:1.8}.wallet-reset{border:1px solid #435342;background:#101811;color:#b9cdb9;padding:8px 11px;font:9px var(--mono)}.wallet-adapter{padding:13px 0;border-top:1px solid #243229}.wallet-adapter b{font:10px var(--mono)}.wallet-adapter p{color:#849387;font-size:10px;margin:5px 0 0}.wallet-disclaimer{border-color:#65522a;background:#171309;color:#d4c18b}.wallet-foot{justify-content:center;color:#91b57c}@media(max-width:600px){.wallet-recovery-top{padding:0 12px}.wallet-recovery-main{padding:28px 14px 50px}.wallet-panel{padding:13px}.wallet-file-meta{grid-template-columns:1fr}.wallet-adapter,.wallet-inspection-head{align-items:flex-start;flex-direction:column}}
+
+
+/* Dashboard-only animated green droplet field. Other workspaces are untouched. */
+.command-shell .command-main {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #050706;
+}
+.command-shell .command-main::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  opacity: .62;
+  background-image:
+    radial-gradient(ellipse 1.4px 3.2px at 18px 22px, rgba(151, 235, 105, .72) 0 55%, transparent 100%),
+    radial-gradient(ellipse 1px 2.8px at 73px 91px, rgba(103, 202, 89, .58) 0 55%, transparent 100%),
+    radial-gradient(ellipse 1.2px 3.5px at 132px 48px, rgba(164, 242, 119, .48) 0 55%, transparent 100%),
+    radial-gradient(ellipse 1px 2.5px at 41px 151px, rgba(92, 186, 78, .54) 0 55%, transparent 100%),
+    radial-gradient(ellipse 1.3px 3px at 111px 178px, rgba(142, 222, 96, .42) 0 55%, transparent 100%),
+    linear-gradient(175deg, transparent 0 48%, rgba(93, 184, 75, .10) 49%, transparent 51% 100%);
+  background-size: 157px 203px, 193px 227px, 239px 251px, 181px 263px, 271px 219px, 100% 100%;
+  background-position: 0 0, 29px -43px, -61px 17px, 81px -96px, -23px 64px, 0 0;
+  animation: cyberlab-dashboard-rain 22s linear infinite;
+}
+.command-shell .command-topbar {
+  position: relative;
+  z-index: 1;
+  background: rgba(6, 9, 7, .82);
+  backdrop-filter: blur(8px);
+}
+.command-shell .command-content {
+  position: relative;
+  z-index: 1;
+}
+.command-shell .command-metrics .metric {
+  background: rgba(9, 13, 8, .86);
+  backdrop-filter: blur(5px);
+}
+.command-shell .command-modules .command-module {
+  background: rgba(8, 12, 7, .82);
+  backdrop-filter: blur(5px);
+}
+.command-shell .command-metrics .metric-link:hover,
+.command-shell .command-modules .command-module:hover {
+  backdrop-filter: blur(7px);
+}
+@keyframes cyberlab-dashboard-rain {
+  from { background-position: 0 -220px, 29px -263px, -61px -234px, 81px -359px, -23px -199px, 0 0; }
+  to { background-position: 0 420px, 29px 417px, -61px 518px, 81px 431px, -23px 460px, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-shell .command-main::before { animation: none; }
+}
+
+/* Agent multimodal composer controls */
+.agent-attachment-list{display:flex;flex-wrap:wrap;gap:7px;padding:10px 12px 0}
+.agent-attachment-chip{display:flex;align-items:center;gap:7px;max-width:100%;padding:6px 8px;border:1px solid #34483a;background:#0c140e;color:#c4d6c6;border-radius:6px;font:10px var(--mono)}
+.agent-attachment-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.agent-attachment-chip button{display:flex;background:transparent;border:0;color:#9cab9e;padding:2px}
+.agent-composer-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.agent-tool-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border:1px solid #34483a;background:#0c140e;color:#b8cbbb;border-radius:6px;font:9px var(--mono);cursor:pointer}
+.agent-tool-button:disabled{opacity:.45;cursor:not-allowed}
+.agent-audio-upload{position:relative}
+.agent-audio-upload input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.agent-tool-button.recording{border-color:#a34b4b;color:#f0a0a0;background:#210d0d}
+.agent-composer-bottom{gap:12px;flex-wrap:wrap}
+.agent-composer-bottom>span{flex:1;min-width:180px}
+@media(max-width:560px){.agent-composer-actions{width:100%}.agent-composer-actions>button[type=submit]{margin-left:auto}.agent-composer-bottom>span{font-size:8px}}
+
+.agent-provider-note{margin:7px 0 0;color:#91a397;font-size:11px;line-height:1.55;max-width:620px}
