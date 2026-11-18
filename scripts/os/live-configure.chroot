@@ -1,0 +1,75 @@
+#!/bin/sh
+set -eu
+
+install -d -m 0755 /opt/cyberlab-ai
+if [ -d /opt/cyberlab-ai/kali-companion ]; then
+  chown -R root:root /opt/cyberlab-ai/kali-companion
+  chmod -R go-w /opt/cyberlab-ai/kali-companion
+fi
+
+cat >/usr/local/bin/cyberlab <<'LAUNCHER'
+#!/bin/sh
+set -eu
+if [ "$#" -eq 0 ]; then
+  exec python3 /usr/local/lib/cyberlab/menu.py
+fi
+exec python3 /opt/cyberlab-ai/kali-companion/cyberlab.py "$@"
+LAUNCHER
+chmod 0755 /usr/local/bin/cyberlab
+
+if command -v xfce4-terminal >/dev/null 2>&1; then
+  cat >/usr/share/applications/cyberlab-terminal.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=CyberLab Terminal
+Comment=Open the CyberLab command-line companion
+Exec=xfce4-terminal --title=CyberLab --command=cyberlab
+Icon=utilities-terminal
+Terminal=false
+Categories=System;Security;
+DESKTOP
+fi
+
+cat >/etc/motd <<'MOTD'
+CyberLab AI OS — Debian Live Workstation
+
+Desktop profile: graphical XFCE environment.
+Terminal profile: lightweight command-line environment.
+
+Use only systems and evidence you are authorised to assess.
+The local companion bridge is opt-in and is never started automatically.
+MOTD
+
+# Conservative guest hardening; does not replace host hypervisor security.
+install -d -m 0755 /etc/sysctl.d /etc/security/limits.d /etc/profile.d
+cat >/etc/sysctl.d/99-cyberlab-hardening.conf <<'SYSCTL'
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.yama.ptrace_scope = 1
+kernel.unprivileged_bpf_disabled = 1
+fs.suid_dumpable = 0
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv6.conf.default.accept_source_route = 0
+SYSCTL
+cat >/etc/security/limits.d/99-cyberlab-core.conf <<'LIMITS'
+* hard core 0
+LIMITS
+cat >/etc/profile.d/99-cyberlab-umask.sh <<'UMASK'
+# New user-created files are private to the owner and their primary group.
+umask 027
+UMASK
+chmod 0644 /etc/sysctl.d/99-cyberlab-hardening.conf /etc/security/limits.d/99-cyberlab-core.conf /etc/profile.d/99-cyberlab-umask.sh
+
+if command -v lightdm >/dev/null 2>&1; then
+  systemctl enable lightdm
+fi

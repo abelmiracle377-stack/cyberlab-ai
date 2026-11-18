@@ -1,0 +1,38 @@
+name: CyberLab Application CI
+
+on:
+  push:
+    branches:
+      - feature/agent-multimodal-inputs
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "proxy.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "next.config.ts"
+      - ".github/workflows/agent-inputs-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-inputs-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --prefer-offline --no-audit --no-fund
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Next.js production build
+        run: npm run build
