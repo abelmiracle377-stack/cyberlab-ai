@@ -11,7 +11,7 @@ test("refuses common plaintext secret and key file names before content handling
 });
 
 test("recognizes Ethereum V3 only from an object-shaped crypto section", () => {
-  const result = inspectWalletJson({ version: 3, crypto: { cipher: "aes-128-ctr", kdf: "scrypt" }, address: "a".repeat(40), id: "12345678-1234-1234-1234-123456789abc" });
+  const result = inspectWalletJson({ version: 3, crypto: { cipher: "aes-128-ctr", kdf: "scrypt", cipherparams: { iv: "b".repeat(32) }, ciphertext: "c".repeat(64), mac: "d".repeat(64), kdfparams: { dklen: 32, n: 262144, r: 8, p: 1, salt: "e".repeat(64) } }, address: "a".repeat(40), id: "12345678-1234-1234-1234-123456789abc" });
   assert.equal(result.status, "recognized");
   assert.match(result.format, /Ethereum/);
   assert.match(result.details[1], /aes-128-ctr/);
@@ -50,4 +50,10 @@ test("fails closed on excessively deep JSON structures", async () => {
     value = next;
   }
   assert.equal(containsSecretMaterialField(root), true);
+});
+
+
+test("does not fingerprint a partial Ethereum V3-shaped JSON object", () => {
+  const result = inspectWalletJson({ version: 3, crypto: { cipher: "aes-128-ctr", kdf: "scrypt" } });
+  assert.equal(result.status, "unsupported");
 });
