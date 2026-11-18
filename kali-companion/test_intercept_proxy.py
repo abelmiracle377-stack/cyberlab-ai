@@ -161,6 +161,60 @@ class NativeInterceptProxyTests(unittest.TestCase):
             sock.bind(("127.0.0.1", 0))
             return sock.getsockname()[1]
 
+    def test_connection_nominated_headers_are_removed_in_both_directions(self):
+        class HopByHopHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                leaked = self.headers.get("X-Request-Internal", "absent")
+                body = leaked.encode("ascii")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Connection", "X-Response-Internal")
+                self.send_header("X-Response-Internal", "must-not-reach-client")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), HopByHopHandler)
+        target_thread = threading.Thread(target=target.serve_forever, daemon=True)
+        target_thread.start()
+        proxy = intercept_proxy.NativeInterceptProxy()
+        listen_port = self._free_port()
+        origin = f"http://localhost:{target.server_port}"
+        try:
+            with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
+                proxy.start({
+                    "origin": origin, "confirmationOrigin": origin,
+                    "authorizationConfirmed": True, "confirmStart": True,
+                    "authorizationReference": "LOCAL-HOP-BY-HOP-001",
+                    "localLabMode": True, "listenPort": listen_port,
+                })
+                with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
+                    client.sendall((
+                        f"GET {origin}/headers HTTP/1.1\\r\\n"
+                        f"Host: localhost:{target.server_port}\\r\\n"
+                        "Connection: close, X-Request-Internal\\r\\n"
+                        "X-Request-Internal: must-not-reach-upstream\\r\\n"
+                        "Connection: close\\r\\n\\r\\n"
+                    ).encode("ascii"))
+                    response = b""
+                    while True:
+                        chunk = client.recv(8192)
+                        if not chunk:
+                            break
+                        response += chunk
+                head, body = response.split(b"\\r\\n\\r\\n", 1)
+                self.assertIn(b"200 OK", head)
+                self.assertNotIn(b"X-Response-Internal", head)
+                self.assertEqual(body, b"absent")
+        finally:
+            proxy.stop()
+            target.shutdown()
+            target.server_close()
+            target_thread.join(timeout=2)
+
     def test_205_response_is_reframed_as_empty(self):
         class ResetHandler(http.server.BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
