@@ -47,7 +47,7 @@ def load_or_create_pairing_token(config_dir: Path, token_file: Path) -> str:
             try:
                 os.fchmod(descriptor, 0o600)
                 with os.fdopen(descriptor, "w", encoding="ascii") as handle:
-                    handle.write(token + "\\n")
+                    handle.write(token + "\n")
                     handle.flush()
                     os.fsync(handle.fileno())
             except Exception:
