@@ -375,6 +375,7 @@ export default function AgentPage() {
         <form className="agent-composer" onSubmit={submit}>
           {attachments.length > 0 && <div className="agent-attachment-list">{attachments.map((file, index) => <div className="agent-attachment-chip" key={file.name + index}><FileText size={13}/><span>{file.name}</span><button type="button" aria-label={"Remove " + file.name} onClick={() => setAttachments(current => current.filter((_, i) => i !== index))}><X size={12}/></button></div>)}</div>}
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what you want to investigate…" rows={3} maxLength={8000} disabled={busy || audioBusy} />
+          {(attachments.length > 0 || audioBusy) && <p className="network-note">Files and audio are sent to the configured model/transcription provider for processing. Do not attach wallet seeds, private keys, passwords or recovery phrases.</p>}
           <div className="agent-composer-bottom">
             <span><ShieldCheck size={12} /> Live research + passive IP/DNS/CVE · Local Nmap requires Kali pairing and explicit approval</span>
             <div className="agent-composer-actions">
