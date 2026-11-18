@@ -25,7 +25,7 @@ class PairingTokenSecurityTests(unittest.TestCase):
             config = Path(directory) / "cyberlab"
             config.mkdir(mode=0o755)
             token_file = config / "bridge-token"
-            token_file.write_text("A" * 48 + "\\n", encoding="ascii")
+            token_file.write_text("A" * 48 + "\n", encoding="ascii")
             token_file.chmod(0o644)
             token = load_or_create_pairing_token(config, token_file)
             self.assertEqual(token, "A" * 48)
