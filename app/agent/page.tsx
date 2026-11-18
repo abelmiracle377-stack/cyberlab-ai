@@ -100,11 +100,11 @@ export default function AgentPage() {
 
   async function addFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const allowed = /^(image\\/(png|jpeg|webp|gif)|application\\/pdf|text\\/(plain|markdown|csv)|application\\/(json|xml))$/i;
+    const allowed = /^(image\/(png|jpeg|webp|gif)|application\/pdf|text\/(plain|markdown|csv)|application\/(json|xml))$/i;
     let pending = attachments;
     for (const file of Array.from(fileList)) {
       if (file.size > 2 * 1024 * 1024) { setError(file.name + ": maximum file size is 2 MB."); continue; }
-      if (!allowed.test(file.type) && !/\\.(txt|md|csv|json|xml)$/i.test(file.name)) {
+      if (!allowed.test(file.type) && !/\.(txt|md|csv|json|xml)$/i.test(file.name)) {
         setError(file.name + ": supported files are images, PDF, TXT, Markdown, CSV, JSON and XML.");
         continue;
       }
@@ -142,7 +142,7 @@ export default function AgentPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Audio transcription failed.");
       if (typeof data.text !== "string" || !data.text.trim()) throw new Error("The transcription provider returned no text.");
-      setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\\n\\n" : ""));
+      setPrompt(current => [current.trim(), data.text].filter(Boolean).join(current.trim() ? "\n\n" : ""));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not transcribe this audio.");
     } finally {
@@ -223,7 +223,7 @@ export default function AgentPage() {
         if (specialistMode) {
           const data = await response.json();
           const specialistSummary = Array.isArray(data.results)
-            ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\\n")).join("\\n\\n")
+            ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\\n")).join("\n\n")
             : "";
           output = [data.synthesis || "The coordinator could not produce a synthesis.", specialistSummary, data.note || ""].filter(Boolean).join("\\n\\n---\\n\\n");
         } else if (useReadOnlyTools) {
@@ -235,9 +235,9 @@ export default function AgentPage() {
                 "Source: " + String(item.source || "unspecified"),
                 String(item.summary || ""),
                 "Evidence payload: " + JSON.stringify(item.data || {}).slice(0, 5000),
-              ].join("\\n")).join("\\n\\n")
+              ].join("\\n")).join("\n\n")
             : "No external tool evidence was retrieved.";
-          output = [data.text || "The model returned an empty response.", "## Tool evidence and provenance", evidenceText, "_Analysis is model-generated; tool results are read-only evidence snapshots._"].join("\\n\\n");
+          output = [data.text || "The model returned an empty response.", "## Tool evidence and provenance", evidenceText, "_Analysis is model-generated; tool results are read-only evidence snapshots._"].join("\n\n");
         } else {
           output = await response.text();
         }
