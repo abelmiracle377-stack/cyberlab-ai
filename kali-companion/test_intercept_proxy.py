@@ -234,12 +234,12 @@ class NativeInterceptProxyTests(unittest.TestCase):
         proxy = intercept_proxy.NativeInterceptProxy()
         listen_port = self._free_port()
         origin = f"http://localhost:{target.server_port}"
-        malformed_headers = (
-            ("Content-Length: 0\\r\\nContent-Length: 0\\r\\n",),
-            ("Content-Length: 0\\r\\nTransfer-Encoding: chunked\\r\\n",),
-            ("Transfer-Encoding: chunked\\r\\nTransfer-Encoding: chunked\\r\\n",),
-            ("Transfer-Encoding: gzip\\r\\n",),
-        )
+        malformed_headers = [
+            "Content-Length: 0\r\nContent-Length: 0\r\n",
+            "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n",
+            "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n",
+            "Transfer-Encoding: gzip\r\n",
+        ]
         try:
             with patch.object(intercept_proxy, "_resolve_pinned", return_value=["127.0.0.1"]):
                 proxy.start({
@@ -248,14 +248,14 @@ class NativeInterceptProxyTests(unittest.TestCase):
                     "authorizationReference": "LOCAL-FRAMING-001",
                     "localLabMode": True, "listenPort": listen_port,
                 })
-                for index, (headers,) in enumerate(malformed_headers):
+                for index, headers in enumerate(malformed_headers):
                     with self.subTest(headers=headers):
                         with socket.create_connection(("127.0.0.1", listen_port), timeout=5) as client:
                             request = (
-                                f"GET {origin}/malformed-{index} HTTP/1.1\\r\\n"
-                                f"Host: localhost:{target.server_port}\\r\\n"
+                                f"GET {origin}/malformed-{index} HTTP/1.1\r\n"
+                                f"Host: localhost:{target.server_port}\r\n"
                                 + headers
-                                + "Connection: close\\r\\n\\r\\n"
+                                + "Connection: close\r\n\r\n"
                             )
                             client.sendall(request.encode("ascii"))
                             response = b""
