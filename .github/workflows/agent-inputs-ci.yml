@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/agent-multimodal-inputs
+      - integration/cyberlab-unified-workstation
     paths:
       - "app/**"
       - "components/**"
