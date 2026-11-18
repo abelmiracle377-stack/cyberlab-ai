@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop, FileCode2,
-  Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
+  Database, FileLock2, FileSearch, Fingerprint, HardDriveDownload, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
 } from "lucide-react";
 
@@ -24,6 +24,12 @@ const groups = [
   ]},
   { title: "ASSESSMENT", items: [
     { label: "Network Analysis", icon: Network, href: "/network-analysis" },
+    { label: "Network Intelligence", icon: Activity, href: "/network-intelligence" },
+    { label: "Native Web Workbench", icon: Globe, href: "/web-workbench" },
+    { label: "Native Web Repeater", icon: Workflow, href: "/web-repeater" },
+    { label: "Native Web Crawler", icon: Radar, href: "/web-crawler" },
+    { label: "Safe Active Web Checks", icon: Bug, href: "/web-scanner" },
+    { label: "Burp Suite Connector", icon: Cable, href: "/burp-suite" },
     { label: "Penetration Testing", icon: Radar, href: "/penetration-testing" },
     { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
     { label: "Vulnerability Lab", icon: Bug, href: "/vulnerability-lab" },
@@ -35,6 +41,7 @@ const groups = [
     { label: "Reverse Engineering", icon: Code2, href: "/reverse-engineering" },
     { label: "Reports", icon: FileSearch, href: "/reports" },
     { label: "Evidence Vault", icon: FileLock2, href: "/evidence-vault" },
+    { label: "File & Picture Recovery", icon: HardDriveDownload, href: "/forensics-recovery" },
   ]},
   { title: "OPERATIONS", items: [
     { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
@@ -52,6 +59,12 @@ const modules = [
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
   { name:"Domain & Privacy Verification", desc:"Review SPF, DMARC, DKIM, CAA, historical URLs and local browser attributes.", icon:ShieldCheck, state:"NEW", href:"/verification" },
   { name:"Network Analysis", desc:"Import and interpret Nmap XML evidence.", icon:Network, state:"IMPORT / ANALYSE", href:"/network-analysis" },
+  { name:"Network Intelligence", desc:"Capture bounded passive traffic and inspect protocol metadata locally through the paired companion.", icon:Activity, state:"PASSIVE / LOCAL", href:"/network-intelligence" },
+  { name:"Native Web Workbench", desc:"Inspect and replay bounded HTTP requests through CyberLab's scoped local proxy.", icon:Globe, state:"NATIVE / AUTHORISED", href:"/web-workbench" },
+  { name:"Native Web Repeater", desc:"Edit and resend explicitly approved HTTP requests through the native workbench.", icon:Workflow, state:"MANUAL / SCOPED", href:"/web-repeater" },
+  { name:"Native Web Crawler", desc:"Discover same-origin pages with bounded, approved GET requests.", icon:Radar, state:"NATIVE / GET ONLY", href:"/web-crawler" },
+  { name:"Safe Active Web Checks", desc:"Run bounded CORS and query-reflection checks with explicit approval.", icon:Bug, state:"NATIVE / LIMITED", href:"/web-scanner" },
+  { name:"Burp Suite Connector", desc:"Connect the local companion to Burp Suite and inspect proxy history, site map and issues.", icon:Cable, state:"LOCAL / PAIRED", href:"/burp-suite" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
   { name:"Live Research", desc:"Research current CVEs, advisories and technical references.", icon:Globe, state:"PROVIDER REQUIRED", href:"/research" },
@@ -59,6 +72,7 @@ const modules = [
   { name:"Vulnerability Lab", desc:"Research CVEs, impact and remediation guidance.", icon:Bug, state:"AVAILABLE", href:"/vulnerability-lab" },
   { name:"Solidity Lab", desc:"Review Solidity source for security-sensitive patterns and contract surface.", icon:FileCode2, state:"HEURISTIC REVIEW", href:"/solidity" },
   { name:"Crypto Wallet Recovery", desc:"Inspect owned wallet backup formats locally without uploading recovery secrets.", icon:Wallet, state:"LOCAL TRIAGE", href:"/wallet-recovery" },
+  { name:"File & Picture Recovery", desc:"Carve supported file signatures from a supplied evidence image and use the paired Linux companion for guarded disk workflows.", icon:HardDriveDownload, state:"LOCAL / AUTHORISED", href:"/forensics-recovery" },
   { name:"Malware Lab", desc:"Static triage, inert threat fixtures, YARA/Sigma structural checks and SOC behaviour simulations.", icon:Shield, state:"DEFENSIVE ANALYSIS", href:"/malware-lab" },
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
