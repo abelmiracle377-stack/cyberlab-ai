@@ -189,7 +189,6 @@ export default function AgentPage() {
     setScanStatus("");
     setScanResult(null);
     setPrompt("");
-    setAttachments([]);
     const scanMatch = submittedAttachments.length === 0 ? text.match(/\b(?:nmap|scan|port\s+scan|scan\s+ports)\b[\s\S]*?\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?:\d{1,3}\.){3}\d{1,3})\b/i) : null;
     if (scanMatch) {
       const portsMatch = text.match(/\bports?\s+([0-9,-]+(?:\s*[-,]\s*[0-9]+)*)/i);
@@ -274,6 +273,7 @@ export default function AgentPage() {
           throw new Error(data.error || "Agent request failed.");
         }
         if (!response.body) throw new Error("Streaming response was not available.");
+        setAttachments([]);
         const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let output = "";
