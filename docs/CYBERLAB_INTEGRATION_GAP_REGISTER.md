@@ -165,7 +165,7 @@ A capability is **Done** only when all applicable items are satisfied:
 | Backlog item | Status | Work |
 |---|---|---|
 | CL-INT-001 — Auth middleware fail-closed | **In review — PR #4** | Public-route policy isolated and tested; protected pages/APIs now return 503 when Supabase config is absent; admin routes remain concealed. GitHub Actions passed on the PR head and Vercel checks passed at the time checked. |
-| CL-INT-002 — Local bridge token permissions | **In review — PR #5** | Token storage extracted; owner-only permissions, symlink rejection, malformed-token rejection and four regression tests added. GitHub CI was queued when last checked; not yet green. |
+| CL-INT-002 — Local bridge token permissions | **In review — PR #5** | Token storage extracted; owner-only permissions, symlink rejection, malformed-token rejection and four regression tests added. The companion-tests CI job passed; the web-build job was still running at the latest check. Vercel status passed. |
 | CL-INT-003 — Branch/PR integration checklist | **Created — PR #3** | This register is the initial checklist and branch ownership record. |
 | CL-INT-004 onward | **Not started** | Continue in dependency order; re-check exact branch heads and PR checks before implementation. |
 
