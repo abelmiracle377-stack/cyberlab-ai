@@ -116,7 +116,7 @@ export default function WalletRecoveryPage() {
             <HardDrive size={23}/>
             <strong>Select an owned wallet backup</strong>
             <span>JSON keystore, wallet.dat or other backup · maximum 50 MB</span>
-            <input id="wallet-backup-file" type="file" onChange={(event) => inspectFile(event.target.files?.[0])} />
+            <input id="wallet-backup-file" type="file" disabled={busy} onChange={(event) => inspectFile(event.target.files?.[0])} />
           </label>
           <div className="wallet-inline-note"><ShieldCheck size={13}/> Only select a backup you own or are explicitly authorised to recover.</div>
           {busy && <div className="wallet-progress"><RefreshCw size={14}/> Computing SHA-256 and inspecting file structure locally…</div>}
