@@ -51,7 +51,7 @@ class WebTestingValidationTests(unittest.TestCase):
         resolve.return_value = [(None, None, None, None, ("127.0.0.1", 8080))]
         data = self.base()
         data["confirmationUrl"] = "http://other.local/"
-        with self.assertRaisesRegex(ValueError, "exact target hostname"):
+        with self.assertRaisesRegex(ValueError, "exact target scheme, hostname and port"):
             web_testing.validate_request(data)
 
     @patch("web_testing.socket.getaddrinfo")
