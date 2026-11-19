@@ -64,6 +64,8 @@ export default function WalletRecoveryPage() {
   const [passphrase, setPassphrase] = useState("");
   const [template, setTemplate] = useState("bip44-ethereum");
   const [accounts, setAccounts] = useState<DerivedAccount[] | null>(null);
+  const [deriveWarning, setDeriveWarning] = useState("");
+  const [extractKind, setExtractKind] = useState("keystore");
   const [extracted, setExtracted] = useState<ExtractedHash | null>(null);
   const [wordlist, setWordlist] = useState("");
   const [crackTool, setCrackTool] = useState("hashcat");
@@ -172,13 +174,14 @@ export default function WalletRecoveryPage() {
   }
 
   async function deriveAddresses() {
-    setCompanionError(""); setAccounts(null);
+    setCompanionError(""); setAccounts(null); setDeriveWarning("");
     if (!mnemonic.trim()) { setCompanionError("Enter the recovery mnemonic you own."); return; }
     if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
     setCompanionBusy("derive");
     try {
       const data = await bridgePost("/wallet/derive", { mnemonic: mnemonic.trim(), passphrase, template, count: 5 });
       setAccounts(data.accounts || []);
+      if (data.warning) setDeriveWarning(data.warning);
     } catch (cause) {
       setCompanionError(cause instanceof Error ? cause.message : "Derivation failed.");
     } finally {
@@ -192,15 +195,16 @@ export default function WalletRecoveryPage() {
     if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
     setCompanionBusy("extract");
     try {
-      const lower = file.name.toLowerCase();
       let body: Record<string, unknown>;
-      if (lower.endsWith(".json")) {
-        body = { kind: "keystore", keystoreJson: new TextDecoder().decode(await file.arrayBuffer()) };
-      } else {
+      if (extractKind === "metamask") {
+        body = { kind: "metamask", vaultJson: new TextDecoder().decode(await file.arrayBuffer()) };
+      } else if (extractKind === "wallet.dat") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         let binary = "";
         bytes.forEach((b) => { binary += String.fromCharCode(b); });
         body = { kind: "wallet.dat", walletDatBase64: btoa(binary) };
+      } else {
+        body = { kind: "keystore", keystoreJson: new TextDecoder().decode(await file.arrayBuffer()) };
       }
       const data = await bridgePost("/wallet/extract-hash", body);
       setExtracted(data);
@@ -244,12 +248,14 @@ export default function WalletRecoveryPage() {
     if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
     setCompanionBusy("balances");
     try {
-      const data = await bridgePost("/wallet/check-balances", {
-        mnemonic: mnemonic.trim(), passphrase, confirmNetwork: true,
+      // Deep sweep: every coin, accounts 0-2 and both the receiving and change chains.
+      const data = await bridgePost("/wallet/sweep", {
+        mnemonic: mnemonic.trim(), passphrase, confirmNetwork: true, checkBalances: true,
         templates: ["bip44-legacy", "bip49-p2sh-segwit", "bip84-segwit", "bip44-ethereum", "litecoin-legacy", "dogecoin-legacy", "bitcoincash"],
-        count: 3,
+        accountCount: 3, includeChange: true, perPath: 3,
       });
-      setBalances(data);
+      setBalances(data.balances || null);
+      if (!data.balances) setCompanionError("Derived " + data.derived_count + " addresses, but the balance lookup was unavailable.");
     } catch (cause) {
       setCompanionError(cause instanceof Error ? cause.message : "Balance check failed.");
     } finally {
@@ -340,6 +346,7 @@ export default function WalletRecoveryPage() {
               <button type="button" className="wallet-reset" disabled={companionBusy === "balances"} onClick={checkBalances} title="Opt-in, read-only public-explorer lookup of your derived addresses across coins">{companionBusy === "balances" ? "Checking funds…" : "Find which path holds funds"}</button>
             </div>
             {accounts && <ul>{accounts.map((acc) => <li key={acc.path}><code>{acc.path}</code> → <code>{acc.address}</code>{acc.coin ? " (" + acc.coin + ")" : ""}</li>)}</ul>}
+            {deriveWarning && <div className="wallet-error"><AlertTriangle size={15}/>{deriveWarning}</div>}
             {balances && <div className="wallet-balance-result">
               <p className="wallet-status-line">{balances.funded_addresses} funded · {balances.active_addresses} ever active of {balances.checked} checked</p>
               <ul>{balances.results.filter((r) => r.has_activity).map((r) => <li key={r.path + r.address}><code>{r.path}</code> {r.coin} — <strong>{r.balance}</strong>{(r.transaction_count ?? 0) > 0 ? " · " + r.transaction_count + " tx" : ""}</li>)}</ul>
@@ -371,9 +378,16 @@ export default function WalletRecoveryPage() {
 
           <div className="wallet-inspection">
             <div className="wallet-inspection-head"><div><span>HASH EXTRACTION</span><h3>Extract a crackable hash</h3></div><Hash size={16}/></div>
+            <div className="wallet-file-meta"><div><span>WALLET TYPE</span>
+              <select value={extractKind} onChange={(e) => setExtractKind(e.target.value)}>
+                <option value="keystore">Ethereum keystore (.json)</option>
+                <option value="metamask">MetaMask vault (.json)</option>
+                <option value="wallet.dat">Bitcoin Core wallet.dat</option>
+              </select>
+            </div></div>
             <label className="wallet-file-drop" htmlFor="wallet-extract-file">
               <HardDrive size={20}/>
-              <strong>Select keystore .json or wallet.dat</strong>
+              <strong>{extractKind === "metamask" ? "Select the MetaMask vault .json" : extractKind === "wallet.dat" ? "Select wallet.dat" : "Select keystore .json"}</strong>
               <span>Extracts the encrypted hash on your machine</span>
               <input id="wallet-extract-file" type="file" disabled={companionBusy === "extract"} onChange={(e) => extractHash(e.target.files?.[0])} />
             </label>

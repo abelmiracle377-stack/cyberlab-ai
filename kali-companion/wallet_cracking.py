@@ -18,7 +18,7 @@ MAX_WORDLIST_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB
 MAX_RULES_BYTES = 64 * 1024 * 1024  # 64 MiB
 DEFAULT_TIMEOUT = 3600
 HASHCAT_MODES = {11300: "Bitcoin/Litecoin wallet.dat", 15700: "Ethereum keystore (scrypt)",
-                 16300: "Ethereum keystore (PBKDF2)"}
+                 16300: "Ethereum keystore (PBKDF2)", 26600: "MetaMask vault"}
 
 # hashcat attack modes we expose for a single forgotten wallet password.
 ATTACK_MODES = {

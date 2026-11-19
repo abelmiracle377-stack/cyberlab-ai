@@ -7,6 +7,7 @@ Sources of truth:
 These vectors are deterministic and need no network or external tools, so a pass
 proves the cryptography is correct, not merely self-consistent.
 """
+import json
 import unittest
 
 import wallet_recovery as wr
@@ -139,6 +140,49 @@ class MultiCoinDerivationTests(unittest.TestCase):
         with_pp = wr.derive_accounts(seed_pp, "bip44-ethereum", 1)[0]["address"]
         self.assertNotEqual(plain, with_pp)
 
+    def test_sweep_covers_accounts_and_change_chains(self):
+        sweep = wr.derive_sweep(self.seed, "bip44-legacy", account_count=2,
+                                include_change=True, per_path=2)
+        # 2 accounts x 2 chains x 2 indices = 8 distinct addresses.
+        self.assertEqual(len(sweep), 8)
+        self.assertEqual(len({e["address"] for e in sweep}), 8)
+        # account 0 / change 0 / index 0 must equal the canonical receiving address.
+        first = next(e for e in sweep if e["path"] == "m/44'/0'/0'/0/0")
+        self.assertEqual(first["address"], "1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA")
+        # The change chain is present and distinct.
+        self.assertTrue(any(e["change"] == 1 for e in sweep))
+        self.assertIn("m/44'/0'/0'/1/0", {e["path"] for e in sweep})
+
+    def test_sweep_without_change_only_external(self):
+        sweep = wr.derive_sweep(self.seed, "bip44-ethereum", account_count=3,
+                                include_change=False, per_path=1)
+        self.assertEqual(len(sweep), 3)  # 3 accounts, external only, 1 index each
+        self.assertTrue(all(e["change"] == 0 for e in sweep))
+        self.assertEqual({e["account"] for e in sweep}, {0, 1, 2})
+
+
+class ElectrumDetectionTests(unittest.TestCase):
+    def test_detects_a_real_electrum_standard_seed(self):
+        # Find a phrase whose HMAC-SHA512("Seed version") starts with "01"
+        # (Electrum's own validity test) to exercise detection deterministically.
+        import hmac as _hmac, hashlib as _hashlib
+        phrase = None
+        for i in range(10000):
+            candidate = "electrum test seed candidate " + str(i)
+            digest = _hmac.new(b"Seed version", candidate.encode(), _hashlib.sha512).hexdigest()
+            if digest.startswith("01"):
+                phrase = candidate
+                break
+        self.assertIsNotNone(phrase)
+        self.assertEqual(wr.electrum_seed_type(phrase), "standard")
+        self.assertTrue(wr.is_electrum_seed(phrase))
+
+    def test_bip39_mnemonic_is_not_flagged_electrum(self):
+        mnemonic = ("abandon abandon abandon abandon abandon abandon "
+                    "abandon abandon abandon abandon abandon about")
+        self.assertIsNone(wr.electrum_seed_type(mnemonic))
+        self.assertFalse(wr.is_electrum_seed(mnemonic))
+
 
 class AddressAndWifTests(unittest.TestCase):
     def test_wif_round_trip(self):
@@ -185,6 +229,33 @@ class HashExtractionTests(unittest.TestCase):
     def test_rejects_non_v3_keystore(self):
         with self.assertRaisesRegex(ValueError, "version 3"):
             wr.extract_keystore_hash('{"version":1}')
+
+    def test_extract_metamask_vault_direct(self):
+        import base64 as b64
+        salt = b64.b64encode(b"saltsalt16bytes!").decode()
+        iv = b64.b64encode(b"iv1234567890abcd").decode()
+        data = b64.b64encode(b"ciphertext-bytes-here-xxxxxxxxxx").decode()
+        vault = '{"data":"' + data + '","iv":"' + iv + '","salt":"' + salt + '"}'
+        result = wr.extract_metamask_hash(vault)
+        self.assertEqual(result["hashcatMode"], 26600)
+        self.assertEqual(result["hash"], "$metamask$" + salt + "$" + iv + "$" + data)
+
+    def test_extract_metamask_vault_nested_keyring(self):
+        import base64 as b64
+        inner = ('{"data":"' + b64.b64encode(b"d" * 24).decode()
+                 + '","iv":"' + b64.b64encode(b"i" * 16).decode()
+                 + '","salt":"' + b64.b64encode(b"s" * 16).decode() + '"}')
+        wrapper = json.dumps({"KeyringController": {"vault": inner}})
+        result = wr.extract_metamask_hash(wrapper)
+        self.assertTrue(result["hash"].startswith("$metamask$"))
+
+    def test_metamask_rejects_missing_vault(self):
+        with self.assertRaisesRegex(ValueError, "No MetaMask vault"):
+            wr.extract_metamask_hash('{"nothing":"here"}')
+
+    def test_metamask_rejects_bad_base64(self):
+        with self.assertRaisesRegex(ValueError, "not valid base64"):
+            wr.extract_metamask_hash('{"data":"not base64!!","iv":"aXY=","salt":"c2FsdA=="}')
 
     def test_extract_wallet_dat_master_key(self):
         encrypted = bytes(range(48))

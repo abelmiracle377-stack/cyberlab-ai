@@ -20,6 +20,7 @@ installed tool (see wallet_cracking.py); this file prepares inputs for it.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -356,6 +357,32 @@ class HDKey:
 BIP39_ENGLISH_SHA256 = "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda"
 
 
+# Electrum v2 seeds are not BIP39: their validity is an HMAC-SHA512 prefix,
+# so BIP39/BIP44 tooling cannot recover an Electrum wallet. Detecting one lets
+# the dashboard tell the user to use the Electrum client instead of guessing.
+_ELECTRUM_PREFIXES = {"01": "standard", "100": "segwit", "101": "2fa", "102": "2fa-segwit"}
+
+
+def _electrum_normalize(text: str) -> str:
+    text = unicodedata.normalize("NFKD", str(text)).lower().strip()
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.split())
+
+
+def electrum_seed_type(mnemonic: str) -> str | None:
+    """Return the Electrum v2 seed type (standard/segwit/2fa/...) or None."""
+    digest = hmac.new(b"Seed version", _electrum_normalize(mnemonic).encode("utf-8"),
+                      hashlib.sha512).hexdigest()
+    for prefix, kind in _ELECTRUM_PREFIXES.items():
+        if digest.startswith(prefix):
+            return kind
+    return None
+
+
+def is_electrum_seed(mnemonic: str) -> bool:
+    return electrum_seed_type(mnemonic) is not None
+
+
 def mnemonic_to_seed(mnemonic: str, passphrase: str = "") -> bytes:
     """BIP39 mnemonic -> 64-byte seed. Does not require the wordlist."""
     mnemonic_n = unicodedata.normalize("NFKD", mnemonic.strip())
@@ -456,6 +483,49 @@ def derive_accounts(seed: bytes, template: str, count: int = 5) -> list[dict]:
     return results
 
 
+def _account_path(template_path: str, account: int, change: int) -> str:
+    """Rebuild a BIP44-style path for a given account index and change chain."""
+    parts = template_path.split("/")
+    if len(parts) != 5 or parts[0] != "m":
+        raise ValueError("Sweep supports BIP44-style 5-level paths only.")
+    return "m/{purpose}/{coin}/{account}'/{change}".format(
+        purpose=parts[1], coin=parts[2], account=account, change=change)
+
+
+def derive_sweep(seed: bytes, template: str, account_count: int = 3,
+                 include_change: bool = True, per_path: int = 3) -> list[dict]:
+    """Derive across account indices and both change chains for one template.
+
+    Real wallets often hold funds on account 1+, or on the internal (change)
+    chain, which a first-receiving-address check misses. This sweeps
+    account 0..account_count-1 and change 0 (receiving) / 1 (change).
+    """
+    if template not in ACCOUNT_TEMPLATES:
+        raise ValueError("Unknown account template: " + template)
+    if not 1 <= account_count <= 20:
+        raise ValueError("account_count must be between 1 and 20.")
+    if not 1 <= per_path <= 50:
+        raise ValueError("per_path must be between 1 and 50.")
+    spec = ACCOUNT_TEMPLATES[template]
+    changes = (0, 1) if include_change else (0,)
+    results = []
+    for account in range(account_count):
+        for change in changes:
+            base = _account_path(spec["path"], account, change)
+            root = HDKey.from_seed(seed).derive_path(base)
+            for i in range(per_path):
+                child = root.derive_child(i)
+                entry = {"path": base + "/" + str(i), "address": _encode_address(spec, child),
+                         "coin": spec["coin"], "template": template,
+                         "account": account, "change": change}
+                if spec["coin"] == "ethereum":
+                    entry["privateKey"] = "0x" + child.key.hex()
+                else:
+                    entry["wif"] = wif_encode(child.key, version=spec.get("wif_version", 0x80))
+                results.append(entry)
+    return results
+
+
 # --- password-recovery hash extraction -------------------------------------
 def extract_keystore_hash(keystore_json: str) -> dict:
     """Extract a John/hashcat hash from an Ethereum V3 (Web3 Secret Storage) keystore."""
@@ -517,3 +587,55 @@ def extract_wallet_dat_hash(wallet_dat: bytes) -> dict:
     return {"format": "bitcoin-core-wallet.dat", "hashcatMode": 11300, "hash": john,
             "iterations": deriv_iters,
             "note": "Run against a locally installed hashcat (-m 11300) or John with your own wordlist."}
+
+
+def _find_metamask_vault(obj, depth: int = 0):
+    """Locate the {data, iv, salt} vault inside a MetaMask export at any nesting."""
+    if depth > 6:
+        return None
+    if isinstance(obj, dict):
+        if all(isinstance(obj.get(k), str) and obj.get(k) for k in ("data", "iv", "salt")):
+            return obj
+        for value in obj.values():
+            if isinstance(value, str) and value.strip().startswith("{"):
+                try:
+                    found = _find_metamask_vault(json.loads(value), depth + 1)
+                except (ValueError, TypeError):
+                    found = None
+                if found:
+                    return found
+            elif isinstance(value, (dict, list)):
+                found = _find_metamask_vault(value, depth + 1)
+                if found:
+                    return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _find_metamask_vault(item, depth + 1)
+            if found:
+                return found
+    return None
+
+
+def extract_metamask_hash(vault_json: str) -> dict:
+    """Extract a hashcat -m 26600 hash from a MetaMask (browser) encrypted vault.
+
+    Accepts the raw vault object {data, iv, salt}, or an export that nests it
+    (for example a KeyringController 'vault' string). The vault holds the
+    AES-GCM ciphertext; recovering the password lets MetaMask itself decrypt it.
+    """
+    try:
+        parsed = json.loads(vault_json)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("MetaMask vault is not valid JSON.") from exc
+    vault = _find_metamask_vault(parsed)
+    if not vault:
+        raise ValueError("No MetaMask vault (data/iv/salt) was found in this export.")
+    salt, iv, data = vault["salt"], vault["iv"], vault["data"]
+    for name, value in (("salt", salt), ("iv", iv), ("data", data)):
+        try:
+            base64.b64decode(value, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("MetaMask vault field '" + name + "' is not valid base64.") from exc
+    hashline = "$metamask$" + salt + "$" + iv + "$" + data
+    return {"format": "metamask-vault", "hashcatMode": 26600, "hash": hashline,
+            "note": "Run against a locally installed hashcat (-m 26600) with your own wordlist."}
