@@ -253,6 +253,39 @@ def wif_encode(private_key: bytes, compressed: bool = True, version: int = 0x80)
     return base58check_encode(payload)
 
 
+def p2sh_p2wpkh_address(public_key: bytes, version: int = 0x05) -> str:
+    """BIP49 nested SegWit: a P2WPKH program wrapped in P2SH (addresses start 3/M)."""
+    redeem_script = b"\x00\x14" + _hash160(public_key)  # OP_0 <20-byte keyhash>
+    return base58check_encode(bytes([version]) + _hash160(redeem_script))
+
+
+# --- Bitcoin Cash CashAddr -------------------------------------------------
+_CASHADDR_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def _cashaddr_polymod(values) -> int:
+    generator = [0x98f2bc8e61, 0x79b76d99e2, 0xf33e5fb3c4, 0xae2eabe2a8, 0x1e4f43e470]
+    chk = 1
+    for value in values:
+        top = chk >> 35
+        chk = ((chk & 0x07ffffffff) << 5) ^ value
+        for i in range(5):
+            chk ^= generator[i] if (top >> i) & 1 else 0
+    return chk ^ 1
+
+
+def cashaddr_encode(pubkey_hash: bytes, prefix: str = "bitcoincash", type_bits: int = 0) -> str:
+    """Encode a 160-bit hash as a CashAddr (type 0 = P2PKH, 1 = P2SH)."""
+    if len(pubkey_hash) != 20:
+        raise ValueError("CashAddr here supports 160-bit hashes only.")
+    version_byte = (type_bits & 0x0f) << 3  # size bits 0 => 160-bit hash
+    payload = _convertbits([version_byte] + list(pubkey_hash), 8, 5)
+    prefix_expand = [ord(c) & 31 for c in prefix] + [0]
+    polymod = _cashaddr_polymod(prefix_expand + payload + [0] * 8)
+    checksum = [(polymod >> 5 * (7 - i)) & 31 for i in range(8)]
+    return prefix + ":" + "".join(_CASHADDR_CHARSET[d] for d in payload + checksum)
+
+
 # --- BIP32 -----------------------------------------------------------------
 _HARDENED = 0x80000000
 
@@ -358,12 +391,48 @@ def validate_mnemonic(mnemonic: str, wordlist: list[str]) -> bool:
     return checksum_bits == expected
 
 
-# Standard account templates for recovery sweeps.
+# Standard account templates for recovery sweeps. Each carries the derivation
+# path, the address encoding, and the coin's version bytes so one derivation
+# routine serves every supported coin and script type.
 ACCOUNT_TEMPLATES = {
-    "bip44-legacy": {"path": "m/44'/0'/0'/0", "address": "p2pkh", "coin": "bitcoin"},
-    "bip84-segwit": {"path": "m/84'/0'/0'/0", "address": "p2wpkh", "coin": "bitcoin"},
+    # Bitcoin
+    "bip44-legacy": {"path": "m/44'/0'/0'/0", "address": "p2pkh", "coin": "bitcoin",
+                     "addr_version": 0x00, "wif_version": 0x80},
+    "bip49-p2sh-segwit": {"path": "m/49'/0'/0'/0", "address": "p2sh-p2wpkh", "coin": "bitcoin",
+                          "addr_version": 0x05, "wif_version": 0x80},
+    "bip84-segwit": {"path": "m/84'/0'/0'/0", "address": "p2wpkh", "coin": "bitcoin",
+                     "hrp": "bc", "wif_version": 0x80},
+    # Litecoin
+    "litecoin-legacy": {"path": "m/44'/2'/0'/0", "address": "p2pkh", "coin": "litecoin",
+                        "addr_version": 0x30, "wif_version": 0xB0},
+    "litecoin-p2sh-segwit": {"path": "m/49'/2'/0'/0", "address": "p2sh-p2wpkh", "coin": "litecoin",
+                             "addr_version": 0x32, "wif_version": 0xB0},
+    "litecoin-segwit": {"path": "m/84'/2'/0'/0", "address": "p2wpkh", "coin": "litecoin",
+                        "hrp": "ltc", "wif_version": 0xB0},
+    # Dogecoin
+    "dogecoin-legacy": {"path": "m/44'/3'/0'/0", "address": "p2pkh", "coin": "dogecoin",
+                        "addr_version": 0x1E, "wif_version": 0x9E},
+    # Bitcoin Cash (CashAddr)
+    "bitcoincash": {"path": "m/44'/145'/0'/0", "address": "cashaddr", "coin": "bitcoincash",
+                    "cashaddr_prefix": "bitcoincash", "cashaddr_type": 0, "wif_version": 0x80},
+    # Ethereum (and EVM chains)
     "bip44-ethereum": {"path": "m/44'/60'/0'/0", "address": "ethereum", "coin": "ethereum"},
 }
+
+
+def _encode_address(spec: dict, child: "HDKey") -> str:
+    kind = spec["address"]
+    if kind == "p2pkh":
+        return p2pkh_address(child.public_key(), spec.get("addr_version", 0x00))
+    if kind == "p2wpkh":
+        return p2wpkh_address(child.public_key(), spec.get("hrp", "bc"))
+    if kind == "p2sh-p2wpkh":
+        return p2sh_p2wpkh_address(child.public_key(), spec.get("addr_version", 0x05))
+    if kind == "cashaddr":
+        return cashaddr_encode(_hash160(child.public_key()),
+                               spec.get("cashaddr_prefix", "bitcoincash"),
+                               spec.get("cashaddr_type", 0))
+    return ethereum_address(child.public_key(compressed=False))
 
 
 def derive_accounts(seed: bytes, template: str, count: int = 5) -> list[dict]:
@@ -377,17 +446,12 @@ def derive_accounts(seed: bytes, template: str, count: int = 5) -> list[dict]:
     results = []
     for i in range(count):
         child = root.derive_child(i)
-        if spec["address"] == "p2pkh":
-            address = p2pkh_address(child.public_key())
-        elif spec["address"] == "p2wpkh":
-            address = p2wpkh_address(child.public_key())
-        else:
-            address = ethereum_address(child.public_key(compressed=False))
-        entry = {"path": spec["path"] + "/" + str(i), "address": address}
-        if spec["coin"] == "bitcoin":
-            entry["wif"] = wif_encode(child.key)
-        else:
+        entry = {"path": spec["path"] + "/" + str(i), "address": _encode_address(spec, child),
+                 "coin": spec["coin"]}
+        if spec["coin"] == "ethereum":
             entry["privateKey"] = "0x" + child.key.hex()
+        else:
+            entry["wif"] = wif_encode(child.key, version=spec.get("wif_version", 0x80))
         results.append(entry)
     return results
 

@@ -38,6 +38,7 @@ import base64
 import wallet_recovery
 import wallet_cracking
 import seed_solver
+import balance_check
 import kali_tools
 import host_telemetry
 import pcap_analysis
@@ -475,6 +476,48 @@ def wallet_solve_seed(data: dict) -> dict:
         result = seed_solver.solve_missing_words(phrase, wordlist, **common)
     result["mode"] = mode
     return result
+
+
+def wallet_check_balances(data: dict) -> dict:
+    """Opt-in, read-only on-chain balance lookup for derived addresses.
+
+    Either pass 'accounts' (address + coin, no keys) or a 'mnemonic' plus
+    'templates' and 'count' to derive and then check. Requires confirmNetwork
+    because it is the only wallet step that reaches the network; only public
+    addresses are sent, never a key, seed or mnemonic.
+    """
+    if data.get("confirmNetwork") is not True:
+        raise ValueError("Set confirmNetwork to true to allow the read-only explorer lookup.")
+
+    accounts = data.get("accounts")
+    if accounts is None:
+        mnemonic = data.get("mnemonic")
+        if not isinstance(mnemonic, str) or not mnemonic.strip():
+            raise ValueError("Provide 'accounts' or a 'mnemonic' to derive and check.")
+        passphrase = data.get("passphrase", "")
+        if not isinstance(passphrase, str) or len(passphrase) > 256:
+            raise ValueError("Passphrase must be a string of at most 256 characters.")
+        templates = data.get("templates") or ["bip44-legacy", "bip84-segwit", "bip44-ethereum"]
+        if not isinstance(templates, list) or not all(isinstance(t, str) for t in templates):
+            raise ValueError("templates must be a list of account-template names.")
+        unknown = [t for t in templates if t not in wallet_recovery.ACCOUNT_TEMPLATES]
+        if unknown:
+            raise ValueError("Unknown account template(s): " + ", ".join(unknown))
+        count = data.get("count", 3)
+        if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= 20:
+            raise ValueError("count must be an integer between 1 and 20.")
+        seed = wallet_recovery.mnemonic_to_seed(mnemonic, passphrase)
+        accounts = []
+        for template in templates:
+            for entry in wallet_recovery.derive_accounts(seed, template, count):
+                accounts.append({"address": entry["address"], "coin": entry["coin"],
+                                 "path": entry["path"]})
+    if not isinstance(accounts, list) or not accounts:
+        raise ValueError("No addresses to check.")
+    # Only ever forward public fields; drop any key material a caller included.
+    public = [{"address": a.get("address"), "coin": a.get("coin"), "path": a.get("path")}
+              for a in accounts if isinstance(a, dict)]
+    return balance_check.check_balances(public)
 
 
 def wallet_crack(data: dict) -> dict:
@@ -1069,7 +1112,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/solve-seed", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1085,6 +1128,7 @@ class Handler(BaseHTTPRequestHandler):
                 131072 if path == "/evidence/case" else
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
+                65536 if path == "/wallet/check-balances" else
                 4096 if path in {"/wallet/derive", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
@@ -1112,6 +1156,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_derive(data), origin)
             if path == "/wallet/solve-seed":
                 return self.send_json(200, wallet_solve_seed(data), origin)
+            if path == "/wallet/check-balances":
+                return self.send_json(200, wallet_check_balances(data), origin)
             if path == "/wallet/crack":
                 return self.send_json(200, wallet_crack(data), origin)
             if path == "/tools/run":

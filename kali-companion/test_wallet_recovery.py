@@ -89,6 +89,57 @@ class Bip39Tests(unittest.TestCase):
         self.assertFalse(wr.validate_mnemonic(bad, words))
 
 
+class MultiCoinDerivationTests(unittest.TestCase):
+    MNEMONIC = ("abandon abandon abandon abandon abandon abandon "
+                "abandon abandon abandon abandon abandon about")
+
+    def setUp(self):
+        self.seed = wr.mnemonic_to_seed(self.MNEMONIC)
+
+    def first(self, template):
+        return wr.derive_accounts(self.seed, template, 1)[0]
+
+    def test_bitcoin_canonical_vectors(self):
+        # Widely-published iancoleman vectors for the abandon...about seed.
+        self.assertEqual(self.first("bip44-legacy")["address"],
+                         "1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA")
+        self.assertEqual(self.first("bip49-p2sh-segwit")["address"],
+                         "37VucYSaXLCAsxYyAPfbSi9eh4iEcbShgf")
+        self.assertEqual(self.first("bip84-segwit")["address"],
+                         "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu")
+
+    def test_cashaddr_encoder_matches_spec_vector(self):
+        # CashAddr reference vector, independent of key derivation.
+        pubkey_hash = bytes.fromhex("76a04053bda0a88bda5177b86a15c3b29f559873")
+        self.assertEqual(wr.cashaddr_encode(pubkey_hash),
+                         "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a")
+
+    def test_bitcoin_cash_address_is_cashaddr(self):
+        entry = self.first("bitcoincash")
+        self.assertTrue(entry["address"].startswith("bitcoincash:q"))
+        self.assertEqual(entry["coin"], "bitcoincash")
+
+    def test_litecoin_version_bytes(self):
+        legacy = self.first("litecoin-legacy")
+        self.assertTrue(legacy["address"].startswith("L"))
+        self.assertEqual(wr.base58check_decode(legacy["address"])[0], 0x30)
+        self.assertEqual(wr.base58check_decode(legacy["wif"])[0], 0xB0)
+        self.assertTrue(self.first("litecoin-segwit")["address"].startswith("ltc1q"))
+        self.assertTrue(self.first("litecoin-p2sh-segwit")["address"].startswith("M"))
+
+    def test_dogecoin_version_bytes(self):
+        doge = self.first("dogecoin-legacy")
+        self.assertTrue(doge["address"].startswith("D"))
+        self.assertEqual(wr.base58check_decode(doge["address"])[0], 0x1E)
+        self.assertEqual(wr.base58check_decode(doge["wif"])[0], 0x9E)
+
+    def test_passphrase_changes_derivation(self):
+        plain = wr.derive_accounts(self.seed, "bip44-ethereum", 1)[0]["address"]
+        seed_pp = wr.mnemonic_to_seed(self.MNEMONIC, "my-25th-word")
+        with_pp = wr.derive_accounts(seed_pp, "bip44-ethereum", 1)[0]["address"]
+        self.assertNotEqual(plain, with_pp)
+
+
 class AddressAndWifTests(unittest.TestCase):
     def test_wif_round_trip(self):
         priv = bytes.fromhex("0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d")
