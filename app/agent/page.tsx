@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles, Paperclip, Mic, Square, FileText, X } from "lucide-react";
 import Link from "next/link";
+import { planCompanionToolRequest, type CompanionToolRequest } from "../../lib/companion-tools";
 
 type Model = { id: string; name: string; provider: string; contextLength: number | null; openWeight: boolean; uncensored?: boolean; supportsTools?: boolean; source: "openrouter" | "ollama" | "unfiltered" };
 const modelKey = (item: Model) => `${item.source}::${item.id}`;
@@ -49,6 +50,12 @@ export default function AgentPage() {
   const [webBusy, setWebBusy] = useState(false);
   const [webStatus, setWebStatus] = useState("");
   const [webResult, setWebResult] = useState<NativeWebAssessmentResult | null>(null);
+  const [toolRequest, setToolRequest] = useState<CompanionToolRequest | null>(null);
+  const [toolAuth, setToolAuth] = useState("");
+  const [toolTargetConfirm, setToolTargetConfirm] = useState("");
+  const [toolWordlist, setToolWordlist] = useState("");
+  const [toolBusy, setToolBusy] = useState(false);
+  const [toolStatus, setToolStatus] = useState("");
 
   const endRef = useRef<HTMLDivElement>(null);
   const providerModels = models.filter((item) => matchesProvider(item, providerChoice));
@@ -250,6 +257,54 @@ export default function AgentPage() {
     } finally { setWebBusy(false); }
   }
 
+  async function runCompanionTool(event: FormEvent) {
+    event.preventDefault();
+    if (!toolRequest || toolBusy) return;
+    const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
+    if (!token) { setToolStatus("Pair your local companion in Kali Connection first; the tool runs on your own machine."); return; }
+    const parameters: Record<string, string | number> = { ...toolRequest.parameters };
+    if (toolRequest.missing.includes("wordlist")) {
+      if (!toolWordlist.trim()) { setToolStatus("Enter the path to a wordlist on your paired machine."); return; }
+      parameters.wordlist = toolWordlist.trim();
+    }
+    const targetValue = toolRequest.targetParam ? String(parameters[toolRequest.targetParam] ?? "") : "";
+    if (toolRequest.active) {
+      if (!toolAuth.trim()) { setToolStatus("Active tools need a written authorisation/engagement reference."); return; }
+      if (toolTargetConfirm.trim().toLowerCase() !== targetValue.trim().toLowerCase()) {
+        setToolStatus("Retype the exact target to confirm you are authorised to assess it."); return;
+      }
+    }
+    setToolBusy(true);
+    setToolStatus("Running " + toolRequest.label + " on your paired companion…");
+    try {
+      const response = await fetch("http://127.0.0.1:8765/tools/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({
+          tool: toolRequest.tool, parameters, confirmRun: true,
+          authorizationReference: toolAuth.trim(), targetConfirmation: targetValue,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "The companion rejected the tool run.");
+      const request = toolRequest;
+      setToolRequest(null);
+      setToolStatus(data.status === "completed" ? "Tool finished (exit code " + data.exitCode + "). Analysing output…" : "Tool run " + data.status + ".");
+      const evidence = {
+        tool: request.tool, arguments: data.argv, exitCode: data.exitCode,
+        status: data.status, stdout: (data.stdout || "").slice(0, 20000),
+        stderr: (data.stderr || "").slice(0, 2000), truncated: data.truncated === true,
+      };
+      await sendAgentPrompt(
+        "Analyse the output of this CyberLab companion tool run. Summarise the security-relevant findings, separate confirmed observations from leads, and recommend safe next steps. Do not claim results beyond this evidence.\n\n" + JSON.stringify(evidence),
+        [], true);
+    } catch (cause) {
+      setToolStatus(cause instanceof Error ? cause.message : "Companion tool run failed.");
+    } finally {
+      setToolBusy(false);
+    }
+  }
+
   async function sendAgentPrompt(text: string, submittedAttachments: AgentAttachment[] = [], skipLocalRouting = false) {
     if ((!text && submittedAttachments.length === 0) || busy) return;
     if (submittedAttachments.length && (executionMode === "specialists" || selectedEntry?.uncensored)) {
@@ -260,9 +315,22 @@ export default function AgentPage() {
     setScanRequest(null);
     setScanStatus("");
     setScanResult(null);
-    if (!skipLocalRouting) { setWebAssessmentRequest(null); setWebStatus(""); setWebResult(null); }
+    if (!skipLocalRouting) { setWebAssessmentRequest(null); setWebStatus(""); setWebResult(null); setToolRequest(null); setToolStatus(""); }
     setPrompt("");
     setAttachments([]);
+    // Explicit tool instructions ("run whois/nikto/gobuster ...") take priority and
+    // are proposed as a companion tool run the operator approves and executes.
+    const plannedTool = !skipLocalRouting && submittedAttachments.length === 0 ? planCompanionToolRequest(text) : null;
+    if (plannedTool) {
+      setMessages((current) => [...current, { role: "user", content: text }, { role: "assistant", content: "I can run " + plannedTool.label + " on your paired companion. Review the parameters and approve below — nothing runs until you confirm." }]);
+      setToolRequest(plannedTool);
+      setToolAuth("");
+      setToolTargetConfirm("");
+      setToolWordlist(typeof plannedTool.parameters.wordlist === "string" ? plannedTool.parameters.wordlist : "");
+      setToolStatus("");
+      setBusy(false);
+      return;
+    }
     const webIntent = /\b(?:scan|crawl|test|assess|audit)\b[\s\S]{0,100}\b(?:https?:\/\/|website|web\s+app|web\s+application)\b|\b(?:website|web\s+app|web\s+application)\b[\s\S]{0,100}\b(?:scan|crawl|test|assess|audit)\b/i.test(text);
     const webTargetMatch = text.match(/https?:\/\/[^\s<>"']+|(?<![@\w-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{1,5})?(?:\/[^\s<>"']*)?/i);
     if (!skipLocalRouting && webIntent && webTargetMatch && submittedAttachments.length === 0) {
@@ -505,6 +573,22 @@ export default function AgentPage() {
           </div>)}
           <p className="mt-3 text-xs text-slate-500">The AI analysis above uses the returned crawl and active-check evidence. Findings remain candidates until manually verified; this workflow is not yet a full SQLi/SSRF/IDOR/authenticated scanner.</p>
         </section>}
+        {toolRequest && <section className="kali-panel" style={{ marginTop: 16 }}>
+          <h2>Approve companion tool run</h2>
+          <p>Tool: <strong>{toolRequest.label}</strong>. Parameters: <code>{Object.entries(toolRequest.parameters).filter(([k]) => k !== "wordlist").map(([k, v]) => k + "=" + v).join("  ")}</code>. This runs on your paired machine (127.0.0.1); nothing is sent to the CyberLab server.</p>
+          <form className="report-editor" onSubmit={runCompanionTool}>
+            {toolRequest.missing.includes("wordlist") && <label>Wordlist path (on your machine)<input value={toolWordlist} onChange={event => setToolWordlist(event.target.value)} placeholder="/usr/share/wordlists/dirb/common.txt" required /></label>}
+            {toolRequest.active && <>
+              <label>Authorisation / engagement reference<input value={toolAuth} onChange={event => setToolAuth(event.target.value)} placeholder="Written authorisation to assess this target" required maxLength={200} /></label>
+              <label>Retype exact target<input value={toolTargetConfirm} onChange={event => setToolTargetConfirm(event.target.value)} placeholder={toolRequest.targetParam ? String(toolRequest.parameters[toolRequest.targetParam] ?? "") : ""} required /></label>
+              <div className="scope-checks"><label><input type="checkbox" required /> I own this target or have explicit written permission to assess it.</label></div>
+            </>}
+            <button className="report-download" type="submit" disabled={toolBusy}>{toolBusy ? "Running on companion…" : "Run on companion"}</button>
+            <button className="report-download" type="button" onClick={() => setToolRequest(null)} disabled={toolBusy}>Cancel</button>
+          </form>
+          {toolStatus && <p role="status">{toolStatus}</p>}
+        </section>}
+        {toolStatus && !toolRequest && <div className="agent-error">{toolStatus}</div>}
         {scanRequest && <section className="kali-panel" style={{ marginTop: 16 }}>
           <h2>Approve local Nmap scan</h2>
           <p>Target detected from your message: <strong>{scanRequest.target}</strong>. Proposed TCP ports: <strong>{scanRequest.ports}</strong> (maximum 100). The request will run directly in your browser against the paired Kali bridge; it is not sent to the CyberLab server.</p>
