@@ -141,6 +141,7 @@ The dashboard's **Digital Forensics → File & Picture Recovery** module can use
 - Probe a completed image with `blkid` to report recognised filesystem signatures without mounting or modifying the image.
 - Enumerate allocated partition boundaries in a completed image with Sleuth Kit `mmls`, without mounting, repairing or modifying it.
 - Inspect filesystem metadata for a selected discovered partition with Sleuth Kit `fsstat`; the bridge revalidates the partition start against `mmls` before running a fixed read-only command.
+- List deleted files in a completed image with Sleuth Kit `fls -r -p -d` (optionally scoped to a selected partition offset), preserving their original names and paths, and recover any one by inode with `icat` to a destination on a different physical drive (owner-only output, SHA-256 hashed).
 
 Install the tools with:
 
@@ -151,7 +152,7 @@ sudo apt install -y gddrescue testdisk foremost ntfs-3g sleuth-kit
 
 For best practice, boot Kali from a live USB, do not boot the installed OS on the affected disk, and do not mount the source partitions. Connect a separate backup drive, then pair the dashboard with the bridge. The acquisition endpoint is allow-listed; it does not accept arbitrary shell commands. It uses GNU ddrescue's first non-scraping pass (`ddrescue -f -n`) and retains the map file so the acquisition can be assessed. Do not disconnect either drive while the job is active. Preserve both the image and the ddrescue-created map file; the map records completed and unreadable regions and is required for a safe resume or follow-up pass. The source device is never an output path.
 
-After imaging, the dashboard can run a read-only Sleuth Kit `mmls` partition-table analysis, a `blkid -p` signature probe, and a selected-partition `fsstat` metadata inspection against the image. The `fsstat` step accepts only a partition start sector returned by a fresh `mmls` parse and limits displayed output to 12,000 characters. It does not mount, repair or modify the image. Partition analysis reports slot, start/end sector, length and partition description for allocated entries; unallocated space and partition-table metadata are excluded. This is boundary discovery only: it does not mount, repair or write to the image, and it does not yet perform filesystem-aware undelete. Install `sleuth-kit` to enable this step.
+After imaging, the dashboard can run a read-only Sleuth Kit `mmls` partition-table analysis, a `blkid -p` signature probe, and a selected-partition `fsstat` metadata inspection against the image. The `fsstat` step accepts only a partition start sector returned by a fresh `mmls` parse and limits displayed output to 12,000 characters. It does not mount, repair or modify the image. Partition analysis reports slot, start/end sector, length and partition description for allocated entries; unallocated space and partition-table metadata are excluded. This is boundary discovery only: it does not mount, repair or write to the image. Filesystem-aware undelete is available as a separate step: `POST /forensics/deleted-list` enumerates deleted entries (names, paths, inodes) with `fls`, and `POST /forensics/recover-file` extracts a chosen inode with `icat` to a different drive. Install `sleuth-kit` to enable both steps.
 
 After imaging, the dashboard can run a read-only `blkid -p` signature probe against the image. This reports recognised filesystem metadata when available; it does not mount the image, modify it, or guarantee that a filesystem is intact. A missing signature is inconclusive. The dashboard can also launch a bounded Foremost recovery job against the image. On successful completion, the companion creates `cyberlab-recovery-manifest.json` inside Foremost's output folder. The manifest records each regular recovered file's relative path, byte size and SHA-256 hash. Symlinks are skipped, enumeration is capped at 5,000 files, and the manifest is created with no-overwrite semantics. A `truncated: true` field means the cap was reached; preserve the Foremost `audit.txt` as well. Hashes document the recovered output as it existed when the manifest was generated; they do not prove authenticity or validate file contents.
 
@@ -161,7 +162,7 @@ PhotoRec remains an interactive recovery option in a separate Kali terminal:
 sudo photorec /mnt/backup/cyberlab-disk.img
 ```
 
-In PhotoRec, select the image/partition, configure File Opt for the required formats, and choose a recovery directory on the backup drive. NTFS undelete and extundelete workflows are not automated by the dashboard in this release; they require filesystem-specific assessment and an unmounted source. Do not run them against the original disk as a substitute for imaging.
+In PhotoRec, select the image/partition, configure File Opt for the required formats, and choose a recovery directory on the backup drive. PhotoRec complements the built-in Sleuth Kit `fls`/`icat` undelete flow: use `fls`/`icat` to recover deleted files with their original names on an intact filesystem, and PhotoRec/Foremost to carve by signature from a damaged or reformatted filesystem. Always recover to the backup drive, never the original source.
 
 A hosted Vercel deployment cannot directly access the browser user's physical disks. A self-hosted CyberLab AI OS running on a Linux machine can use the same local runner and bridge directly on that machine, provided it has the required OS permissions and tools; no remote web process is given raw-disk access.
 
@@ -240,3 +241,28 @@ CyberLab also includes limited native safe active web checks for CORS preflight 
 The native HTTP workbench can reload request history for a newly approved replay. Sensitive request headers are redacted and request-body contents are deliberately omitted from history; operators must re-enter any body before replay.
 
 A native HTTP/HTTPS interception proxy is available from the Web Workbench. It binds only to 127.0.0.1, requires one exact approved origin and explicit start approval, and supports HTTP/1.1 plus HTTPS CONNECT TLS termination with the CyberLab-managed local CA. Create the CA explicitly in the workbench and manually trust its public certificate in a dedicated test browser profile; CyberLab does not alter system/browser trust stores. Proxy history omits request/response bodies and URL queries and redacts sensitive headers. Optional manual request interception pauses traffic in a bounded queue; operators can forward unchanged, edit eligible methods, paths, headers and UTF-8 bodies before forwarding, or drop requests. Response interception can separately pause, inspect, edit eligible status/header/text-body fields, forward or drop. Both queues are bounded and undecided items are dropped after 120 seconds. POST, PUT, PATCH and DELETE are blocked unless separately approved at proxy start. The native `/web-repeater` workspace supports up to five request tabs, explicit per-send approval, response inspection/comparison and bounded offline parameter mutation drafts. Current proxy limitations include one request per client connection, no HTTP/2, WebSockets, chunked client request bodies, client certificates or multi-origin profiles.
+
+
+## Vetted tool execution and agent operation
+
+Beyond the plan-only `POST /plan` endpoint, the companion can **run** a curated set of security tools through `POST /tools/run` (discover availability with `GET /tools/runners`). This is a vetted execution layer, not an arbitrary shell:
+
+- Each tool has a fixed argument template; operator input only fills validated, typed slots (hostname/IP, URL, port spec, single port, wordlist path, bounded integers, injection-safe search terms). No value is ever passed through a shell.
+- **Passive tools** (whois, dig, host, dnsrecon, dnsenum, fierce, sublist3r, theHarvester, Metasploit module search) run after an explicit confirmation.
+- **Active tools** (nmap, masscan, sslscan, netcat banner grab, ftp anonymous listing, whatweb, wafw00f, nikto, nuclei, wpscan, gobuster, ffuf, dirb, sqlmap, enum4linux-ng, smbmap, nbtscan, ssh-audit) additionally require a written authorisation reference and an exact-target confirmation, mirroring the Nmap scan flow.
+- If a tool's binary is not installed the call fails closed with an apt install hint; output is bounded and is only ever the tool's own stdout/stderr and exit code.
+- Metasploit is limited to module **search** metadata; unattended exploit execution and online brute-force remain out of scope.
+
+The hosted AI agent console can turn an instruction such as "run whois on example.com" or "nikto https://app.example.com" into a concrete `POST /tools/run` request that the operator approves in the browser; the browser calls the local bridge with the paired token and feeds the real output back to the model for analysis. The server-side agent never reaches the loopback bridge directly.
+
+## Local wallet recovery
+
+The dashboard's **Wallet Recovery** module can use the companion for owned or explicitly authorised backups:
+
+- `POST /wallet/derive` performs standards-based BIP39/BIP32/BIP44 derivation (verified against the official BIP32/BIP39/EIP-55 vectors) to list addresses and keys for a supplied mnemonic — Python standard library only, no network.
+- `POST /wallet/extract-hash` extracts a hashcat/John hash from an Ethereum V3 keystore or a Bitcoin Core `wallet.dat` master key.
+- `POST /wallet/crack` runs a locally installed hashcat (`-m 11300/15700/16300`) or John in wordlist mode against the extracted hash. A recovered password is only ever reported from the tool's own output; the companion never downloads cracking tools and fails closed when they are absent.
+
+## Burp Suite connector
+
+The local Montoya extension exposes read-only in-scope proxy history, site map and audit issues, plus two write actions gated by explicit confirmation: placing a request in Repeater (`/burp/repeater/from-history`, which does not send) and replaying a single in-scope request through Burp (`/burp/send-request`, which returns status/MIME/length only). Out-of-scope requests are refused. Intruder, crawling and scan-start remain out of scope.
