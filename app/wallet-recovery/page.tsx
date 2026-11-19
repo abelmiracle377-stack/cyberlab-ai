@@ -14,10 +14,25 @@ type Inspection = {
   details: string[];
 };
 
-type DerivedAccount = { path: string; address: string; wif?: string; privateKey?: string };
+type DerivedAccount = { path: string; address: string; coin?: string; wif?: string; privateKey?: string };
 type ExtractedHash = { format: string; hashcatMode?: number; hash: string; note: string };
-type CrackResult = { status: string; tool?: string; password?: string; note?: string; exitCode?: number };
+type CrackResult = { status: string; tool?: string; attack?: string; password?: string; note?: string; exitCode?: number };
 type WalletToolStatus = { hashcat: { installed: boolean }; john: { installed: boolean } };
+type BalanceRow = { address: string; coin?: string; path?: string; status: string; balance?: string; transaction_count?: number; has_activity?: boolean };
+type BalanceResult = { results: BalanceRow[]; checked: number; funded_addresses: number; active_addresses: number; note: string };
+type SolverResult = { candidates: string[]; candidate_count: number; checked: number; exhausted: boolean; matched_address?: string | null; note: string };
+
+const ACCOUNT_TEMPLATES: { value: string; label: string }[] = [
+  { value: "bip44-ethereum", label: "Ethereum (m/44'/60')" },
+  { value: "bip44-legacy", label: "Bitcoin legacy (m/44'/0')" },
+  { value: "bip49-p2sh-segwit", label: "Bitcoin nested SegWit (m/49'/0')" },
+  { value: "bip84-segwit", label: "Bitcoin native SegWit (m/84'/0')" },
+  { value: "litecoin-legacy", label: "Litecoin legacy (m/44'/2')" },
+  { value: "litecoin-p2sh-segwit", label: "Litecoin nested SegWit (m/49'/2')" },
+  { value: "litecoin-segwit", label: "Litecoin native SegWit (m/84'/2')" },
+  { value: "dogecoin-legacy", label: "Dogecoin (m/44'/3')" },
+  { value: "bitcoincash", label: "Bitcoin Cash (m/44'/145')" },
+];
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
@@ -52,10 +67,20 @@ export default function WalletRecoveryPage() {
   const [extracted, setExtracted] = useState<ExtractedHash | null>(null);
   const [wordlist, setWordlist] = useState("");
   const [crackTool, setCrackTool] = useState("hashcat");
+  const [attackMode, setAttackMode] = useState("dictionary");
+  const [mask, setMask] = useState("");
+  const [rulesFile, setRulesFile] = useState("");
   const [crack, setCrack] = useState<CrackResult | null>(null);
   const [ownAuthorised, setOwnAuthorised] = useState(false);
   const [companionBusy, setCompanionBusy] = useState("");
   const [companionError, setCompanionError] = useState("");
+  // Balance check (opt-in, read-only) and seed solver.
+  const [balances, setBalances] = useState<BalanceResult | null>(null);
+  const [solverMode, setSolverMode] = useState("missing");
+  const [solverPhrase, setSolverPhrase] = useState("");
+  const [solverWordlist, setSolverWordlist] = useState("");
+  const [solverMatch, setSolverMatch] = useState("");
+  const [solver, setSolver] = useState<SolverResult | null>(null);
 
   async function inspectFile(file?: File) {
     setError("");
@@ -193,12 +218,61 @@ export default function WalletRecoveryPage() {
     if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
     setCompanionBusy("crack");
     try {
-      const body: Record<string, unknown> = { tool: crackTool, hash: extracted.hash, wordlist: wordlist.trim(), confirmRun: true };
-      if (crackTool === "hashcat") body.hashcatMode = extracted.hashcatMode;
+      const body: Record<string, unknown> = { tool: crackTool, hash: extracted.hash, confirmRun: true };
+      const needsWordlist = crackTool === "john" || attackMode !== "mask";
+      if (needsWordlist) body.wordlist = wordlist.trim();
+      if (crackTool === "hashcat") {
+        body.hashcatMode = extracted.hashcatMode;
+        body.attackMode = attackMode;
+        if (attackMode !== "dictionary") body.mask = mask.trim();
+        if (attackMode === "dictionary" && rulesFile.trim()) body.rulesFile = rulesFile.trim();
+      } else if (rulesFile.trim()) {
+        body.rules = rulesFile.trim();
+      }
       const data = await bridgePost("/wallet/crack", body);
       setCrack(data);
     } catch (cause) {
       setCompanionError(cause instanceof Error ? cause.message : "Recovery run failed.");
+    } finally {
+      setCompanionBusy("");
+    }
+  }
+
+  async function checkBalances() {
+    setCompanionError(""); setBalances(null);
+    if (!mnemonic.trim()) { setCompanionError("Enter the recovery mnemonic to sweep for funds."); return; }
+    if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
+    setCompanionBusy("balances");
+    try {
+      const data = await bridgePost("/wallet/check-balances", {
+        mnemonic: mnemonic.trim(), passphrase, confirmNetwork: true,
+        templates: ["bip44-legacy", "bip49-p2sh-segwit", "bip84-segwit", "bip44-ethereum", "litecoin-legacy", "dogecoin-legacy", "bitcoincash"],
+        count: 3,
+      });
+      setBalances(data);
+    } catch (cause) {
+      setCompanionError(cause instanceof Error ? cause.message : "Balance check failed.");
+    } finally {
+      setCompanionBusy("");
+    }
+  }
+
+  async function solveSeed() {
+    setCompanionError(""); setSolver(null);
+    if (!solverPhrase.trim()) { setCompanionError("Enter the known words (use ? or _ for a missing word)."); return; }
+    if (!solverWordlist.trim()) { setCompanionError("Enter the path to your BIP-39 english.txt on your machine."); return; }
+    if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
+    setCompanionBusy("solve");
+    try {
+      const body: Record<string, unknown> = {
+        mode: solverMode, phrase: solverPhrase.trim(), words: solverPhrase.trim(),
+        wordlistPath: solverWordlist.trim(), passphrase,
+      };
+      if (solverMatch.trim()) body.matchAddress = solverMatch.trim();
+      const data = await bridgePost("/wallet/solve-seed", body);
+      setSolver(data);
+    } catch (cause) {
+      setCompanionError(cause instanceof Error ? cause.message : "Seed reconstruction failed.");
     } finally {
       setCompanionBusy("");
     }
@@ -257,14 +331,42 @@ export default function WalletRecoveryPage() {
               <div><span>PASSPHRASE (OPTIONAL)</span><input value={passphrase} onChange={(e) => setPassphrase(e.target.value)} placeholder="BIP39 passphrase" /></div>
               <div><span>ACCOUNT TYPE</span>
                 <select value={template} onChange={(e) => setTemplate(e.target.value)}>
-                  <option value="bip44-ethereum">Ethereum (m/44'/60')</option>
-                  <option value="bip44-legacy">Bitcoin legacy (m/44'/0')</option>
-                  <option value="bip84-segwit">Bitcoin native SegWit (m/84'/0')</option>
+                  {ACCOUNT_TEMPLATES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
             </div>
-            <button type="button" className="wallet-reset" disabled={companionBusy === "derive"} onClick={deriveAddresses}>{companionBusy === "derive" ? "Deriving…" : "Derive first 5 addresses"}</button>
-            {accounts && <ul>{accounts.map((acc) => <li key={acc.path}><code>{acc.path}</code> → <code>{acc.address}</code></li>)}</ul>}
+            <div className="wallet-btn-row">
+              <button type="button" className="wallet-reset" disabled={companionBusy === "derive"} onClick={deriveAddresses}>{companionBusy === "derive" ? "Deriving…" : "Derive first 5 addresses"}</button>
+              <button type="button" className="wallet-reset" disabled={companionBusy === "balances"} onClick={checkBalances} title="Opt-in, read-only public-explorer lookup of your derived addresses across coins">{companionBusy === "balances" ? "Checking funds…" : "Find which path holds funds"}</button>
+            </div>
+            {accounts && <ul>{accounts.map((acc) => <li key={acc.path}><code>{acc.path}</code> → <code>{acc.address}</code>{acc.coin ? " (" + acc.coin + ")" : ""}</li>)}</ul>}
+            {balances && <div className="wallet-balance-result">
+              <p className="wallet-status-line">{balances.funded_addresses} funded · {balances.active_addresses} ever active of {balances.checked} checked</p>
+              <ul>{balances.results.filter((r) => r.has_activity).map((r) => <li key={r.path + r.address}><code>{r.path}</code> {r.coin} — <strong>{r.balance}</strong>{(r.transaction_count ?? 0) > 0 ? " · " + r.transaction_count + " tx" : ""}</li>)}</ul>
+              {balances.active_addresses === 0 && <p className="wallet-status-line">No activity found on the checked paths.</p>}
+              <p className="wallet-inline-note"><ShieldCheck size={13}/> {balances.note}</p>
+            </div>}
+          </div>
+
+          <div className="wallet-inspection">
+            <div className="wallet-inspection-head"><div><span>SEED RECONSTRUCTION</span><h3>Recover a missing or scrambled phrase</h3></div><KeyRound size={16}/></div>
+            <div className="wallet-file-meta">
+              <div><span>MODE</span>
+                <select value={solverMode} onChange={(e) => setSolverMode(e.target.value)}>
+                  <option value="missing">Fill missing words (mark each ? or _)</option>
+                  <option value="scramble">Fix word order (known words)</option>
+                </select>
+              </div>
+              <div><span>BIP-39 english.txt PATH</span><input value={solverWordlist} onChange={(e) => setSolverWordlist(e.target.value)} placeholder="/home/you/bip39/english.txt" /></div>
+            </div>
+            <textarea value={solverPhrase} onChange={(e) => setSolverPhrase(e.target.value)} rows={2} className="wallet-mnemonic-input" placeholder={solverMode === "missing" ? "legal winner thank ? ? ... (all 12/24 positions, ? for each blank)" : "the known words in any order"} />
+            <div className="wallet-file-meta"><div><span>KNOWN ADDRESS (OPTIONAL, PINS THE EXACT PHRASE)</span><input value={solverMatch} onChange={(e) => setSolverMatch(e.target.value)} placeholder="a receiving address from this wallet" /></div></div>
+            <button type="button" className="wallet-reset" disabled={companionBusy === "solve"} onClick={solveSeed}>{companionBusy === "solve" ? "Searching…" : "Reconstruct phrase"}</button>
+            {solver && <div className="wallet-balance-result">
+              <p className="wallet-status-line">{solver.candidate_count} checksum-valid candidate{solver.candidate_count === 1 ? "" : "s"} · {solver.checked.toLocaleString()} checked{solver.exhausted ? "" : " · stopped early (narrow the search or add an address)"}</p>
+              <ul>{solver.candidates.slice(0, 20).map((c) => <li key={c}><code>{c}</code></li>)}</ul>
+              <p className="wallet-inline-note"><ShieldCheck size={13}/> {solver.note}</p>
+            </div>}
           </div>
 
           <div className="wallet-inspection">
@@ -281,17 +383,36 @@ export default function WalletRecoveryPage() {
           <div className="wallet-inspection">
             <div className="wallet-inspection-head"><div><span>PASSWORD RECOVERY</span><h3>Run hashcat / John locally</h3></div><Fingerprint size={16}/></div>
             <div className="wallet-file-meta">
-              <div><span>WORDLIST PATH (ON YOUR MACHINE)</span><input value={wordlist} onChange={(e) => setWordlist(e.target.value)} placeholder="/home/you/wordlists/rockyou.txt" /></div>
               <div><span>TOOL</span>
                 <select value={crackTool} onChange={(e) => setCrackTool(e.target.value)}>
                   <option value="hashcat">hashcat</option>
                   <option value="john">John the Ripper</option>
                 </select>
               </div>
+              <div><span>ATTACK</span>
+                {crackTool === "hashcat" ? (
+                  <select value={attackMode} onChange={(e) => setAttackMode(e.target.value)}>
+                    <option value="dictionary">Dictionary (+ optional rules)</option>
+                    <option value="mask">Mask / brute force</option>
+                    <option value="hybrid-wordlist-mask">Hybrid: word + mask</option>
+                    <option value="hybrid-mask-wordlist">Hybrid: mask + word</option>
+                  </select>
+                ) : (
+                  <select value={attackMode} onChange={(e) => setAttackMode(e.target.value)}>
+                    <option value="dictionary">Wordlist (+ optional rules)</option>
+                  </select>
+                )}
+              </div>
             </div>
+            {(crackTool === "john" || attackMode !== "mask") &&
+              <div className="wallet-file-meta"><div><span>WORDLIST PATH (ON YOUR MACHINE)</span><input value={wordlist} onChange={(e) => setWordlist(e.target.value)} placeholder="/home/you/wordlists/rockyou.txt" /></div></div>}
+            {crackTool === "hashcat" && attackMode !== "dictionary" &&
+              <div className="wallet-file-meta"><div><span>MASK (e.g. ?u?l?l?l?l?d?d)</span><input value={mask} onChange={(e) => setMask(e.target.value)} placeholder="?u?l?l?l?l?l?d?d" /></div></div>}
+            {attackMode === "dictionary" &&
+              <div className="wallet-file-meta"><div><span>{crackTool === "hashcat" ? "RULES FILE (OPTIONAL)" : "JOHN RULES (OPTIONAL, e.g. Jumbo)"}</span><input value={rulesFile} onChange={(e) => setRulesFile(e.target.value)} placeholder={crackTool === "hashcat" ? "/usr/share/hashcat/rules/best64.rule" : "Jumbo"} /></div></div>}
             <button type="button" className="wallet-reset" disabled={companionBusy === "crack" || !extracted} onClick={runRecovery}>{companionBusy === "crack" ? "Recovering…" : "Start password recovery"}</button>
             {crack && <div className={"wallet-state wallet-state-" + (crack.status === "cracked" ? "recognized" : "partial")}>
-              {crack.status === "cracked" ? "RECOVERED: " + crack.password : crack.status.toUpperCase() + " — " + (crack.note || "")}
+              {crack.status === "cracked" ? "RECOVERED: " + crack.password : crack.status.toUpperCase() + (crack.attack ? " (" + crack.attack + ")" : "") + " — " + (crack.note || "")}
             </div>}
           </div>
         </section>

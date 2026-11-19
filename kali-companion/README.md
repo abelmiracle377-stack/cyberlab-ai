@@ -137,11 +137,13 @@ The dashboard's **Digital Forensics → File & Picture Recovery** module can use
 - Require source-device confirmation and reject mounted source partitions.
 - Verify that the image destination is a mounted filesystem on a different physical device.
 - Create a new image and ddrescue map file without overwriting existing output.
-- Run Foremost against a completed CyberLab acquisition image and write results to a new folder on the backup drive.
+- Carve files from a completed CyberLab acquisition image with Foremost (`POST /forensics/foremost`; the carve type list is configurable via `fileTypes`, defaulting to a broad photo/video/audio/document/archive set) and write results to a new folder on the backup drive.
+- Carve with PhotoRec (`POST /forensics/photorec`) for far broader format coverage (480+ types, including HEIC, camera RAW, MP4 and Office files) when filesystem metadata is gone. Background job, SHA-256 manifest, output on a different drive.
 - Probe a completed image with `blkid` to report recognised filesystem signatures without mounting or modifying the image.
 - Enumerate allocated partition boundaries in a completed image with Sleuth Kit `mmls`, without mounting, repairing or modifying it.
 - Inspect filesystem metadata for a selected discovered partition with Sleuth Kit `fsstat`; the bridge revalidates the partition start against `mmls` before running a fixed read-only command.
 - List deleted files in a completed image with Sleuth Kit `fls -r -p -d` (optionally scoped to a selected partition offset), preserving their original names and paths, and recover any one by inode with `icat` to a destination on a different physical drive (owner-only output, SHA-256 hashed).
+- Recover every deleted file in one step with `POST /forensics/recover-all-deleted`: it lists deleted entries (`fls`) and extracts each (`icat`) to a new folder on a different drive, keeping original names, with a SHA-256 for every file and a recovery manifest. Bounded by `maxFiles`; one unreadable file never aborts the batch.
 
 Install the tools with:
 
@@ -156,13 +158,7 @@ After imaging, the dashboard can run a read-only Sleuth Kit `mmls` partition-tab
 
 After imaging, the dashboard can run a read-only `blkid -p` signature probe against the image. This reports recognised filesystem metadata when available; it does not mount the image, modify it, or guarantee that a filesystem is intact. A missing signature is inconclusive. The dashboard can also launch a bounded Foremost recovery job against the image. On successful completion, the companion creates `cyberlab-recovery-manifest.json` inside Foremost's output folder. The manifest records each regular recovered file's relative path, byte size and SHA-256 hash. Symlinks are skipped, enumeration is capped at 5,000 files, and the manifest is created with no-overwrite semantics. A `truncated: true` field means the cap was reached; preserve the Foremost `audit.txt` as well. Hashes document the recovered output as it existed when the manifest was generated; they do not prove authenticity or validate file contents.
 
-PhotoRec remains an interactive recovery option in a separate Kali terminal:
-
-```bash
-sudo photorec /mnt/backup/cyberlab-disk.img
-```
-
-In PhotoRec, select the image/partition, configure File Opt for the required formats, and choose a recovery directory on the backup drive. PhotoRec complements the built-in Sleuth Kit `fls`/`icat` undelete flow: use `fls`/`icat` to recover deleted files with their original names on an intact filesystem, and PhotoRec/Foremost to carve by signature from a damaged or reformatted filesystem. Always recover to the backup drive, never the original source.
+PhotoRec now runs directly from the dashboard (`POST /forensics/photorec`) as a bounded background job against the verified image, carving 480+ formats to a new folder on the backup drive with its own SHA-256 manifest. Choose the recovery approach by filesystem state: use the `fls`/`icat` named undelete (individually or the one-step `recover-all-deleted`) to recover deleted files with their original names on an intact filesystem, and PhotoRec or Foremost to carve by signature from a damaged or reformatted filesystem. The companion always refuses to write recovered output onto the original source device.
 
 A hosted Vercel deployment cannot directly access the browser user's physical disks. A self-hosted CyberLab AI OS running on a Linux machine can use the same local runner and bridge directly on that machine, provided it has the required OS permissions and tools; no remote web process is given raw-disk access.
 
@@ -266,9 +262,11 @@ Wireshark's `tshark` capture analysis is exposed at `POST /network/pcap-analyze`
 
 The dashboard's **Wallet Recovery** module can use the companion for owned or explicitly authorised backups:
 
-- `POST /wallet/derive` performs standards-based BIP39/BIP32/BIP44 derivation (verified against the official BIP32/BIP39/EIP-55 vectors) to list addresses and keys for a supplied mnemonic — Python standard library only, no network.
+- `POST /wallet/derive` performs standards-based BIP39/BIP32/BIP44 derivation (verified against the official BIP32/BIP39/EIP-55 vectors) to list addresses and keys for a supplied mnemonic — Python standard library only, no network. Supported account types: Bitcoin legacy/BIP49 nested SegWit/BIP84 native SegWit, Litecoin (legacy/nested/native SegWit), Dogecoin, Bitcoin Cash (CashAddr, verified against the CashAddr reference vector), and Ethereum. A BIP39 passphrase (25th word) is supported.
+- `POST /wallet/solve-seed` reconstructs a mnemonic that is missing words (mark each blank `?`/`_`; every 2048 candidates per blank are tried and only checksum-valid phrases kept) or out of order (bounded permutation search). An optional known address pins the single correct phrase via real derivation. Loads your own SHA-256-verified BIP-39 `english.txt`. A hard combination cap and time budget keep a search from hanging.
 - `POST /wallet/extract-hash` extracts a hashcat/John hash from an Ethereum V3 keystore or a Bitcoin Core `wallet.dat` master key.
-- `POST /wallet/crack` runs a locally installed hashcat (`-m 11300/15700/16300`) or John in wordlist mode against the extracted hash. A recovered password is only ever reported from the tool's own output; the companion never downloads cracking tools and fails closed when they are absent.
+- `POST /wallet/crack` runs a locally installed hashcat or John against the extracted hash. hashcat supports dictionary (`-a 0`, optional rules file), mask (`-a 3`, with up to four custom charsets), and the wordlist+mask hybrids (`-a 6`/`-a 7`); John supports wordlist mangling rules (`--rules`) and incremental mode. A recovered password is only ever reported from the tool's own output; the companion never downloads cracking tools and fails closed when they are absent.
+- `POST /wallet/check-balances` is an opt-in (`confirmNetwork`), read-only lookup via an allow-listed public explorer. It derives-then-checks from a mnemonic (or checks supplied addresses) to show which derivation path and coin hold funds or show prior activity. Only public addresses are sent — never a key, seed or mnemonic.
 
 ## Burp Suite connector
 

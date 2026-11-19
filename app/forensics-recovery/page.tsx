@@ -84,6 +84,7 @@ export default function ForensicsRecoveryPage(){
   const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
   const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false),[imagePartitions,setImagePartitions]=useState<ImagePartitions|null>(null),[partitionsBusy,setPartitionsBusy]=useState(false),[selectedPartition,setSelectedPartition]=useState(""),[filesystemDetails,setFilesystemDetails]=useState<FilesystemDetails|null>(null),[filesystemBusy,setFilesystemBusy]=useState(false);
   const [deletedFiles,setDeletedFiles]=useState<DeletedFile[]|null>(null),[deletedBusy,setDeletedBusy]=useState(false),[recoveringInode,setRecoveringInode]=useState(""),[recoveredFiles,setRecoveredFiles]=useState<RecoveredFile[]>([]);
+  const [carveTypes,setCarveTypes]=useState(""),[bulkBusy,setBulkBusy]=useState(false),[bulkResult,setBulkResult]=useState<{recovered_count:number;failed_count:number;deleted_found:number;output:string}|null>(null);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
   async function pairKali(){
@@ -135,13 +136,13 @@ export default function ForensicsRecoveryPage(){
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Filesystem metadata inspection failed.");}
     finally{setFilesystemBusy(false);}
   }
-  async function runForemost(){
+  async function startCarveJob(endpoint:string,extra:Record<string,unknown>,label:string){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before starting recovery.");return;}
     setBridgeBusy(true);
     try{
-      const response=await fetch("http://127.0.0.1:8765/forensics/foremost",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,outputDirectory:recoveryParent,confirmationImage:confirmImage})});
-      const data=await response.json();if(!response.ok)throw new Error(data.error||"Foremost recovery could not start.");
-      setRecoveryJob(data.job);setBridgeMessage(data.note||"Foremost recovery started.");
+      const response=await fetch("http://127.0.0.1:8765"+endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,outputDirectory:recoveryParent,confirmationImage:confirmImage,...extra})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||(label+" could not start."));
+      setRecoveryJob(data.job);setBridgeMessage(data.note||(label+" started."));
       const id=data.job.id;
       const poll=async():Promise<void>=>{
         const status=await fetch("http://127.0.0.1:8765/forensics/jobs/"+id,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
@@ -151,8 +152,21 @@ export default function ForensicsRecoveryPage(){
         setBridgeMessage(payload.job.message||"Recovery job finished.");
       };
       void poll().catch(e=>setBridgeMessage(e instanceof Error?e.message:"Could not monitor recovery job."));
-    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Foremost recovery failed.");}
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:(label+" failed."));}
     finally{setBridgeBusy(false);}
+  }
+  function runForemost(){const extra=carveTypes.trim()?{fileTypes:carveTypes.trim()}:{};void startCarveJob("/forensics/foremost",extra,"Foremost recovery");}
+  function runPhotorec(){void startCarveJob("/forensics/photorec",{},"PhotoRec carving");}
+  async function recoverAllDeleted(){
+    if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path first.");return;}
+    const offset=selectedPartition?Number(selectedPartition):0;
+    setBulkBusy(true);setBulkResult(null);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/recover-all-deleted",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,outputDirectory:recoveryParent,offset,maxFiles:200})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Bulk undelete failed.");
+      setBulkResult(data);setBridgeMessage("Recovered "+data.recovered_count+" of "+data.deleted_found+" deleted files to "+data.output+(data.failed_count?(" ("+data.failed_count+" failed)"):""));
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Bulk undelete failed.");}
+    finally{setBulkBusy(false);}
   }
   async function listDeleted(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path first.");return;}
@@ -228,7 +242,9 @@ export default function ForensicsRecoveryPage(){
             <p>Foremost runs a fixed, allow-listed set of document, archive and picture signatures against the completed image. Output is written to a new folder on a drive separate from the original source.</p>
             <label className="vault-field"><span>Existing output parent directory on backup drive</span><input value={recoveryParent} onChange={e=>setRecoveryParent(e.target.value)} placeholder="/mnt/backup"/></label>
             <label className="vault-field"><span>Retype exact acquired image path</span><input value={confirmImage} onChange={e=>setConfirmImage(e.target.value)} placeholder={job.image}/></label>
+            <label className="vault-field"><span>Carve file types (optional, comma-separated: jpg,png,pdf,mov,zip… blank = broad default)</span><input value={carveTypes} onChange={e=>setCarveTypes(e.target.value)} placeholder="jpg,png,gif,mov,avi,pdf,doc,zip" /></label>
             <button className="network-run" type="button" onClick={runForemost} disabled={bridgeBusy||confirmImage!==job.image}>Run Foremost on image</button>
+            <button className="network-run" type="button" onClick={runPhotorec} disabled={bridgeBusy||confirmImage!==job.image} style={{marginTop:8}}>Run PhotoRec carving (480+ formats: HEIC, RAW, MP4, Office…)</button>
             <button className="network-run" type="button" onClick={inspectImage} disabled={probeBusy||confirmImage!==job.image} style={{marginTop:8}}>{probeBusy?"Inspecting image…":"Identify filesystem (read-only)"}</button>
             <button className="network-run" type="button" onClick={inspectPartitions} disabled={partitionsBusy||confirmImage!==job.image} style={{marginTop:8}}>{partitionsBusy?"Analysing partitions…":"Analyse partition table (read-only)"}</button>
             {imagePartitions&&imagePartitions.partition_count>0&&<><label className="vault-field"><span>Partition for filesystem metadata inspection</span><select value={selectedPartition} onChange={e=>{setSelectedPartition(e.target.value);setFilesystemDetails(null);}}><option value="">Select a discovered partition</option>{imagePartitions.partitions.map(part=><option key={part.slot} value={String(part.start_sector)}>Slot {part.slot} · sector {part.start_sector.toLocaleString()} · {part.description}</option>)}</select></label><button className="network-run" type="button" onClick={inspectPartitionFilesystem} disabled={filesystemBusy||!selectedPartition||confirmImage!==job.image} style={{marginTop:8}}>{filesystemBusy?"Inspecting filesystem…":"Inspect selected filesystem metadata (read-only)"}</button></>}
@@ -240,8 +256,10 @@ export default function ForensicsRecoveryPage(){
             {recoveryJob?.manifest&&<><div className="malware-kv"><span>SHA-256 manifest</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.manifest.path}</strong></div><p className="network-note">Manifest hashes {recoveryJob.manifest.files_hashed.toLocaleString()} recovered file(s), covering {formatBytes(recoveryJob.manifest.total_bytes_hashed)}.{recoveryJob.manifest.truncated?" File limit reached; manifest is partial.":" All enumerated regular files were hashed."}</p></>}
             <div style={{marginTop:16,borderTop:"1px solid var(--line)",paddingTop:12}}>
               <h3>Deleted-file recovery (filesystem-aware)</h3>
-              <p>Sleuth Kit lists files deleted from the filesystem with their original names and paths, then recovers a selected file by inode to the backup drive. This complements carving when the filesystem is intact. Select a partition above to scope the listing to it.</p>
-              <button className="network-run" type="button" onClick={listDeleted} disabled={deletedBusy||confirmImage!==job.image}>{deletedBusy?"Listing deleted files…":"List deleted files"}</button>
+              <p>Sleuth Kit lists files deleted from the filesystem with their original names and paths, then recovers them to the backup drive. This complements carving when the filesystem is intact. Select a partition above to scope the listing to it.</p>
+              <button className="network-run" type="button" onClick={recoverAllDeleted} disabled={bulkBusy||confirmImage!==job.image}>{bulkBusy?"Recovering all deleted files…":"Recover ALL deleted files in one go (keeps names)"}</button>
+              {bulkResult&&<p className="network-note">Recovered {bulkResult.recovered_count} of {bulkResult.deleted_found} deleted files{bulkResult.failed_count?(" ("+bulkResult.failed_count+" failed)"):""} to {bulkResult.output}. Each file is SHA-256 hashed; validate before trusting.</p>}
+              <button className="network-run" type="button" onClick={listDeleted} disabled={deletedBusy||confirmImage!==job.image} style={{marginTop:8}}>{deletedBusy?"Listing deleted files…":"List deleted files (recover individually)"}</button>
               {deletedFiles&&<><div className="malware-kv"><span>Deleted entries{selectedPartition?" · sector "+Number(selectedPartition).toLocaleString():""}</span><strong>{deletedFiles.length}</strong></div>
                 <div style={{maxHeight:320,overflowY:"auto",border:"1px solid var(--line)",borderRadius:6,marginTop:8}}>
                   {deletedFiles.filter(f=>!f.isDirectory).map(f=><div key={f.inode+f.path} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 10px",borderBottom:"1px solid var(--line)"}}>
@@ -252,7 +270,7 @@ export default function ForensicsRecoveryPage(){
                 </div></>}
               {recoveredFiles.length>0&&<><div className="malware-kv" style={{marginTop:10}}><span>Recovered this session</span><strong>{recoveredFiles.length}</strong></div>{recoveredFiles.map(r=><div className="malware-kv" key={r.destination}><span style={{overflowWrap:"anywhere"}}>{r.destination.split("/").pop()} · {formatBytes(r.size_bytes)}</span><strong style={{overflowWrap:"anywhere",fontSize:11}}>{r.sha256.slice(0,16)}…</strong></div>)}<p className="network-note">Each recovered file is written with owner-only permissions to a separate drive and SHA-256 hashed. Validate every file before trusting it; recovered data can be partial.</p></>}
             </div>
-            <p className="network-note">For PhotoRec's interactive signature-recovery workflow (photos from a damaged or reformatted filesystem), open another Kali terminal and run: <code>sudo photorec {job.image}</code>. In PhotoRec, select the image/partition, use File Opt to select formats, and choose an output folder on the backup drive. Do not choose the source drive.</p>
+            <p className="network-note">PhotoRec carving runs from the button above — it signature-recovers 480+ formats (including HEIC, camera RAW, MP4 and Office files) directly from this verified image to a new folder on the backup drive, never the source. Use it when the filesystem is damaged or reformatted and named undelete finds nothing.</p>
           </div>}
         </>}
         {bridgeMessage&&<p role="status" className="network-note">{bridgeMessage}</p>}
