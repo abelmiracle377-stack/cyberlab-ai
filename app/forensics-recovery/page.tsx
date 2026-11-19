@@ -11,6 +11,8 @@ type AcquisitionJob = {id:string;state:string;source:string;image:string;map:str
 type ImageProbe = {recognized:boolean;metadata:Record<string,string>;method:string;note:string};
 type ImagePartitions = {partitions:Array<{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string}>;partition_count:number;method:string;note:string};
 type FilesystemDetails = {partition:{slot:string;start_sector:number;end_sector:number;length_sectors:number;description:string};metadata:string;truncated:boolean;method:string;note:string};
+type DeletedFile = {inode:string;path:string;deleted:boolean;isDirectory:boolean};
+type RecoveredFile = {inode:string;destination:string;size_bytes:number;sha256:string;note:string};
 const MAX_BYTES = 256 * 1024 * 1024;
 const signatures = {
   jpegStart: [0xff,0xd8,0xff], jpegEnd: [0xff,0xd9],
@@ -81,6 +83,7 @@ function formatBytes(n:number){return n<1024?`${n} B`:n<1024*1024?`${(n/1024).to
 export default function ForensicsRecoveryPage(){
   const [source,setSource]=useState<File|null>(null),[items,setItems]=useState<Recovered[]>([]),[previewUrls,setPreviewUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[hash,setHash]=useState("");
   const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false),[imagePartitions,setImagePartitions]=useState<ImagePartitions|null>(null),[partitionsBusy,setPartitionsBusy]=useState(false),[selectedPartition,setSelectedPartition]=useState(""),[filesystemDetails,setFilesystemDetails]=useState<FilesystemDetails|null>(null),[filesystemBusy,setFilesystemBusy]=useState(false);
+  const [deletedFiles,setDeletedFiles]=useState<DeletedFile[]|null>(null),[deletedBusy,setDeletedBusy]=useState(false),[recoveringInode,setRecoveringInode]=useState(""),[recoveredFiles,setRecoveredFiles]=useState<RecoveredFile[]>([]);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
   async function pairKali(){
@@ -151,6 +154,29 @@ export default function ForensicsRecoveryPage(){
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Foremost recovery failed.");}
     finally{setBridgeBusy(false);}
   }
+  async function listDeleted(){
+    if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path first.");return;}
+    const offset=selectedPartition?Number(selectedPartition):0;
+    setDeletedBusy(true);setRecoveredFiles([]);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/deleted-list",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,offset,limit:1000})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not list deleted files.");
+      setDeletedFiles(data.deleted_files||[]);setBridgeMessage(data.note||"Deleted-file listing complete.");
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"Deleted-file listing failed.");}
+    finally{setDeletedBusy(false);}
+  }
+  async function recoverDeleted(file:DeletedFile){
+    if(!job||confirmImage!==job.image)return;
+    const offset=selectedPartition?Number(selectedPartition):0;
+    const name=file.path.split("/").pop()||file.inode;
+    setRecoveringInode(file.inode);
+    try{
+      const response=await fetch("http://127.0.0.1:8765/forensics/recover-file",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,inode:file.inode,outputDirectory:recoveryParent,offset,filename:name})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"File recovery failed.");
+      setRecoveredFiles(current=>[data,...current]);setBridgeMessage("Recovered "+name+" ("+data.size_bytes+" bytes) to "+data.destination);
+    }catch(e){setBridgeMessage(e instanceof Error?e.message:"File recovery failed.");}
+    finally{setRecoveringInode("");}
+  }
   async function acquireImage(){
     if(!selectedDevice||confirmationSource!==selectedDevice){setBridgeMessage("Select a source and retype its exact device path to confirm.");return;}
     setBridgeBusy(true);setBridgeMessage("Submitting protected imaging job…");
@@ -212,7 +238,21 @@ export default function ForensicsRecoveryPage(){
             {recoveryJob&&<div className="malware-kv"><span>Foremost job · {recoveryJob.state}</span><strong>{recoveryJob.message}</strong></div>}
             {recoveryJob?.output&&<div className="malware-kv"><span>Recovered files folder</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.output}</strong></div>}
             {recoveryJob?.manifest&&<><div className="malware-kv"><span>SHA-256 manifest</span><strong style={{overflowWrap:"anywhere"}}>{recoveryJob.manifest.path}</strong></div><p className="network-note">Manifest hashes {recoveryJob.manifest.files_hashed.toLocaleString()} recovered file(s), covering {formatBytes(recoveryJob.manifest.total_bytes_hashed)}.{recoveryJob.manifest.truncated?" File limit reached; manifest is partial.":" All enumerated regular files were hashed."}</p></>}
-            <p className="network-note">For PhotoRec's interactive recovery workflow, open another Kali terminal and run: <code>sudo photorec {job.image}</code>. In PhotoRec, select the image/partition, use File Opt to select formats, and choose an output folder on the backup drive. Do not choose the source drive.</p>
+            <div style={{marginTop:16,borderTop:"1px solid var(--line)",paddingTop:12}}>
+              <h3>Deleted-file recovery (filesystem-aware)</h3>
+              <p>Sleuth Kit lists files deleted from the filesystem with their original names and paths, then recovers a selected file by inode to the backup drive. This complements carving when the filesystem is intact. Select a partition above to scope the listing to it.</p>
+              <button className="network-run" type="button" onClick={listDeleted} disabled={deletedBusy||confirmImage!==job.image}>{deletedBusy?"Listing deleted files…":"List deleted files"}</button>
+              {deletedFiles&&<><div className="malware-kv"><span>Deleted entries{selectedPartition?" · sector "+Number(selectedPartition).toLocaleString():""}</span><strong>{deletedFiles.length}</strong></div>
+                <div style={{maxHeight:320,overflowY:"auto",border:"1px solid var(--line)",borderRadius:6,marginTop:8}}>
+                  {deletedFiles.filter(f=>!f.isDirectory).map(f=><div key={f.inode+f.path} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 10px",borderBottom:"1px solid var(--line)"}}>
+                    <span style={{overflowWrap:"anywhere",fontSize:12}}>{f.path}</span>
+                    <button className="network-run" type="button" onClick={()=>recoverDeleted(f)} disabled={recoveringInode===f.inode} style={{flexShrink:0}}>{recoveringInode===f.inode?"Recovering…":"Recover"}</button>
+                  </div>)}
+                  {deletedFiles.filter(f=>!f.isDirectory).length===0&&<p className="network-note" style={{padding:10}}>No deleted files were listed for this scope. Try a different partition, or use carving for a damaged filesystem.</p>}
+                </div></>}
+              {recoveredFiles.length>0&&<><div className="malware-kv" style={{marginTop:10}}><span>Recovered this session</span><strong>{recoveredFiles.length}</strong></div>{recoveredFiles.map(r=><div className="malware-kv" key={r.destination}><span style={{overflowWrap:"anywhere"}}>{r.destination.split("/").pop()} · {formatBytes(r.size_bytes)}</span><strong style={{overflowWrap:"anywhere",fontSize:11}}>{r.sha256.slice(0,16)}…</strong></div>)}<p className="network-note">Each recovered file is written with owner-only permissions to a separate drive and SHA-256 hashed. Validate every file before trusting it; recovered data can be partial.</p></>}
+            </div>
+            <p className="network-note">For PhotoRec's interactive signature-recovery workflow (photos from a damaged or reformatted filesystem), open another Kali terminal and run: <code>sudo photorec {job.image}</code>. In PhotoRec, select the image/partition, use File Opt to select formats, and choose an output folder on the backup drive. Do not choose the source drive.</p>
           </div>}
         </>}
         {bridgeMessage&&<p role="status" className="network-note">{bridgeMessage}</p>}
