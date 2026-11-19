@@ -31,3 +31,14 @@ unzip
 xz-utils
 tmux
 htop
+# CyberLab essential security tooling (Debian Trixie)
+whois
+bind9-dnsutils
+dnsrecon
+whatweb
+nikto
+netcat-openbsd
+john
+hashcat
+sslscan
+openssl

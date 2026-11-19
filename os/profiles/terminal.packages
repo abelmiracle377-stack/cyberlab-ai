@@ -35,3 +35,22 @@ file
 jq
 unzip
 xz-utils
+# CyberLab security tooling (Debian Trixie) — CLI tools the paired companion drives
+whois
+bind9-dnsutils
+dnsrecon
+whatweb
+nikto
+gobuster
+dirb
+sqlmap
+sslscan
+masscan
+netcat-openbsd
+hydra
+john
+hashcat
+hashid
+aircrack-ng
+python3-impacket
+openssl
