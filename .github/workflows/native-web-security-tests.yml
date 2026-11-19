@@ -1,0 +1,22 @@
+name: Native web security regression tests
+
+on:
+  push:
+    branches: [fix/native-web-scope-and-ssrf-tests]
+  pull_request:
+    branches: [feature/cyberlab-burp-integration]
+
+permissions:
+  contents: read
+
+jobs:
+  native-web-security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run offline native web security tests
+        run: python -m unittest discover -s kali-companion -p "test_web_testing.py" -v
