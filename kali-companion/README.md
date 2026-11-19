@@ -253,7 +253,14 @@ Beyond the plan-only `POST /plan` endpoint, the companion can **run** a curated 
 - If a tool's binary is not installed the call fails closed with an apt install hint; output is bounded and is only ever the tool's own stdout/stderr and exit code.
 - Metasploit is limited to module **search** metadata; unattended exploit execution and online brute-force remain out of scope.
 
-The hosted AI agent console can turn an instruction such as "run whois on example.com" or "nikto https://app.example.com" into a concrete `POST /tools/run` request that the operator approves in the browser; the browser calls the local bridge with the paired token and feeds the real output back to the model for analysis. The server-side agent never reaches the loopback bridge directly.
+The hosted AI agent console can turn an instruction such as "run whois on example.com" or "nikto https://app.example.com" into a concrete `POST /tools/run` request that the operator approves in the browser; the browser calls the local bridge with the paired token and feeds the real output back to the model for analysis. The server-side agent never reaches the loopback bridge directly. The dashboard's Tool Runner page offers the same execution from a form instead of the agent.
+
+**Tool availability by platform.** Tools execute for real — `subprocess.run` with a fixed argument list, no shell — but only when the binary is installed on the machine running the companion:
+
+- On **Kali Linux**, all of these tools are available from Kali's repositories, so the full set can run.
+- On the **Debian-based CyberLab OS VM**, the live/VM profiles ship the Debian-packaged subset (nmap, sqlmap, nikto, gobuster, dirb, sslscan/sslyze, masscan, hydra, john, hashcat, aircrack-ng, wpscan, smbmap, nbtscan, ssh-audit, dnsenum, fierce, sublist3r, theHarvester, wafw00f, dnstwist, testssl.sh, ffuf, whois, dig/host and more). Go/ProjectDiscovery and Kali-only tools (httpx, naabu, katana, subfinder, amass, nuclei, feroxbuster, dalfox, gau, waybackurls, assetfinder, gospider, arjun, cmseek, droopescan, joomscan, searchsploit/exploitdb, metasploit-framework) are not in Debian and are not shipped on the OS VM; run the companion on actual Kali for those, or install them manually. Either way, a missing tool fails closed with an install hint — never a simulated result.
+
+Wireshark's `tshark` capture analysis is exposed at `POST /network/pcap-analyze` (protocol hierarchy and top IP conversations over an existing .pcap/.pcapng). The Wireshark GUI itself runs on the Kali/OS machine, not through the companion.
 
 ## Local wallet recovery
 

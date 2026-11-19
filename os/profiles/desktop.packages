@@ -61,3 +61,17 @@ hashid
 aircrack-ng
 python3-impacket
 openssl
+bind9-host
+dnsenum
+fierce
+sublist3r
+theharvester
+wafw00f
+smbmap
+nbtscan
+ssh-audit
+wpscan
+sslyze
+dnstwist
+testssl.sh
+ffuf
