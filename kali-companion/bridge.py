@@ -37,6 +37,7 @@ from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending
 import base64
 import wallet_recovery
 import wallet_cracking
+import seed_solver
 import kali_tools
 import host_telemetry
 import pcap_analysis
@@ -415,23 +416,102 @@ def wallet_derive(data: dict) -> dict:
             "note": "Derived locally from the supplied mnemonic. Private keys and the mnemonic never leave this machine."}
 
 
+def wallet_solve_seed(data: dict) -> dict:
+    """Reconstruct a mnemonic that is missing words or out of order.
+
+    Loads the operator's own SHA-256-verified BIP-39 english.txt and searches
+    offline for checksum-valid phrases, narrowing to a known address if given.
+    """
+    wordlist_path = data.get("wordlistPath")
+    if not isinstance(wordlist_path, str) or not wordlist_path.strip():
+        raise ValueError("Provide 'wordlistPath' (the path to your BIP-39 english.txt on this machine).")
+    try:
+        wordlist = wallet_recovery.load_wordlist(Path(wordlist_path).expanduser())
+    except FileNotFoundError:
+        raise ValueError("Wordlist file not found at the supplied path.")
+
+    mode = str(data.get("mode", "missing"))
+    passphrase = data.get("passphrase", "")
+    if not isinstance(passphrase, str) or len(passphrase) > 256:
+        raise ValueError("Passphrase must be a string of at most 256 characters.")
+    match_address = data.get("matchAddress")
+    if match_address is not None and (not isinstance(match_address, str) or len(match_address) > 120):
+        raise ValueError("matchAddress must be a string address.")
+    templates = data.get("templates")
+    if templates is not None:
+        if not isinstance(templates, list) or not all(isinstance(t, str) for t in templates):
+            raise ValueError("templates must be a list of account-template names.")
+        unknown = [t for t in templates if t not in wallet_recovery.ACCOUNT_TEMPLATES]
+        if unknown:
+            raise ValueError("Unknown account template(s): " + ", ".join(unknown))
+    gap = data.get("addressGap", 5)
+    if not isinstance(gap, int) or isinstance(gap, bool) or not 1 <= gap <= 50:
+        raise ValueError("addressGap must be an integer between 1 and 50.")
+    max_results = data.get("maxResults", seed_solver.DEFAULT_MAX_RESULTS)
+    if not isinstance(max_results, int) or isinstance(max_results, bool) or not 1 <= max_results <= 2000:
+        raise ValueError("maxResults must be an integer between 1 and 2000.")
+    time_budget = data.get("timeBudgetSeconds", seed_solver.DEFAULT_TIME_BUDGET)
+    if not isinstance(time_budget, (int, float)) or isinstance(time_budget, bool) or not 1 <= time_budget <= 600:
+        raise ValueError("timeBudgetSeconds must be between 1 and 600.")
+    common = dict(match_address=match_address, templates=templates, address_gap=gap,
+                  passphrase=passphrase, max_results=max_results, time_budget=time_budget)
+
+    if mode == "scramble":
+        words = data.get("words") or data.get("phrase")
+        if isinstance(words, str):
+            words = words.split()
+        if not isinstance(words, list) or not words:
+            raise ValueError("Provide the known words in 'words' (any order).")
+        max_permutations = data.get("maxPermutations", 400_000)
+        if not isinstance(max_permutations, int) or isinstance(max_permutations, bool) or not 1 <= max_permutations <= 5_000_000:
+            raise ValueError("maxPermutations must be an integer between 1 and 5,000,000.")
+        result = seed_solver.solve_scrambled_order(words, wordlist, max_permutations=max_permutations, **common)
+    else:
+        phrase = data.get("phrase") or data.get("words")
+        if isinstance(phrase, list):
+            phrase = " ".join(str(token) for token in phrase)
+        if not isinstance(phrase, str) or not phrase.strip():
+            raise ValueError("Provide the partial 'phrase', marking each missing word with ? or _.")
+        result = seed_solver.solve_missing_words(phrase, wordlist, **common)
+    result["mode"] = mode
+    return result
+
+
 def wallet_crack(data: dict) -> dict:
-    """Run a locally installed hashcat/John against an extracted wallet hash."""
+    """Run a locally installed hashcat/John against an extracted wallet hash.
+
+    Supports several attack strategies for a forgotten password: a straight
+    wordlist, a wordlist with mangling rules, a brute-force mask, and hashcat's
+    wordlist+mask hybrids, as well as John's incremental mode.
+    """
     tool = str(data.get("tool", "hashcat")).lower()
     hash_value = data.get("hash")
     wordlist = data.get("wordlist")
     confirmed = data.get("confirmRun") is True
-    if not isinstance(hash_value, str) or not isinstance(wordlist, str):
-        raise ValueError("Provide 'hash' and 'wordlist' (a path on this machine).")
+    if not isinstance(hash_value, str):
+        raise ValueError("Provide 'hash' (an extracted wallet hash).")
     timeout = data.get("timeoutSeconds", wallet_cracking.DEFAULT_TIMEOUT)
     if not isinstance(timeout, int) or isinstance(timeout, bool):
         raise ValueError("timeoutSeconds must be an integer.")
     if tool == "john":
-        return wallet_cracking.run_john(hash_value, wordlist, confirmed=confirmed, timeout=timeout)
+        incremental = data.get("incremental")
+        rules = data.get("rules")
+        if not incremental and not isinstance(wordlist, str):
+            raise ValueError("Provide 'wordlist' (a path on this machine) or set 'incremental'.")
+        return wallet_cracking.run_john(hash_value, wordlist, confirmed=confirmed, timeout=timeout,
+                                        rules=rules, incremental=incremental)
     mode = data.get("hashcatMode")
     if not isinstance(mode, int) or isinstance(mode, bool):
         raise ValueError("hashcatMode is required for hashcat (for example 11300, 15700 or 16300).")
-    return wallet_cracking.run_hashcat(hash_value, mode, wordlist, confirmed=confirmed, timeout=timeout)
+    attack_mode = str(data.get("attackMode", "dictionary"))
+    mask = data.get("mask")
+    rules_file = data.get("rulesFile")
+    custom_charsets = data.get("customCharsets")
+    if attack_mode in {"dictionary", "hybrid-wordlist-mask", "hybrid-mask-wordlist"} and not isinstance(wordlist, str):
+        raise ValueError("Provide 'wordlist' (a path on this machine) for this attack mode.")
+    return wallet_cracking.run_hashcat(hash_value, mode, wordlist, confirmed=confirmed, timeout=timeout,
+                                       attack_mode=attack_mode, mask=mask, rules_file=rules_file,
+                                       custom_charsets=custom_charsets)
 
 
 def run_kali_tool(data: dict) -> dict:
@@ -989,7 +1069,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/solve-seed", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1005,7 +1085,7 @@ class Handler(BaseHTTPRequestHandler):
                 131072 if path == "/evidence/case" else
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
-                4096 if path in {"/wallet/derive", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
+                4096 if path in {"/wallet/derive", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
@@ -1030,6 +1110,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_extract_hash(data), origin)
             if path == "/wallet/derive":
                 return self.send_json(200, wallet_derive(data), origin)
+            if path == "/wallet/solve-seed":
+                return self.send_json(200, wallet_solve_seed(data), origin)
             if path == "/wallet/crack":
                 return self.send_json(200, wallet_crack(data), origin)
             if path == "/tools/run":
