@@ -137,5 +137,84 @@ class RecoverDeletedTests(unittest.TestCase):
                 fix.cleanup()
 
 
+class RecoverAllDeletedTests(unittest.TestCase):
+    def test_bulk_undelete_recovers_every_deleted_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fix = _JobFixture(tmp)
+            outdir = Path(tmp) / "out"
+            outdir.mkdir()
+            saved_mount, saved_anc = forensics._mount_device, forensics._ancestors
+            forensics._mount_device = lambda p: ("", "")
+            forensics._ancestors = lambda dev: {"source"} if "does-not-exist" in str(dev) else {"dest"}
+            try:
+                payloads = {"14-128-3": b"\xff\xd8holiday", "18-128-3": b"\x89PNGsecret"}
+
+                def runner(cmd, **kw):
+                    if cmd[0] == "fls":
+                        return subprocess.CompletedProcess(cmd, 0, FLS_SAMPLE, "")
+                    # icat: the inode is the last argument
+                    inode = cmd[-1]
+                    return subprocess.CompletedProcess(cmd, 0, payloads.get(inode, b""), b"")
+
+                result = forensics.recover_all_deleted_files(
+                    fix.job_id, str(fix.image), str(outdir), offset=0, max_files=50,
+                    runner=runner, which=lambda n: "/usr/bin/" + n)
+                # Two deleted regular files; the deleted directory (.Trash) is skipped.
+                self.assertEqual(result["recovered_count"], 2)
+                self.assertEqual(result["failed_count"], 0)
+                names = {Path(r["destination"]).read_bytes() for r in result["recovered"]}
+                self.assertEqual(names, set(payloads.values()))
+                self.assertIsNotNone(result["manifest"])
+            finally:
+                forensics._mount_device, forensics._ancestors = saved_mount, saved_anc
+                fix.cleanup()
+
+    def test_bulk_undelete_refuses_output_on_source_drive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fix = _JobFixture(tmp)
+            outdir = Path(tmp) / "out"
+            outdir.mkdir()
+            saved_mount, saved_anc = forensics._mount_device, forensics._ancestors
+            forensics._mount_device = lambda p: ("8:1", "/mnt")
+            forensics._ancestors = lambda dev: {"same"}  # dest and source collide
+            try:
+                with self.assertRaisesRegex(ValueError, "original source device"):
+                    forensics.recover_all_deleted_files(
+                        fix.job_id, str(fix.image), str(outdir),
+                        runner=lambda *a, **k: None, which=lambda n: "/usr/bin/" + n)
+            finally:
+                forensics._mount_device, forensics._ancestors = saved_mount, saved_anc
+                fix.cleanup()
+
+    def test_missing_sleuthkit_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fix = _JobFixture(tmp)
+            try:
+                with self.assertRaisesRegex(ValueError, "Sleuth Kit"):
+                    forensics.recover_all_deleted_files(fix.job_id, str(fix.image), tmp,
+                                                        which=lambda n: None)
+            finally:
+                fix.cleanup()
+
+
+class CarveOptionTests(unittest.TestCase):
+    def test_foremost_types_default_and_validation(self):
+        self.assertEqual(forensics._validate_foremost_types(None), forensics.FOREMOST_DEFAULT_TYPES)
+        self.assertEqual(forensics._validate_foremost_types("jpg, png ,PDF"), "jpg,png,pdf")
+        with self.assertRaisesRegex(ValueError, "Unsupported foremost type"):
+            forensics._validate_foremost_types("jpg,heic")
+
+    def test_photorec_missing_binary_fails_closed(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            fix = _JobFixture(tmp)
+            try:
+                with patch.object(forensics.shutil, "which", return_value=None):
+                    with self.assertRaisesRegex(ValueError, "PhotoRec is required"):
+                        forensics.start_photorec_recovery(fix.job_id, tmp, str(fix.image))
+            finally:
+                fix.cleanup()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -263,6 +263,124 @@ def _resolve_completed_image(image_job_id: str, confirmation_image: str, action:
     return image
 
 
+def _source_of(image_job_id: str) -> str:
+    with _jobs_lock:
+        job = dict(_jobs.get(image_job_id) or {})
+    return str(job.get("source", ""))
+
+
+def _guard_output_on_separate_drive(parent: Path, source: str) -> None:
+    """Refuse to write recovered data onto the original source device."""
+    dest_majmin, _ = _mount_device(parent)
+    dest_ancestors = {dest_majmin}
+    if dest_majmin:
+        try:
+            dest_ancestors = _ancestors("/dev/block/" + dest_majmin) or {dest_majmin}
+        except Exception:
+            dest_ancestors = {dest_majmin}
+    source_ancestors = _ancestors(source) if source else set()
+    if source_ancestors and source_ancestors.intersection(dest_ancestors):
+        raise ValueError("Recovery output is on the original source device. Choose a different physical drive.")
+
+
+# foremost's practical built-in type set (photos, video, audio, docs, archives).
+FOREMOST_DEFAULT_TYPES = "jpg,png,gif,bmp,mov,avi,mpg,wmv,wav,pdf,ole,doc,zip,rar,htm"
+_FOREMOST_ALLOWED = {"jpg", "gif", "png", "bmp", "avi", "exe", "mpg", "wav", "riff",
+                     "wmv", "mov", "pdf", "ole", "doc", "zip", "rar", "htm", "cpp", "all"}
+
+
+def _validate_foremost_types(file_types) -> str:
+    if not file_types:
+        return FOREMOST_DEFAULT_TYPES
+    parts = [t.strip().lower() for t in str(file_types).split(",") if t.strip()]
+    if not parts:
+        return FOREMOST_DEFAULT_TYPES
+    unsupported = [t for t in parts if t not in _FOREMOST_ALLOWED]
+    if unsupported:
+        raise ValueError("Unsupported foremost type(s): " + ", ".join(unsupported)
+                         + ". Allowed: " + ", ".join(sorted(_FOREMOST_ALLOWED)))
+    return ",".join(dict.fromkeys(parts))
+
+
+def recover_all_deleted_files(image_job_id: str, confirmation_image: str, output_directory: str,
+                              offset: int = 0, max_files: int = 100,
+                              runner=subprocess.run, which=shutil.which) -> dict:
+    """One-shot named undelete: list deleted files (fls) and recover each (icat).
+
+    Recovers files the filesystem still has metadata for, keeping their original
+    names, to a separate drive, with a SHA-256 for every recovered file. This is
+    the "recover my deleted files in one go" path for intact-metadata deletions;
+    use carving (foremost/photorec) when the metadata is gone.
+    """
+    image = _resolve_completed_image(image_job_id, confirmation_image, "bulk file recovery")
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 2 ** 40:
+        raise ValueError("Partition offset (in sectors) must be a non-negative integer.")
+    if isinstance(max_files, bool) or not isinstance(max_files, int) or not 1 <= max_files <= 1000:
+        raise ValueError("max_files must be between 1 and 1000.")
+    if not which("fls") or not which("icat"):
+        raise ValueError("Sleuth Kit (fls and icat) is required. Install it with: sudo apt install -y sleuthkit")
+    parent = Path(output_directory).expanduser().resolve(strict=True)
+    if not parent.is_dir():
+        raise ValueError("Choose an existing destination directory on a different drive.")
+    _guard_output_on_separate_drive(parent, _source_of(image_job_id))
+
+    listing = runner(["fls", "-r", "-p", "-d", "-o", str(offset), str(image)],
+                     capture_output=True, text=True, timeout=600, check=False)
+    if listing.returncode != 0:
+        raise ValueError((listing.stderr or listing.stdout or "fls failed.")[:500])
+    entries = [e for e in parse_fls_output(listing.stdout, deleted_only=True, limit=max_files)
+               if not e["isDirectory"]]
+
+    output = parent / ("cyberlab-undelete-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8])
+    fd_dir = os.open(str(parent), os.O_RDONLY)
+    try:
+        os.mkdir(str(output), 0o700)
+    finally:
+        os.close(fd_dir)
+
+    recovered, failed = [], []
+    for entry in entries:
+        inode = entry["inode"]
+        if not re.fullmatch(r"\d[\d\-]{0,40}", inode):
+            failed.append({"inode": inode, "error": "unexpected inode format"})
+            continue
+        base = re.sub(r"[^A-Za-z0-9._-]", "_", Path(entry["path"]).name).strip("._")[:120] or ("inode-" + inode.replace("-", "_"))
+        destination = output / (uuid.uuid4().hex[:8] + "-" + base)
+        try:
+            result = runner(["icat", "-o", str(offset), str(image), inode],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, check=False)
+            payload = result.stdout if isinstance(result.stdout, (bytes, bytearray)) else (result.stdout or "").encode()
+            if result.returncode != 0:
+                failed.append({"inode": inode, "path": entry["path"], "error": "icat failed"})
+                continue
+            fd = os.open(str(destination), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+            recovered.append({
+                "inode": inode, "original_path": entry["path"],
+                "destination": str(destination), "size_bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            })
+        except Exception as exc:  # one bad file must not abort the batch
+            failed.append({"inode": inode, "path": entry["path"], "error": str(exc)[:200]})
+
+    manifest = None
+    if recovered:
+        try:
+            manifest = build_recovery_manifest(str(output))
+        except Exception:
+            manifest = None
+    return {
+        "image": str(image), "offset": offset, "output": str(output),
+        "deleted_found": len(entries), "recovered_count": len(recovered),
+        "failed_count": len(failed), "recovered": recovered, "failed": failed,
+        "manifest": manifest, "method": "Sleuth Kit fls+icat bulk named undelete",
+        "note": ("Recovered to a separate drive with owner-only permissions; the image was not "
+                 "modified. Validate every file — a recovered file can be partial. Files whose "
+                 "data was overwritten cannot be undeleted; try carving for those."),
+    }
+
+
 # fls rows look like:  r/r * 14-128-3:  Users/alex/Pictures/holiday.jpg
 _FLS_ROW = re.compile(
     r"^(?P<ftype>[a-z\-]/[a-z\-])\s+(?P<deleted>\*?)\s*(?P<inode>\d[\d\-]*):\s+(?P<path>.+?)\s*$")
@@ -413,7 +531,9 @@ def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dic
     return {"path": str(manifest_path), **{key: manifest[key] for key in ("files_hashed", "total_bytes_hashed", "truncated")}}
 
 
-def start_foremost_recovery(image_job_id: str, output_directory: str, confirmation_image: str) -> dict:
+def start_foremost_recovery(image_job_id: str, output_directory: str, confirmation_image: str,
+                            file_types=None) -> dict:
+    foremost_types = _validate_foremost_types(file_types)
     with _jobs_lock:
         source_job = _jobs.get(image_job_id)
         source_job = dict(source_job) if source_job else None
@@ -449,7 +569,7 @@ def start_foremost_recovery(image_job_id: str, output_directory: str, confirmati
 
     def worker():
         try:
-            command = ["foremost", "-t", "jpg,png,gif,bmp,tif,doc,pdf,xls,ppt,zip", "-i", str(image), "-o", str(output)]
+            command = ["foremost", "-t", foremost_types, "-i", str(image), "-o", str(output)]
             completed = subprocess.run(command, capture_output=True, text=True, check=False)
             manifest = None
             manifest_error = None
@@ -477,3 +597,69 @@ def start_foremost_recovery(image_job_id: str, output_directory: str, confirmati
 
     threading.Thread(target=worker, name="cyberlab-foremost", daemon=True).start()
     return {"job": {key: value for key, value in record.items() if key != "started_at"}, "note": "Recovery reads only the forensic image. Recovered output is written to a new directory on the backup drive."}
+
+
+def start_photorec_recovery(image_job_id: str, output_directory: str, confirmation_image: str) -> dict:
+    """Carve files from a verified image with PhotoRec (recovers 480+ formats).
+
+    PhotoRec signature-carves regardless of filesystem metadata, covering many
+    more photo/video/document formats than foremost (HEIC, modern RAW, MP4,
+    Office, etc.). Filenames are not preserved; output goes to a new directory
+    on a different drive. Runs as a background job.
+    """
+    image = _resolve_completed_image(image_job_id, confirmation_image, "PhotoRec carving")
+    if not shutil.which("photorec"):
+        raise ValueError("PhotoRec is required. Install it with: sudo apt install -y testdisk")
+    parent = Path(output_directory).expanduser().resolve(strict=True)
+    if not parent.is_dir():
+        raise ValueError("Choose an existing destination parent directory on a different drive.")
+    _guard_output_on_separate_drive(parent, _source_of(image_job_id))
+    output = parent / ("cyberlab-photorec-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8])
+    if output.exists():
+        raise ValueError("The selected recovery output directory already exists.")
+    os.mkdir(str(output), 0o700)
+    if not _acquisition_lock.acquire(blocking=False):
+        raise ValueError("Another forensic acquisition or recovery job is already running.")
+    job_id = uuid.uuid4().hex
+    record = {"id": job_id, "kind": "photorec", "state": "running",
+              "source": _source_of(image_job_id), "image": str(image), "output": str(output),
+              "started_at": time.time(), "message": "PhotoRec carving started from the verified disk image."}
+    with _jobs_lock:
+        _jobs[job_id] = record
+
+    def worker():
+        try:
+            # Non-interactive batch carve of all supported formats from the whole image.
+            command = ["photorec", "/log", "/d", str(output / "recup_dir"), "/cmd",
+                       str(image), "partition_none,search"]
+            completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            manifest = None
+            manifest_error = None
+            if completed.returncode == 0 and output.is_dir():
+                try:
+                    manifest = build_recovery_manifest(str(output))
+                except Exception as exc:
+                    manifest_error = str(exc)[:500]
+            with _jobs_lock:
+                record["state"] = "completed" if completed.returncode == 0 else "failed"
+                record["return_code"] = completed.returncode
+                if completed.returncode == 0:
+                    record["manifest"] = manifest
+                    record["message"] = ("PhotoRec finished. SHA-256 manifest created; validate every recovered file."
+                                         if manifest else
+                                         "PhotoRec finished, but the SHA-256 manifest could not be created: "
+                                         + (manifest_error or "output directory unavailable"))
+                else:
+                    record["message"] = (completed.stderr or "PhotoRec failed.")[-1200:]
+                record["finished_at"] = time.time()
+        except Exception as exc:
+            with _jobs_lock:
+                record["state"] = "failed"
+                record["message"] = str(exc)[:1200]
+                record["finished_at"] = time.time()
+        finally:
+            _acquisition_lock.release()
+
+    threading.Thread(target=worker, name="cyberlab-photorec", daemon=True).start()
+    return {"job": {key: value for key, value in record.items() if key != "started_at"},
+            "note": "PhotoRec reads only the forensic image. Carved output (no original filenames) is written to a new directory on the backup drive."}
