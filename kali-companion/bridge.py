@@ -534,6 +534,29 @@ def _validate_solidity_project(files: object, dependency_lock: object) -> tuple[
 
 
 
+EIP170_LIMIT = 24576  # maximum deployed contract bytecode size, in bytes
+
+
+def evaluate_eip170(bytecode_object: str, is_deployed: bool) -> dict:
+    """Evaluate deployed-contract bytecode size against the EIP-170 24 KB limit."""
+    hex_object = (bytecode_object or "").strip()
+    if hex_object.startswith(("0x", "0X")):
+        hex_object = hex_object[2:]
+    if not hex_object:
+        return {"bytes": 0, "limit": EIP170_LIMIT, "status": "unknown", "basis": "none",
+                "note": "No bytecode was produced; the contract may be abstract, an interface, or failed to compile."}
+    size = len(hex_object) // 2
+    over = size > EIP170_LIMIT
+    return {
+        "bytes": size, "limit": EIP170_LIMIT,
+        "status": "over_limit" if over else "ok",
+        "basis": "deployed" if is_deployed else "creation",
+        "note": ("Deployed bytecode exceeds the EIP-170 24,576-byte limit and will not deploy to most EVM chains; split the contract, remove dead code, or enable the optimizer." if over
+                 else "Within the EIP-170 24,576-byte deployed-size limit." if is_deployed
+                 else "Size estimated from creation bytecode; the deployed runtime size is usually smaller."),
+    }
+
+
 def compile_solidity_project(files: object, dependency_lock: object = None, expected_version: str = "") -> dict:
     """Compile a bounded multi-file project with explicit local source and SHA-256-locked OpenZeppelin inputs."""
     sources, remappings = _validate_solidity_project(files, dependency_lock if dependency_lock is not None else [])
@@ -552,7 +575,7 @@ def compile_solidity_project(files: object, dependency_lock: object = None, expe
             "sources": {path: {"content": content} for path, content in sources.items()},
             "settings": {
                 "remappings": remappings,
-                "outputSelection": {"*": {"*": ["abi", "evm.bytecode.object"]}},
+                "outputSelection": {"*": {"*": ["abi", "evm.bytecode.object", "evm.deployedBytecode.object"]}},
             },
         }
         payload = json.dumps(standard_input, separators=(",", ":")).encode("utf-8")
@@ -598,10 +621,14 @@ def compile_solidity_project(files: object, dependency_lock: object = None, expe
             if not isinstance(entries, dict):
                 continue
             for name, artifact in entries.items():
+                evm = artifact.get("evm") or {}
+                deployed = (evm.get("deployedBytecode") or {}).get("object", "")
+                creation = (evm.get("bytecode") or {}).get("object", "")
                 contracts.append({
                     "file": str(file_name)[:160], "name": str(name)[:128],
                     "abi": artifact.get("abi", []),
-                    "bytecode": (artifact.get("evm") or {}).get("bytecode", {}).get("object", "")[:500000],
+                    "bytecode": creation[:500000],
+                    "deploymentSize": evaluate_eip170(deployed or creation, bool(deployed)),
                 })
         errors = sum(1 for item in diagnostics if item["severity"] == "error")
         return {

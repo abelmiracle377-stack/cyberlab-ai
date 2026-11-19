@@ -442,3 +442,22 @@ class SolidityProjectCompilerValidationTests(unittest.TestCase):
                 ])
         status.assert_not_called()
         run.assert_not_called()
+
+
+class Eip170SizeTests(unittest.TestCase):
+    def test_within_limit_is_ok(self):
+        result = bridge.evaluate_eip170("0x" + "60" * 1000, True)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["bytes"], 1000)
+        self.assertEqual(result["basis"], "deployed")
+
+    def test_over_limit_is_flagged(self):
+        result = bridge.evaluate_eip170("ab" * (bridge.EIP170_LIMIT + 1), True)
+        self.assertEqual(result["status"], "over_limit")
+        self.assertGreater(result["bytes"], bridge.EIP170_LIMIT)
+
+    def test_empty_bytecode_is_unknown(self):
+        self.assertEqual(bridge.evaluate_eip170("", True)["status"], "unknown")
+
+    def test_creation_basis_noted_when_not_deployed(self):
+        self.assertEqual(bridge.evaluate_eip170("60" * 10, False)["basis"], "creation")

@@ -52,7 +52,7 @@ export default function SolidityLabPage() {
   const [generationError, setGenerationError] = useState("");
   const [compilerStatus, setCompilerStatus] = useState<{available:boolean;version:string|null;message:string}|null>(null);
   const [compilerBusy, setCompilerBusy] = useState(false);
-  const [compileResult, setCompileResult] = useState<{status:string;version:string;diagnostics:{severity:string;code:string;message:string;file:string;line:number|null}[];contracts:{name:string;file:string;abi:unknown[];bytecode:string}[];source_files?:number;dependency_packages?:number;note:string}|null>(null);
+  const [compileResult, setCompileResult] = useState<{status:string;version:string;diagnostics:{severity:string;code:string;message:string;file:string;line:number|null}[];contracts:{name:string;file:string;abi:unknown[];bytecode:string;deploymentSize?:{bytes:number;limit:number;status:string;basis:string;note:string}}[];source_files?:number;dependency_packages?:number;note:string}|null>(null);
   const [compilerError, setCompilerError] = useState("");
   const [projectFilesJson, setProjectFilesJson] = useState(JSON.stringify([
     { path: "src/MyToken.sol", content: 'pragma solidity ^0.8.20; import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol"; contract MyToken is ERC20 { constructor() ERC20("MyToken", "MTK") { _mint(msg.sender, 1_000_000 * 10 ** decimals()); } }' },
@@ -326,7 +326,7 @@ export default function SolidityLabPage() {
             <h3>Compiler result: {compileResult.status.toUpperCase()} · solc {compileResult.version}</h3>
             <p>{compileResult.contracts.length} contract artifact(s) · {compileResult.diagnostics.length} diagnostic(s){compileResult.source_files ? ` · ${compileResult.source_files} source files · ${compileResult.dependency_packages || 0} locked dependencies` : ""}</p>
             {compileResult.diagnostics.map((item,index)=><article className="solidity-finding" key={item.code+"-"+index}><div className="solidity-finding-head"><span>{item.code || "COMPILER"} · {item.file || "Contract.sol"}</span><b>{item.severity.toUpperCase()}</b></div><pre>{item.message}</pre></article>)}
-            {compileResult.contracts.map(item=><div key={item.file+"-"+item.name}><strong>{item.name}</strong><p>ABI entries: {item.abi.length} · Bytecode characters: {item.bytecode.length}</p></div>)}
+            {compileResult.contracts.map(item=><div key={item.file+"-"+item.name}><strong>{item.name}</strong><p>ABI entries: {item.abi.length} · Bytecode characters: {item.bytecode.length}{item.deploymentSize&&item.deploymentSize.status!=="unknown"?" · Deployed size: "+item.deploymentSize.bytes.toLocaleString()+" / "+item.deploymentSize.limit.toLocaleString()+" B ("+(item.deploymentSize.status==="over_limit"?"OVER EIP-170 LIMIT":"within EIP-170")+")":""}</p>{item.deploymentSize&&item.deploymentSize.status==="over_limit"&&<p className="solidity-warning" style={{marginTop:4}}>{item.deploymentSize.note}</p>}</div>)}
             <p>{compileResult.note}</p>
           </div>}
         </section>

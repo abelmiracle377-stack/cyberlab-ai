@@ -111,3 +111,33 @@ contract C {
 }`;
   assert.ok(!ids(safe).includes("SOL-ACL-001"));
 });
+
+test("flags constructor deployment arguments", () => {
+  const c = `pragma solidity ^0.8.20;
+contract Token {
+  address owner;
+  constructor(address initialOwner, uint256 cap) { owner = initialOwner; }
+}`;
+  assert.ok(ids(c).includes("SOL-DEPLOY-001"));
+});
+
+test("no constructor-arg finding when constructor takes none", () => {
+  const c = `pragma solidity ^0.8.20;
+contract Token { constructor() {} }`;
+  assert.ok(!ids(c).includes("SOL-DEPLOY-001"));
+});
+
+test("flags library that needs link-time address", () => {
+  const c = `pragma solidity ^0.8.20;
+library MathLib { function add(uint a, uint b) public pure returns (uint) { return a + b; } }
+contract C { using MathLib for uint; }`;
+  assert.ok(ids(c).includes("SOL-DEPLOY-002"));
+});
+
+test("flags upgradeable contract needing initialisation", () => {
+  const c = `pragma solidity ^0.8.20;
+contract C is Initializable {
+  function initialize(address owner_) public initializer { }
+}`;
+  assert.ok(ids(c).includes("SOL-DEPLOY-003"));
+});

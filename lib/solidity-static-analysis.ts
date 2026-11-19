@@ -172,6 +172,50 @@ function structuralFindings(clean:string,source:string):SolidityFinding[]{
  return out;
 }
 
+// Deployment-readiness leads: what an operator must supply or check before a
+// real deployment. Informational/advisory; not a substitute for compilation.
+function deploymentFindings(clean:string,source:string):SolidityFinding[]{
+ const out:SolidityFinding[]=[];
+ const lineOf=(index:number)=>lineAt(source,index);
+ // Constructor arguments required at deployment.
+ const ctor=/\bconstructor\s*\(([^)]*)\)/.exec(clean);
+ if(ctor){
+  const params=ctor[1].split(",").map(s=>s.trim()).filter(Boolean);
+  if(params.length>0){
+   out.push({id:"SOL-DEPLOY-001",severity:"info",
+    title:"Constructor requires deployment arguments",
+    description:"Deployment must supply "+params.length+" constructor argument(s): "+params.map(p=>p.replace(/\s+/g," ")).join(", ").slice(0,200)+". Missing or wrong constructor values are a common deployment failure.",
+    recommendation:"Prepare and double-check each constructor argument (owner, token names, caps, oracle addresses) for the exact target network before deploying.",
+    line:lineOf(ctor.index),evidence:source.slice(ctor.index,ctor.index+120).split("\n")[0].trim().slice(0,180)});
+  }
+ }
+ // Libraries with external/public functions generally require link-time addresses.
+ const libRe=/\blibrary\s+([A-Za-z_$][\w$]*)\s*\{/g;
+ let lib:RegExpExecArray|null;
+ while((lib=libRe.exec(clean))!==null){
+  const open=lib.index+lib[0].length-1;
+  const close=matchClosingBrace(clean,open);
+  const body=close>0?clean.slice(open+1,close):"";
+  if(/\bfunction\s+[A-Za-z_$][\w$]*\s*\([^)]*\)[^{;]*\b(?:public|external)\b/.test(body)){
+   out.push({id:"SOL-DEPLOY-002",severity:"info",
+    title:"Library may require link-time address",
+    description:"Library '"+lib[1]+"' exposes public/external functions and may be deployed separately and linked at deploy time. Unlinked bytecode contains placeholder references and will not deploy.",
+    recommendation:"Deploy the library and link its address, or make the functions internal so they inline into the consuming contract.",
+    line:lineOf(lib.index),evidence:"library "+lib[1]});
+  }
+ }
+ // Upgradeable contracts usually deploy behind a proxy and must be initialised.
+ if(/\binitializer\b/.test(clean)&&/\b(?:Initializable|upgradeable|__.*_init)\b/i.test(clean)){
+  const idx=clean.search(/\binitializer\b/);
+  out.push({id:"SOL-DEPLOY-003",severity:"medium",
+   title:"Upgradeable contract must be initialised after deployment",
+   description:"This contract uses an initializer pattern. Deploying the implementation without calling the initializer (usually through a proxy) can leave it uninitialised and seizable.",
+   recommendation:"Deploy behind the intended proxy, call the initializer atomically, and protect the implementation (e.g. _disableInitializers in the constructor).",
+   line:lineOf(idx<0?0:idx),evidence:"initializer"});
+ }
+ return out;
+}
+
 export function analyzeSoliditySource(source:string):SolidityAnalysis {
  if(typeof source!=="string"||!source.trim())throw new Error("Paste Solidity source code to analyse.");
  if(source.length>100000)throw new Error("Source exceeds the 100 KB analysis limit.");
@@ -186,6 +230,7 @@ export function analyzeSoliditySource(source:string):SolidityAnalysis {
   }
  }
  for(const finding of structuralFindings(clean,source))findings.push(finding);
+ for(const finding of deploymentFindings(clean,source))findings.push(finding);
  const unique=new Map<string,SolidityFinding>();
  for(const finding of findings){const key=finding.id+":"+finding.line;if(!unique.has(key))unique.set(key,finding);}
  const rank:Record<SoliditySeverity,number>={critical:0,high:1,medium:2,low:3,info:4};
