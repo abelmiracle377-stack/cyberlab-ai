@@ -187,6 +187,98 @@ TOOL_SPECS = {
         "argv": lambda p: ["msfconsole", "-q", "-x", "search " + p["query"] + "; exit -y"],
         "purpose": "Search local Metasploit modules by keyword (metadata only; no exploit is run).",
     },
+    # --- passive DNS / OSINT recon (no authorisation required) ---
+    "dig": {
+        "binary": "dig", "package": "bind9-dnsutils", "active": False, "category": "passive-dns",
+        "params": {"host": v_host}, "argv": lambda p: ["dig", "+short", "+timeout=5", "A", p["host"]],
+        "purpose": "Resolve A records for a domain (passive).",
+    },
+    "host": {
+        "binary": "host", "package": "bind9-host", "active": False, "category": "passive-dns",
+        "params": {"host": v_host}, "argv": lambda p: ["host", "-W", "5", p["host"]],
+        "purpose": "Basic DNS lookup for a domain or IP (passive).",
+    },
+    "dnsenum": {
+        "binary": "dnsenum", "package": "dnsenum", "active": False, "category": "passive-dns",
+        "params": {"host": v_host}, "argv": lambda p: ["dnsenum", "--noreverse", "--nocolor", p["host"]],
+        "purpose": "DNS record and subdomain enumeration (recon).",
+    },
+    "fierce": {
+        "binary": "fierce", "package": "fierce", "active": False, "category": "passive-dns",
+        "params": {"host": v_host}, "argv": lambda p: ["fierce", "--domain", p["host"]],
+        "purpose": "DNS reconnaissance and subdomain discovery.",
+    },
+    "sublist3r": {
+        "binary": "sublist3r", "package": "sublist3r", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["sublist3r", "-n", "-d", p["host"]],
+        "purpose": "Passive subdomain enumeration from public sources.",
+    },
+    "theharvester": {
+        "binary": "theHarvester", "package": "theharvester", "active": False, "category": "passive-osint",
+        "params": {"host": v_host},
+        "argv": lambda p: ["theHarvester", "-d", p["host"], "-b", "duckduckgo,bing,crtsh", "-l", "100"],
+        "purpose": "Passive public-source host and e-mail discovery.",
+    },
+    # --- active web (authorisation + exact-target confirmation required) ---
+    "wpscan": {
+        "binary": "wpscan", "package": "wpscan", "active": True, "category": "web-cms",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["wpscan", "--url", p["url"], "--no-banner", "--no-update",
+                           "--random-user-agent", "--format", "cli-no-color"],
+        "purpose": "WordPress enumeration of an authorised site.",
+    },
+    "nuclei": {
+        "binary": "nuclei", "package": "nuclei", "active": True, "category": "web-scan",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["nuclei", "-u", p["url"], "-silent", "-rl", "50", "-timeout", "10",
+                           "-severity", "low,medium,high,critical", "-nc"],
+        "purpose": "Template-based checks against an authorised URL (rate-limited).",
+    },
+    "wafw00f": {
+        "binary": "wafw00f", "package": "wafw00f", "active": True, "category": "web-fingerprint",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["wafw00f", "-a", p["url"]],
+        "purpose": "Detect and fingerprint a web application firewall on an authorised URL.",
+    },
+    "ffuf": {
+        "binary": "ffuf", "package": "ffuf", "active": True, "category": "web-content",
+        "target_param": "url",
+        "params": {"url": v_url, "wordlist": v_wordlist, "threads": v_bounded_int(1, 40)},
+        "argv": lambda p: ["ffuf", "-u", p["url"].rstrip("/") + "/FUZZ", "-w", p["wordlist"],
+                           "-mc", "200,204,301,302,307,401,403", "-t", p["threads"], "-s"],
+        "purpose": "Web content fuzzing on an authorised URL with your wordlist.",
+    },
+    "dirb": {
+        "binary": "dirb", "package": "dirb", "active": True, "category": "web-content",
+        "target_param": "url", "params": {"url": v_url, "wordlist": v_wordlist},
+        "argv": lambda p: ["dirb", p["url"], p["wordlist"], "-S", "-r"],
+        "purpose": "Directory/content discovery on an authorised URL with your wordlist.",
+    },
+    # --- active network / SMB / SSH (authorisation + exact-target confirmation) ---
+    "enum4linux-ng": {
+        "binary": "enum4linux-ng", "package": "enum4linux-ng", "active": True, "category": "smb-enum",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["enum4linux-ng", "-A", p["host"]],
+        "purpose": "SMB/Windows enumeration of an authorised host.",
+    },
+    "smbmap": {
+        "binary": "smbmap", "package": "smbmap", "active": True, "category": "smb-enum",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["smbmap", "-H", p["host"]],
+        "purpose": "Enumerate SMB shares and access on an authorised host.",
+    },
+    "nbtscan": {
+        "binary": "nbtscan", "package": "nbtscan", "active": True, "category": "netbios",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["nbtscan", p["host"]],
+        "purpose": "NetBIOS name scan of an authorised host.",
+    },
+    "ssh-audit": {
+        "binary": "ssh-audit", "package": "ssh-audit", "active": True, "category": "ssh",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["ssh-audit", "--", p["host"]],
+        "purpose": "SSH server configuration and algorithm audit of an authorised host.",
+    },
 }
 
 

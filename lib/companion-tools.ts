@@ -84,6 +84,83 @@ export function planCompanionToolRequest(prompt: string): CompanionToolRequest |
     }
   }
 
+  // wpscan — WordPress enumeration.
+  if (/\bwpscan\b|wordpress\s+(?:scan|enum)/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "wpscan", label: "WordPress enumeration (wpscan)", parameters: { url },
+      active: true, targetParam: "url", missing: [] };
+  }
+
+  // nuclei — template-based checks.
+  if (/\bnuclei\b/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "nuclei", label: "Template checks (nuclei)", parameters: { url },
+      active: true, targetParam: "url", missing: [] };
+  }
+
+  // wafw00f — WAF detection.
+  if (/\bwafw00f\b|detect\s+waf|web\s+application\s+firewall/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "wafw00f", label: "WAF detection (wafw00f)", parameters: { url },
+      active: true, targetParam: "url", missing: [] };
+  }
+
+  // ffuf — web fuzzing.
+  if (/\bffuf\b|web\s+fuzz/.test(text)) {
+    const url = extractUrl(prompt);
+    const wordlist = extractWordlist(prompt);
+    if (url) {
+      const parameters: Record<string, string | number> = { url, threads: 20 };
+      if (wordlist) parameters.wordlist = wordlist;
+      return { tool: "ffuf", label: "Web content fuzzing (ffuf)", parameters,
+        active: true, targetParam: "url", missing: wordlist ? [] : ["wordlist"] };
+    }
+  }
+
+  // SMB / NetBIOS / SSH enumeration.
+  if (/\benum4linux\b|smb\s+enum/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "enum4linux-ng", label: "SMB enumeration (enum4linux-ng)",
+      parameters: { host }, active: true, targetParam: "host", missing: [] };
+  }
+  if (/\bsmbmap\b|smb\s+shares/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "smbmap", label: "SMB share enumeration (smbmap)",
+      parameters: { host }, active: true, targetParam: "host", missing: [] };
+  }
+  if (/\bnbtscan\b|netbios/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "nbtscan", label: "NetBIOS scan (nbtscan)",
+      parameters: { host }, active: true, targetParam: "host", missing: [] };
+  }
+  if (/\bssh[-\s]?audit\b|audit\s+ssh/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "ssh-audit", label: "SSH configuration audit (ssh-audit)",
+      parameters: { host }, active: true, targetParam: "host", missing: [] };
+  }
+
+  // Passive DNS/OSINT recon tools.
+  if (/\bdnsenum\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "dnsenum", label: "DNS enumeration (dnsenum)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bfierce\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "fierce", label: "DNS recon (fierce)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bsublist3r\b|subdomain(?:s)?\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "sublist3r", label: "Subdomain enumeration (sublist3r)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\btheharvester\b|\bharvester\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "theharvester", label: "OSINT discovery (theHarvester)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bdig\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "dig", label: "DNS A-record lookup (dig)", parameters: { host }, active: false, missing: [] };
+  }
+
   // sqlmap — SQL injection testing.
   if (/\bsqlmap\b|sql\s*injection|sqli\b/.test(text)) {
     const url = extractUrl(prompt);

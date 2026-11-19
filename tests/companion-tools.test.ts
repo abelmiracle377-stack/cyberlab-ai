@@ -80,6 +80,30 @@ test("plans a masscan with default ports", () => {
   assert.equal(req?.parameters.rate, 1000);
 });
 
+test("plans wpscan, nuclei and wafw00f for URLs", () => {
+  assert.equal(planCompanionToolRequest("wpscan https://blog.example.com")?.tool, "wpscan");
+  assert.equal(planCompanionToolRequest("run nuclei on https://example.com")?.tool, "nuclei");
+  assert.equal(planCompanionToolRequest("detect waf on https://example.com")?.tool, "wafw00f");
+});
+
+test("plans SMB/SSH enumeration for hosts", () => {
+  assert.equal(planCompanionToolRequest("enum4linux 10.0.0.5")?.tool, "enum4linux-ng");
+  assert.equal(planCompanionToolRequest("smbmap 10.0.0.5")?.tool, "smbmap");
+  assert.equal(planCompanionToolRequest("ssh-audit example.com")?.tool, "ssh-audit");
+});
+
+test("plans passive subdomain and OSINT recon", () => {
+  assert.equal(planCompanionToolRequest("find subdomains of example.com")?.tool, "sublist3r");
+  assert.equal(planCompanionToolRequest("theharvester example.com")?.tool, "theharvester");
+  assert.equal(planCompanionToolRequest("dnsenum example.com")?.active, false);
+});
+
+test("ffuf without wordlist reports it missing", () => {
+  const req = planCompanionToolRequest("ffuf https://example.com");
+  assert.equal(req?.tool, "ffuf");
+  assert.deepEqual(req?.missing, ["wordlist"]);
+});
+
 test("returns null for ordinary chat with no tool intent", () => {
   assert.equal(planCompanionToolRequest("explain how TLS certificate validation works"), null);
   assert.equal(planCompanionToolRequest("what is an IP address?"), null);

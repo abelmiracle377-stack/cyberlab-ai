@@ -174,6 +174,47 @@ class ExpandedToolTests(unittest.TestCase):
         self.assertIn("--ftp-method", run.argv)
 
 
+class NewToolBatchTests(unittest.TestCase):
+    def test_passive_dns_tools_need_no_authorisation(self):
+        for name in ("dig", "host", "dnsenum", "sublist3r", "theharvester"):
+            with self.subTest(tool=name):
+                run = ok_runner("result")
+                result = kt.run_tool(name, {"host": "example.com"}, confirmed=True,
+                                     resolve=FAKE, runner=run)
+                self.assertEqual(result["status"], "completed")
+
+    def test_active_web_tools_require_authorisation(self):
+        for name in ("wpscan", "nuclei", "wafw00f"):
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(ValueError, "authorisation"):
+                    kt.run_tool(name, {"url": "https://example.com"}, confirmed=True,
+                                target_confirmation="https://example.com",
+                                resolve=FAKE, runner=ok_runner())
+
+    def test_ffuf_appends_fuzz_keyword_and_uses_wordlist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            wl = Path(tmp) / "w.txt"
+            wl.write_text("admin\n", encoding="utf-8")
+            run = ok_runner("admin [Status: 200]")
+            kt.run_tool("ffuf", {"url": "https://example.com/", "wordlist": str(wl), "threads": 20},
+                        confirmed=True, authorization_reference="ENG-1",
+                        target_confirmation="https://example.com/", resolve=FAKE, runner=run)
+            self.assertIn("https://example.com/FUZZ", run.argv)
+            self.assertIn(str(wl), run.argv)
+
+    def test_smb_and_ssh_tools_target_the_host(self):
+        for name in ("enum4linux-ng", "smbmap", "nbtscan", "ssh-audit"):
+            with self.subTest(tool=name):
+                run = ok_runner("enum output")
+                kt.run_tool(name, {"host": "10.0.0.5"}, confirmed=True,
+                            authorization_reference="ENG-1", target_confirmation="10.0.0.5",
+                            resolve=FAKE, runner=run)
+                self.assertIn("10.0.0.5", run.argv)
+
+    def test_registry_has_grown(self):
+        self.assertGreaterEqual(len(kt.TOOL_SPECS), 27)
+
+
 class ListingTests(unittest.TestCase):
     def test_list_reports_installed_flag_and_mode(self):
         listed = kt.list_tools()
