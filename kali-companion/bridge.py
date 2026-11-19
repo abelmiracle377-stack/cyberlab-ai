@@ -34,6 +34,9 @@ from parameter_lab import inspect_parameters, generate_cases
 from parameter_analysis import compare_responses
 from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
 from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending_response_intercepts, decide_response_intercept, proxy_history, websocket_frame_history, pending_websocket_frames, decide_websocket_frame
+import base64
+import wallet_recovery
+import wallet_cracking
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -298,6 +301,76 @@ def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
         raise ValueError("Local model returned an invalid message.")
     return {"model": model, "response": content[:50000], "done": bool(result.get("done", False))}
 
+
+
+def wallet_tool_status() -> dict:
+    """Report which local password-recovery tools are available; installs nothing."""
+    return {
+        "hashcat": {"installed": bool(shutil.which("hashcat")), "executable": shutil.which("hashcat")},
+        "john": {"installed": bool(shutil.which("john")), "executable": shutil.which("john")},
+        "supportedFormats": ["ethereum-keystore-v3", "bitcoin-core-wallet.dat"],
+        "derivation": ["bip44-legacy", "bip84-segwit", "bip44-ethereum"],
+        "note": "Hash extraction and HD address derivation run locally with no tool. Password recovery requires a locally installed hashcat or John; the companion never downloads cracking tools.",
+    }
+
+
+def wallet_extract_hash(data: dict) -> dict:
+    """Extract a hashcat/John-ready hash from an owned wallet backup."""
+    kind = str(data.get("kind", "")).lower()
+    if kind in {"keystore", "ethereum-keystore-v3"}:
+        keystore = data.get("keystoreJson")
+        if not isinstance(keystore, str) or not keystore.strip():
+            raise ValueError("Provide the keystore JSON in 'keystoreJson'.")
+        return wallet_recovery.extract_keystore_hash(keystore)
+    if kind in {"wallet.dat", "bitcoin-core-wallet.dat", "walletdat"}:
+        encoded = data.get("walletDatBase64")
+        if not isinstance(encoded, str) or not encoded.strip():
+            raise ValueError("Provide the wallet.dat bytes as base64 in 'walletDatBase64'.")
+        try:
+            blob = base64.b64decode(encoded, validate=True)
+        except ValueError as exc:  # binascii.Error subclasses ValueError
+            raise ValueError("walletDatBase64 is not valid base64.") from exc
+        if not 16 <= len(blob) <= 4_000_000:
+            raise ValueError("wallet.dat payload is outside the accepted size range.")
+        return wallet_recovery.extract_wallet_dat_hash(blob)
+    raise ValueError("Unknown wallet kind. Use 'keystore' or 'wallet.dat'.")
+
+
+def wallet_derive(data: dict) -> dict:
+    """Derive owned-wallet addresses from a mnemonic the operator supplies locally."""
+    mnemonic = data.get("mnemonic")
+    if not isinstance(mnemonic, str) or not mnemonic.strip():
+        raise ValueError("Provide the recovery mnemonic in 'mnemonic'.")
+    passphrase = data.get("passphrase", "")
+    if not isinstance(passphrase, str) or len(passphrase) > 256:
+        raise ValueError("Passphrase must be a string of at most 256 characters.")
+    template = str(data.get("template", "bip44-ethereum"))
+    count = data.get("count", 5)
+    if not isinstance(count, int) or isinstance(count, bool):
+        raise ValueError("count must be an integer.")
+    seed = wallet_recovery.mnemonic_to_seed(mnemonic, passphrase)
+    accounts = wallet_recovery.derive_accounts(seed, template, count)
+    return {"template": template, "count": len(accounts), "accounts": accounts,
+            "note": "Derived locally from the supplied mnemonic. Private keys and the mnemonic never leave this machine."}
+
+
+def wallet_crack(data: dict) -> dict:
+    """Run a locally installed hashcat/John against an extracted wallet hash."""
+    tool = str(data.get("tool", "hashcat")).lower()
+    hash_value = data.get("hash")
+    wordlist = data.get("wordlist")
+    confirmed = data.get("confirmRun") is True
+    if not isinstance(hash_value, str) or not isinstance(wordlist, str):
+        raise ValueError("Provide 'hash' and 'wordlist' (a path on this machine).")
+    timeout = data.get("timeoutSeconds", wallet_cracking.DEFAULT_TIMEOUT)
+    if not isinstance(timeout, int) or isinstance(timeout, bool):
+        raise ValueError("timeoutSeconds must be an integer.")
+    if tool == "john":
+        return wallet_cracking.run_john(hash_value, wordlist, confirmed=confirmed, timeout=timeout)
+    mode = data.get("hashcatMode")
+    if not isinstance(mode, int) or isinstance(mode, bool):
+        raise ValueError("hashcatMode is required for hashcat (for example 11300, 15700 or 16300).")
+    return wallet_cracking.run_hashcat(hash_value, mode, wordlist, confirmed=confirmed, timeout=timeout)
 
 
 def environment_capabilities() -> dict:
@@ -698,7 +771,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -708,6 +781,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, solidity_compiler_status(), origin)
         if path == "/solidity/tests/status":
             return self.send_json(200, solidity_test_runner_status(), origin)
+        if path == "/wallet/status":
+            return self.send_json(200, wallet_tool_status(), origin)
         if path == "/ollama/health":
             try:
                 models = ollama_models()
@@ -801,7 +876,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -816,6 +891,8 @@ class Handler(BaseHTTPRequestHandler):
                 8192 if path == "/evidence/case/verify" else
                 131072 if path == "/evidence/case" else
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
+                4_200_000 if path == "/wallet/extract-hash" else
+                4096 if path in {"/wallet/derive", "/wallet/crack"} else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
             if length < 2 or length > body_limit:
@@ -835,6 +912,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/solidity/tests/run":
                 result = run_solidity_tests(data.get("files"), data.get("dependencyLock", []))
                 return self.send_json(200, result, origin)
+            if path == "/wallet/extract-hash":
+                return self.send_json(200, wallet_extract_hash(data), origin)
+            if path == "/wallet/derive":
+                return self.send_json(200, wallet_derive(data), origin)
+            if path == "/wallet/crack":
+                return self.send_json(200, wallet_crack(data), origin)
             if path == "/proxy/intercepts/decision":
                 try:
                     return self.send_json(200, decide_intercept(data.get("id", ""), data.get("action", ""), data.get("edits")), origin)
