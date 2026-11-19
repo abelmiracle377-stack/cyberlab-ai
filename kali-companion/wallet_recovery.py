@@ -29,6 +29,8 @@ import struct
 import unicodedata
 from pathlib import Path
 
+import aes
+
 # --- secp256k1 -------------------------------------------------------------
 _P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
 _N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -785,3 +787,65 @@ def extract_metamask_hash(vault_json: str) -> dict:
     hashline = "$metamask$" + salt + "$" + iv + "$" + data
     return {"format": "metamask-vault", "hashcatMode": 26600, "hash": hashline,
             "note": "Run against a locally installed hashcat (-m 26600) with your own wordlist."}
+
+
+# --- BIP38 encrypted private keys (encrypted paper wallets, "6P...") --------
+def _parse_bip38(encrypted_key: str) -> dict:
+    raw = base58check_decode(encrypted_key)
+    if len(raw) != 39 or raw[0] != 0x01:
+        raise ValueError("Not a BIP38 encrypted private key (it should start with 6P).")
+    prefix2 = raw[1]
+    if prefix2 == 0x43:
+        raise ValueError("This is an EC-multiply BIP38 key (made from an intermediate passphrase "
+                         "code); it cannot be decrypted from the passphrase alone here.")
+    if prefix2 != 0x42:
+        raise ValueError("Unrecognised BIP38 key type.")
+    flagbyte = raw[2]
+    return {"addresshash": raw[3:7], "encrypted1": raw[7:23], "encrypted2": raw[23:39],
+            "compressed": bool(flagbyte & 0x20)}
+
+
+def _bip38_try(parsed: dict, passphrase: str):
+    """Try one passphrase; return the recovered key dict or None on mismatch."""
+    pw = unicodedata.normalize("NFC", passphrase).encode("utf-8")
+    derived = hashlib.scrypt(pw, salt=parsed["addresshash"], n=16384, r=8, p=8,
+                             dklen=64, maxmem=132 * 1024 * 1024)
+    derived_half1, derived_half2 = derived[:32], derived[32:]
+    decrypted1 = aes.decrypt_block(parsed["encrypted1"], derived_half2)
+    decrypted2 = aes.decrypt_block(parsed["encrypted2"], derived_half2)
+    private_key = (bytes(a ^ b for a, b in zip(decrypted1, derived_half1[:16]))
+                   + bytes(a ^ b for a, b in zip(decrypted2, derived_half1[16:])))
+    public_key = private_to_public(private_key, compressed=parsed["compressed"])
+    address = p2pkh_address(public_key)
+    if _sha256(_sha256(address.encode("ascii")))[:4] != parsed["addresshash"]:
+        return None
+    return {"wif": wif_encode(private_key, compressed=parsed["compressed"]),
+            "address": address, "compressed": parsed["compressed"]}
+
+
+def decrypt_bip38(encrypted_key: str, passphrase: str) -> dict:
+    """Decrypt a BIP38 key (no-EC-multiply) with a known passphrase.
+
+    Verified against the BIP38 specification's own test vectors. The address
+    hash embedded in the key confirms the passphrase, so a wrong passphrase is
+    reported rather than returning a bogus key.
+    """
+    result = _bip38_try(_parse_bip38(encrypted_key), passphrase)
+    if result is None:
+        raise ValueError("Incorrect passphrase for this BIP38 key.")
+    return result
+
+
+def crack_bip38(encrypted_key: str, passphrases, max_attempts: int = 1_000_000) -> dict:
+    """Try each passphrase from an iterable against a BIP38 key, offline."""
+    parsed = _parse_bip38(encrypted_key)
+    attempts = 0
+    for passphrase in passphrases:
+        if attempts >= max_attempts:
+            break
+        attempts += 1
+        result = _bip38_try(parsed, passphrase)
+        if result is not None:
+            return {"status": "cracked", "attempts": attempts, "passphrase": passphrase, **result}
+    return {"status": "exhausted", "attempts": attempts,
+            "note": "No passphrase in the list matched. Try a larger or more targeted list."}

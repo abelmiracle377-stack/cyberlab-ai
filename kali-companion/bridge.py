@@ -678,6 +678,53 @@ def wallet_sweep(data: dict) -> dict:
     return result
 
 
+def wallet_bip38_decrypt(data: dict) -> dict:
+    """Decrypt a BIP38 ('6P...') encrypted private key with a known passphrase."""
+    encrypted = data.get("encryptedKey")
+    passphrase = data.get("passphrase")
+    if not isinstance(encrypted, str) or not encrypted.strip():
+        raise ValueError("Provide the BIP38 key in 'encryptedKey'.")
+    if not isinstance(passphrase, str) or not passphrase:
+        raise ValueError("Provide the 'passphrase'.")
+    if len(passphrase) > 1024:
+        raise ValueError("Passphrase is too long.")
+    result = wallet_recovery.decrypt_bip38(encrypted.strip(), passphrase)
+    result["note"] = "Decrypted locally. The private key and passphrase never leave this machine."
+    return result
+
+
+def wallet_bip38_crack(data: dict) -> dict:
+    """Try a local passphrase wordlist against a BIP38 key (offline, fail-closed)."""
+    encrypted = data.get("encryptedKey")
+    wordlist_path = data.get("wordlistPath")
+    if not isinstance(encrypted, str) or not encrypted.strip():
+        raise ValueError("Provide the BIP38 key in 'encryptedKey'.")
+    if not isinstance(wordlist_path, str) or not wordlist_path.strip():
+        raise ValueError("Provide 'wordlistPath' (a passphrase list on this machine).")
+    path = Path(wordlist_path).expanduser()
+    if path.is_symlink():
+        raise ValueError("Wordlist path must not be a symlink.")
+    if not path.is_file():
+        raise ValueError("Wordlist file not found.")
+    if path.stat().st_size > 256 * 1024 * 1024:
+        raise ValueError("Passphrase list exceeds the 256 MiB limit.")
+    max_attempts = data.get("maxAttempts", 1_000_000)
+    if not isinstance(max_attempts, int) or isinstance(max_attempts, bool) or not 1 <= max_attempts <= 5_000_000:
+        raise ValueError("maxAttempts must be an integer between 1 and 5,000,000.")
+
+    def passphrases():
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                candidate = line.rstrip("\n").rstrip("\r")
+                if candidate:
+                    yield candidate
+
+    result = wallet_recovery.crack_bip38(encrypted.strip(), passphrases(), max_attempts=max_attempts)
+    if result["status"] == "cracked":
+        result["note"] = "Passphrase recovered locally. Keep the key and passphrase offline and secure."
+    return result
+
+
 def wallet_crack(data: dict) -> dict:
     """Run a locally installed hashcat/John against an extracted wallet hash.
 
@@ -1270,7 +1317,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1287,7 +1334,7 @@ class Handler(BaseHTTPRequestHandler):
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
                 65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover"} else
-                4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
+                4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
@@ -1322,6 +1369,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_sweep(data), origin)
             if path == "/wallet/auto-recover":
                 return self.send_json(200, wallet_auto_recover(data), origin)
+            if path == "/wallet/bip38-decrypt":
+                return self.send_json(200, wallet_bip38_decrypt(data), origin)
+            if path == "/wallet/bip38-crack":
+                return self.send_json(200, wallet_bip38_crack(data), origin)
             if path == "/wallet/crack":
                 return self.send_json(200, wallet_crack(data), origin)
             if path == "/tools/run":

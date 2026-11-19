@@ -86,6 +86,11 @@ export default function WalletRecoveryPage() {
   const [solverWordlist, setSolverWordlist] = useState("");
   const [solverMatch, setSolverMatch] = useState("");
   const [solver, setSolver] = useState<SolverResult | null>(null);
+  // BIP38 encrypted private keys ("6P...").
+  const [bip38Key, setBip38Key] = useState("");
+  const [bip38Pass, setBip38Pass] = useState("");
+  const [bip38Wordlist, setBip38Wordlist] = useState("");
+  const [bip38Result, setBip38Result] = useState<{ wif?: string; address?: string; compressed?: boolean; status?: string; passphrase?: string; attempts?: number; note?: string } | null>(null);
 
   async function inspectFile(file?: File) {
     setError("");
@@ -240,6 +245,36 @@ export default function WalletRecoveryPage() {
       setCrack(data);
     } catch (cause) {
       setCompanionError(cause instanceof Error ? cause.message : "Recovery run failed.");
+    } finally {
+      setCompanionBusy("");
+    }
+  }
+
+  async function bip38Decrypt() {
+    setCompanionError(""); setBip38Result(null);
+    if (!bip38Key.trim()) { setCompanionError("Enter the BIP38 key (starts with 6P)."); return; }
+    if (!bip38Pass) { setCompanionError("Enter the passphrase."); return; }
+    if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
+    setCompanionBusy("bip38d");
+    try {
+      setBip38Result(await bridgePost("/wallet/bip38-decrypt", { encryptedKey: bip38Key.trim(), passphrase: bip38Pass }));
+    } catch (cause) {
+      setCompanionError(cause instanceof Error ? cause.message : "BIP38 decryption failed.");
+    } finally {
+      setCompanionBusy("");
+    }
+  }
+
+  async function bip38Crack() {
+    setCompanionError(""); setBip38Result(null);
+    if (!bip38Key.trim()) { setCompanionError("Enter the BIP38 key (starts with 6P)."); return; }
+    if (!bip38Wordlist.trim()) { setCompanionError("Enter a passphrase-list path on your machine."); return; }
+    if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
+    setCompanionBusy("bip38c");
+    try {
+      setBip38Result(await bridgePost("/wallet/bip38-crack", { encryptedKey: bip38Key.trim(), wordlistPath: bip38Wordlist.trim() }));
+    } catch (cause) {
+      setCompanionError(cause instanceof Error ? cause.message : "BIP38 passphrase search failed.");
     } finally {
       setCompanionBusy("");
     }
@@ -449,6 +484,22 @@ export default function WalletRecoveryPage() {
               <input id="wallet-extract-file" type="file" disabled={companionBusy === "extract"} onChange={(e) => extractHash(e.target.files?.[0])} />
             </label>
             {extracted && <div className="wallet-hash"><span>{extracted.format}{extracted.hashcatMode ? " · hashcat -m " + extracted.hashcatMode : ""}</span><code>{extracted.hash}</code></div>}
+          </div>
+
+          <div className="wallet-inspection">
+            <div className="wallet-inspection-head"><div><span>ENCRYPTED PAPER WALLET</span><h3>Decrypt a BIP38 key (6P…)</h3></div><LockKeyhole size={16}/></div>
+            <div className="wallet-file-meta"><div><span>BIP38 KEY</span><input value={bip38Key} onChange={(e) => setBip38Key(e.target.value)} placeholder="6Pf... encrypted private key" /></div></div>
+            <div className="wallet-file-meta">
+              <div><span>PASSPHRASE (IF KNOWN)</span><input type="password" value={bip38Pass} onChange={(e) => setBip38Pass(e.target.value)} placeholder="the passphrase" /></div>
+              <div><span>OR PASSPHRASE-LIST PATH</span><input value={bip38Wordlist} onChange={(e) => setBip38Wordlist(e.target.value)} placeholder="/home/you/passphrases.txt" /></div>
+            </div>
+            <div className="wallet-btn-row">
+              <button type="button" className="wallet-reset" disabled={companionBusy === "bip38d"} onClick={bip38Decrypt}>{companionBusy === "bip38d" ? "Decrypting…" : "Decrypt with passphrase"}</button>
+              <button type="button" className="wallet-reset" disabled={companionBusy === "bip38c"} onClick={bip38Crack}>{companionBusy === "bip38c" ? "Searching…" : "Try passphrase list"}</button>
+            </div>
+            {bip38Result && (bip38Result.wif
+              ? <div className="wallet-hash"><span>Recovered{bip38Result.compressed ? " (compressed)" : " (uncompressed)"}{bip38Result.passphrase ? " · passphrase: " + bip38Result.passphrase : ""} · {bip38Result.address}</span><code>{bip38Result.wif}</code></div>
+              : <div className="wallet-state wallet-state-partial">{(bip38Result.status || "").toUpperCase()}{bip38Result.attempts ? " after " + bip38Result.attempts + " tries" : ""} — {bip38Result.note || ""}</div>)}
           </div>
 
           <div className="wallet-inspection">
