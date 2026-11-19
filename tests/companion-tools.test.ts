@@ -128,3 +128,23 @@ test("feroxbuster without a wordlist reports it missing", () => {
   assert.equal(req?.tool, "feroxbuster");
   assert.deepEqual(req?.missing, ["wordlist"]);
 });
+
+test("plans metasploit info for a specific module path", () => {
+  const req = planCompanionToolRequest("show metasploit info for exploit/windows/smb/ms17_010_eternalblue");
+  assert.equal(req?.tool, "metasploit-info");
+  assert.equal(req?.parameters.module, "exploit/windows/smb/ms17_010_eternalblue");
+});
+
+test("plans searchsploit and nmap-vuln and snmp", () => {
+  assert.equal(planCompanionToolRequest("searchsploit eternalblue")?.tool, "searchsploit");
+  assert.equal(planCompanionToolRequest("nmap vuln scan 10.0.0.5")?.tool, "nmap-vuln");
+  assert.equal(planCompanionToolRequest("snmp-check 10.0.0.5")?.tool, "snmp-check");
+});
+
+test("plans arjun, cmseek, gospider, dnstwist, waybackurls", () => {
+  assert.equal(planCompanionToolRequest("arjun https://example.com")?.tool, "arjun");
+  assert.equal(planCompanionToolRequest("cmseek https://example.com")?.tool, "cmseek");
+  assert.equal(planCompanionToolRequest("gospider https://example.com")?.tool, "gospider");
+  assert.equal(planCompanionToolRequest("dnstwist example.com")?.active, false);
+  assert.equal(planCompanionToolRequest("waybackurls example.com")?.tool, "waybackurls");
+});

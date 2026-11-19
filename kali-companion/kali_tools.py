@@ -95,6 +95,13 @@ def v_search_term(value: object) -> str:
     return text
 
 
+def v_msf_module(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_/.\-]{2,120}", text):
+        raise ValueError("Enter a Metasploit module path, e.g. exploit/windows/smb/ms17_010_eternalblue.")
+    return text
+
+
 def v_bounded_int(low: int, high: int):
     def check(value: object) -> str:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -343,6 +350,62 @@ TOOL_SPECS = {
         "target_param": "url", "params": {"url": v_url},
         "argv": lambda p: ["dalfox", "url", p["url"], "--silence", "--no-color"],
         "purpose": "Bounded reflected-XSS parameter testing of an authorised URL.",
+    },
+    # --- exploit research (metadata only; no exploit is ever run) ---
+    "metasploit-info": {
+        "binary": "msfconsole", "package": "metasploit-framework", "active": False,
+        "category": "exploit-research", "params": {"module": v_msf_module},
+        "argv": lambda p: ["msfconsole", "-q", "-x", "info " + p["module"] + "; exit -y"],
+        "purpose": "Show metadata for one Metasploit module (no exploit is run).",
+    },
+    "searchsploit": {
+        "binary": "searchsploit", "package": "exploitdb", "active": False, "category": "exploit-research",
+        "params": {"query": v_search_term},
+        "argv": lambda p: ["searchsploit", "--disable-colour", p["query"]],
+        "purpose": "Search the local Exploit-DB copy by keyword (reference only).",
+    },
+    # --- additional passive OSINT / defensive ---
+    "dnstwist": {
+        "binary": "dnstwist", "package": "dnstwist", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["dnstwist", "--format", "cli", p["host"]],
+        "purpose": "Discover look-alike/typosquat domains for phishing defence (passive).",
+    },
+    "waybackurls": {
+        "binary": "waybackurls", "package": "waybackurls", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["waybackurls", p["host"]],
+        "purpose": "Collect historical URLs for a domain from the Wayback Machine (passive).",
+    },
+    # --- additional active scanning / enumeration ---
+    "nmap-vuln": {
+        "binary": "nmap", "package": "nmap", "active": True, "category": "vuln-scan",
+        "target_param": "host",
+        "params": {"host": v_host, "ports": v_port_spec},
+        "argv": lambda p: ["nmap", "-n", "-sV", "--script", "vuln", "-T2", "-p", p["ports"], "--", p["host"]],
+        "purpose": "Run Nmap's NSE vuln scripts against authorised ports on a host.",
+    },
+    "snmp-check": {
+        "binary": "snmp-check", "package": "snmp-check", "active": True, "category": "snmp",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["snmp-check", p["host"]],
+        "purpose": "Enumerate SNMP information from an authorised host (default community).",
+    },
+    "arjun": {
+        "binary": "arjun", "package": "arjun", "active": True, "category": "web-params",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["arjun", "-u", p["url"]],
+        "purpose": "Discover hidden HTTP parameters on an authorised URL.",
+    },
+    "cmseek": {
+        "binary": "cmseek", "package": "cmseek", "active": True, "category": "web-cms",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["cmseek", "-u", p["url"], "--batch"],
+        "purpose": "Detect and enumerate the CMS of an authorised site.",
+    },
+    "gospider": {
+        "binary": "gospider", "package": "gospider", "active": True, "category": "web-crawl",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["gospider", "-s", p["url"], "-q", "-d", "2"],
+        "purpose": "Bounded crawl (depth 2) of an authorised URL.",
     },
 }
 

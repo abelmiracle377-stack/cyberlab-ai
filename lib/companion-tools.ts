@@ -57,8 +57,8 @@ function extractSearchTerm(text: string): string | null {
   // Prefer a concrete identifier (CVE or MS advisory) when present.
   const cve = text.match(/\b(CVE-\d{4}-\d{4,7}|ms\d{2}-\d{3})\b/i);
   if (cve) return cve[1];
-  // Otherwise take the keyword(s) after a search-style verb and drop filler words.
-  const match = text.match(/\b(?:search|find|look\s+up)\s+(.+)$/i);
+  // Otherwise take the keyword(s) after a search-style verb or tool name, and drop filler words.
+  const match = text.match(/\b(?:search|find|look\s+up|searchsploit|metasploit|msf)\s+(.+)$/i);
   if (!match) return null;
   const cleaned = match[1]
     .replace(/\b(?:for|in|the|a|an|metasploit|msf|msfconsole|module|modules|exploit|exploits)\b/gi, " ")
@@ -236,11 +236,58 @@ export function planCompanionToolRequest(prompt: string): CompanionToolRequest |
       active: true, targetParam: "url", missing: [] };
   }
 
+  // metasploit module info (specific module path).
+  const msfModule = prompt.match(/\b((?:exploit|auxiliary|post|payload|encoder|nop|evasion)\/[a-z0-9_/.-]{3,120})\b/i);
+  if (msfModule && /\b(?:metasploit|msf|info|module)\b/i.test(text)) {
+    return { tool: "metasploit-info", label: "Metasploit module info", parameters: { module: msfModule[1].toLowerCase() }, active: false, missing: [] };
+  }
+
   // metasploit module search (metadata only, no target).
   if (/\b(?:metasploit|msfconsole|msf)\b|search\s+(?:exploit|module)/.test(text)) {
     const query = extractSearchTerm(prompt);
     if (query) return { tool: "metasploit-search", label: "Metasploit module search", parameters: { query },
       active: false, missing: [] };
+  }
+
+  // searchsploit — local Exploit-DB search.
+  if (/\bsearchsploit\b|exploit[-\s]?db|exploit\s+database/.test(text)) {
+    const query = extractSearchTerm(prompt);
+    if (query) return { tool: "searchsploit", label: "Exploit-DB search (searchsploit)", parameters: { query }, active: false, missing: [] };
+  }
+
+  // nmap NSE vuln scripts.
+  if (/\bnmap[-\s]?vuln\b|vuln\s+scan|nmap.*\bvuln\b/.test(text)) {
+    const host = extractHost(prompt);
+    const ports = extractPorts(prompt) || "1-1000";
+    if (host) return { tool: "nmap-vuln", label: "Nmap vuln scripts", parameters: { host, ports }, active: true, targetParam: "host", missing: [] };
+  }
+
+  // snmp-check / arjun / cmseek / gospider.
+  if (/\bsnmp[-\s]?check\b|\bsnmp\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "snmp-check", label: "SNMP enumeration (snmp-check)", parameters: { host }, active: true, targetParam: "host", missing: [] };
+  }
+  if (/\barjun\b|parameter\s+discovery|hidden\s+param/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "arjun", label: "HTTP parameter discovery (arjun)", parameters: { url }, active: true, targetParam: "url", missing: [] };
+  }
+  if (/\bcmseek\b|cms\s+(?:detect|scan)/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "cmseek", label: "CMS detection (cmseek)", parameters: { url }, active: true, targetParam: "url", missing: [] };
+  }
+  if (/\bgospider\b/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "gospider", label: "Crawl (gospider)", parameters: { url }, active: true, targetParam: "url", missing: [] };
+  }
+
+  // dnstwist / waybackurls — passive OSINT.
+  if (/\bdnstwist\b|typosquat|look[-\s]?alike\s+domain/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "dnstwist", label: "Typosquat discovery (dnstwist)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bwaybackurls\b|wayback\s+machine/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "waybackurls", label: "Archived URL discovery (waybackurls)", parameters: { host }, active: false, missing: [] };
   }
 
   // anonymous FTP listing.

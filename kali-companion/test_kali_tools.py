@@ -241,6 +241,41 @@ class NewToolBatchTests(unittest.TestCase):
                         confirmed=True, authorization_reference="E1",
                         target_confirmation="https://example.com", resolve=FAKE, runner=ok_runner())
 
+    def test_registry_reached_47(self):
+        self.assertGreaterEqual(len(kt.TOOL_SPECS), 47)
+
+    def test_metasploit_info_is_passive_metadata(self):
+        run = ok_runner("Name: MS17-010 EternalBlue")
+        kt.run_tool("metasploit-info", {"module": "exploit/windows/smb/ms17_010_eternalblue"},
+                    confirmed=True, resolve=FAKE, runner=run)
+        self.assertIn("info exploit/windows/smb/ms17_010_eternalblue; exit -y", run.argv)
+
+    def test_searchsploit_is_passive(self):
+        run = ok_runner("EternalBlue | windows/remote/42315.py")
+        result = kt.run_tool("searchsploit", {"query": "eternalblue"}, confirmed=True,
+                             resolve=FAKE, runner=run)
+        self.assertEqual(result["status"], "completed")
+
+    def test_nmap_vuln_runs_vuln_scripts_with_authorisation(self):
+        run = ok_runner("| vulners:")
+        kt.run_tool("nmap-vuln", {"host": "10.0.0.5", "ports": "80,443"}, confirmed=True,
+                    authorization_reference="E1", target_confirmation="10.0.0.5",
+                    resolve=FAKE, runner=run)
+        self.assertIn("--script", run.argv)
+        self.assertEqual(run.argv[run.argv.index("--script") + 1], "vuln")
+
+    def test_new_active_tools_need_authorisation(self):
+        for name, params, target in (
+            ("snmp-check", {"host": "10.0.0.5"}, "10.0.0.5"),
+            ("arjun", {"url": "https://example.com"}, "https://example.com"),
+            ("cmseek", {"url": "https://example.com"}, "https://example.com"),
+            ("gospider", {"url": "https://example.com"}, "https://example.com"),
+        ):
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(ValueError, "authorisation"):
+                    kt.run_tool(name, params, confirmed=True, target_confirmation=target,
+                                resolve=FAKE, runner=ok_runner())
+
 
 class ListingTests(unittest.TestCase):
     def test_list_reports_installed_flag_and_mode(self):
