@@ -174,6 +174,13 @@ TOOL_SPECS = {
                            "--crawl", "0", "--flush-session", "--disable-coloring"],
         "purpose": "Bounded SQL-injection testing (level 1 / risk 1) of an authorised URL.",
     },
+    "ftp-anon": {
+        "binary": "curl", "package": "curl", "active": True, "category": "ftp",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["curl", "-sS", "--connect-timeout", "10", "--max-time", "25",
+                           "--ftp-method", "nocwd", "ftp://" + p["host"] + "/"],
+        "purpose": "Anonymous FTP root directory listing on an authorised host.",
+    },
     "metasploit-search": {
         "binary": "msfconsole", "package": "metasploit-framework", "active": False,
         "category": "exploit-research", "params": {"query": v_search_term},

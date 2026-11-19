@@ -98,6 +98,13 @@ export function planCompanionToolRequest(prompt: string): CompanionToolRequest |
       active: false, missing: [] };
   }
 
+  // anonymous FTP listing.
+  if (/\bftp\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "ftp-anon", label: "Anonymous FTP listing", parameters: { host },
+      active: true, targetParam: "host", missing: [] };
+  }
+
   // netcat banner grab — host + port.
   if (/\b(?:netcat|\bnc\b|banner\s*grab)\b/.test(text)) {
     const host = extractHost(prompt);

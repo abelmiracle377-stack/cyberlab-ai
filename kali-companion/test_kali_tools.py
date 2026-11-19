@@ -165,6 +165,15 @@ class ExpandedToolTests(unittest.TestCase):
                         target_confirmation="93.184.216.34", resolve=FAKE, runner=ok_runner())
 
 
+    def test_ftp_anon_builds_anonymous_listing(self):
+        run = ok_runner("drwxr-xr-x pub")
+        kt.run_tool("ftp-anon", {"host": "ftp.example.com"}, confirmed=True,
+                    authorization_reference="ENG-1", target_confirmation="ftp.example.com",
+                    resolve=FAKE, runner=run)
+        self.assertIn("ftp://ftp.example.com/", run.argv)
+        self.assertIn("--ftp-method", run.argv)
+
+
 class ListingTests(unittest.TestCase):
     def test_list_reports_installed_flag_and_mode(self):
         listed = kt.list_tools()
