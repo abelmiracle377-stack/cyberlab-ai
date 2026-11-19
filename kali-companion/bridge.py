@@ -306,6 +306,64 @@ def ollama_chat(model: str, prompt: str, history: list | None = None) -> dict:
 
 
 
+def _read_os_release() -> dict:
+    data = {}
+    try:
+        for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+            if "=" in line:
+                key, value = line.split("=", 1)
+                data[key] = value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return data
+
+
+def _read_cyberlab_os_marker() -> dict | None:
+    """Return the CyberLab AI OS marker fields, or None when not a CyberLab OS VM."""
+    try:
+        text = Path("/etc/cyberlab-ai-os-release").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    marker = {}
+    for line in text.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            marker[key.strip()] = value.strip().strip('"').strip("'")
+    return marker if marker.get("CYBERLAB_OS") == "1" else None
+
+
+def detect_companion_type(os_release: dict, cyberlab_marker: dict | None) -> dict:
+    """Classify the host the companion runs on (pure function; easy to test)."""
+    if cyberlab_marker:
+        return {
+            "companion_type": "cyberlab-os",
+            "label": "CyberLab AI OS VM companion",
+            "edition": cyberlab_marker.get("EDITION", "") or cyberlab_marker.get("VERSION_ID", ""),
+            "distribution": cyberlab_marker.get("NAME", "CyberLab AI OS"),
+        }
+    distro_id = (os_release.get("ID", "") or "").lower()
+    id_like = (os_release.get("ID_LIKE", "") or "").lower()
+    if distro_id == "kali" or "kali" in id_like:
+        return {"companion_type": "kali", "label": "Kali Linux companion", "edition": "",
+                "distribution": os_release.get("PRETTY_NAME", "Kali Linux")}
+    return {"companion_type": "linux", "label": "Linux companion", "edition": "",
+            "distribution": os_release.get("PRETTY_NAME", "Linux")}
+
+
+def companion_identity() -> dict:
+    """Self-identify the companion so the dashboard can label and offer each VM type."""
+    identity = detect_companion_type(_read_os_release(), _read_cyberlab_os_marker())
+    runners = kali_tools.list_tools()["tools"]
+    identity.update({
+        "agent": "CyberLab Companion Bridge",
+        "architecture": platform.machine(),
+        "tool_count": len(runners),
+        "tools_installed": sum(1 for tool in runners if tool["installed"]),
+        "note": "Companion identity only. Hostname, IP addresses, usernames and environment variables are not disclosed.",
+    })
+    return identity
+
+
 def wallet_tool_status() -> dict:
     """Report which local password-recovery tools are available; installs nothing."""
     return {
@@ -819,7 +877,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/telemetry/security", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/telemetry/security", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -921,7 +979,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200 if job else 404, job or {"error": "Unknown or expired acquisition job."}, origin)
         if path == "/system":
             return self.send_json(200, {"status": "ok", "metrics": system_snapshot()}, origin)
-        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge", "nmap": bool(shutil.which("nmap"))}, origin)
+        if path == "/identity":
+            return self.send_json(200, companion_identity(), origin)
+        self.send_json(200, {"status": "connected", "agent": "CyberLab Kali Bridge",
+                             "nmap": bool(shutil.which("nmap")), "companion": companion_identity()}, origin)
 
     def do_POST(self):
         origin = self.headers.get("Origin", "")

@@ -34,6 +34,7 @@ export default function KaliConnectionPage() {
   const [result,setResult]=useState<Result|null>(null);
   const [copied,setCopied]=useState(false);
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
+  const [companion,setCompanion]=useState<{companion_type:string;label:string;distribution:string;edition:string;tool_count:number;tools_installed:number}|null>(null);
   const [telemetryBusy,setTelemetryBusy]=useState(false);
   const [toolInventory,setToolInventory]=useState<ToolInventory|null>(null);
   const [toolsBusy,setToolsBusy]=useState(false);
@@ -63,6 +64,7 @@ export default function KaliConnectionPage() {
       const response=await fetch("http://127.0.0.1:8765/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
+      setCompanion(data.companion||null);
       const inventoryResponse=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const inventory=await inventoryResponse.json();
       if(!inventoryResponse.ok)throw new Error(inventory.error||"Connected, but the Kali tool inventory could not be loaded. Update the local companion.");
@@ -249,7 +251,14 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <h2>3. Pair this browser with Kali</h2>
         <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Paste the local pairing token"/></label>
         <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Connect to Kali</>}</button>
-        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local Kali bridge. The pairing token is held only in this page's memory.</p>}
+        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local companion. The pairing token is held only in this page's memory.</p>}
+        {connected&&companion&&<section className="kali-panel" style={{marginTop:12}}>
+          <h2>Paired companion</h2>
+          <div className="malware-kv"><span>Companion</span><strong>{companion.label}</strong></div>
+          <div className="malware-kv"><span>Platform</span><strong>{companion.distribution}{companion.edition?" · "+companion.edition:""}</strong></div>
+          <div className="malware-kv"><span>Tools available</span><strong>{companion.tools_installed} of {companion.tool_count} installed</strong></div>
+          <p className="network-note">{companion.companion_type==="cyberlab-os"?"You are paired with a CyberLab AI OS VM. It runs the same vetted tool execution as a Kali companion; the CyberLab OS ships the Debian-packaged tool set.":companion.companion_type==="kali"?"You are paired with a Kali Linux machine, where the full tool set is available.":"You are paired with a generic Linux host. Tools run when their binary is installed; missing tools fail closed with an install hint."}</p>
+        </section>}
       </section>
 
       {connected&&toolInventory&&<section className="kali-panel">

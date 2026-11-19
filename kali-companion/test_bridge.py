@@ -461,3 +461,28 @@ class Eip170SizeTests(unittest.TestCase):
 
     def test_creation_basis_noted_when_not_deployed(self):
         self.assertEqual(bridge.evaluate_eip170("60" * 10, False)["basis"], "creation")
+
+
+class CompanionIdentityTests(unittest.TestCase):
+    def test_cyberlab_os_marker_wins(self):
+        result = bridge.detect_companion_type(
+            {"ID": "debian", "PRETTY_NAME": "Debian GNU/Linux 13"},
+            {"CYBERLAB_OS": "1", "NAME": "CyberLab AI OS", "EDITION": "desktop"})
+        self.assertEqual(result["companion_type"], "cyberlab-os")
+        self.assertEqual(result["label"], "CyberLab AI OS VM companion")
+        self.assertEqual(result["edition"], "desktop")
+
+    def test_kali_is_detected_by_id_or_id_like(self):
+        self.assertEqual(bridge.detect_companion_type({"ID": "kali"}, None)["companion_type"], "kali")
+        self.assertEqual(bridge.detect_companion_type({"ID": "x", "ID_LIKE": "kali debian"}, None)["companion_type"], "kali")
+
+    def test_plain_linux_falls_back(self):
+        result = bridge.detect_companion_type({"ID": "debian", "PRETTY_NAME": "Debian GNU/Linux 13"}, None)
+        self.assertEqual(result["companion_type"], "linux")
+        self.assertEqual(result["label"], "Linux companion")
+
+    def test_identity_excludes_hostname_and_secrets(self):
+        identity = bridge.companion_identity()
+        self.assertIn(identity["companion_type"], {"kali", "cyberlab-os", "linux"})
+        self.assertIn("tool_count", identity)
+        self.assertFalse(any(k.lower() in {"hostname", "ip", "user", "token"} for k in identity))
