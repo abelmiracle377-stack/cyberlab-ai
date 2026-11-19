@@ -245,6 +245,122 @@ def inspect_image_partitions(image_job_id: str, confirmation_image: str) -> dict
         "note": "Read-only partition-boundary analysis of the acquired image. The source image was not mounted; no partition was repaired or modified. An empty result can mean an unsupported, damaged or absent partition table; it does not prove that no recoverable data exists.",
     }
 
+def _resolve_completed_image(image_job_id: str, confirmation_image: str, action: str) -> Path:
+    """Shared guard: return the regular image file of a completed acquisition job."""
+    with _jobs_lock:
+        source_job = _jobs.get(image_job_id)
+        source_job = dict(source_job) if source_job else None
+    if not source_job or source_job.get("state") != "completed":
+        raise ValueError("Choose a completed CyberLab ddrescue acquisition job.")
+    recorded_image = Path(str(source_job.get("image", "")))
+    if recorded_image.is_symlink():
+        raise ValueError("The acquired image path must not be a symbolic link.")
+    image = recorded_image.resolve(strict=True)
+    if not image.is_file():
+        raise ValueError("The acquired image is not a regular image file.")
+    if confirmation_image.strip() != str(image):
+        raise ValueError("Retype the exact acquired image path to confirm " + action + ".")
+    return image
+
+
+# fls rows look like:  r/r * 14-128-3:  Users/alex/Pictures/holiday.jpg
+_FLS_ROW = re.compile(
+    r"^(?P<ftype>[a-z\-]/[a-z\-])\s+(?P<deleted>\*?)\s*(?P<inode>\d[\d\-]*):\s+(?P<path>.+?)\s*$")
+
+
+def parse_fls_output(output: str, deleted_only: bool = True, limit: int = 1000) -> list[dict]:
+    """Parse Sleuth Kit fls rows into structured deleted-file entries."""
+    if not 1 <= limit <= 10000:
+        raise ValueError("Listing limit must be between 1 and 10000.")
+    entries = []
+    for line in output.splitlines():
+        match = _FLS_ROW.match(line)
+        if not match:
+            continue
+        is_deleted = match.group("deleted") == "*"
+        if deleted_only and not is_deleted:
+            continue
+        ftype = match.group("ftype")
+        entries.append({
+            "inode": match.group("inode"),
+            "path": match.group("path")[:400],
+            "deleted": is_deleted,
+            "isDirectory": ftype.startswith("d"),
+        })
+        if len(entries) >= limit:
+            break
+    return entries
+
+
+def list_deleted_files(image_job_id: str, confirmation_image: str, offset: int = 0,
+                       limit: int = 1000, runner=subprocess.run, which=shutil.which) -> dict:
+    """List deleted files in an acquired image using read-only Sleuth Kit fls."""
+    image = _resolve_completed_image(image_job_id, confirmation_image, "deleted-file listing")
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 2**40:
+        raise ValueError("Partition offset (in sectors) must be a non-negative integer.")
+    if not which("fls"):
+        raise ValueError("Sleuth Kit fls is required. Install it with: sudo apt install -y sleuthkit")
+    command = ["fls", "-r", "-p", "-d", "-o", str(offset), str(image)]
+    result = runner(command, capture_output=True, text=True, timeout=300, check=False)
+    if result.returncode != 0:
+        raise ValueError((result.stderr or result.stdout or "fls failed.")[:500])
+    entries = parse_fls_output(result.stdout, deleted_only=True, limit=limit)
+    return {
+        "image": str(image), "offset": offset, "deleted_count": len(entries),
+        "deleted_files": entries, "method": "Sleuth Kit fls recursive deleted-entry listing",
+        "note": "Read-only metadata listing from the acquired image. Nothing was mounted, modified or recovered yet. Recover individual files by inode with an explicit destination on a different drive.",
+    }
+
+
+def recover_deleted_file(image_job_id: str, confirmation_image: str, inode: str,
+                         output_directory: str, offset: int = 0, filename: str = "",
+                         runner=subprocess.run, which=shutil.which) -> dict:
+    """Recover one deleted file by inode with Sleuth Kit icat to a separate drive."""
+    image = _resolve_completed_image(image_job_id, confirmation_image, "file recovery")
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 2**40:
+        raise ValueError("Partition offset (in sectors) must be a non-negative integer.")
+    if not isinstance(inode, str) or not re.fullmatch(r"\d[\d\-]{0,40}", inode):
+        raise ValueError("Inode must be a Sleuth Kit inode identifier, e.g. 14-128-3.")
+    if not which("icat"):
+        raise ValueError("Sleuth Kit icat is required. Install it with: sudo apt install -y sleuthkit")
+    parent = Path(output_directory).expanduser().resolve(strict=True)
+    if not parent.is_dir():
+        raise ValueError("Choose an existing destination directory on a different drive.")
+    dest_majmin, _ = _mount_device(parent)
+    dest_ancestors = _ancestors("/dev/block/" + dest_majmin) if dest_majmin and Path("/dev/block/" + dest_majmin).exists() else {dest_majmin}
+    with _jobs_lock:
+        source_job = dict(_jobs.get(image_job_id) or {})
+    source_ancestors = _ancestors(str(source_job.get("source", "")))
+    if source_ancestors and source_ancestors.intersection(dest_ancestors):
+        raise ValueError("Recovery output is on the original source device. Choose a different physical drive.")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", (filename or ("recovered-" + inode))).strip("._") or "recovered"
+    safe_name = safe_name[:120]
+    destination = parent / ("cyberlab-recovered-" + uuid.uuid4().hex[:8] + "-" + safe_name)
+    if destination.exists():
+        raise ValueError("The recovery destination already exists.")
+    command = ["icat", "-o", str(offset), str(image), inode]
+    fd = os.open(str(destination), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            result = runner(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300, check=False)
+            payload = result.stdout if isinstance(result.stdout, (bytes, bytearray)) else (result.stdout or "").encode()
+            if result.returncode != 0:
+                raise ValueError((getattr(result, "stderr", b"") or b"icat failed.")[:500].decode("utf-8", "replace") if isinstance(getattr(result, "stderr", b""), (bytes, bytearray)) else str(result.stderr)[:500])
+            handle.write(payload)
+            digest.update(payload)
+            size = len(payload)
+    except Exception:
+        Path(destination).unlink(missing_ok=True)
+        raise
+    return {
+        "inode": inode, "destination": str(destination), "size_bytes": size,
+        "sha256": digest.hexdigest(), "method": "Sleuth Kit icat inode extraction",
+        "note": "Recovered to a separate destination with owner-only permissions. The source image was not modified. Validate the file before trusting it; a recovered file can be partial or corrupt.",
+    }
+
+
 def build_recovery_manifest(output_directory: str, max_files: int = 5000) -> dict:
     """Hash regular recovered files without following symlinks; cap work for safety."""
     if type(max_files) is not int or not 1 <= max_files <= 5000:

@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition
+from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition, list_deleted_files, recover_deleted_file
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
 from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater
@@ -897,7 +897,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -913,7 +913,7 @@ class Handler(BaseHTTPRequestHandler):
                 131072 if path == "/evidence/case" else
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
-                4096 if path in {"/wallet/derive", "/wallet/crack"} else
+                4096 if path in {"/wallet/derive", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
@@ -1133,6 +1133,24 @@ class Handler(BaseHTTPRequestHandler):
                     str(data.get("confirmationImage", "")),
                 )
                 return self.send_json(202, result, origin)
+            if path == "/forensics/deleted-list":
+                offset = data.get("offset", 0)
+                if not isinstance(offset, int) or isinstance(offset, bool):
+                    raise ValueError("offset must be an integer.")
+                limit = data.get("limit", 1000)
+                if not isinstance(limit, int) or isinstance(limit, bool):
+                    raise ValueError("limit must be an integer.")
+                result = list_deleted_files(str(data.get("imageJobId", "")), str(data.get("confirmationImage", "")), offset=offset, limit=limit)
+                return self.send_json(200, result, origin)
+            if path == "/forensics/recover-file":
+                offset = data.get("offset", 0)
+                if not isinstance(offset, int) or isinstance(offset, bool):
+                    raise ValueError("offset must be an integer.")
+                result = recover_deleted_file(
+                    str(data.get("imageJobId", "")), str(data.get("confirmationImage", "")),
+                    str(data.get("inode", "")), str(data.get("outputDirectory", "")),
+                    offset=offset, filename=str(data.get("filename", "")))
+                return self.send_json(201, result, origin)
             if path == "/forensics/image":
                 result = start_image_acquisition(
                     str(data.get("source", "")),
