@@ -52,7 +52,7 @@ class GzipResponseDecoderTests(unittest.TestCase):
     def test_concatenated_members_remain_subject_to_combined_output_limit(self):
         half = intercept_proxy.MAX_RESPONSE_BODY // 2 + 1
         compressed = gzip.compress(b"a" * half) + gzip.compress(b"b" * half)
-        with self.assertRaisesRegex(ValueError, "decompressed upstream response"):
+        with self.assertRaisesRegex(ValueError, "(?i)decompressed upstream response"):
             intercept_proxy._decode_gzip_response(compressed)
 
     def test_rejects_invalid_gzip_response(self):
@@ -61,7 +61,7 @@ class GzipResponseDecoderTests(unittest.TestCase):
 
     def test_rejects_decompression_expansion_over_response_limit(self):
         compressed = gzip.compress(b"x" * (intercept_proxy.MAX_RESPONSE_BODY + 1))
-        with self.assertRaisesRegex(ValueError, "decompressed upstream response"):
+        with self.assertRaisesRegex(ValueError, "(?i)decompressed upstream response"):
             intercept_proxy._decode_gzip_response(compressed)
 
 
@@ -77,7 +77,7 @@ class DeflateResponseDecoderTests(unittest.TestCase):
 
     def test_rejects_decompression_expansion_over_response_limit(self):
         compressed = zlib.compress(b"x" * (intercept_proxy.MAX_RESPONSE_BODY + 1))
-        with self.assertRaisesRegex(ValueError, "decompressed upstream response"):
+        with self.assertRaisesRegex(ValueError, "(?i)decompressed upstream response"):
             intercept_proxy._decode_deflate_response(compressed)
 
 
