@@ -37,6 +37,7 @@ from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending
 import base64
 import wallet_recovery
 import wallet_cracking
+import kali_tools
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -371,6 +372,24 @@ def wallet_crack(data: dict) -> dict:
     if not isinstance(mode, int) or isinstance(mode, bool):
         raise ValueError("hashcatMode is required for hashcat (for example 11300, 15700 or 16300).")
     return wallet_cracking.run_hashcat(hash_value, mode, wordlist, confirmed=confirmed, timeout=timeout)
+
+
+def run_kali_tool(data: dict) -> dict:
+    """Run one registered Kali tool with validation, consent and authorisation."""
+    name = str(data.get("tool", ""))
+    params = data.get("parameters")
+    if not isinstance(params, dict):
+        raise ValueError("Provide a 'parameters' object for the tool.")
+    timeout = data.get("timeoutSeconds", kali_tools.DEFAULT_TIMEOUT)
+    if not isinstance(timeout, int) or isinstance(timeout, bool):
+        raise ValueError("timeoutSeconds must be an integer.")
+    return kali_tools.run_tool(
+        name, params,
+        confirmed=data.get("confirmRun") is True,
+        authorization_reference=str(data.get("authorizationReference", "")),
+        target_confirmation=str(data.get("targetConfirmation", "")),
+        timeout=timeout,
+    )
 
 
 def environment_capabilities() -> dict:
@@ -771,7 +790,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -783,6 +802,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, solidity_test_runner_status(), origin)
         if path == "/wallet/status":
             return self.send_json(200, wallet_tool_status(), origin)
+        if path == "/tools/runners":
+            return self.send_json(200, kali_tools.list_tools(), origin)
         if path == "/ollama/health":
             try:
                 models = ollama_models()
@@ -876,7 +897,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -893,6 +914,7 @@ class Handler(BaseHTTPRequestHandler):
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
                 4096 if path in {"/wallet/derive", "/wallet/crack"} else
+                8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
             if length < 2 or length > body_limit:
@@ -918,6 +940,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_derive(data), origin)
             if path == "/wallet/crack":
                 return self.send_json(200, wallet_crack(data), origin)
+            if path == "/tools/run":
+                return self.send_json(200, run_kali_tool(data), origin)
             if path == "/proxy/intercepts/decision":
                 try:
                     return self.send_json(200, decide_intercept(data.get("id", ""), data.get("action", ""), data.get("edits")), origin)
