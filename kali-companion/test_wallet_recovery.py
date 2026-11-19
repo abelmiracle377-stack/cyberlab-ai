@@ -184,6 +184,40 @@ class ElectrumDetectionTests(unittest.TestCase):
         self.assertFalse(wr.is_electrum_seed(mnemonic))
 
 
+class ElectrumDerivationTests(unittest.TestCase):
+    # Authoritative vectors from Electrum's own tests/test_wallet_vertical.py.
+    STANDARD = "cycle rocket west magnet parrot shuffle foot correct salt library feed song"
+    SEGWIT = "bitter grass shiver impose acquire brush forget axis eager alone wine silver"
+
+    def test_standard_seed_receiving_and_change(self):
+        self.assertEqual(wr.electrum_seed_type(self.STANDARD), "standard")
+        out = wr.derive_electrum_accounts(self.STANDARD, count=1)
+        self.assertEqual(out["seedType"], "standard")
+        recv = next(a for a in out["accounts"] if a["path"] == "m/0/0")
+        change = next(a for a in out["accounts"] if a["path"] == "m/1/0")
+        self.assertEqual(recv["address"], "1NNkttn1YvVGdqBW4PR6zvc3Zx3H5owKRf")
+        self.assertEqual(change["address"], "1KSezYMhAJMWqFbVFB2JshYg69UpmEXR4D")
+
+    def test_segwit_seed_receiving_and_change(self):
+        self.assertEqual(wr.electrum_seed_type(self.SEGWIT), "segwit")
+        out = wr.derive_electrum_accounts(self.SEGWIT, count=1)
+        self.assertEqual(out["seedType"], "segwit")
+        recv = next(a for a in out["accounts"] if a["path"] == "m/0'/0/0")
+        change = next(a for a in out["accounts"] if a["path"] == "m/0'/1/0")
+        self.assertEqual(recv["address"], "bc1q3g5tmkmlvxryhh843v4dz026avatc0zzr6h3af")
+        self.assertEqual(change["address"], "bc1qdy94n2q5qcp0kg7v9yzwe6wvfkhnvyzje7nx2p")
+
+    def test_wif_reproduces_the_address(self):
+        out = wr.derive_electrum_accounts(self.STANDARD, count=1, include_change=False)
+        entry = out["accounts"][0]
+        priv = wr.base58check_decode(entry["wif"])[1:-1]  # strip version + compression flag
+        self.assertEqual(wr.p2pkh_address(wr.private_to_public(priv)), entry["address"])
+
+    def test_bip39_seed_is_rejected_by_electrum_derive(self):
+        with self.assertRaisesRegex(ValueError, "Not a recognised Electrum"):
+            wr.derive_electrum_accounts("abandon " * 11 + "about")
+
+
 class AddressAndWifTests(unittest.TestCase):
     def test_wif_round_trip(self):
         priv = bytes.fromhex("0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d")

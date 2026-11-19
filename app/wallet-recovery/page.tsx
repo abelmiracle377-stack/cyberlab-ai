@@ -65,6 +65,8 @@ export default function WalletRecoveryPage() {
   const [template, setTemplate] = useState("bip44-ethereum");
   const [accounts, setAccounts] = useState<DerivedAccount[] | null>(null);
   const [deriveWarning, setDeriveWarning] = useState("");
+  const [electrumAccounts, setElectrumAccounts] = useState<DerivedAccount[] | null>(null);
+  const [electrumType, setElectrumType] = useState("");
   const [extractKind, setExtractKind] = useState("keystore");
   const [extracted, setExtracted] = useState<ExtractedHash | null>(null);
   const [wordlist, setWordlist] = useState("");
@@ -242,6 +244,22 @@ export default function WalletRecoveryPage() {
     }
   }
 
+  async function deriveElectrum() {
+    setCompanionError(""); setElectrumAccounts(null); setElectrumType("");
+    if (!mnemonic.trim()) { setCompanionError("Enter the Electrum recovery phrase."); return; }
+    if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
+    setCompanionBusy("electrum");
+    try {
+      const data = await bridgePost("/wallet/electrum-derive", { mnemonic: mnemonic.trim(), passphrase, count: 5, includeChange: true });
+      setElectrumAccounts(data.accounts || []);
+      setElectrumType(data.seedType || "");
+    } catch (cause) {
+      setCompanionError(cause instanceof Error ? cause.message : "Electrum derivation failed.");
+    } finally {
+      setCompanionBusy("");
+    }
+  }
+
   async function checkBalances() {
     setCompanionError(""); setBalances(null);
     if (!mnemonic.trim()) { setCompanionError("Enter the recovery mnemonic to sweep for funds."); return; }
@@ -347,6 +365,11 @@ export default function WalletRecoveryPage() {
             </div>
             {accounts && <ul>{accounts.map((acc) => <li key={acc.path}><code>{acc.path}</code> → <code>{acc.address}</code>{acc.coin ? " (" + acc.coin + ")" : ""}</li>)}</ul>}
             {deriveWarning && <div className="wallet-error"><AlertTriangle size={15}/>{deriveWarning}</div>}
+            {deriveWarning && deriveWarning.includes("electrum-derive") && <button type="button" className="wallet-reset" disabled={companionBusy === "electrum"} onClick={deriveElectrum}>{companionBusy === "electrum" ? "Deriving Electrum…" : "Derive as Electrum wallet"}</button>}
+            {electrumAccounts && <div className="wallet-balance-result">
+              <p className="wallet-status-line">Electrum {electrumType} wallet · correct addresses</p>
+              <ul>{electrumAccounts.map((acc) => <li key={acc.path}><code>{acc.path}</code> → <code>{acc.address}</code></li>)}</ul>
+            </div>}
             {balances && <div className="wallet-balance-result">
               <p className="wallet-status-line">{balances.funded_addresses} funded · {balances.active_addresses} ever active of {balances.checked} checked</p>
               <ul>{balances.results.filter((r) => r.has_activity).map((r) => <li key={r.path + r.address}><code>{r.path}</code> {r.coin} — <strong>{r.balance}</strong>{(r.transaction_count ?? 0) > 0 ? " · " + r.transaction_count + " tx" : ""}</li>)}</ul>

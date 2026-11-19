@@ -383,6 +383,52 @@ def is_electrum_seed(mnemonic: str) -> bool:
     return electrum_seed_type(mnemonic) is not None
 
 
+# Electrum v2 single-signature seed types we can recover from the seed alone.
+# 2fa / 2fa-segwit need the TrustedCoin cosigner and cannot be recovered offline.
+ELECTRUM_SUPPORTED = {"standard", "segwit"}
+
+
+def electrum_root(mnemonic: str, passphrase: str = "") -> "HDKey":
+    """Electrum v2 seed -> BIP32 root (PBKDF2 with the 'electrum' salt, not BIP39)."""
+    seed = hashlib.pbkdf2_hmac("sha512", _electrum_normalize(mnemonic).encode("utf-8"),
+                               b"electrum" + passphrase.encode("utf-8"), 2048, dklen=64)
+    return HDKey.from_seed(seed)
+
+
+def derive_electrum_accounts(mnemonic: str, passphrase: str = "", count: int = 5,
+                             include_change: bool = True) -> dict:
+    """Derive addresses for an Electrum v2 standard (legacy) or segwit seed.
+
+    Verified against Electrum's own test vectors: standard uses m/{change}/{i}
+    (P2PKH), segwit uses m/0'/{change}/{i} (P2WPKH).
+    """
+    kind = electrum_seed_type(mnemonic)
+    if kind is None:
+        raise ValueError("Not a recognised Electrum v2 seed.")
+    if kind not in ELECTRUM_SUPPORTED:
+        raise ValueError("Electrum '" + kind + "' seeds use a 2FA (TrustedCoin) cosigner and cannot "
+                         "be recovered from the seed alone. Recover it in the Electrum client.")
+    if not 1 <= count <= 100:
+        raise ValueError("Address count must be between 1 and 100.")
+    root = electrum_root(mnemonic, passphrase)
+    account = root.derive_child(_HARDENED) if kind == "segwit" else root  # m/0' for segwit
+    chains = (0, 1) if include_change else (0,)
+    results = []
+    for change in chains:
+        branch = account.derive_child(change)
+        for index in range(count):
+            child = branch.derive_child(index)
+            if kind == "segwit":
+                address = p2wpkh_address(child.public_key())
+                path = "m/0'/" + str(change) + "/" + str(index)
+            else:
+                address = p2pkh_address(child.public_key())
+                path = "m/" + str(change) + "/" + str(index)
+            results.append({"path": path, "address": address, "coin": "bitcoin",
+                            "seedType": kind, "change": change, "wif": wif_encode(child.key)})
+    return {"seedType": kind, "count": len(results), "accounts": results}
+
+
 def mnemonic_to_seed(mnemonic: str, passphrase: str = "") -> bytes:
     """BIP39 mnemonic -> 64-byte seed. Does not require the wordlist."""
     mnemonic_n = unicodedata.normalize("NFKD", mnemonic.strip())

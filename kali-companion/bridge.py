@@ -422,10 +422,32 @@ def wallet_derive(data: dict) -> dict:
                 "note": "Derived locally from the supplied mnemonic. Private keys and the mnemonic never leave this machine."}
     electrum = wallet_recovery.electrum_seed_type(mnemonic)
     if electrum:
-        response["warning"] = ("This looks like an Electrum " + electrum + " seed, not a BIP39 seed. "
-                               "BIP39/BIP44 derivation here will not reproduce your Electrum wallet's "
-                               "addresses — open the phrase in the Electrum client to recover it.")
+        if electrum in wallet_recovery.ELECTRUM_SUPPORTED:
+            response["warning"] = ("This is an Electrum " + electrum + " seed, not a BIP39 seed. The "
+                                   "addresses above (BIP39/BIP44) will not match your Electrum wallet. "
+                                   "Use 'Derive as Electrum wallet' (/wallet/electrum-derive) for the correct addresses.")
+        else:
+            response["warning"] = ("This is an Electrum " + electrum + " seed, which uses a 2FA cosigner "
+                                   "and cannot be recovered from the seed alone. Recover it in the Electrum client.")
     return response
+
+
+def wallet_electrum_derive(data: dict) -> dict:
+    """Derive the correct addresses for an Electrum v2 standard or segwit seed."""
+    mnemonic = data.get("mnemonic")
+    if not isinstance(mnemonic, str) or not mnemonic.strip():
+        raise ValueError("Provide the Electrum recovery phrase in 'mnemonic'.")
+    passphrase = data.get("passphrase", "")
+    if not isinstance(passphrase, str) or len(passphrase) > 256:
+        raise ValueError("Passphrase must be a string of at most 256 characters.")
+    count = data.get("count", 5)
+    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= 100:
+        raise ValueError("count must be an integer between 1 and 100.")
+    include_change = data.get("includeChange", True) is not False
+    result = wallet_recovery.derive_electrum_accounts(
+        mnemonic, passphrase, count=count, include_change=include_change)
+    result["note"] = "Derived locally from the Electrum seed. Keys and the seed never leave this machine."
+    return result
 
 
 def wallet_solve_seed(data: dict) -> dict:
@@ -1169,7 +1191,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1186,7 +1208,7 @@ class Handler(BaseHTTPRequestHandler):
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
                 65536 if path in {"/wallet/check-balances", "/wallet/sweep"} else
-                4096 if path in {"/wallet/derive", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
+                4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
@@ -1211,6 +1233,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_extract_hash(data), origin)
             if path == "/wallet/derive":
                 return self.send_json(200, wallet_derive(data), origin)
+            if path == "/wallet/electrum-derive":
+                return self.send_json(200, wallet_electrum_derive(data), origin)
             if path == "/wallet/solve-seed":
                 return self.send_json(200, wallet_solve_seed(data), origin)
             if path == "/wallet/check-balances":
