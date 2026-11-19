@@ -564,6 +564,74 @@ def wallet_check_balances(data: dict) -> dict:
     return balance_check.check_balances(public)
 
 
+def wallet_auto_recover(data: dict) -> dict:
+    """Detect the seed scheme and recover without the user knowing the wallet type.
+
+    Electrum v2 standard/segwit and Electrum old are derived with their own
+    schemes; anything else is treated as BIP39 and swept across coins, accounts
+    and change chains. When a phrase could be BIP39 or old Electrum, both sets
+    are returned so nothing is missed. Optional balance check surfaces the funded
+    path across every candidate.
+    """
+    mnemonic = data.get("mnemonic")
+    if not isinstance(mnemonic, str) or not mnemonic.strip():
+        raise ValueError("Provide the recovery phrase in 'mnemonic'.")
+    passphrase = data.get("passphrase", "")
+    if not isinstance(passphrase, str) or len(passphrase) > 256:
+        raise ValueError("Passphrase must be a string of at most 256 characters.")
+    count = data.get("count", 3)
+    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= 20:
+        raise ValueError("count must be an integer between 1 and 20.")
+    include_change = data.get("includeChange", True) is not False
+
+    schemes = []
+    accounts = []
+
+    def add(scheme, entries):
+        schemes.append(scheme)
+        for entry in entries:
+            accounts.append({"scheme": scheme, "address": entry["address"],
+                             "coin": entry.get("coin", "bitcoin"), "path": entry["path"]})
+
+    v2 = wallet_recovery.electrum_seed_type(mnemonic)
+    if v2 in wallet_recovery.ELECTRUM_SUPPORTED:
+        add("electrum-" + v2, wallet_recovery.derive_electrum_accounts(
+            mnemonic, passphrase, count=count, include_change=include_change)["accounts"])
+    elif v2:
+        return {"detected": "electrum-" + v2, "recoverable": False, "schemes": [],
+                "derived_count": 0, "accounts": [],
+                "note": "This is a 2FA (TrustedCoin) Electrum seed; it needs the cosigner and cannot be recovered from the seed alone."}
+    else:
+        templates = data.get("templates") or ["bip44-legacy", "bip49-p2sh-segwit",
+                                               "bip84-segwit", "bip44-ethereum",
+                                               "litecoin-legacy", "dogecoin-legacy", "bitcoincash"]
+        if not isinstance(templates, list) or not all(isinstance(t, str) for t in templates):
+            raise ValueError("templates must be a list of account-template names.")
+        unknown = [t for t in templates if t not in wallet_recovery.ACCOUNT_TEMPLATES]
+        if unknown:
+            raise ValueError("Unknown account template(s): " + ", ".join(unknown))
+        seed = wallet_recovery.mnemonic_to_seed(mnemonic, passphrase)
+        bip39 = []
+        for template in templates:
+            bip39.extend(wallet_recovery.derive_sweep(
+                seed, template, account_count=min(count, 5), include_change=include_change, per_path=2))
+        add("bip39", bip39)
+        if wallet_recovery.is_old_electrum_seed(mnemonic):
+            add("electrum-old", wallet_recovery.derive_old_electrum_accounts(
+                mnemonic, count=count, include_change=include_change)["accounts"])
+
+    result = {"detected": "+".join(schemes), "schemes": schemes,
+              "derived_count": len(accounts), "accounts": accounts,
+              "note": "Derived locally across every detected scheme. Keys and the seed stay on this machine."}
+    if data.get("checkBalances") is True:
+        if data.get("confirmNetwork") is not True:
+            raise ValueError("Set confirmNetwork to true to allow the read-only explorer lookup.")
+        result["balances"] = balance_check.check_balances(
+            [{"address": a["address"], "coin": a["coin"], "path": a["path"] + " [" + a["scheme"] + "]"}
+             for a in accounts])
+    return result
+
+
 def wallet_sweep(data: dict) -> dict:
     """Derive across account indices and change chains, optionally balance-checked.
 
@@ -1202,7 +1270,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1218,7 +1286,7 @@ class Handler(BaseHTTPRequestHandler):
                 131072 if path == "/evidence/case" else
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
-                65536 if path in {"/wallet/check-balances", "/wallet/sweep"} else
+                65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover"} else
                 4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
@@ -1252,6 +1320,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_check_balances(data), origin)
             if path == "/wallet/sweep":
                 return self.send_json(200, wallet_sweep(data), origin)
+            if path == "/wallet/auto-recover":
+                return self.send_json(200, wallet_auto_recover(data), origin)
             if path == "/wallet/crack":
                 return self.send_json(200, wallet_crack(data), origin)
             if path == "/tools/run":

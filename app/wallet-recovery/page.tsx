@@ -80,6 +80,7 @@ export default function WalletRecoveryPage() {
   const [companionError, setCompanionError] = useState("");
   // Balance check (opt-in, read-only) and seed solver.
   const [balances, setBalances] = useState<BalanceResult | null>(null);
+  const [autoResult, setAutoResult] = useState<{ detected: string; schemes: string[]; derived_count: number; recoverable?: boolean; note: string; balances?: BalanceResult } | null>(null);
   const [solverMode, setSolverMode] = useState("missing");
   const [solverPhrase, setSolverPhrase] = useState("");
   const [solverWordlist, setSolverWordlist] = useState("");
@@ -244,6 +245,24 @@ export default function WalletRecoveryPage() {
     }
   }
 
+  async function autoRecover() {
+    setCompanionError(""); setAutoResult(null);
+    if (!mnemonic.trim()) { setCompanionError("Enter the recovery phrase to auto-detect and recover."); return; }
+    if (!ownAuthorised) { setCompanionError("Confirm you own or are authorised to recover this wallet."); return; }
+    setCompanionBusy("auto");
+    try {
+      const data = await bridgePost("/wallet/auto-recover", {
+        mnemonic: mnemonic.trim(), passphrase, count: 3, includeChange: true,
+        checkBalances: true, confirmNetwork: true,
+      });
+      setAutoResult(data);
+    } catch (cause) {
+      setCompanionError(cause instanceof Error ? cause.message : "Auto-recovery failed.");
+    } finally {
+      setCompanionBusy("");
+    }
+  }
+
   async function deriveElectrum() {
     setCompanionError(""); setElectrumAccounts(null); setElectrumType("");
     if (!mnemonic.trim()) { setCompanionError("Enter the Electrum recovery phrase."); return; }
@@ -347,6 +366,21 @@ export default function WalletRecoveryPage() {
           <button type="button" className="wallet-reset" onClick={checkTools}>Check companion recovery tools</button>
           {tools && <p className="wallet-status-line">hashcat: {tools.hashcat.installed ? "installed" : "not installed"} · John: {tools.john.installed ? "installed" : "not installed"}</p>}
           {companionError && <div className="wallet-error"><AlertTriangle size={15}/>{companionError}</div>}
+
+          <div className="wallet-inspection">
+            <div className="wallet-inspection-head"><div><span>ONE-BUTTON RECOVERY</span><h3>Auto-detect seed type & recover</h3></div><ShieldCheck size={16}/></div>
+            <p className="wallet-inline-note">Paste your recovery phrase in the mnemonic box below, then let the companion detect whether it&apos;s BIP39, Electrum v2 (standard/segwit) or Electrum old, derive across accounts and change chains, and report which path holds funds.</p>
+            <button type="button" className="wallet-reset" disabled={companionBusy === "auto"} onClick={autoRecover}>{companionBusy === "auto" ? "Detecting & recovering…" : "Auto-detect & recover"}</button>
+            {autoResult && <div className="wallet-balance-result">
+              <p className="wallet-status-line">Detected: <strong>{autoResult.detected || "—"}</strong>{autoResult.recoverable === false ? " · not recoverable from the seed alone" : " · " + autoResult.derived_count + " addresses derived"}</p>
+              {autoResult.balances && <>
+                <p className="wallet-status-line">{autoResult.balances.funded_addresses} funded · {autoResult.balances.active_addresses} ever active of {autoResult.balances.checked} checked</p>
+                <ul>{autoResult.balances.results.filter((r) => r.has_activity).map((r) => <li key={(r.path || "") + r.address}><code>{r.path}</code> {r.coin} — <strong>{r.balance}</strong></li>)}</ul>
+                {autoResult.balances.active_addresses === 0 && <p className="wallet-status-line">No activity found on the derived paths.</p>}
+              </>}
+              <p className="wallet-inline-note"><ShieldCheck size={13}/> {autoResult.note}</p>
+            </div>}
+          </div>
 
           <div className="wallet-inspection">
             <div className="wallet-inspection-head"><div><span>HD DERIVATION</span><h3>Derive addresses from a mnemonic</h3></div><KeyRound size={16}/></div>
