@@ -320,6 +320,50 @@ def inspect_burp_issues(limit: int = 50) -> dict:
 
 
 EXTENSION_REPEATER_URL = "http://127.0.0.1:8766/v1/repeater/from-history"
+EXTENSION_SEND_URL = "http://127.0.0.1:8766/v1/send-request"
+
+
+def send_in_scope_request(history_id: int, confirmed: bool = False, opener=urlopen) -> dict:
+    """Replay one explicitly confirmed in-scope proxy-history request through Burp.
+
+    Returns bounded response metadata (status code, body length, MIME type). The
+    extension refuses out-of-scope requests; no request or response body is read.
+    """
+    if isinstance(history_id, bool) or not isinstance(history_id, int) or history_id < 1:
+        return {"status": "invalid_request", "request_sent": False}
+    if confirmed is not True:
+        return {"status": "confirmation_required", "request_sent": False}
+    try:
+        token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {"status": "not_configured", "request_sent": False}
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
+        return {"status": "invalid_configuration", "request_sent": False}
+    request = Request(
+        EXTENSION_SEND_URL + "?id=" + str(history_id) + "&confirm=true",
+        data=b"",
+        headers={"Accept": "application/json", "Authorization": "Bearer " + token},
+        method="POST",
+    )
+    try:
+        with opener(request, timeout=15) as response:
+            payload = json.loads(response.read(8192).decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("status") != "sent":
+            return {"status": "invalid_response", "request_sent": False}
+        return {
+            "status": "sent", "request_sent": True, "history_id": history_id,
+            "method": str(payload.get("method", "")),
+            "status_code": payload.get("status_code"),
+            "mime_type": str(payload.get("mime_type", "")),
+            "body_length": payload.get("body_length"),
+            "note": "Replayed one in-scope request through Burp. Review the response in Burp; only metadata is returned here.",
+        }
+    except HTTPError as exc:
+        return {"status": "out_of_scope" if exc.code == 403 else (
+            "authentication_failed" if exc.code == 401 else "api_error"),
+            "request_sent": False}
+    except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
+        return {"status": "unavailable", "request_sent": False}
 
 
 def open_burp_history_in_repeater(history_id: int, confirmed: bool = False) -> dict:

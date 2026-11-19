@@ -40,6 +40,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
             server.createContext("/v1/site-map", e -> siteMap(e, token, api));
             server.createContext("/v1/issues", e -> issues(e, token, api));
             server.createContext("/v1/repeater/from-history", e -> repeaterFromHistory(e, token, api));
+            server.createContext("/v1/send-request", e -> sendInScopeRequest(e, token, api));
             executor = Executors.newFixedThreadPool(2, r -> {
                 Thread t = new Thread(r, "cyberlab-burp-api");
                 t.setDaemon(true);
@@ -122,6 +123,56 @@ public final class CyberLabBurpExtension implements BurpExtension {
             api.repeater().sendToRepeater(request, "CyberLab · Proxy #" + historyId);
             send(e, 200, "{\"status\":\"opened_in_repeater\",\"history_id\":"
                 + historyId + ",\"request_sent\":false}");
+            return;
+        }
+        send(e, 404, "{\"error\":\"proxy_history_item_not_found\"}");
+    }
+
+    // Active capability: replay one explicitly confirmed in-scope proxy-history
+    // request through Burp and return bounded response metadata. Out-of-scope
+    // requests are refused; no request body or response body is returned.
+    private static void sendInScopeRequest(HttpExchange e, String token, MontoyaApi api) throws IOException {
+        if (!"/v1/send-request".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"POST".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        String query = e.getRequestURI().getRawQuery();
+        int historyId = -1;
+        boolean confirmed = false;
+        if (query != null) for (String pair : query.split("&")) {
+            String[] parts = pair.split("=", 2);
+            if (parts.length == 2 && "id".equals(parts[0])) {
+                try { historyId = Integer.parseInt(parts[1]); } catch (NumberFormatException ignored) { }
+            }
+            if (parts.length == 2 && "confirm".equals(parts[0])) confirmed = "true".equals(parts[1]);
+        }
+        if (historyId < 1 || !confirmed) {
+            send(e, 400, "{\"error\":\"history_id_and_explicit_confirmation_required\"}");
+            return;
+        }
+        for (ProxyHttpRequestResponse entry : api.proxy().history()) {
+            if (entry.id() != historyId) continue;
+            var request = entry.finalRequest();
+            if (!request.isInScope()) {
+                send(e, 403, "{\"error\":\"out_of_scope_request_blocked\"}");
+                return;
+            }
+            try {
+                var result = api.http().sendRequest(request);
+                var response = result.response();
+                if (response == null) {
+                    send(e, 502, "{\"status\":\"sent\",\"history_id\":" + historyId + ",\"response\":null}");
+                    return;
+                }
+                int bodyLength = response.body() == null ? 0 : response.body().length();
+                send(e, 200, "{\"status\":\"sent\",\"history_id\":" + historyId
+                    + ",\"method\":" + json(request.method())
+                    + ",\"status_code\":" + Short.toString(response.statusCode())
+                    + ",\"mime_type\":" + json(String.valueOf(response.statedMimeType()))
+                    + ",\"body_length\":" + bodyLength
+                    + ",\"in_scope\":true}");
+            } catch (RuntimeException ex) {
+                send(e, 502, "{\"error\":\"send_failed\",\"reason\":" + json(ex.getClass().getSimpleName()) + "}");
+            }
             return;
         }
         send(e, 404, "{\"error\":\"proxy_history_item_not_found\"}");

@@ -168,3 +168,47 @@ class BurpConnectorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _FakeToken:
+    def __init__(self, value): self._value = value
+    def read_text(self, encoding="utf-8"): return self._value
+
+
+class SendInScopeRequestTests(unittest.TestCase):
+    def _opener(self, payload_bytes, status=200):
+        class Resp:
+            def __enter__(self_inner): return self_inner
+            def __exit__(self_inner, *a): return False
+            def read(self_inner, n=-1): return payload_bytes
+        def opener(request, timeout=0):
+            opener.url = request.full_url
+            return Resp()
+        return opener
+
+    def test_requires_confirmation(self):
+        result = burp_connector.send_in_scope_request(5, confirmed=False)
+        self.assertEqual(result["status"], "confirmation_required")
+        self.assertFalse(result["request_sent"])
+
+    def test_rejects_invalid_history_id(self):
+        self.assertEqual(burp_connector.send_in_scope_request(0, confirmed=True)["status"], "invalid_request")
+        self.assertEqual(burp_connector.send_in_scope_request(True, confirmed=True)["status"], "invalid_request")
+
+    def test_returns_response_metadata_on_send(self):
+        body = b'{"status":"sent","history_id":7,"method":"GET","status_code":200,"mime_type":"HTML","body_length":1234,"in_scope":true}'
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE", _FakeToken("tok")):
+            result = burp_connector.send_in_scope_request(7, confirmed=True, opener=self._opener(body))
+        self.assertEqual(result["status"], "sent")
+        self.assertTrue(result["request_sent"])
+        self.assertEqual(result["status_code"], 200)
+        self.assertEqual(result["body_length"], 1234)
+
+    def test_out_of_scope_is_reported(self):
+        from urllib.error import HTTPError
+        def opener(request, timeout=0):
+            raise HTTPError(request.full_url, 403, "forbidden", {}, None)
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE", _FakeToken("tok")):
+            result = burp_connector.send_in_scope_request(7, confirmed=True, opener=opener)
+        self.assertEqual(result["status"], "out_of_scope")
+        self.assertFalse(result["request_sent"])

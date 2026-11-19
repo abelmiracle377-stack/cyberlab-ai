@@ -25,7 +25,7 @@ from urllib.parse import urlparse, parse_qs
 from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition, list_deleted_files, recover_deleted_file
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
-from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater
+from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater, send_in_scope_request
 from network_capture import list_capture_interfaces, capture_packets
 from web_testing import execute_request, request_history
 from web_crawler import run_crawl
@@ -897,7 +897,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/burp/repeater/from-history", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1042,6 +1042,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(400, {"status": "invalid_request", "request_sent": False}, origin)
                 result = open_burp_history_in_repeater(history_id, confirmed=True)
                 status_code = 200 if result.get("status") == "opened_in_repeater" else 400
+                return self.send_json(status_code, result, origin)
+            if path == "/burp/send-request":
+                if data.get("confirmSend") is not True:
+                    return self.send_json(400, {"status": "confirmation_required", "request_sent": False}, origin)
+                history_id = data.get("historyId")
+                if isinstance(history_id, bool) or not isinstance(history_id, int):
+                    return self.send_json(400, {"status": "invalid_request", "request_sent": False}, origin)
+                result = send_in_scope_request(history_id, confirmed=True)
+                status_code = 200 if result.get("status") == "sent" else 400
                 return self.send_json(status_code, result, origin)
             if path == "/plan":
                 return self.send_json(200, plan_task(data.get("prompt", "")), origin)

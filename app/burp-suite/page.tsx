@@ -24,6 +24,9 @@ export default function BurpSuitePage() {
   const [repeaterConfirmed,setRepeaterConfirmed] = useState(false);
   const [repeaterBusyId,setRepeaterBusyId] = useState<number|null>(null);
   const [repeaterMessage,setRepeaterMessage] = useState("");
+  const [sendConfirmed,setSendConfirmed] = useState(false);
+  const [sendBusyId,setSendBusyId] = useState<number|null>(null);
+  const [sendResults,setSendResults] = useState<Record<number,string>>({});
 
   useEffect(() => {
     const saved = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
@@ -50,6 +53,25 @@ export default function BurpSuitePage() {
       setRepeaterMessage(e instanceof Error ? e.message : "Repeater handoff failed.");
     } finally {
       setRepeaterBusyId(null);
+    }
+  }
+
+  async function sendThroughBurp(historyId: number) {
+    if (!sendConfirmed) { setRepeaterMessage("Confirm the in-scope replay first."); return; }
+    setSendBusyId(historyId);
+    try {
+      const response = await fetch(BRIDGE + "/burp/send-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token.trim() },
+        body: JSON.stringify({ historyId, confirmSend: true })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.status || "Could not replay the request.");
+      setSendResults(current => ({ ...current, [historyId]: data.method + " → " + data.status_code + " · " + (data.body_length ?? 0) + " bytes" }));
+    } catch (e) {
+      setSendResults(current => ({ ...current, [historyId]: e instanceof Error ? e.message : "Replay failed." }));
+    } finally {
+      setSendBusyId(null);
     }
   }
 
@@ -104,7 +126,7 @@ export default function BurpSuitePage() {
         <h1>Burp Suite workspace</h1>
         <p>Read Burp connection status, in-scope proxy history and the in-scope site map from your paired Kali workstation.</p>
       </div>
-      <div className="scope-warning"><AlertTriangle size={14}/> This page is read-only. It does not send requests to targets, replay traffic, run Intruder jobs, crawl sites or start Burp scans. Only metadata that Burp marks in scope is returned.</div>
+      <div className="scope-warning"><AlertTriangle size={14}/> Reads in-scope Burp metadata. It can replay a single in-scope request through Burp only after you explicitly confirm each one; it does not run Intruder jobs, crawl sites or start Burp scans. Out-of-scope requests are refused by the connector.</div>
       {!token && <section className="network-results">
         <h2>Kali pairing required</h2>
         <p>Connect your local Kali companion first. The existing pairing token is saved in this browser session.</p>
@@ -116,6 +138,7 @@ export default function BurpSuitePage() {
           <RefreshCw size={14}/> {busy ? "Refreshing…" : "Refresh Burp data"}
         </button>
         <label><input type="checkbox" checked={repeaterConfirmed} onChange={e=>setRepeaterConfirmed(e.target.checked)}/> I confirm the selected captured request may be placed in Repeater. It will not be sent until I manually press Send in Burp.</label>
+        <label><input type="checkbox" checked={sendConfirmed} onChange={e=>setSendConfirmed(e.target.checked)}/> I authorise replaying a selected in-scope request through Burp. Each replay re-sends live traffic to the in-scope target.</label>
         {repeaterMessage && <p>{repeaterMessage}</p>}
       </div>
       {error && <div className="agent-error"><AlertTriangle size={14}/>{error}</div>}
@@ -129,7 +152,7 @@ export default function BurpSuitePage() {
       {history && <section className="network-results">
         <h2>Proxy HTTP history ({history.count})</h2>
         {history.status !== "connected" && <p>Montoya extension: {history.status}. Load the CyberLab Burp extension in Burp and ensure the paired Kali companion runs under the same OS user.</p>}
-        {history.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>ID</th><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Action</th></tr></thead><tbody>{history.items.map((item,i)=><tr key={item.id ?? i}><td>{item.id ?? "—"}</td><td>{item.timestamp || "—"}</td><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td><td><button className="report-download" disabled={item.id === null || !repeaterConfirmed || repeaterBusyId !== null} onClick={()=>item.id !== null && void openInRepeater(item.id)}>{repeaterBusyId === item.id ? "Opening…" : "Open in Repeater"}</button></td></tr>)}</tbody></table></div> : <p>No in-scope proxy history entries were returned.</p>}
+        {history.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>ID</th><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Action</th></tr></thead><tbody>{history.items.map((item,i)=><tr key={item.id ?? i}><td>{item.id ?? "—"}</td><td>{item.timestamp || "—"}</td><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td><td><button className="report-download" disabled={item.id === null || !repeaterConfirmed || repeaterBusyId !== null} onClick={()=>item.id !== null && void openInRepeater(item.id)}>{repeaterBusyId === item.id ? "Opening…" : "Open in Repeater"}</button><button className="report-download" style={{marginLeft:6}} disabled={item.id === null || !sendConfirmed || sendBusyId !== null} onClick={()=>item.id !== null && void sendThroughBurp(item.id)}>{sendBusyId === item.id ? "Sending…" : "Replay"}</button>{item.id !== null && sendResults[item.id] && <div className="network-note" style={{marginTop:4}}>{sendResults[item.id]}</div>}</td></tr>)}</tbody></table></div> : <p>No in-scope proxy history entries were returned.</p>}
       </section>}
       {siteMap && <section className="network-results">
         <h2><Network size={15}/> Site map ({siteMap.count})</h2>
