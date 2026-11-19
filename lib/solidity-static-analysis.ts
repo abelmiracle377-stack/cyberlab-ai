@@ -50,6 +50,128 @@ function maskCommentsPreservingStrings(source:string):string {
  return output;
 }
 function lineAt(source:string,index:number):number{return source.slice(0,index).split("\n").length;}
+
+// --- scope-aware structural analysis ---------------------------------------
+// These detectors parse function boundaries from the comment/string-masked
+// source so a finding reflects code inside one function body, not an incidental
+// match anywhere in the file. This is still source analysis, not a compiler.
+type ParsedFunction = {
+  name:string; header:string; body:string; bodyStart:number;
+  visibility:"public"|"external"|"internal"|"private"|"default";
+  stateMutability:"view"|"pure"|"payable"|"nonpayable";
+  modifiers:string[];
+};
+
+const SOLIDITY_HEADER_KEYWORDS = new Set([
+  "public","external","internal","private","view","pure","payable","nonpayable",
+  "virtual","override","returns","memory","storage","calldata","constant","immutable",
+]);
+
+function matchClosingBrace(source:string,openIndex:number):number{
+ let depth=0;
+ for(let i=openIndex;i<source.length;i++){
+  if(source[i]==="{")depth++;
+  else if(source[i]==="}"){depth--;if(depth===0)return i;}
+ }
+ return -1;
+}
+
+function parseFunctions(clean:string):ParsedFunction[]{
+ const functions:ParsedFunction[]=[];
+ const header=/\b(function\s+([A-Za-z_$][\w$]*)|constructor|receive|fallback)\s*\(([^)]*)\)([^;{]*)(\{|;)/g;
+ let match:RegExpExecArray|null;
+ while((match=header.exec(clean))!==null){
+  const name=match[2]||match[1];
+  const tail=match[4]||"";
+  if(match[5]!=="{"){continue;}
+  const openIndex=header.lastIndex-1;
+  const closeIndex=matchClosingBrace(clean,openIndex);
+  if(closeIndex<0)continue;
+  const body=clean.slice(openIndex+1,closeIndex);
+  const tokens=tail.split(/[^A-Za-z_$][\w$]*/).join(" ").split(/\s+/).filter(Boolean);
+  let visibility:ParsedFunction["visibility"]="default";
+  for(const v of ["public","external","internal","private"] as const){if(new RegExp("\\b"+v+"\\b").test(tail))visibility=v;}
+  let stateMutability:ParsedFunction["stateMutability"]="nonpayable";
+  for(const m of ["view","pure","payable"] as const){if(new RegExp("\\b"+m+"\\b").test(tail))stateMutability=m;}
+  const modifiers=(tail.match(/\b[A-Za-z_$][\w$]*\b/g)||[]).filter(word=>!SOLIDITY_HEADER_KEYWORDS.has(word));
+  void tokens;
+  functions.push({name,header:tail.trim(),body,bodyStart:openIndex+1,visibility,stateMutability,modifiers});
+  header.lastIndex=closeIndex;
+ }
+ return functions;
+}
+
+function isGuarded(fn:ParsedFunction):boolean{
+ if(fn.modifiers.length>0)return true; // a custom modifier (onlyOwner, onlyRole, ...) is an access gate
+ // Inline caller checks or OpenZeppelin-style internal guards.
+ return /\brequire\s*\(\s*(?:_?msg\s*\.\s*sender|owner|_owner|admin)\b/.test(fn.body)
+   ||/\bif\s*\(\s*msg\s*\.\s*sender\s*(?:!=|==)/.test(fn.body)
+   ||/\b_check(?:Owner|Role)\s*\(/.test(fn.body)
+   ||/\b(?:onlyOwner|onlyRole|onlyGovernance|onlyAdmin)\b/.test(fn.body);
+}
+
+function isExposed(fn:ParsedFunction):boolean{
+ return fn.visibility==="public"||fn.visibility==="external"||fn.visibility==="default";
+}
+
+function structuralFindings(clean:string,source:string):SolidityFinding[]{
+ const out:SolidityFinding[]=[];
+ const add=(fn:ParsedFunction,rel:number,f:Omit<SolidityFinding,"line"|"evidence">)=>{
+  const absolute=fn.bodyStart+Math.max(0,rel);
+  const evidence=source.slice(absolute,absolute+160).split("\n")[0].trim().slice(0,180);
+  out.push({...f,line:lineAt(source,absolute),evidence});
+ };
+ for(const fn of parseFunctions(clean)){
+  const exposed=isExposed(fn);
+  const guarded=isGuarded(fn);
+  const constructorLike=fn.name==="constructor";
+
+  // Unprotected self-destruct.
+  const selfdestruct=/\b(?:selfdestruct|suicide)\s*\(/.exec(fn.body);
+  if(selfdestruct&&exposed&&!guarded&&!constructorLike){
+   add(fn,selfdestruct.index,{id:"SOL-ACL-001",severity:"critical",
+    title:"Unprotected selfdestruct in an externally callable function",
+    description:"Function '"+fn.name+"' can be called externally, has no access-control modifier or caller check, and can destroy the contract. Any account could remove the contract and its ETH.",
+    recommendation:"Gate this function with an ownership/role modifier or an explicit msg.sender check, and re-evaluate whether selfdestruct is needed at all under EIP-6780."});
+  }
+
+  // Unprotected delegatecall (arbitrary code execution in this contract's context).
+  const delegate=/\.\s*delegatecall\s*\(/.exec(fn.body);
+  if(delegate&&exposed&&!guarded&&!constructorLike){
+   add(fn,delegate.index,{id:"SOL-ACL-002",severity:"critical",
+    title:"Unprotected delegatecall in an externally callable function",
+    description:"Function '"+fn.name+"' performs a delegatecall without an access-control guard. If the target or calldata is caller-influenced, an attacker can execute arbitrary code in this contract's storage context.",
+    recommendation:"Restrict the caller, constrain the implementation address to a reviewed allow-list, and validate storage-layout compatibility."});
+  }
+
+  // Unprotected ownership / admin / authority assignment.
+  const ownerWrite=/\b(owner|_owner|admin|_admin|governance|_governance)\s*=/.exec(fn.body);
+  if(ownerWrite&&exposed&&!guarded&&!constructorLike&&fn.stateMutability!=="view"&&fn.stateMutability!=="pure"){
+   add(fn,ownerWrite.index,{id:"SOL-ACL-003",severity:"high",
+    title:"Privileged state variable set without access control",
+    description:"Function '"+fn.name+"' assigns to an ownership/authority variable but has no modifier or caller check. Any account could seize control of the contract.",
+    recommendation:"Require the current owner/authority (or a role) before reassigning it; consider a two-step ownership transfer."});
+  }
+
+  // Checks-effects-interactions: external value transfer before a later state write
+  // within the same function body (scope-bounded reentrancy lead). To stay
+  // high-signal, the trailing write must be an indexed or compound assignment,
+  // which is the hallmark of balance/accounting state.
+  const interaction=/\.\s*(?:call\s*\{[^}]*value[^}]*\}\s*\(|transfer\s*\(|send\s*\(|call\s*\()/.exec(fn.body);
+  if(interaction){
+   const after=fn.body.slice(interaction.index+1);
+   const stateWrite=/\b[A-Za-z_$][\w$]*\s*\[[^\]]*\]\s*(?:=(?!=)|\+=|-=)|\b[A-Za-z_$][\w$]*\s*(?:\+=|-=)/.exec(after);
+   if(stateWrite){
+    add(fn,interaction.index,{id:"SOL-REENT-001",severity:"high",
+     title:"External interaction before a state update (reentrancy lead)",
+     description:"Function '"+fn.name+"' performs an external call/transfer and then updates contract state afterwards. A malicious recipient can re-enter before the state is written.",
+     recommendation:"Apply checks-effects-interactions: update balances/flags before the external call, and/or use a reentrancy guard (e.g. OpenZeppelin nonReentrant)."});
+   }
+  }
+ }
+ return out;
+}
+
 export function analyzeSoliditySource(source:string):SolidityAnalysis {
  if(typeof source!=="string"||!source.trim())throw new Error("Paste Solidity source code to analyse.");
  if(source.length>100000)throw new Error("Source exceeds the 100 KB analysis limit.");
@@ -63,6 +185,7 @@ export function analyzeSoliditySource(source:string):SolidityAnalysis {
    if(!rule.pattern.global)break;
   }
  }
+ for(const finding of structuralFindings(clean,source))findings.push(finding);
  const unique=new Map<string,SolidityFinding>();
  for(const finding of findings){const key=finding.id+":"+finding.line;if(!unique.has(key))unique.set(key,finding);}
  const rank:Record<SoliditySeverity,number>={critical:0,high:1,medium:2,low:3,info:4};
@@ -77,6 +200,6 @@ export function analyzeSoliditySource(source:string):SolidityAnalysis {
   imports:[...maskCommentsPreservingStrings(source).matchAll(/\bimport\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]\s*;/g)].map(m=>m[1]),
   functions:[...clean.matchAll(/\bfunction\s+[A-Za-z_$][\w$]*\s*\(/g)].length,
   findings:ordered,summary,
-  limitations:["Pattern-based source review only; this is not a Solidity compiler, Slither, Mythril, fuzzing, symbolic execution, or formal verification.","A detected pattern is a review lead, not proof of exploitability. Absence of findings does not mean the contract is secure.","The analyzer does not resolve inheritance, modifiers, control flow, storage layout, external dependencies, or chain-specific semantics.","Do not paste private keys, seed phrases, production secrets, or confidential source into an untrusted deployment."]
+  limitations:["Source review combining pattern rules with scope-aware per-function checks; this is not a Solidity compiler, Slither, Mythril, fuzzing, symbolic execution, or formal verification.","A detected pattern is a review lead, not proof of exploitability. Absence of findings does not mean the contract is secure.","Access-control and reentrancy checks reason about one function body at a time and do not resolve inheritance, cross-function state, modifier internals, storage layout, external dependencies, or chain-specific semantics.","For authoritative analysis, compile and run the native solc/Foundry pipeline on your paired companion.","Do not paste private keys, seed phrases, production secrets, or confidential source into an untrusted deployment."]
  };
 }

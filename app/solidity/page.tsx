@@ -347,7 +347,7 @@ export default function SolidityLabPage() {
           {testResult && <div className="solidity-limitations"><h3>Test result: {testResult.status.toUpperCase()}</h3><p>{testResult.sandbox}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(testResult.result,null,2)}</pre><p>{testResult.note}</p></div>}
         </section>
 
-        <div className="solidity-warning"><AlertTriangle size={15} /> Heuristic source analysis only. Pattern matches are review leads, not proof of exploitability or safety.</div>
+        <div className="solidity-warning"><AlertTriangle size={15} /> Source analysis combines pattern rules with scope-aware per-function access-control and reentrancy checks. Findings are review leads, not proof of exploitability or safety; compile and test on your paired companion for authoritative results.</div>
         <form className="solidity-form" onSubmit={runAnalysis}>
           <div className="solidity-editor-head"><label htmlFor="solidity-source"><FileCode2 size={14} /> Solidity source <span>{source.length.toLocaleString()} / 100,000 characters</span></label><button type="button" onClick={() => setSource(sample)}>Load example</button></div>
           <textarea id="solidity-source" value={source} onChange={event => setSource(event.target.value)} maxLength={100000} spellCheck={false} autoCapitalize="off" autoCorrect="off" />

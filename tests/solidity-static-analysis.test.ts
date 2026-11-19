@@ -34,7 +34,10 @@ contract Example {
  assert.equal(origin?.line,4);
  assert.equal(origin?.severity,"critical");
  assert.equal(delegate?.line,7);
- assert.equal(result.summary.critical,1);
+ // The unprotected external delegatecall is additionally flagged as critical by
+ // the scope-aware access-control pass (SOL-ACL-002), so there are two criticals.
+ assert.ok(result.findings.some(f=>f.id==="SOL-ACL-002"));
+ assert.equal(result.summary.critical,2);
  assert.ok(result.summary.high>=1);
  assert.ok(result.summary.medium>=1);
 });
