@@ -318,9 +318,9 @@ export default function AgentPage() {
         if (specialistMode) {
           const data = await response.json();
           const specialistSummary = Array.isArray(data.results)
-            ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\\n")).join("\n\n")
+            ? data.results.map((item: any) => ["### " + item.label + " · " + item.status, item.analysis || item.error || "No analysis returned."].join("\n")).join("\n\n")
             : "";
-          output = [data.synthesis || "The coordinator could not produce a synthesis.", specialistSummary, data.note || ""].filter(Boolean).join("\\n\\n---\\n\\n");
+          output = [data.synthesis || "The coordinator could not produce a synthesis.", specialistSummary, data.note || ""].filter(Boolean).join("\n\n---\n\n");
         } else if (useReadOnlyTools) {
           const data = await response.json();
           const evidenceText = Array.isArray(data.evidence) && data.evidence.length
@@ -330,7 +330,7 @@ export default function AgentPage() {
                 "Source: " + String(item.source || "unspecified"),
                 String(item.summary || ""),
                 "Evidence payload: " + JSON.stringify(item.data || {}).slice(0, 5000),
-              ].join("\\n")).join("\n\n")
+              ].join("\n")).join("\n\n")
             : "No external tool evidence was retrieved.";
           output = [data.text || "The model returned an empty response.", "## Tool evidence and provenance", evidenceText, "_Analysis is model-generated; tool results are read-only evidence snapshots._"].join("\n\n");
         } else {
