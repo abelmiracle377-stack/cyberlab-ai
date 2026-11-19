@@ -218,6 +218,39 @@ class ElectrumDerivationTests(unittest.TestCase):
             wr.derive_electrum_accounts("abandon " * 11 + "about")
 
 
+class OldElectrumDerivationTests(unittest.TestCase):
+    # Authoritative vector from Electrum's tests/test_wallet_vertical.py.
+    SEED = "powerful random nobody notice nothing important anyway look away hidden message over"
+
+    def test_wordlist_integrity(self):
+        words = wr.old_electrum_wordlist()
+        self.assertEqual(len(words), 1626)
+
+    def test_old_seed_receiving_and_change(self):
+        self.assertTrue(wr.is_old_electrum_seed(self.SEED))
+        out = wr.derive_old_electrum_accounts(self.SEED, count=1)
+        self.assertEqual(out["seedType"], "old")
+        recv = next(a for a in out["accounts"] if a["path"] == "m/0/0")
+        change = next(a for a in out["accounts"] if a["path"] == "m/1/0")
+        self.assertEqual(recv["address"], "1FJEEB8ihPMbzs2SkLmr37dHyRFzakqUmo")
+        self.assertEqual(change["address"], "1KRW8pH6HFHZh889VDq6fEKvmrsmApwNfe")
+
+    def test_hex_seed_matches_word_seed(self):
+        hex_seed = wr.old_electrum_mn_decode(self.SEED.split(), wr.old_electrum_wordlist())
+        from_words = wr.derive_old_electrum_accounts(self.SEED, count=1, include_change=False)
+        from_hex = wr.derive_old_electrum_accounts(hex_seed, count=1, include_change=False)
+        self.assertEqual(from_words["accounts"][0]["address"], from_hex["accounts"][0]["address"])
+
+    def test_uncompressed_wif_reproduces_address(self):
+        entry = wr.derive_old_electrum_accounts(self.SEED, count=1, include_change=False)["accounts"][0]
+        priv = wr.base58check_decode(entry["wif"])[1:]  # uncompressed WIF: version + 32 bytes
+        self.assertEqual(wr.p2pkh_address(wr.private_to_public(priv, compressed=False)), entry["address"])
+
+    def test_bip39_phrase_is_not_a_hex_or_short_seed(self):
+        # A hex string that is not 32 chars is not treated as an old seed.
+        self.assertFalse(wr.is_old_electrum_seed("deadbeef"))
+
+
 class AddressAndWifTests(unittest.TestCase):
     def test_wif_round_trip(self):
         priv = bytes.fromhex("0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d")

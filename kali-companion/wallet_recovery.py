@@ -429,6 +429,106 @@ def derive_electrum_accounts(mnemonic: str, passphrase: str = "", count: int = 5
     return {"seedType": kind, "count": len(results), "accounts": results}
 
 
+# --- Electrum v1 (old) seeds -----------------------------------------------
+# Pre-v2 Electrum: a 12-word phrase from a 1626-word list (or a 32-hex string)
+# stretched 100k rounds into a master key, with its own non-BIP32 address chain.
+_OLD_ELECTRUM_WORDLIST_SHA256 = "c8da327d316f8ee758b790068e618077ac271a89fd77ec1250c59ae40e7b599e"
+_OLD_ELECTRUM_WORDS_PATH = Path(__file__).with_name("electrum_old_wordlist.txt")
+_OLD_ELECTRUM_WORDS: list | None = None
+_OLD_SEED_HEX = re.compile(r"\A[0-9a-fA-F]{32}\Z")
+
+
+def old_electrum_wordlist() -> list:
+    """Load and SHA-256-verify the bundled 1626-word old Electrum wordlist."""
+    global _OLD_ELECTRUM_WORDS
+    if _OLD_ELECTRUM_WORDS is None:
+        raw = _OLD_ELECTRUM_WORDS_PATH.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != _OLD_ELECTRUM_WORDLIST_SHA256:
+            raise ValueError("Old Electrum wordlist failed its SHA-256 integrity check.")
+        words = raw.decode("utf-8").split()
+        if len(words) != 1626:
+            raise ValueError("The old Electrum wordlist must contain exactly 1626 words.")
+        _OLD_ELECTRUM_WORDS = words
+    return _OLD_ELECTRUM_WORDS
+
+
+def old_electrum_mn_decode(words: list, wordlist: list) -> str:
+    """Decode a 12-word old Electrum phrase into its hex seed."""
+    index = {word: position for position, word in enumerate(wordlist)}
+    size = len(wordlist)
+    out = ""
+    for i in range(len(words) // 3):
+        try:
+            w1 = index[words[3 * i]]
+            w2 = index[words[3 * i + 1]] % size
+            w3 = index[words[3 * i + 2]] % size
+        except KeyError as exc:
+            raise ValueError("Word not in the old Electrum wordlist: " + str(exc)) from exc
+        out += "%08x" % (w1 + size * ((w2 - w1) % size) + size * size * ((w3 - w2) % size))
+    return out
+
+
+def _old_electrum_hex_seed(mnemonic: str) -> str:
+    text = " ".join(str(mnemonic).strip().lower().split())
+    compact = text.replace(" ", "")
+    if _OLD_SEED_HEX.match(compact):
+        return compact.lower()
+    words = text.split()
+    if len(words) != 12:
+        raise ValueError("An old Electrum seed is 12 words or a 32-character hex string.")
+    return old_electrum_mn_decode(words, old_electrum_wordlist())
+
+
+def is_old_electrum_seed(mnemonic: str) -> bool:
+    """True when the phrase is a 32-hex seed or 12 words all in the old list."""
+    text = " ".join(str(mnemonic).strip().lower().split())
+    if _OLD_SEED_HEX.match(text.replace(" ", "")):
+        return True
+    words = text.split()
+    if len(words) != 12:
+        return False
+    wordset = set(old_electrum_wordlist())
+    return all(word in wordset for word in words)
+
+
+def _old_electrum_stretch(hex_seed: str) -> int:
+    seed = hex_seed.encode("ascii")
+    x = seed
+    for _ in range(100000):
+        x = hashlib.sha256(x + seed).digest()
+    return int.from_bytes(x, "big")
+
+
+def derive_old_electrum_accounts(mnemonic: str, count: int = 5,
+                                 include_change: bool = True) -> dict:
+    """Derive addresses for an Electrum v1 (old) seed, as 12 words or hex.
+
+    Verified against Electrum's own old-seed receiving and change test vectors.
+    Old Electrum uses uncompressed P2PKH keys and a master-public-key sequence
+    chain (m/{change}/{index}), not BIP32.
+    """
+    if not 1 <= count <= 100:
+        raise ValueError("Address count must be between 1 and 100.")
+    hex_seed = _old_electrum_hex_seed(mnemonic)
+    secexp = _old_electrum_stretch(hex_seed)
+    mx, my = _point_mul(secexp, _G)
+    mpk = mx.to_bytes(32, "big") + my.to_bytes(32, "big")
+    chains = (0, 1) if include_change else (0,)
+    results = []
+    for change in chains:
+        for index in range(count):
+            prefix = ("%d:%d:" % (index, change)).encode("ascii")
+            seq = int.from_bytes(hashlib.sha256(hashlib.sha256(prefix + mpk).digest()).digest(), "big")
+            px, py = _point_add((mx, my), _point_mul(seq, _G))
+            public_key = b"\x04" + px.to_bytes(32, "big") + py.to_bytes(32, "big")
+            private_key = ((secexp + seq) % _N).to_bytes(32, "big")
+            results.append({"path": "m/%d/%d" % (change, index),
+                            "address": p2pkh_address(public_key), "coin": "bitcoin",
+                            "seedType": "old", "change": change,
+                            "wif": wif_encode(private_key, compressed=False)})
+    return {"seedType": "old", "count": len(results), "accounts": results}
+
+
 def mnemonic_to_seed(mnemonic: str, passphrase: str = "") -> bytes:
     """BIP39 mnemonic -> 64-byte seed. Does not require the wordlist."""
     mnemonic_n = unicodedata.normalize("NFKD", mnemonic.strip())

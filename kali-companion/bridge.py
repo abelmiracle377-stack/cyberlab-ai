@@ -429,6 +429,10 @@ def wallet_derive(data: dict) -> dict:
         else:
             response["warning"] = ("This is an Electrum " + electrum + " seed, which uses a 2FA cosigner "
                                    "and cannot be recovered from the seed alone. Recover it in the Electrum client.")
+    elif wallet_recovery.is_old_electrum_seed(mnemonic):
+        response["warning"] = ("This looks like an Electrum old (pre-2016) seed, not BIP39. If the "
+                               "addresses above don't match your wallet, use 'Derive as Electrum wallet' "
+                               "(/wallet/electrum-derive) for the correct legacy addresses.")
     return response
 
 
@@ -444,8 +448,15 @@ def wallet_electrum_derive(data: dict) -> dict:
     if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= 100:
         raise ValueError("count must be an integer between 1 and 100.")
     include_change = data.get("includeChange", True) is not False
-    result = wallet_recovery.derive_electrum_accounts(
-        mnemonic, passphrase, count=count, include_change=include_change)
+    if wallet_recovery.electrum_seed_type(mnemonic):
+        result = wallet_recovery.derive_electrum_accounts(
+            mnemonic, passphrase, count=count, include_change=include_change)
+    elif wallet_recovery.is_old_electrum_seed(mnemonic):
+        # Old Electrum seeds predate passphrases; the passphrase is not used.
+        result = wallet_recovery.derive_old_electrum_accounts(
+            mnemonic, count=count, include_change=include_change)
+    else:
+        raise ValueError("Not a recognised Electrum seed (v2 standard/segwit, or old/pre-2016).")
     result["note"] = "Derived locally from the Electrum seed. Keys and the seed never leave this machine."
     return result
 
