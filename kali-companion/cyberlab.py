@@ -7,8 +7,10 @@ import hashlib
 import ipaddress
 import json
 import math
+import os
 import re
 import socket
+import stat
 import sys
 import shutil
 import subprocess
@@ -60,12 +62,33 @@ def calculate_entropy(data: bytes) -> float:
     counts = Counter(data)
     return round(-sum((count / len(data)) * math.log2(count / len(data)) for count in counts.values()), 3)
 
+def _read_regular_file(path: Path, limit: int, label: str) -> bytes:
+    """Read a bounded regular file without following symlinks or blocking on FIFOs."""
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("This operation requires a platform with no-follow file opening.")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError(f"{label} must be a regular file, not a device, pipe or socket.")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            data = source.read(limit + 1)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if len(data) > limit:
+        raise ValueError(f"{label} exceeds the {limit // (1024 * 1024)} MB limit.")
+    return data
+
+
 def triage_file(path: Path) -> dict:
-    data = path.read_bytes()
-    if not data:
-        raise ValueError("Selected file is empty.")
+    # Bound the read and reject symlinks/special files before inspecting evidence.
+    data = _read_regular_file(path, MAX_FILE_BYTES, "File")
     if len(data) > MAX_FILE_BYTES:
         raise ValueError("File exceeds the 10 MB limit.")
+    if not data:
+        raise ValueError("Selected file is empty.")
     strings = re.findall(rb"[\x20-\x7e]{5,}", data)
     decoded = [item.decode("latin-1", errors="replace") for item in strings]
     matches = [(name, value) for name, pattern in INDICATORS.items() for value in decoded if pattern.search(value)]
@@ -151,7 +174,9 @@ def parse_nmap_xml_text(raw: bytes) -> dict:
 
 
 def parse_nmap_xml(path: Path) -> dict:
-    return parse_nmap_xml_text(path.read_bytes())
+    # Parse only a bounded regular report; do not follow symlinks or block on
+    # attacker-controlled special files supplied as report paths.
+    return parse_nmap_xml_text(_read_regular_file(path, MAX_XML_BYTES, "Nmap XML"))
 
 def port_scan(target: str, port_spec: str, timeout: int = 60) -> dict:
     target = target.strip().lower().rstrip('.')

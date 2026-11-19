@@ -79,6 +79,7 @@ const modules = [
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
   { name:"Evidence Vault", desc:"Keep investigation notes in a browser-local encrypted vault.", icon:FileLock2, state:"LOCAL", href:"/evidence-vault" },
+  { name:"File & Picture Recovery", desc:"Carve contiguous JPEG, PNG, GIF and PDF candidates from a supplied evidence image without modifying the source.", icon:HardDriveDownload, state:"LIMITED / LOCAL", href:"/forensics-recovery" },
   { name:"SOC Host Telemetry", desc:"Read-only, on-demand health metrics from a paired local Kali host.", icon:Activity, state:"LOCAL / ON DEMAND", href:"/kali-connection" },
   { name:"Camera Intelligence", desc:"Discover devices only on an operator-selected private LAN or view one explicitly authorised camera through the local Kali companion.", icon:Camera, state:"LOCAL / EXPLICIT CONSENT", href:"/kali-connection#camera-intelligence" },
   { name:"Personal VPS Gateway", desc:"Optional separately deployed personal gateway with revocable per-device permissions; not hosted by Vercel.", icon:Server, state:"OPTIONAL / NOT DEPLOYED", href:"/kali-connection#vps-gateway" },

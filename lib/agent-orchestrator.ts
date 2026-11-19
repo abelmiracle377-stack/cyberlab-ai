@@ -46,8 +46,8 @@ const profiles: Record<Specialist, SpecialistProfile> = {
   },
   "web-application": {
     label: "Web Application Security Analyst",
-    focus: "Review application architecture, routes, authentication, authorisation, input validation, session handling and common web security risks. Keep testing within explicitly authorised scope and prefer code review or low-impact checks.",
-    signals: /\b(web app|website|api|http|owasp|xss|csrf|ssrf|sql injection|authentication|authorization|cookie|cors)\b/i,
+    focus: "Review application architecture, routes, authentication, authorisation, input validation, session handling and common web security risks. Coordinate authorised web and API assessments through CyberLab's native HTTP workbench and safe request replay, bounded same-origin crawler, baseline header/cookie review, and limited CORS/query-reflection checks. Confirm exact scheme, host, port, approval reference, request budgets and explicit approval before active checks. Advanced SQL injection, SSRF, IDOR, authenticated testing, full proxy interception and fuzzing are not yet implemented. Do not depend on or invoke Burp Suite. Prefer evidence-backed findings and never claim a test ran unless the native companion returns verified results.",
+    signals: /\b(burp|burpsuite|repeater|intruder|owasp zap|web application|web app|website|web security|api security|api|http|owasp|xss|csrf|ssrf|sql injection|authentication|authorization|cookie|cors)\b/i,
   },
   "cloud-container": {
     label: "Cloud & Container Security Analyst",

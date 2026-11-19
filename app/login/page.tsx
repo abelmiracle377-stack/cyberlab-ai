@@ -13,7 +13,7 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">(search.get("mode") === "signup" ? "signup" : "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,11 +26,13 @@ function LoginForm() {
     try {
       const supabase = createClient();
       if (mode === "signin") {
-        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
         if (authError) throw authError;
-        router.replace(search.get("next") || "/"); router.refresh();
+        const requested = search.get("next") || "/";
+        const destination = requested.startsWith("/") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/";
+        router.replace(destination); router.refresh();
       } else {
-        const { data, error: authError } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/auth/callback" } });
+        const { data, error: authError } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password, options: { emailRedirectTo: window.location.origin + "/auth/callback" } });
         if (authError) throw authError;
         if (data.session) { router.replace("/"); router.refresh(); }
         else { setMessage("Account created. Check your email to confirm your address, then sign in."); setMode("signin"); }

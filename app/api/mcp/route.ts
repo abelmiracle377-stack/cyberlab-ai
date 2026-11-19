@@ -52,7 +52,7 @@ export async function GET(request:Request){
 }
 export async function POST(request:Request){
  if(!authorised(request)) return Response.json({error:"MCP gateway is disabled or authentication failed."},{status:process.env.CYBERLAB_MCP_API_KEY?401:503});
- let body:any; try{body=await request.json()}catch{return error(null,-32700,"Parse error")}
+ const declaredLength=Number(request.headers.get("content-length")||0);if(declaredLength>64*1024)return error(null,-32600,"Request too large");let rawBody="";try{rawBody=await request.text()}catch{return error(null,-32700,"Parse error")}if(Buffer.byteLength(rawBody,"utf8")>64*1024)return error(null,-32600,"Request too large");let body:any;try{body=JSON.parse(rawBody)}catch{return error(null,-32700,"Parse error")}
  const id=body?.id??null; if(body?.jsonrpc!=="2.0"||typeof body.method!=="string") return error(id,-32600,"Invalid Request");
  if(body.method==="initialize") return rpc(id,{protocolVersion:"2025-03-26",capabilities:{tools:{}},serverInfo:{name:"cyberlab-ai",version:"0.1.0"}});
  if(body.method==="notifications/initialized") return new Response(null,{status:202});

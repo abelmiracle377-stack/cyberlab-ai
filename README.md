@@ -2,7 +2,7 @@
 
 An open-source AI-assisted cybersecurity research workspace for passive OSINT, IP intelligence, authorised assessment planning, vulnerability research, safe malware triage, binary inspection, network evidence analysis and Kali Linux workflows.
 
-## Product roadmap
+## CyberLab AI OS VM\n\nA separate Debian-based bootable workstation VM build is being added under [os/](./os/). The reproducible QCOW2 build, provisioning scripts, structural verifier and manual image-build workflow are documented there. The VM is not yet represented as boot-verified; image generation and a real QEMU boot acceptance test are separate gates.\n\n## Product roadmap
 
 The additive capability-parity plan and Kodachi-inspired information architecture are documented in [docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md](./docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md). This plan preserves all existing routes, tools and workflows; planned capabilities are not represented as implemented until verified.
 
@@ -160,3 +160,23 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - After a user signs up, promote the owner account by setting `public.user_profiles.role='admin'` for that user's UUID in Supabase SQL Editor.
 - Admins use `/admin` to manage roles and grant, suspend, cancel or expire access. Customers use `/billing` for checkout and payment history. `/pricing` is public.
 - Test with Paystack test keys before going live and confirm your merchant account's USD recurring-card eligibility and settlement settings.
+
+
+### Kali companion case export and preservation
+
+- A completed unified investigation case can be exported as structured JSON and a standalone HTML report from the paired local bridge.
+- The bridge also writes a private local archive under `~/.local/state/cyberlab/exports/<case-id>/`, with `case.json`, `case.html` and `manifest.json`. The directory is restricted to mode 0700 and files to mode 0600 where supported; files are created exclusively and existing case archives are never overwritten.
+- The manifest records SHA-256 digests and byte sizes for the JSON and HTML exports, plus the source-report digests. Verify these hashes after transfer or storage.
+- HTML report fields are escaped and the document applies a restrictive Content Security Policy. The export contains report observations and metadata, not original samples, disk images or recovered file contents.
+
+- The paired local bridge exposes `POST /evidence/case/verify`. Supply only the case identifier; the verifier resolves it beneath the configured export directory and never accepts a caller-selected filesystem path.
+- Verification checks the exact expected file set, rejects symlinks/non-regular files, validates the manifest schema and case ID, and recomputes SHA-256 and byte sizes for the JSON and HTML reports. It is read-only and reports missing or altered files without repairing them.
+- A successful check confirms consistency with the local manifest only. It does not prove who created the files, when they were created, or that the manifest itself is authentic.
+- This is integrity-oriented local archiving, not a digital signature, immutable storage, trusted timestamp or formal chain-of-custody system. Preserve original media and acquisition maps separately under your evidence-retention policy.
+
+
+### Kali companion audit-ledger verification
+
+- The paired local bridge exposes read-only `GET /evidence/case/ledger/verify` to verify the local append-only case audit ledger without creating a case.
+- Verification rejects missing, oversized, symlinked or non-regular ledger files; checks each JSONL record's required metadata, source-digest shape, record hash and previous-record hash; and reports line-numbered errors.
+- The verifier opens the fixed ledger read-only under a shared file lock and does not repair, rewrite or append to it. A valid result confirms the local hash chain is internally consistent, not that it is signed, immutable or tamper-proof.
