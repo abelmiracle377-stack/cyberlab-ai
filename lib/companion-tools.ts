@@ -16,17 +16,17 @@ export type CompanionToolRequest = {
 
 const HOST = /\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})\b/i;
 const IPV4 = /\b((?:\d{1,3}\.){3}\d{1,3})\b/;
-const URL = /\bhttps?:\/\/[^\s"'<>]+/i;
+const URL_RE = /\bhttps?:\/\/[^\s"'<>]+/i;
 
 function extractUrl(text: string): string | null {
-  const match = text.match(URL);
+  const match = text.match(URL_RE);
   return match ? match[0].replace(/[),.]+$/, "") : null;
 }
 
 function extractHost(text: string): string | null {
-  const url = text.match(URL);
-  if (url) {
-    try { return new URL(url[0]).hostname; } catch { /* fall through */ }
+  const urlMatch = text.match(URL_RE);
+  if (urlMatch) {
+    try { return new URL(urlMatch[0]).hostname; } catch { /* fall through */ }
   }
   const ip = text.match(IPV4);
   if (ip) return ip[1];
