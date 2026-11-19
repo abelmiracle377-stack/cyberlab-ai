@@ -212,7 +212,34 @@ class NewToolBatchTests(unittest.TestCase):
                 self.assertIn("10.0.0.5", run.argv)
 
     def test_registry_has_grown(self):
-        self.assertGreaterEqual(len(kt.TOOL_SPECS), 27)
+        self.assertGreaterEqual(len(kt.TOOL_SPECS), 38)
+
+    def test_new_passive_osint_tools(self):
+        for name in ("amass", "subfinder", "assetfinder", "gau"):
+            with self.subTest(tool=name):
+                run = ok_runner("sub.example.com")
+                result = kt.run_tool(name, {"host": "example.com"}, confirmed=True,
+                                     resolve=FAKE, runner=run)
+                self.assertEqual(result["status"], "completed")
+                self.assertIn("example.com", run.argv)
+
+    def test_new_active_tools_require_authorisation(self):
+        for name, params, target in (
+            ("httpx", {"url": "https://example.com"}, "https://example.com"),
+            ("naabu", {"host": "example.com"}, "example.com"),
+            ("sslyze", {"host": "example.com"}, "example.com"),
+            ("dalfox", {"url": "https://example.com"}, "https://example.com"),
+        ):
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(ValueError, "authorisation"):
+                    kt.run_tool(name, params, confirmed=True, target_confirmation=target,
+                                resolve=FAKE, runner=ok_runner())
+
+    def test_feroxbuster_requires_wordlist_file(self):
+        with self.assertRaisesRegex(ValueError, "Wordlist"):
+            kt.run_tool("feroxbuster", {"url": "https://example.com", "wordlist": "/nope", "threads": 10},
+                        confirmed=True, authorization_reference="E1",
+                        target_confirmation="https://example.com", resolve=FAKE, runner=ok_runner())
 
 
 class ListingTests(unittest.TestCase):

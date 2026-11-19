@@ -161,6 +161,74 @@ export function planCompanionToolRequest(prompt: string): CompanionToolRequest |
     if (host) return { tool: "dig", label: "DNS A-record lookup (dig)", parameters: { host }, active: false, missing: [] };
   }
 
+  // feroxbuster — content discovery (check before generic web verbs).
+  if (/\bferoxbuster\b|\bferox\b/.test(text)) {
+    const url = extractUrl(prompt);
+    const wordlist = extractWordlist(prompt);
+    if (url) {
+      const parameters: Record<string, string | number> = { url, threads: 10 };
+      if (wordlist) parameters.wordlist = wordlist;
+      return { tool: "feroxbuster", label: "Content discovery (feroxbuster)", parameters,
+        active: true, targetParam: "url", missing: wordlist ? [] : ["wordlist"] };
+    }
+  }
+
+  // dalfox — XSS testing.
+  if (/\bdalfox\b|\bxss\b/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "dalfox", label: "Reflected-XSS test (dalfox)", parameters: { url },
+      active: true, targetParam: "url", missing: [] };
+  }
+
+  // httpx / katana — web probe / crawl.
+  if (/\bhttpx\b|probe\s+(?:the\s+)?url/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "httpx", label: "URL probe (httpx)", parameters: { url },
+      active: true, targetParam: "url", missing: [] };
+  }
+  if (/\bkatana\b|crawl\s+(?:the\s+)?(?:site|url)/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "katana", label: "Crawl (katana)", parameters: { url },
+      active: true, targetParam: "url", missing: [] };
+  }
+
+  // naabu — fast port scan.
+  if (/\bnaabu\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "naabu", label: "Fast port scan (naabu)", parameters: { host },
+      active: true, targetParam: "host", missing: [] };
+  }
+
+  // sslyze / testssl — TLS analysis.
+  if (/\bsslyze\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "sslyze", label: "TLS analysis (sslyze)", parameters: { host },
+      active: true, targetParam: "host", missing: [] };
+  }
+  if (/\btestssl\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "testssl", label: "TLS assessment (testssl.sh)", parameters: { host },
+      active: true, targetParam: "host", missing: [] };
+  }
+
+  // amass / subfinder / assetfinder / gau — passive subdomain & URL OSINT.
+  if (/\bamass\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "amass", label: "Attack-surface OSINT (amass)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bsubfinder\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "subfinder", label: "Subdomain discovery (subfinder)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bassetfinder\b/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "assetfinder", label: "Subdomain discovery (assetfinder)", parameters: { host }, active: false, missing: [] };
+  }
+  if (/\bgau\b|wayback\s+urls?/.test(text)) {
+    const host = extractHost(prompt);
+    if (host) return { tool: "gau", label: "Archived URL discovery (gau)", parameters: { host }, active: false, missing: [] };
+  }
+
   // sqlmap — SQL injection testing.
   if (/\bsqlmap\b|sql\s*injection|sqli\b/.test(text)) {
     const url = extractUrl(prompt);

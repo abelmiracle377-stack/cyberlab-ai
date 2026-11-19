@@ -112,3 +112,19 @@ test("returns null for ordinary chat with no tool intent", () => {
 test("returns null when a tool is named but no target is present", () => {
   assert.equal(planCompanionToolRequest("what does whatweb do?"), null);
 });
+
+test("plans the widened tool set", () => {
+  assert.equal(planCompanionToolRequest("httpx https://example.com")?.tool, "httpx");
+  assert.equal(planCompanionToolRequest("naabu scan example.com")?.tool, "naabu");
+  assert.equal(planCompanionToolRequest("sslyze example.com")?.tool, "sslyze");
+  assert.equal(planCompanionToolRequest("run testssl on example.com")?.tool, "testssl");
+  assert.equal(planCompanionToolRequest("subfinder example.com")?.active, false);
+  assert.equal(planCompanionToolRequest("amass example.com")?.tool, "amass");
+  assert.equal(planCompanionToolRequest("dalfox https://example.com")?.tool, "dalfox");
+});
+
+test("feroxbuster without a wordlist reports it missing", () => {
+  const req = planCompanionToolRequest("feroxbuster https://example.com");
+  assert.equal(req?.tool, "feroxbuster");
+  assert.deepEqual(req?.missing, ["wordlist"]);
+});

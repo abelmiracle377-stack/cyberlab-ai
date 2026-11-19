@@ -279,6 +279,71 @@ TOOL_SPECS = {
         "argv": lambda p: ["ssh-audit", "--", p["host"]],
         "purpose": "SSH server configuration and algorithm audit of an authorised host.",
     },
+    # --- additional passive subdomain / URL OSINT ---
+    "amass": {
+        "binary": "amass", "package": "amass", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["amass", "enum", "-passive", "-d", p["host"]],
+        "purpose": "Passive attack-surface and subdomain intelligence.",
+    },
+    "subfinder": {
+        "binary": "subfinder", "package": "subfinder", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["subfinder", "-d", p["host"], "-silent"],
+        "purpose": "Passive subdomain discovery from public sources.",
+    },
+    "assetfinder": {
+        "binary": "assetfinder", "package": "assetfinder", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["assetfinder", "--subs-only", p["host"]],
+        "purpose": "Passive subdomain discovery.",
+    },
+    "gau": {
+        "binary": "gau", "package": "gau", "active": False, "category": "passive-osint",
+        "params": {"host": v_host}, "argv": lambda p: ["gau", "--threads", "5", p["host"]],
+        "purpose": "Collect known URLs for a domain from public archives (passive).",
+    },
+    # --- additional active web / network ---
+    "httpx": {
+        "binary": "httpx", "package": "httpx", "active": True, "category": "web-probe",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["httpx", "-u", p["url"], "-silent", "-sc", "-title", "-td"],
+        "purpose": "Probe an authorised URL for status, title and detected technologies.",
+    },
+    "naabu": {
+        "binary": "naabu", "package": "naabu", "active": True, "category": "port-scan",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["naabu", "-host", p["host"], "-silent"],
+        "purpose": "Fast SYN/CONNECT port discovery on an authorised host.",
+    },
+    "katana": {
+        "binary": "katana", "package": "katana", "active": True, "category": "web-crawl",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["katana", "-u", p["url"], "-silent", "-d", "2"],
+        "purpose": "Bounded crawl (depth 2) of an authorised URL.",
+    },
+    "sslyze": {
+        "binary": "sslyze", "package": "sslyze", "active": True, "category": "tls",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["sslyze", p["host"]],
+        "purpose": "Detailed TLS configuration analysis of an authorised host.",
+    },
+    "testssl": {
+        "binary": "testssl.sh", "package": "testssl.sh", "active": True, "category": "tls",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["testssl.sh", "--quiet", "--color", "0", p["host"]],
+        "purpose": "Comprehensive TLS/cipher assessment of an authorised host.",
+    },
+    "feroxbuster": {
+        "binary": "feroxbuster", "package": "feroxbuster", "active": True, "category": "web-content",
+        "target_param": "url",
+        "params": {"url": v_url, "wordlist": v_wordlist, "threads": v_bounded_int(1, 50)},
+        "argv": lambda p: ["feroxbuster", "-u", p["url"], "-w", p["wordlist"], "-t", p["threads"], "-q", "-n"],
+        "purpose": "Recursive-off content discovery on an authorised URL with your wordlist.",
+    },
+    "dalfox": {
+        "binary": "dalfox", "package": "dalfox", "active": True, "category": "web-xss",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["dalfox", "url", p["url"], "--silence", "--no-color"],
+        "purpose": "Bounded reflected-XSS parameter testing of an authorised URL.",
+    },
 }
 
 
