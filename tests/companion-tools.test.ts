@@ -148,3 +148,16 @@ test("plans arjun, cmseek, gospider, dnstwist, waybackurls", () => {
   assert.equal(planCompanionToolRequest("dnstwist example.com")?.active, false);
   assert.equal(planCompanionToolRequest("waybackurls example.com")?.tool, "waybackurls");
 });
+
+test("plans CMS scanners and focused scans", () => {
+  assert.equal(planCompanionToolRequest("joomscan https://example.com")?.tool, "joomscan");
+  assert.equal(planCompanionToolRequest("droopescan https://example.com")?.tool, "droopescan");
+  assert.equal(planCompanionToolRequest("nuclei-cves https://example.com")?.tool, "nuclei-cves");
+  assert.equal(planCompanionToolRequest("nmap-safe scan 10.0.0.5")?.tool, "nmap-safe");
+});
+
+test("smtp-user-enum reports a missing user list", () => {
+  const req = planCompanionToolRequest("smtp-user-enum mail.example.com");
+  assert.equal(req?.tool, "smtp-user-enum");
+  assert.deepEqual(req?.missing, ["userlist"]);
+});

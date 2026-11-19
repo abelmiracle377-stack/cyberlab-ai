@@ -84,6 +84,40 @@ export function planCompanionToolRequest(prompt: string): CompanionToolRequest |
     }
   }
 
+  // joomscan / droopescan — CMS scanners (check before generic web verbs).
+  if (/\bjoomscan\b|joomla\s+scan/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "joomscan", label: "Joomla enumeration (joomscan)", parameters: { url }, active: true, targetParam: "url", missing: [] };
+  }
+  if (/\bdroopescan\b|drupal\s+scan/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "droopescan", label: "CMS enumeration (droopescan)", parameters: { url }, active: true, targetParam: "url", missing: [] };
+  }
+
+  // nuclei CVE-only run.
+  if (/\bnuclei[-\s]?cves?\b|cve\s+templates?/.test(text)) {
+    const url = extractUrl(prompt);
+    if (url) return { tool: "nuclei-cves", label: "CVE template checks (nuclei)", parameters: { url }, active: true, targetParam: "url", missing: [] };
+  }
+
+  // nmap safe NSE scripts.
+  if (/\bnmap[-\s]?safe\b|safe\s+scripts?/.test(text)) {
+    const host = extractHost(prompt);
+    const ports = extractPorts(prompt) || "1-1000";
+    if (host) return { tool: "nmap-safe", label: "Nmap safe scripts", parameters: { host, ports }, active: true, targetParam: "host", missing: [] };
+  }
+
+  // smtp-user-enum — needs a user list.
+  if (/\bsmtp[-\s]?user[-\s]?enum\b|smtp\s+user/.test(text)) {
+    const host = extractHost(prompt);
+    const userlist = extractWordlist(prompt);
+    if (host) {
+      const parameters: Record<string, string | number> = { host };
+      if (userlist) parameters.userlist = userlist;
+      return { tool: "smtp-user-enum", label: "SMTP user enumeration", parameters, active: true, targetParam: "host", missing: userlist ? [] : ["userlist"] };
+    }
+  }
+
   // wpscan — WordPress enumeration.
   if (/\bwpscan\b|wordpress\s+(?:scan|enum)/.test(text)) {
     const url = extractUrl(prompt);

@@ -407,6 +407,39 @@ TOOL_SPECS = {
         "argv": lambda p: ["gospider", "-s", p["url"], "-q", "-d", "2"],
         "purpose": "Bounded crawl (depth 2) of an authorised URL.",
     },
+    # --- CMS scanners ---
+    "joomscan": {
+        "binary": "joomscan", "package": "joomscan", "active": True, "category": "web-cms",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["joomscan", "--url", p["url"]],
+        "purpose": "Joomla enumeration of an authorised site.",
+    },
+    "droopescan": {
+        "binary": "droopescan", "package": "droopescan", "active": True, "category": "web-cms",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["droopescan", "scan", "-u", p["url"]],
+        "purpose": "Drupal/SilverStripe/WordPress enumeration of an authorised site.",
+    },
+    # --- focused template / script scans ---
+    "nuclei-cves": {
+        "binary": "nuclei", "package": "nuclei", "active": True, "category": "web-scan",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["nuclei", "-u", p["url"], "-tags", "cve", "-silent", "-rl", "50",
+                           "-timeout", "10", "-nc"],
+        "purpose": "Run only CVE-tagged nuclei templates against an authorised URL.",
+    },
+    "nmap-safe": {
+        "binary": "nmap", "package": "nmap", "active": True, "category": "port-scan",
+        "target_param": "host", "params": {"host": v_host, "ports": v_port_spec},
+        "argv": lambda p: ["nmap", "-n", "-sV", "--script", "safe", "-T2", "-p", p["ports"], "--", p["host"]],
+        "purpose": "Run Nmap's non-intrusive 'safe' NSE scripts against authorised ports.",
+    },
+    "smtp-user-enum": {
+        "binary": "smtp-user-enum", "package": "smtp-user-enum", "active": True, "category": "smtp",
+        "target_param": "host", "params": {"host": v_host, "userlist": v_wordlist},
+        "argv": lambda p: ["smtp-user-enum", "-M", "VRFY", "-U", p["userlist"], "-t", p["host"]],
+        "purpose": "Enumerate valid SMTP users on an authorised mail host with your user list.",
+    },
 }
 
 
@@ -418,6 +451,7 @@ def list_tools() -> dict:
             "name": name, "binary": spec["binary"], "category": spec["category"],
             "active": spec["active"], "installed": bool(shutil.which(spec["binary"])),
             "parameters": sorted(spec["params"].keys()), "purpose": spec["purpose"],
+            "target_param": spec.get("target_param"),
         })
     return {"tools": tools,
             "note": "Active tools require an authorisation reference and exact-target confirmation. The companion never installs tools or runs arbitrary commands."}

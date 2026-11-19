@@ -263,9 +263,10 @@ export default function AgentPage() {
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
     if (!token) { setToolStatus("Pair your local companion in Kali Connection first; the tool runs on your own machine."); return; }
     const parameters: Record<string, string | number> = { ...toolRequest.parameters };
-    if (toolRequest.missing.includes("wordlist")) {
-      if (!toolWordlist.trim()) { setToolStatus("Enter the path to a wordlist on your paired machine."); return; }
-      parameters.wordlist = toolWordlist.trim();
+    const missingParam = toolRequest.missing[0];
+    if (missingParam) {
+      if (!toolWordlist.trim()) { setToolStatus("Enter the required " + missingParam + " path on your paired machine."); return; }
+      parameters[missingParam] = toolWordlist.trim();
     }
     const targetValue = toolRequest.targetParam ? String(parameters[toolRequest.targetParam] ?? "") : "";
     if (toolRequest.active) {
@@ -577,7 +578,7 @@ export default function AgentPage() {
           <h2>Approve companion tool run</h2>
           <p>Tool: <strong>{toolRequest.label}</strong>. Parameters: <code>{Object.entries(toolRequest.parameters).filter(([k]) => k !== "wordlist").map(([k, v]) => k + "=" + v).join("  ")}</code>. This runs on your paired machine (127.0.0.1); nothing is sent to the CyberLab server.</p>
           <form className="report-editor" onSubmit={runCompanionTool}>
-            {toolRequest.missing.includes("wordlist") && <label>Wordlist path (on your machine)<input value={toolWordlist} onChange={event => setToolWordlist(event.target.value)} placeholder="/usr/share/wordlists/dirb/common.txt" required /></label>}
+            {toolRequest.missing.length > 0 && <label>{toolRequest.missing[0]} path (on your machine)<input value={toolWordlist} onChange={event => setToolWordlist(event.target.value)} placeholder="/usr/share/wordlists/dirb/common.txt" required /></label>}
             {toolRequest.active && <>
               <label>Authorisation / engagement reference<input value={toolAuth} onChange={event => setToolAuth(event.target.value)} placeholder="Written authorisation to assess this target" required maxLength={200} /></label>
               <label>Retype exact target<input value={toolTargetConfirm} onChange={event => setToolTargetConfirm(event.target.value)} placeholder={toolRequest.targetParam ? String(toolRequest.parameters[toolRequest.targetParam] ?? "") : ""} required /></label>

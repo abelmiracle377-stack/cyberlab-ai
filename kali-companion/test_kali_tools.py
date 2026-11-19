@@ -241,8 +241,32 @@ class NewToolBatchTests(unittest.TestCase):
                         confirmed=True, authorization_reference="E1",
                         target_confirmation="https://example.com", resolve=FAKE, runner=ok_runner())
 
-    def test_registry_reached_47(self):
-        self.assertGreaterEqual(len(kt.TOOL_SPECS), 47)
+    def test_registry_reached_52(self):
+        self.assertGreaterEqual(len(kt.TOOL_SPECS), 52)
+
+    def test_cms_scanners_and_focused_scans_need_authorisation(self):
+        for name, params, target in (
+            ("joomscan", {"url": "https://example.com"}, "https://example.com"),
+            ("droopescan", {"url": "https://example.com"}, "https://example.com"),
+            ("nuclei-cves", {"url": "https://example.com"}, "https://example.com"),
+        ):
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(ValueError, "authorisation"):
+                    kt.run_tool(name, params, confirmed=True, target_confirmation=target,
+                                resolve=FAKE, runner=ok_runner())
+
+    def test_nuclei_cves_uses_cve_tags(self):
+        run = ok_runner("[cve]")
+        kt.run_tool("nuclei-cves", {"url": "https://example.com"}, confirmed=True,
+                    authorization_reference="E1", target_confirmation="https://example.com",
+                    resolve=FAKE, runner=run)
+        self.assertEqual(run.argv[run.argv.index("-tags") + 1], "cve")
+
+    def test_smtp_user_enum_requires_userlist_file(self):
+        with self.assertRaisesRegex(ValueError, "Wordlist|file"):
+            kt.run_tool("smtp-user-enum", {"host": "mail.example.com", "userlist": "/nope"},
+                        confirmed=True, authorization_reference="E1",
+                        target_confirmation="mail.example.com", resolve=FAKE, runner=ok_runner())
 
     def test_metasploit_info_is_passive_metadata(self):
         run = ok_runner("Name: MS17-010 EternalBlue")

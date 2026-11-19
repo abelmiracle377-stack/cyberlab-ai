@@ -45,6 +45,7 @@ const groups = [
   ]},
   { title: "OPERATIONS", items: [
     { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
+    { label: "Tool Runner", icon: Terminal, href: "/tool-runner" },
     { label: "SOC Host Telemetry", icon: Activity, href: "/kali-connection" },
     { label: "Investigations", icon: FileSearch, href: "/investigations" },
     { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
