@@ -72,12 +72,24 @@ def db():
       token_hash TEXT PRIMARY KEY, file_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
       FOREIGN KEY(file_id) REFERENCES files(id)
     );
+    CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY, device_id TEXT, event_type TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
+    );
     """)
     return con
 
 
 def digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def log_event(con, device_id: Optional[str], event_type: str, detail: str = "") -> None:
+    """Append an audit event within the caller's open transaction."""
+    con.execute(
+        "INSERT INTO events(id,device_id,event_type,detail,created_at) VALUES(?,?,?,?,?)",
+        (str(uuid.uuid4()), device_id, str(event_type)[:40], str(detail)[:200], int(time.time())),
+    )
 
 
 def owner_auth(authorization: Optional[str] = Header(default=None)):
@@ -202,6 +214,8 @@ def accept_pairing(body: AcceptPairing):
     con.execute("INSERT INTO devices(id,name,platform,token_hash,permissions,created_at,last_seen,revoked) VALUES(?,?,?,?,?,?,?,0)",
                 (device_id, body.participant_label, pairing["platform"], digest(token),
                  json.dumps(body.permissions), now, now))
+    log_event(con, device_id, "device_paired",
+              body.participant_label + " · " + ",".join(sorted(k for k, v in body.permissions.items() if v)))
     con.commit()
     con.close()
     return {"device_id": device_id, "device_token": token,
@@ -223,10 +237,33 @@ def list_devices():
     } for r in rows]}
 
 
+@app.get("/v1/audit", dependencies=[Depends(owner_auth)])
+def list_audit(device_id: Optional[str] = None, limit: int = 100):
+    """Owner-only audit log of device pairing, file and revocation events."""
+    if not 1 <= limit <= 1000:
+        raise HTTPException(400, "limit must be between 1 and 1000.")
+    con = db()
+    if device_id:
+        rows = con.execute(
+            "SELECT id,device_id,event_type,detail,created_at FROM events WHERE device_id=? ORDER BY created_at DESC, id DESC LIMIT ?",
+            (device_id, limit)).fetchall()
+    else:
+        rows = con.execute(
+            "SELECT id,device_id,event_type,detail,created_at FROM events ORDER BY created_at DESC, id DESC LIMIT ?",
+            (limit,)).fetchall()
+    con.close()
+    return {"events": [{"id": r["id"], "device_id": r["device_id"], "event_type": r["event_type"],
+                        "detail": r["detail"], "created_at": r["created_at"]} for r in rows],
+            "count": len(rows),
+            "note": "Owner-only audit trail. It records event metadata only, never file contents, tokens or sensor data."}
+
+
 @app.post("/v1/devices/{device_id}/revoke", dependencies=[Depends(owner_auth)])
 def revoke_device(device_id: str):
     con = db()
     cur = con.execute("UPDATE devices SET revoked=1 WHERE id=?", (device_id,))
+    if cur.rowcount:
+        log_event(con, device_id, "device_revoked", "")
     con.commit()
     con.close()
     if not cur.rowcount:
@@ -270,6 +307,7 @@ async def upload_file(upload: UploadFile = File(...), device=Depends(device_auth
                 (file_id, device["id"], safe_name,
                  upload.content_type or "application/octet-stream",
                  str(destination), size, int(time.time())))
+    log_event(con, device["id"], "file_uploaded", safe_name + " (" + str(size) + " bytes)")
     con.commit()
     con.close()
     return {"file_id": file_id, "name": safe_name, "size": size,
@@ -318,12 +356,13 @@ def create_share(file_id: str, expires_in: int = 3600):
     if not 60 <= expires_in <= 86400:
         raise HTTPException(400, "Share expiry must be between 60 and 86400 seconds.")
     con = db()
-    exists = con.execute("SELECT id FROM files WHERE id=?", (file_id,)).fetchone()
+    exists = con.execute("SELECT id, device_id FROM files WHERE id=?", (file_id,)).fetchone()
     if not exists:
         con.close()
         raise HTTPException(404, "File not found.")
     token = secrets.token_urlsafe(32)
     con.execute("INSERT INTO shares VALUES(?,?,?)", (digest(token), file_id, int(time.time()) + expires_in))
+    log_event(con, exists["device_id"], "file_shared", file_id + " · expires in " + str(expires_in) + "s")
     con.commit()
     con.close()
     return {"share_token": token, "expires_in_seconds": expires_in,

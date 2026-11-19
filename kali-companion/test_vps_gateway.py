@@ -71,3 +71,46 @@ class VPSCompatibilityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VPSAuditTests(unittest.TestCase):
+    def _temp_db(self, directory):
+        return mock.patch.object(gateway, "DB_PATH", Path(directory) / "registry.sqlite3")
+
+    def test_audit_records_and_filters_by_device(self):
+        with tempfile.TemporaryDirectory() as directory, self._temp_db(directory):
+            con = gateway.db()
+            gateway.log_event(con, "dev-1", "device_paired", "alex")
+            gateway.log_event(con, "dev-1", "file_uploaded", "photo.jpg (100 bytes)")
+            gateway.log_event(con, "dev-2", "device_revoked", "")
+            con.commit()
+            con.close()
+            everything = gateway.list_audit()
+            self.assertEqual(everything["count"], 3)
+            device_one = gateway.list_audit(device_id="dev-1")
+            self.assertEqual(device_one["count"], 2)
+            self.assertTrue(all(e["device_id"] == "dev-1" for e in device_one["events"]))
+            self.assertTrue(all("token" not in e["detail"].lower() for e in everything["events"]))
+
+    def test_audit_limit_is_bounded(self):
+        from fastapi import HTTPException
+        with tempfile.TemporaryDirectory() as directory, self._temp_db(directory):
+            with self.assertRaises(HTTPException):
+                gateway.list_audit(limit=0)
+            with self.assertRaises(HTTPException):
+                gateway.list_audit(limit=5000)
+
+    def test_audit_route_is_owner_authenticated(self):
+        route = next(item for item in gateway.app.routes
+                     if getattr(item, "path", None) == "/v1/audit")
+        self.assertIn("GET", route.methods)
+        self.assertTrue(route.dependencies)
+
+    def test_log_event_truncates_long_detail(self):
+        with tempfile.TemporaryDirectory() as directory, self._temp_db(directory):
+            con = gateway.db()
+            gateway.log_event(con, "dev", "custom", "y" * 500)
+            con.commit()
+            detail = con.execute("SELECT detail FROM events").fetchone()["detail"]
+            con.close()
+            self.assertLessEqual(len(detail), 200)
