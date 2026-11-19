@@ -108,6 +108,63 @@ class ArgvConstructionTests(unittest.TestCase):
         self.assertEqual(result["status"], "timeout")
 
 
+class ExpandedToolTests(unittest.TestCase):
+    def test_single_port_validator(self):
+        self.assertEqual(kt.v_single_port(443), "443")
+        for bad in (0, 70000, "abc", True):
+            with self.assertRaises(ValueError):
+                kt.v_single_port(bad)
+
+    def test_search_term_rejects_command_injection_characters(self):
+        self.assertEqual(kt.v_search_term("type:exploit smb"), "type:exploit smb")
+        for bad in ("smb; exit", "a`id`", "a&&b", "x|y"):
+            with self.assertRaises(ValueError):
+                kt.v_search_term(bad)
+
+    def test_metasploit_search_is_passive_metadata_only(self):
+        run = ok_runner("Matching Modules\n...\nexploit/windows/smb/ms17_010_eternalblue")
+        result = kt.run_tool("metasploit-search", {"query": "ms17-010"}, confirmed=True,
+                             resolve=FAKE, runner=run)
+        self.assertEqual(result["status"], "completed")
+        self.assertIn("search ms17-010; exit -y", run.argv)
+        self.assertEqual(run.argv[:3], ["/usr/bin/msfconsole", "-q", "-x"])
+
+    def test_netcat_banner_passes_devnull_stdin(self):
+        captured = {}
+
+        def run(argv, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(argv, 0, "220 vsFTPd 3.0.3", "")
+
+        result = kt.run_tool("netcat-banner", {"host": "example.com", "port": 21}, confirmed=True,
+                             authorization_reference="ENG-1", target_confirmation="example.com",
+                             resolve=FAKE, runner=run)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(captured.get("stdin"), subprocess.DEVNULL)
+
+    def test_sqlmap_is_bounded_level_and_risk(self):
+        run = ok_runner("sqlmap output")
+        kt.run_tool("sqlmap", {"url": "https://example.com/item?id=1"}, confirmed=True,
+                    authorization_reference="ENG-1", target_confirmation="https://example.com/item?id=1",
+                    resolve=FAKE, runner=run)
+        self.assertEqual(run.argv[run.argv.index("--level") + 1], "1")
+        self.assertEqual(run.argv[run.argv.index("--risk") + 1], "1")
+        self.assertIn("--batch", run.argv)
+
+    def test_masscan_includes_rate_limit(self):
+        run = ok_runner("Discovered open port 80/tcp")
+        kt.run_tool("masscan", {"host": "93.184.216.34", "ports": "80,443", "rate": 1000},
+                    confirmed=True, authorization_reference="ENG-1",
+                    target_confirmation="93.184.216.34", resolve=FAKE, runner=run)
+        self.assertEqual(run.argv[run.argv.index("--rate") + 1], "1000")
+
+    def test_masscan_rate_bounds_enforced(self):
+        with self.assertRaises(ValueError):
+            kt.run_tool("masscan", {"host": "93.184.216.34", "ports": "80", "rate": 999999},
+                        confirmed=True, authorization_reference="ENG-1",
+                        target_confirmation="93.184.216.34", resolve=FAKE, runner=ok_runner())
+
+
 class ListingTests(unittest.TestCase):
     def test_list_reports_installed_flag_and_mode(self):
         listed = kt.list_tools()

@@ -74,6 +74,27 @@ def v_wordlist(value: object) -> str:
     return str(path)
 
 
+def v_single_port(value: object) -> str:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("Port must be a single integer between 1 and 65535.")
+    if isinstance(value, bool) or not 1 <= port <= 65535:
+        raise ValueError("Port must be a single integer between 1 and 65535.")
+    return str(port)
+
+
+def v_search_term(value: object) -> str:
+    text = str(value or "").strip()
+    if not 1 <= len(text) <= 120:
+        raise ValueError("Search term must be 1 to 120 characters.")
+    # Restrict to characters that are safe inside a single msfconsole -x command;
+    # there is no shell, but this keeps the term from injecting extra msf commands.
+    if not re.fullmatch(r"[A-Za-z0-9 _/.:+\-]+", text):
+        raise ValueError("Search term may contain only letters, numbers, spaces and _ / . : + -")
+    return text
+
+
 def v_bounded_int(low: int, high: int):
     def check(value: object) -> str:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -126,6 +147,39 @@ TOOL_SPECS = {
                            "-w", p["wordlist"], "-u", p["url"]],
         "purpose": "Directory/content discovery on an authorised URL with your wordlist.",
     },
+    "sslscan": {
+        "binary": "sslscan", "package": "sslscan", "active": True, "category": "tls",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["sslscan", "--no-colour", "--", p["host"]],
+        "purpose": "TLS protocol and cipher review of an authorised host (port 443).",
+    },
+    "masscan": {
+        "binary": "masscan", "package": "masscan", "active": True, "category": "fast-scan",
+        "target_param": "host",
+        "params": {"host": v_host, "ports": v_port_spec, "rate": v_bounded_int(1, 5000)},
+        "argv": lambda p: ["masscan", "-p", p["ports"], "--rate", p["rate"], "--wait", "0", p["host"]],
+        "purpose": "Rate-limited high-speed port discovery on an authorised host (may require root).",
+    },
+    "netcat-banner": {
+        "binary": "nc", "package": "netcat-openbsd", "active": True, "category": "connectivity",
+        "target_param": "host", "stdin_devnull": True,
+        "params": {"host": v_host, "port": v_single_port},
+        "argv": lambda p: ["nc", "-w", "5", "-v", "--", p["host"], p["port"]],
+        "purpose": "Connect to one authorised host/port and read the service banner.",
+    },
+    "sqlmap": {
+        "binary": "sqlmap", "package": "sqlmap", "active": True, "category": "web-sqli",
+        "target_param": "url", "params": {"url": v_url},
+        "argv": lambda p: ["sqlmap", "-u", p["url"], "--batch", "--level", "1", "--risk", "1",
+                           "--crawl", "0", "--flush-session", "--disable-coloring"],
+        "purpose": "Bounded SQL-injection testing (level 1 / risk 1) of an authorised URL.",
+    },
+    "metasploit-search": {
+        "binary": "msfconsole", "package": "metasploit-framework", "active": False,
+        "category": "exploit-research", "params": {"query": v_search_term},
+        "argv": lambda p: ["msfconsole", "-q", "-x", "search " + p["query"] + "; exit -y"],
+        "purpose": "Search local Metasploit modules by keyword (metadata only; no exploit is run).",
+    },
 }
 
 
@@ -177,8 +231,11 @@ def run_tool(name: str, params: dict, confirmed: bool = False,
 
     argv = spec["argv"](validated)
     argv[0] = executable
+    run_kwargs = {"capture_output": True, "text": True, "timeout": int(timeout), "check": False}
+    if spec.get("stdin_devnull"):
+        run_kwargs["stdin"] = subprocess.DEVNULL  # tools like nc must not block on inherited stdin
     try:
-        completed = runner(argv, capture_output=True, text=True, timeout=int(timeout), check=False)
+        completed = runner(argv, **run_kwargs)
     except subprocess.TimeoutExpired:
         return {"status": "timeout", "tool": name, "argv": argv[1:],
                 "note": "The tool did not finish within the time limit."}

@@ -48,6 +48,38 @@ test("extracts host from a URL for whois", () => {
   assert.equal(req?.parameters.host, "sub.example.co.uk");
 });
 
+test("plans a sqlmap run", () => {
+  const req = planCompanionToolRequest("test for sql injection on https://example.com/item?id=1");
+  assert.equal(req?.tool, "sqlmap");
+  assert.equal(req?.active, true);
+});
+
+test("plans a metasploit module search without a target", () => {
+  const req = planCompanionToolRequest("search metasploit for CVE-2017-0144");
+  assert.equal(req?.tool, "metasploit-search");
+  assert.equal(req?.active, false);
+  assert.equal(req?.parameters.query, "CVE-2017-0144");
+});
+
+test("plans a netcat banner grab with host and port", () => {
+  const req = planCompanionToolRequest("netcat banner grab on example.com port 22");
+  assert.equal(req?.tool, "netcat-banner");
+  assert.equal(req?.parameters.host, "example.com");
+  assert.equal(req?.parameters.port, 22);
+});
+
+test("plans an sslscan TLS review", () => {
+  const req = planCompanionToolRequest("run sslscan on example.com");
+  assert.equal(req?.tool, "sslscan");
+  assert.equal(req?.active, true);
+});
+
+test("plans a masscan with default ports", () => {
+  const req = planCompanionToolRequest("masscan 93.184.216.34");
+  assert.equal(req?.tool, "masscan");
+  assert.equal(req?.parameters.rate, 1000);
+});
+
 test("returns null for ordinary chat with no tool intent", () => {
   assert.equal(planCompanionToolRequest("explain how TLS certificate validation works"), null);
   assert.equal(planCompanionToolRequest("what is an IP address?"), null);
