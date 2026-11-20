@@ -320,7 +320,7 @@ export default function AcademyPage() {
     <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><GraduationCap size={14}/> CYBERLAB ACADEMY</div>
     <h1 className="text-3xl font-semibold tracking-tight">Learn by doing</h1>
     <p className="mt-2 max-w-2xl text-sm text-slate-400">Hack The Box / TryHackMe-style tracks that teach real skills on CyberLab's own tools — with videos, hands-on rooms, flag answers, and certifications you can earn.</p>
-    {certs.length > 0 && <div className="mt-5 flex flex-wrap items-center gap-2">{certs.map((c) => <a key={c.serial} href={"/verify?serial=" + encodeURIComponent(c.serial)} className="inline-flex items-center gap-1 rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200 hover:border-emerald-600"><Award size={12}/> {c.code} · {c.serial}</a>)}<a href="/verify" className="text-xs text-emerald-300/70 hover:text-emerald-200">Verify a certificate →</a></div>}
+    {certs.length > 0 && <div className="mt-5 flex flex-wrap items-center gap-2">{certs.map((c) => <a key={c.serial} href={"/certificate/" + encodeURIComponent(c.serial)} className="inline-flex items-center gap-1 rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200 hover:border-emerald-600"><Award size={12}/> {c.code} · {c.serial}</a>)}<a href="/verify" className="text-xs text-emerald-300/70 hover:text-emerald-200">Verify a certificate →</a></div>}
     <div className="mt-6 grid gap-4 md:grid-cols-2">
       {tracks.map((t) => {
         const p = progressOf(t);

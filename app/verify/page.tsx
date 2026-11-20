@@ -60,6 +60,7 @@ export default function VerifyPage() {
               <div className="flex gap-2"><dt className="w-24 text-slate-500">Issued</dt><dd>{new Date(cert.issued_at).toLocaleDateString()}</dd></div>
               <div className="flex gap-2"><dt className="w-24 text-slate-500">Serial</dt><dd><code className="text-emerald-300">{cert.serial}</code></dd></div>
             </dl>
+            <a href={"/certificate/" + encodeURIComponent(cert.serial)} className="mt-4 inline-block text-xs text-emerald-300 hover:text-emerald-200">View printable certificate →</a>
           </div>
         : <div className="mt-6 rounded-xl border border-rose-900 bg-rose-950/20 p-5 text-rose-200"><div className="flex items-center gap-2"><ShieldX size={18}/> <span className="font-semibold">No certificate found</span></div><p className="mt-1 text-sm text-rose-300/80">No certificate matches that serial.</p></div>)}
       <a href="/academy" className="mt-8 inline-block text-xs text-emerald-300/70 hover:text-emerald-200">← CyberLab Academy</a>
