@@ -56,5 +56,56 @@ class CollectTests(unittest.TestCase):
         self.assertFalse(telemetry["tools"]["who"])
 
 
+class SystemTelemetryTests(unittest.TestCase):
+    def test_meminfo_and_loadavg_parse(self):
+        mem = ht.parse_meminfo("MemTotal:  8000000 kB\nMemAvailable: 2000000 kB\n")
+        self.assertEqual(mem["total_bytes"], 8000000 * 1024)
+        self.assertEqual(mem["used_bytes"], 6000000 * 1024)
+        self.assertEqual(mem["used_percent"], 75.0)
+        self.assertEqual(ht.parse_loadavg("0.50 0.30 0.10 1/200 1234")["5m"], 0.30)
+
+    def test_df_parse(self):
+        rows = ht.parse_df("Filesystem 1B-blocks Used Available Capacity Mounted\n"
+                           "/dev/sda1 1000 400 600 40% /\n")
+        self.assertEqual(rows[0]["mount"], "/")
+        self.assertEqual(rows[0]["used_percent"], 40.0)
+
+    def test_last_extracts_source_ip(self):
+        rows = ht.parse_last("alice pts/0 10.0.0.5 Wed Nov 19 10:00 still logged in\n"
+                             "root tty1 Wed Nov 19 09:00\n"
+                             "wtmp begins ...\n")
+        self.assertEqual(rows[0]["from"], "10.0.0.5")
+        self.assertEqual(rows[1]["from"], "")  # local login, no source
+
+    def test_collect_uses_injected_readers(self):
+        files = {
+            "/proc/meminfo": "MemTotal: 4000 kB\nMemAvailable: 1000 kB\n",
+            "/proc/uptime": "12345.6 0.0",
+            "/proc/loadavg": "0.1 0.2 0.3 1/1 1",
+            "/etc/os-release": 'NAME="CyberLab AI OS"\nVERSION_ID=1.0\nID=cyberlab\n',
+            "/proc/sys/kernel/osrelease": "6.1.0-cyberlab\n",
+        }
+
+        def fake_runner(argv, **kwargs):
+            if argv[0] == "df":
+                return subprocess.CompletedProcess(argv, 0, "H b u a c m\n/dev/sda1 100 50 50 50% /\n", "")
+            if argv[0] == "last":
+                return subprocess.CompletedProcess(argv, 0, "alice pts/0 10.0.0.5 Wed\n", "")
+            if argv[0] == "lastb":
+                return subprocess.CompletedProcess(argv, 1, "", "lastb: permission denied")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        out = ht.collect_system_telemetry(runner=fake_runner, which=lambda n: "/usr/bin/" + n,
+                                          read_file=lambda p: files.get(p, ""))
+        self.assertEqual(out["os"]["name"], "CyberLab AI OS")
+        self.assertEqual(out["kernel"], "6.1.0-cyberlab")
+        self.assertEqual(out["uptime_seconds"], 12345)
+        self.assertEqual(out["memory"]["used_percent"], 75.0)
+        self.assertEqual(out["recent_login_count"], 1)
+        # lastb returned permission-denied: reported as needing root, not crashed.
+        self.assertTrue(out["failed_logins_need_root"])
+        self.assertEqual(out["failed_login_count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

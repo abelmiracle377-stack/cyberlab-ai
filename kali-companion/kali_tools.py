@@ -102,6 +102,23 @@ def v_msf_module(value: object) -> str:
     return text
 
 
+def v_filepath(value: object) -> str:
+    from pathlib import Path
+    path = Path(str(value or "").strip()).expanduser()
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Provide an existing regular file on this machine.")
+    if path.stat().st_size > 2 * 1024 * 1024 * 1024:
+        raise ValueError("File is larger than the 2 GiB limit.")
+    return str(path)
+
+
+def v_hash(value: object) -> str:
+    text = str(value or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9$./:+=_\-]{3,256}", text):
+        raise ValueError("Enter a hash string (3 to 256 characters).")
+    return text
+
+
 def v_bounded_int(low: int, high: int):
     def check(value: object) -> str:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -439,6 +456,98 @@ TOOL_SPECS = {
         "target_param": "host", "params": {"host": v_host, "userlist": v_wordlist},
         "argv": lambda p: ["smtp-user-enum", "-M", "VRFY", "-U", p["userlist"], "-t", p["host"]],
         "purpose": "Enumerate valid SMTP users on an authorised mail host with your user list.",
+    },
+    # --- local-file forensics / metadata (operate on a file you supply; no target) ---
+    "exiftool": {
+        "binary": "exiftool", "package": "libimage-exiftool-perl", "active": False,
+        "category": "forensics-metadata", "params": {"file": v_filepath},
+        "argv": lambda p: ["exiftool", "--", p["file"]],
+        "purpose": "Extract embedded metadata (EXIF/XMP/GPS, author, timestamps) from a local file.",
+    },
+    "binwalk": {
+        "binary": "binwalk", "package": "binwalk", "active": False, "category": "forensics-carve",
+        "params": {"file": v_filepath}, "argv": lambda p: ["binwalk", "--", p["file"]],
+        "purpose": "Scan a local file/firmware image for embedded files and signatures.",
+    },
+    "strings-file": {
+        "binary": "strings", "package": "binutils", "active": False, "category": "forensics-metadata",
+        "params": {"file": v_filepath, "min": v_bounded_int(1, 50)},
+        "argv": lambda p: ["strings", "-a", "-n", p["min"], "--", p["file"]],
+        "purpose": "List printable strings (min length N) from a local file.",
+    },
+    "hashid": {
+        "binary": "hashid", "package": "hashid", "active": False, "category": "hash-id",
+        "params": {"hash": v_hash}, "argv": lambda p: ["hashid", "-m", "--", p["hash"]],
+        "purpose": "Identify the likely algorithm(s) of a hash string (offline).",
+    },
+    # --- active network/service recon (authorisation + exact-target confirmation) ---
+    "fping": {
+        "binary": "fping", "package": "fping", "active": True, "category": "connectivity",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["fping", "-c", "3", "-t", "500", "--", p["host"]],
+        "purpose": "ICMP reachability/latency check on an authorised host.",
+    },
+    "arp-scan": {
+        "binary": "arp-scan", "package": "arp-scan", "active": True, "category": "lan-discovery",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["arp-scan", "--retry=2", "--timeout=500", "--", p["host"]],
+        "purpose": "Layer-2 ARP discovery for an authorised host/range (usually needs root).",
+    },
+    "onesixtyone": {
+        "binary": "onesixtyone", "package": "onesixtyone", "active": True, "category": "snmp",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["onesixtyone", p["host"], "public"],
+        "purpose": "Probe an authorised host for the default 'public' SNMP community.",
+    },
+    "smbclient-list": {
+        "binary": "smbclient", "package": "smbclient", "active": True, "category": "smb",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["smbclient", "-N", "-g", "-L", "//" + p["host"]],
+        "purpose": "List SMB shares on an authorised host with a null session.",
+    },
+    "rpcclient-info": {
+        "binary": "rpcclient", "package": "smbclient", "active": True, "category": "smb",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["rpcclient", "-U", "%", "-N", "-c", "srvinfo", p["host"]],
+        "purpose": "Read server info from an authorised host over MS-RPC with a null session.",
+    },
+    "showmount": {
+        "binary": "showmount", "package": "nfs-common", "active": True, "category": "nfs",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["showmount", "-e", "--no-headers", p["host"]],
+        "purpose": "List NFS exports on an authorised host.",
+    },
+    "ldap-namingcontexts": {
+        "binary": "ldapsearch", "package": "ldap-utils", "active": True, "category": "ldap",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["ldapsearch", "-x", "-LLL", "-o", "ldif-wrap=no",
+                           "-H", "ldap://" + p["host"], "-s", "base", "-b", "",
+                           "namingContexts", "defaultNamingContext"],
+        "purpose": "Read the directory naming contexts from an authorised LDAP host anonymously.",
+    },
+    "ike-scan": {
+        "binary": "ike-scan", "package": "ike-scan", "active": True, "category": "vpn",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["ike-scan", "--", p["host"]],
+        "purpose": "Probe an authorised host's IKE/IPsec VPN responder (usually needs root).",
+    },
+    "nmap-udp-top": {
+        "binary": "nmap", "package": "nmap", "active": True, "category": "port-scan",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["nmap", "-n", "-sU", "--top-ports", "20", "--reason", "-T2", "--", p["host"]],
+        "purpose": "Scan the top 20 UDP ports of an authorised host (usually needs root).",
+    },
+    "tlsx": {
+        "binary": "tlsx", "package": "tlsx", "active": True, "category": "tls",
+        "target_param": "host", "params": {"host": v_host},
+        "argv": lambda p: ["tlsx", "-silent", "-u", p["host"] + ":443", "-cn", "-san", "-expiry"],
+        "purpose": "Retrieve the TLS certificate names and expiry from an authorised host.",
+    },
+    "cewl": {
+        "binary": "cewl", "package": "cewl", "active": True, "category": "wordlist",
+        "target_param": "url", "params": {"url": v_url, "depth": v_bounded_int(0, 3)},
+        "argv": lambda p: ["cewl", "-d", p["depth"], "-m", "5", "--with-numbers", p["url"]],
+        "purpose": "Build a custom wordlist from the words on an authorised site.",
     },
 }
 

@@ -301,6 +301,65 @@ class NewToolBatchTests(unittest.TestCase):
                                 resolve=FAKE, runner=ok_runner())
 
 
+class ForensicsAndReconBatchTests(unittest.TestCase):
+    def test_local_file_tools_are_passive_and_take_a_real_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sample = Path(tmp) / "evidence.jpg"
+            sample.write_bytes(b"\xff\xd8\xff\xe0 some metadata")
+            for name in ("exiftool", "binwalk"):
+                with self.subTest(tool=name):
+                    run = ok_runner("metadata")
+                    result = kt.run_tool(name, {"file": str(sample)}, confirmed=True,
+                                         resolve=FAKE, runner=run)
+                    self.assertEqual(result["status"], "completed")
+                    self.assertIn(str(sample), run.argv)
+                    self.assertIn("--", run.argv)
+
+    def test_local_file_tool_rejects_missing_file(self):
+        with self.assertRaisesRegex(ValueError, "existing regular file"):
+            kt.run_tool("exiftool", {"file": "/no/such/file.xyz"}, confirmed=True,
+                        resolve=FAKE, runner=ok_runner())
+
+    def test_hashid_identifies_a_hash_offline(self):
+        run = ok_runner("[+] MD5")
+        result = kt.run_tool("hashid", {"hash": "5f4dcc3b5aa765d61d8327deb882cf99"},
+                             confirmed=True, resolve=FAKE, runner=run)
+        self.assertEqual(result["status"], "completed")
+        self.assertIn("5f4dcc3b5aa765d61d8327deb882cf99", run.argv)
+
+    def test_strings_file_passes_min_length(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sample = Path(tmp) / "blob.bin"
+            sample.write_bytes(b"hello\x00\x01world")
+            run = ok_runner("hello")
+            kt.run_tool("strings-file", {"file": str(sample), "min": 5}, confirmed=True,
+                        resolve=FAKE, runner=run)
+            self.assertEqual(run.argv[run.argv.index("-n") + 1], "5")
+
+    def test_active_recon_tools_require_authorisation_and_target(self):
+        for name in ("fping", "arp-scan", "onesixtyone", "smbclient-list", "rpcclient-info",
+                     "showmount", "ldap-namingcontexts", "ike-scan", "nmap-udp-top", "tlsx"):
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(ValueError, "authorisation"):
+                    kt.run_tool(name, {"host": "198.51.100.7"}, confirmed=True,
+                                target_confirmation="198.51.100.7", resolve=FAKE, runner=ok_runner())
+
+    def test_active_recon_tool_runs_when_authorised(self):
+        run = ok_runner("open")
+        result = kt.run_tool("smbclient-list", {"host": "198.51.100.7"}, confirmed=True,
+                             authorization_reference="ENG-9", target_confirmation="198.51.100.7",
+                             resolve=FAKE, runner=run)
+        self.assertEqual(result["status"], "completed")
+        self.assertIn("-L", run.argv)
+        self.assertIn("//198.51.100.7", run.argv)
+
+    def test_cewl_depth_is_bounded(self):
+        with self.assertRaises(ValueError):
+            kt.run_tool("cewl", {"url": "https://example.com", "depth": 9}, confirmed=True,
+                        authorization_reference="ENG-9", target_confirmation="https://example.com",
+                        resolve=FAKE, runner=ok_runner())
+
+
 class ListingTests(unittest.TestCase):
     def test_list_reports_installed_flag_and_mode(self):
         listed = kt.list_tools()
