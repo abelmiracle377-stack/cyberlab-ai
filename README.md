@@ -18,6 +18,8 @@ Permanent latest-release links. The inaugural release **`v0.1.0`** is built on G
 
 A `terminal` edition ISO is also published. The full desktop edition and physical-media/QEMU usage are documented in [`os/README.md`](os/README.md).
 
+**Installing the OS:** step-by-step for VirtualBox, VMware and the ISO is in [`docs/INSTALL_OVA.md`](docs/INSTALL_OVA.md). Per-version release notes are in [`CHANGELOG.md`](CHANGELOG.md); the current version is in [`VERSION`](VERSION).
+
 To cut a new release, bump the tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`). The **Build CyberLab AI OS Live ISOs** workflow then builds and QEMU boot-tests the ISOs and builds the VirtualBox/VMware appliances, attaching every image to the release. These are multi-gigabyte images built on GitHub's runners; they are not produced by the normal web/companion CI. You can also run the workflow manually from the Actions tab (**Run workflow**).
 
 ---

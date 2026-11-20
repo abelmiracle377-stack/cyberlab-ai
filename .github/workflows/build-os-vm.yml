@@ -197,6 +197,17 @@ jobs:
           name: CyberLab AI ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
+          body: |
+            CyberLab AI OS — a prebuilt, standalone, bootable security OS (Debian-based, XFCE, CyberLab tools and companion included), plus the standalone CyberSOC engine.
+
+            **Images** (verify with `SHA256SUMS` for ISOs, `APPLIANCE-SHA256SUMS` for OVA/VMDK/CyberSOC):
+            - Bootable **ISO** — physical hardware or a new VM (BIOS + UEFI, QEMU boot-tested)
+            - VirtualBox/VMware **appliance (OVA)** and VMware **disk (VMDK)**
+            - **CyberSOC** standalone (`cybersoc.tar.gz`)
+
+            **Install guide:** [docs/INSTALL_OVA.md](https://github.com/abelmiracle377-stack/cyberlab-ai/blob/${{ github.ref_name }}/docs/INSTALL_OVA.md) · **Release notes:** [CHANGELOG.md](https://github.com/abelmiracle377-stack/cyberlab-ai/blob/${{ github.ref_name }}/CHANGELOG.md)
+
+            Authorized use only — systems you own, lab environments, and engagements with written permission.
           files: |
             cyberlab-dist/*.iso
             cyberlab-dist/SHA256SUMS
