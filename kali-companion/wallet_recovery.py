@@ -859,18 +859,19 @@ def _parse_bip38(encrypted_key: str) -> dict:
     if len(raw) != 39 or raw[0] != 0x01:
         raise ValueError("Not a BIP38 encrypted private key (it should start with 6P).")
     prefix2 = raw[1]
-    if prefix2 == 0x43:
-        raise ValueError("This is an EC-multiply BIP38 key (made from an intermediate passphrase "
-                         "code); it cannot be decrypted from the passphrase alone here.")
-    if prefix2 != 0x42:
-        raise ValueError("Unrecognised BIP38 key type.")
     flagbyte = raw[2]
-    return {"addresshash": raw[3:7], "encrypted1": raw[7:23], "encrypted2": raw[23:39],
-            "compressed": bool(flagbyte & 0x20)}
+    if prefix2 == 0x42:  # non-EC-multiply (passphrase encrypts the key directly)
+        return {"mode": "plain", "addresshash": raw[3:7],
+                "encrypted1": raw[7:23], "encrypted2": raw[23:39],
+                "compressed": bool(flagbyte & 0x20)}
+    if prefix2 == 0x43:  # EC-multiply (made from an intermediate passphrase code)
+        return {"mode": "ec", "addresshash": raw[3:7], "ownerentropy": raw[7:15],
+                "encrypted1_half": raw[15:23], "encrypted2": raw[23:39],
+                "compressed": bool(flagbyte & 0x20), "has_lotseq": bool(flagbyte & 0x04)}
+    raise ValueError("Unrecognised BIP38 key type.")
 
 
-def _bip38_try(parsed: dict, passphrase: str):
-    """Try one passphrase; return the recovered key dict or None on mismatch."""
+def _bip38_try_plain(parsed: dict, passphrase: str):
     pw = unicodedata.normalize("NFC", passphrase).encode("utf-8")
     derived = hashlib.scrypt(pw, salt=parsed["addresshash"], n=16384, r=8, p=8,
                              dklen=64, maxmem=132 * 1024 * 1024)
@@ -879,6 +880,39 @@ def _bip38_try(parsed: dict, passphrase: str):
     decrypted2 = aes.decrypt_block(parsed["encrypted2"], derived_half2)
     private_key = (bytes(a ^ b for a, b in zip(decrypted1, derived_half1[:16]))
                    + bytes(a ^ b for a, b in zip(decrypted2, derived_half1[16:])))
+    return private_key
+
+
+def _bip38_try_ec(parsed: dict, passphrase: str):
+    pw = unicodedata.normalize("NFC", passphrase).encode("utf-8")
+    owner = parsed["ownerentropy"]
+    if parsed["has_lotseq"]:
+        prefactor = hashlib.scrypt(pw, salt=owner[:4], n=16384, r=8, p=8, dklen=32,
+                                   maxmem=132 * 1024 * 1024)
+        passfactor = int.from_bytes(_sha256(_sha256(prefactor + owner)), "big")
+    else:
+        passfactor = int.from_bytes(hashlib.scrypt(pw, salt=owner, n=16384, r=8, p=8, dklen=32,
+                                                   maxmem=132 * 1024 * 1024), "big")
+    passpoint = private_to_public((passfactor % _N).to_bytes(32, "big"), compressed=True)
+    derived = hashlib.scrypt(passpoint, salt=parsed["addresshash"] + owner, n=1024, r=1, p=1,
+                             dklen=64, maxmem=132 * 1024 * 1024)
+    derived_half1, derived_half2 = derived[:32], derived[32:]
+    decrypted2 = bytes(a ^ b for a, b in zip(aes.decrypt_block(parsed["encrypted2"], derived_half2),
+                                             derived_half1[16:32]))
+    encrypted1_full = parsed["encrypted1_half"] + decrypted2[:8]
+    decrypted1 = bytes(a ^ b for a, b in zip(aes.decrypt_block(encrypted1_full, derived_half2),
+                                             derived_half1[:16]))
+    seedb = decrypted1[:16] + decrypted2[8:16]
+    factorb = int.from_bytes(_sha256(_sha256(seedb)), "big")
+    return ((passfactor * factorb) % _N).to_bytes(32, "big")
+
+
+def _bip38_try(parsed: dict, passphrase: str):
+    """Try one passphrase; return the recovered key dict or None on mismatch."""
+    if parsed["mode"] == "ec":
+        private_key = _bip38_try_ec(parsed, passphrase)
+    else:
+        private_key = _bip38_try_plain(parsed, passphrase)
     public_key = private_to_public(private_key, compressed=parsed["compressed"])
     address = p2pkh_address(public_key)
     if _sha256(_sha256(address.encode("ascii")))[:4] != parsed["addresshash"]:
@@ -888,7 +922,7 @@ def _bip38_try(parsed: dict, passphrase: str):
 
 
 def decrypt_bip38(encrypted_key: str, passphrase: str) -> dict:
-    """Decrypt a BIP38 key (no-EC-multiply) with a known passphrase.
+    """Decrypt a BIP38 key (non-EC-multiply or EC-multiply) with a known passphrase.
 
     Verified against the BIP38 specification's own test vectors. The address
     hash embedded in the key confirms the passphrase, so a wrong passphrase is

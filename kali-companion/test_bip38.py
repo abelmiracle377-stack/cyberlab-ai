@@ -15,6 +15,19 @@ VECTORS = [
      "L44B5gGEpqEDRS9vVPz7QT35jcBG2r3CZwSwQ4fCewXAhAhqGVpP", True),
 ]
 
+# EC-multiply vectors (prefix 6Pf / 6Pg), from the BIP38 specification.
+EC_VECTORS = [
+    ("TestingOneTwoThree", "6PfQu77ygVyJLZjfvMLyhLMQbYnu5uguoJJ4kMCLqWwPEdfpwANVS76gTX",
+     "5K4caxezwjGCGfnoPTZ8tMcJBLB7Jvyjv4xxeacadhq8nLisLR2"),
+    ("Satoshi", "6PfLGnQs6VZnrNpmVKfjotbnQuaJK4KZoPFrAjx1JMJUa1Ft8gnf5WxfKd",
+     "5KJ51SgxWaAYR13zd9ReMhJpwrcX47xTJh2D3fGPG9CM8vkv5sH"),
+    ("MOLON LABE", "6PgNBNNzDkKdhkT6uJntUXwwzQV8Rr2tZcbkDcuC9DZRsS6AtHts4Ypo1j",
+     "5JLdxTtcTHcfYcmJsNVy1v2PMDx432JPoYcBTVVRHpPaxUrdtf8"),
+    ("ΜΟΛΩΝ ΛΑΒΕ",
+     "6PgGWtx25kUg8QWvwuJAgorN6k9FbE25rv5dMRwu5SKMnfpfVe5mar2ngH",
+     "5KMKKuUmAkiNbA3DazMQiLfDq47qs8MAEThm4yL8R2PhV1ov33D"),
+]
+
 
 class Bip38DecryptTests(unittest.TestCase):
     def test_official_vectors(self):
@@ -22,6 +35,16 @@ class Bip38DecryptTests(unittest.TestCase):
             result = wr.decrypt_bip38(encrypted, passphrase)
             self.assertEqual(result["wif"], wif)
             self.assertEqual(result["compressed"], compressed)
+
+    def test_ec_multiply_vectors(self):
+        # Covers no-lot/sequence, lot/sequence, and a Greek UTF-8 passphrase.
+        for passphrase, encrypted, wif in EC_VECTORS:
+            result = wr.decrypt_bip38(encrypted, passphrase)
+            self.assertEqual(result["wif"], wif)
+
+    def test_ec_multiply_wrong_passphrase_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Incorrect passphrase"):
+            wr.decrypt_bip38(EC_VECTORS[0][1], "wrong")
 
     def test_wrong_passphrase_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Incorrect passphrase"):
