@@ -5,7 +5,9 @@ import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, Exte
 import { createClient } from "@/lib/supabase/client";
 
 type Task = { id: string; title: string; instructions: string; hint?: string; videoUrl?: string; requiresAnswer: boolean };
-type Room = { id: string; title: string; summary: string; difficulty: string; tool?: string; toolHref?: string; videoUrl?: string; resources?: { title: string; url: string }[]; tasks: Task[] };
+type Room = { id: string; title: string; summary: string; difficulty: string; tool?: string; toolHref?: string; videoUrl?: string; lab?: boolean; resources?: { title: string; url: string }[]; tasks: Task[] };
+type LabChallenge = { id: string; title: string; technique: string; pathHint: string };
+type LabInfo = { status: string; baseUrl: string | null; challenges: LabChallenge[] };
 type Cert = { code: string; title: string; passPercent: number; exam: { id: string; prompt: string; options: { id: string; text: string }[] }[] };
 type Track = { id: string; title: string; summary: string; level: string; rooms: Room[]; certification: Cert | null };
 type IssuedCert = { track_id: string; code: string; serial: string; percent: number; issued_at: string };
@@ -40,6 +42,24 @@ export default function AcademyPage() {
   const [flag, setFlag] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [examResult, setExamResult] = useState<{ passed: boolean; percent: number } | null>(null);
+  const [lab, setLab] = useState<LabInfo | null>(null);
+  const [labBusy, setLabBusy] = useState(false);
+
+  const BRIDGE = "http://127.0.0.1:8765";
+  async function labAction(action: "start" | "stop") {
+    setError(""); setLabBusy(true);
+    try {
+      const token = typeof window !== "undefined" ? window.sessionStorage.getItem("cyberlab.kaliBridgeToken") || "" : "";
+      if (!token) throw new Error("Pair the local Kali companion first (the lab runs on your machine).");
+      const res = await fetch(`${BRIDGE}/academy/lab/${action}`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "The companion rejected the lab request.");
+      setLab(action === "stop" ? null : data);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not reach the companion."); }
+    finally { setLabBusy(false); }
+  }
 
   const load = useCallback(async () => {
     const [c, p, cert] = await Promise.all([
@@ -121,6 +141,20 @@ export default function AcademyPage() {
       <h1 className="text-2xl font-semibold">{room.title}</h1>
       <p className="mt-1 max-w-2xl text-sm text-slate-400">{room.summary}</p>
       {room.tool && room.toolHref && <a href={room.toolHref} className="mt-3 inline-flex items-center gap-2 rounded border border-emerald-800 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-200">Open tool: {room.tool} <ExternalLink size={12}/></a>}
+      {room.lab && <div className="mt-4 rounded-xl border border-amber-900/50 bg-amber-950/10 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-amber-200">Hands-on lab target</div>
+          <div className="flex gap-2">
+            <button onClick={() => labAction("start")} disabled={labBusy} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{labBusy ? "…" : lab ? "Restart lab" : "Start lab"}</button>
+            {lab && <button onClick={() => labAction("stop")} disabled={labBusy} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">Stop</button>}
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">Runs a deliberately vulnerable target on your own machine (loopback only) via the paired companion. Attack it to capture each flag, then submit the flags below.</p>
+        {lab?.baseUrl && <>
+          <p className="mt-2 text-xs text-emerald-200">Target: <code className="rounded bg-black/30 px-1.5 py-0.5">{lab.baseUrl}</code> — point the assessment tool or your browser/repeater here.</p>
+          <div className="mt-3 space-y-1.5">{lab.challenges.map((c) => <div key={c.id} className="text-[11px] text-slate-400"><b className="text-slate-300">{c.title}</b> — {c.technique} <code className="text-slate-500">{c.pathHint}</code></div>)}</div>
+        </>}
+      </div>}
       {embed(room.videoUrl) && <div className="mt-5 aspect-video w-full overflow-hidden rounded-xl border border-slate-800"><iframe className="h-full w-full" src={embed(room.videoUrl)!} title="Lesson video" allowFullScreen/></div>}
       {room.resources && room.resources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{room.resources.map((r) => <a key={r.url} href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded border border-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-600">{r.title} <ExternalLink size={11}/></a>)}</div>}
       <div className="mt-6 space-y-3">
@@ -183,7 +217,7 @@ export default function AcademyPage() {
     <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><GraduationCap size={14}/> CYBERLAB ACADEMY</div>
     <h1 className="text-3xl font-semibold tracking-tight">Learn by doing</h1>
     <p className="mt-2 max-w-2xl text-sm text-slate-400">Hack The Box / TryHackMe-style tracks that teach real skills on CyberLab's own tools — with videos, hands-on rooms, flag answers, and certifications you can earn.</p>
-    {certs.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{certs.map((c) => <span key={c.serial} className="inline-flex items-center gap-1 rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200"><Award size={12}/> {c.code} · {c.serial}</span>)}</div>}
+    {certs.length > 0 && <div className="mt-5 flex flex-wrap items-center gap-2">{certs.map((c) => <a key={c.serial} href={"/verify?serial=" + encodeURIComponent(c.serial)} className="inline-flex items-center gap-1 rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200 hover:border-emerald-600"><Award size={12}/> {c.code} · {c.serial}</a>)}<a href="/verify" className="text-xs text-emerald-300/70 hover:text-emerald-200">Verify a certificate →</a></div>}
     <div className="mt-6 grid gap-4 md:grid-cols-2">
       {tracks.map((t) => {
         const p = progressOf(t);

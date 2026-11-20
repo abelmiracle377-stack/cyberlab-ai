@@ -16,7 +16,7 @@ export type AcademyRoom = {
   id: string; title: string; summary: string;
   difficulty: "intro" | "easy" | "medium" | "hard";
   tool?: string; toolHref?: string; videoUrl?: string;
-  resources?: AcademyResource[]; tasks: AcademyTask[];
+  lab?: boolean; resources?: AcademyResource[]; tasks: AcademyTask[];
 };
 export type CertQuestion = { id: string; prompt: string; options: { id: string; text: string }[]; answer: string };
 export type Certification = { code: string; title: string; passPercent: number; exam: CertQuestion[] };
@@ -195,6 +195,58 @@ export const TRACKS: AcademyTrack[] = [
   },
 ];
 
+// Capture-the-flag track against the bundled vulnerable lab (academy_lab.py).
+// Answers MUST match the lab's flags exactly.
+TRACKS.push({
+  id: "ctf-lab",
+  title: "Capture The Flag: Vulnerable Shop",
+  summary: "Attack a bundled, deliberately vulnerable target that runs on your own machine (loopback only) and capture real flags — the hands-on way to practise everything the Web track teaches.",
+  level: "intermediate",
+  rooms: [
+    {
+      id: "ctf-shop",
+      title: "The Vulnerable Shop",
+      summary: "Start the lab from this room, then find five flags by doing the techniques — recon, file disclosure, header inspection and error-based SQLi.",
+      difficulty: "medium",
+      tool: "Web Application Assessment", toolHref: "/web-assessment",
+      lab: true,
+      resources: [{ title: "OWASP WSTG", url: "https://owasp.org/www-project-web-security-testing-guide/" }],
+      tasks: [
+        { id: "ctf-recon", title: "Robots recon",
+          instructions: "Start the lab (button above). Request /robots.txt on the lab's base URL, follow the Disallowed path, and submit the flag it returns.",
+          answer: "CYBERLAB{recon_robots_txt}", hint: "Disallow: points at a hidden path." },
+        { id: "ctf-dotenv", title: "Exposed .env",
+          instructions: "The app serves its environment file. Request /.env and submit the FLAG= value.",
+          answer: "CYBERLAB{dotenv_secrets_exposed}" },
+        { id: "ctf-git", title: "Exposed .git",
+          instructions: "The version-control folder is downloadable. Read /.git/config and submit the flag in its comment.",
+          answer: "CYBERLAB{git_source_leak}", hint: "Also try /.git/HEAD to confirm the exposure." },
+        { id: "ctf-header", title: "Leaky response header",
+          instructions: "Inspect the response headers of /api/status (use the assessment tool or a repeater). Submit the value of the X-Flag header.",
+          answer: "CYBERLAB{response_header_leak}" },
+        { id: "ctf-sqli", title: "Error-based SQL injection",
+          instructions: "Break the product query: request /product?id=1' (a single quote). The database error leaks a debug flag. Submit it.",
+          answer: "CYBERLAB{error_based_sqli}", hint: "A single quote breaks SQL string context." },
+      ],
+    },
+  ],
+  certification: {
+    code: "CCCP", title: "CyberLab Certified CTF Player", passPercent: 80,
+    exam: [
+      { id: "cccp-1", prompt: "Where does robots.txt help an attacker?",
+        options: [{ id: "a", text: "It encrypts traffic" }, { id: "b", text: "It can disclose hidden paths" }, { id: "c", text: "It blocks all bots" }, { id: "d", text: "It patches the server" }], answer: "b" },
+      { id: "cccp-2", prompt: "A web-served .env file is dangerous because it:",
+        options: [{ id: "a", text: "Speeds up the site" }, { id: "b", text: "Leaks application secrets" }, { id: "c", text: "Is required by HTTP" }, { id: "d", text: "Is always empty" }], answer: "b" },
+      { id: "cccp-3", prompt: "Error-based SQL injection is revealed by:",
+        options: [{ id: "a", text: "A 404 page" }, { id: "b", text: "A database error after breaking query syntax" }, { id: "c", text: "A redirect" }, { id: "d", text: "A favicon" }], answer: "b" },
+      { id: "cccp-4", prompt: "Inspecting response headers can reveal:",
+        options: [{ id: "a", text: "Nothing useful" }, { id: "b", text: "Debug values and technology disclosure" }, { id: "c", text: "The user's password" }, { id: "d", text: "The server's CPU" }], answer: "b" },
+      { id: "cccp-5", prompt: "The lab target runs:",
+        options: [{ id: "a", text: "On the public internet" }, { id: "b", text: "On loopback (127.0.0.1) on your own machine" }, { id: "c", text: "On a classmate's server" }, { id: "d", text: "In the cloud" }], answer: "b" },
+    ],
+  },
+});
+
 export function findTrack(id: string): AcademyTrack | undefined {
   return TRACKS.find((t) => t.id === id);
 }
@@ -216,7 +268,7 @@ export function publicTracks() {
     id: t.id, title: t.title, summary: t.summary, level: t.level,
     rooms: t.rooms.map((r) => ({
       id: r.id, title: r.title, summary: r.summary, difficulty: r.difficulty,
-      tool: r.tool, toolHref: r.toolHref, videoUrl: r.videoUrl, resources: r.resources,
+      tool: r.tool, toolHref: r.toolHref, videoUrl: r.videoUrl, lab: Boolean(r.lab), resources: r.resources,
       tasks: r.tasks.map((task) => ({
         id: task.id, title: task.title, instructions: task.instructions,
         hint: task.hint, videoUrl: task.videoUrl, requiresAnswer: Boolean(task.answer),

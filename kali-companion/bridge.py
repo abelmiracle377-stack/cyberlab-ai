@@ -31,6 +31,7 @@ from web_testing import execute_request, request_history
 from web_crawler import run_crawl
 from web_active_scan import run_active_scan
 from web_assessment import run_assessment
+import academy_lab
 from parameter_lab import inspect_parameters, generate_cases
 from parameter_analysis import compare_responses
 from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
@@ -1299,7 +1300,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/academy/lab/status", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -1361,6 +1362,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, pending_websocket_frames(), origin)
         if path == "/network/interfaces":
             return self.send_json(200, list_capture_interfaces(), origin)
+        if path == "/academy/lab/status":
+            return self.send_json(200, academy_lab.lab_status(), origin)
         if path == "/web/history":
             query = parse_qs(urlparse(self.path).query)
             try:
@@ -1413,7 +1416,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1536,6 +1539,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, result, origin)
                 finally:
                     web_assessment_lock.release()
+            if path == "/academy/lab/start":
+                return self.send_json(200, academy_lab.start_lab(), origin)
+            if path == "/academy/lab/stop":
+                return self.send_json(200, academy_lab.stop_lab(), origin)
             if path == "/web/crawl":
                 if not web_crawl_lock.acquire(blocking=False):
                     return self.send_json(409, {"error": "A native web crawl is already running."}, origin)

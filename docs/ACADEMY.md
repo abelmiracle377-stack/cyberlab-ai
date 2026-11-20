@@ -33,6 +33,36 @@ Each room or task may carry a `videoUrl`:
   (e.g. `academy-videos`, public read) and set the task's `videoUrl` to the
   file's public URL, or set it to a direct `.mp4`/`.webm` URL.
 
+## Hands-on CTF lab (bundled vulnerable target)
+
+The *Capture The Flag: Vulnerable Shop* track runs against a real, deliberately
+vulnerable web app bundled with the companion (`kali-companion/academy_lab.py`).
+It binds **127.0.0.1 only** — a sandbox on the learner's own machine, nothing
+external. The "The Vulnerable Shop" room has a **Start lab** button that calls
+the paired companion (`POST /academy/lab/start`); the learner then attacks the
+target with the assessment tool, a browser or a repeater and submits the five
+flags they capture:
+
+- `/robots.txt` recon → a disallowed hidden path reveals a flag
+- `/.env` file disclosure
+- `/.git/config` source disclosure
+- an `X-Flag` response header on `/api/status`
+- error-based SQL injection on `/product?id=1'`
+
+Flags are fixed and matched by the track's task answers (stripped from the
+browser), so a learner must actually perform the technique to capture them.
+`build_response` is a pure function, unit-tested in `test_academy_lab.py`.
+Bridge routes: `POST /academy/lab/start`, `POST /academy/lab/stop`,
+`GET /academy/lab/status`.
+
+## Public certificate verification
+
+`/verify` confirms a certificate by serial for anyone — no login needed — via a
+`SECURITY DEFINER` function `verify_certificate(serial)` that returns only the
+public fields (code, track, score, issue date, serial), never the owner. Apply
+`supabase/migrations/202611200008_academy_verify.sql`. Earned certificates on
+the Academy home link to `/verify?serial=…`.
+
 ## Answer integrity
 
 The browser is served curriculum with answer keys stripped
