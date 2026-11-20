@@ -5,6 +5,7 @@ import {
   Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, Camera, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop, FileCode2,
   Database, FileLock2, FileSearch, Fingerprint, HardDriveDownload, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Server, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
+  MessageCircle,
 } from "lucide-react";
 
 const groups = [
@@ -52,6 +53,9 @@ const groups = [
     { label: "Camera Intelligence", icon: Camera, href: "/kali-connection#camera-intelligence" },
     { label: "Personal VPS Gateway", icon: Server, href: "/kali-connection#vps-gateway" },
     { label: "Settings", icon: Settings2, href: "/settings" },
+  ]},
+  { title: "COMMUNITY", items: [
+    { label: "Chat", icon: MessageCircle, href: "/chat" },
   ]},
 ];
 
