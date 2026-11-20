@@ -42,6 +42,7 @@ import balance_check
 import kali_tools
 import host_telemetry
 import soc_engine
+import cybersoc
 import splunk_connector
 import wazuh_connector
 import pcap_analysis
@@ -730,6 +731,32 @@ def wallet_bip38_crack(data: dict) -> dict:
     return result
 
 
+def soc_run_cycle(data: dict) -> dict:
+    """Run one autonomous CyberSOC cycle on this host.
+
+    Dry-run by default (analysis + escalations, no actions executed). Set
+    dryRun=false to let authorized safe actions run; destructive actions still
+    only run if the policy's allowed_actions explicitly includes them.
+    """
+    provided = data.get("events") or []
+    if not isinstance(provided, list):
+        raise ValueError("events must be a list.")
+    host = str(data.get("host", "local"))[:120]
+    collectors = []
+    if data.get("fromTelemetry") is not False:
+        collectors.append(cybersoc.telemetry_collector(host))
+    if provided:
+        collectors.append(lambda: provided)
+    policy = data.get("policy") if isinstance(data.get("policy"), dict) else None
+    if policy and isinstance(policy.get("allowed_actions"), list):
+        policy = {**policy, "allowed_actions": set(policy["allowed_actions"])}
+    dry_run = data.get("dryRun") is not False
+    responder = None if dry_run else cybersoc.build_default_responder()
+    report = cybersoc.run_cycle(collectors, responder=responder, policy=policy)
+    report["dry_run"] = dry_run
+    return report
+
+
 def soc_splunk_send(data: dict) -> dict:
     """Forward an event to Splunk HEC from the companion."""
     return splunk_connector.send_hec_event(
@@ -1383,7 +1410,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1400,7 +1427,7 @@ class Handler(BaseHTTPRequestHandler):
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
                 65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover"} else
-                1048576 if path == "/soc/analyze" else
+                1048576 if path in {"/soc/analyze", "/soc/run-cycle"} else
                 4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
@@ -1430,6 +1457,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_electrum_derive(data), origin)
             if path == "/soc/analyze":
                 return self.send_json(200, soc_analyze(data), origin)
+            if path == "/soc/run-cycle":
+                return self.send_json(200, soc_run_cycle(data), origin)
             if path == "/soc/splunk/send":
                 return self.send_json(200, soc_splunk_send(data), origin)
             if path == "/soc/splunk/search":
