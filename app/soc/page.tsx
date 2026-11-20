@@ -73,34 +73,66 @@ export default function SocPage() {
   const [busy, setBusy] = useState("");
   const [cycleInfo, setCycleInfo] = useState("");
   const [showExposure, setShowExposure] = useState(false);
-  const [exposureIps, setExposureIps] = useState("");
+  const [assetInput, setAssetInput] = useState("");
   const [shodanKey, setShodanKey] = useState("");
+  const [assets, setAssets] = useState<{ id: string; asset: string; label: string | null; last_scanned_at: string | null }[]>([]);
+  const [autoSweep, setAutoSweep] = useState(false);
 
-  async function scanExposure() {
-    setError(""); setCycleInfo("");
-    if (!token.trim()) { setError("Enter the companion bridge token."); return; }
-    if (!shodanKey.trim()) { setError("Enter your Shodan API key."); return; }
-    const ips = exposureIps.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 25);
-    if (ips.length === 0) { setError("Enter one or more asset IPs to assess."); return; }
-    setBusy("exposure");
+  const loadAssets = useCallback(async () => {
+    try { const d = await api("/api/soc/exposure-assets"); setAssets(d.assets || []); } catch { /* not critical */ }
+  }, []);
+
+  async function addAssets() {
+    const items = assetInput.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 25);
+    if (items.length === 0) return;
     try {
-      if (typeof window !== "undefined") window.sessionStorage.setItem("cyberlab.shodanApiKey", shodanKey.trim());
-      const alerts: Record<string, unknown>[] = [];
-      let scanned = 0;
-      for (const ip of ips) {
+      for (const asset of items) await api("/api/soc/exposure-assets", { method: "POST", body: JSON.stringify({ asset }) });
+      setAssetInput(""); await loadAssets();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not add asset."); }
+  }
+  async function removeAsset(id: string) {
+    try { await api("/api/soc/exposure-assets?id=" + encodeURIComponent(id), { method: "DELETE" }); await loadAssets(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not remove asset."); }
+  }
+
+  const sweepAssets = useCallback(async (list: { id: string; asset: string }[], key: string, bridgeToken: string) => {
+    if (!bridgeToken.trim() || !key.trim() || list.length === 0) return;
+    const alerts: Record<string, unknown>[] = [];
+    const scannedIds: string[] = [];
+    for (const a of list) {
+      try {
         const res = await fetch(BRIDGE + "/shodan/host", {
-          method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token.trim() },
-          body: JSON.stringify({ apiKey: shodanKey.trim(), ip }),
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + bridgeToken.trim() },
+          body: JSON.stringify({ apiKey: key.trim(), ip: a.asset }),
         });
         const host = await res.json();
-        if (res.ok) { scanned += 1; alerts.push(...exposureAlerts(host)); }
-      }
-      if (alerts.length) await api("/api/soc/alerts", { method: "POST", body: JSON.stringify({ alerts, source: "shodan" }) });
-      setCycleInfo(`External exposure: scanned ${scanned}/${ips.length} assets · ${alerts.length} findings ingested as alerts`);
-      await loadAlerts();
-    } catch (e) { setError(e instanceof Error ? e.message : "Exposure scan failed. Is the companion paired?"); }
+        if (res.ok) { scannedIds.push(a.id); alerts.push(...exposureAlerts(host)); }
+      } catch { /* skip unreachable asset */ }
+    }
+    if (alerts.length) await api("/api/soc/alerts", { method: "POST", body: JSON.stringify({ alerts, source: "shodan" }) });
+    if (scannedIds.length) await api("/api/soc/exposure-assets", { method: "PATCH", body: JSON.stringify({ ids: scannedIds }) });
+    setCycleInfo(`Exposure sweep: ${scannedIds.length}/${list.length} assets · ${alerts.length} findings ingested · ${new Date().toLocaleTimeString()}`);
+    await Promise.all([loadAlerts(), loadAssets()]);
+  }, [loadAlerts, loadAssets]);
+
+  async function sweepNow() {
+    setError("");
+    if (!token.trim()) { setError("Enter the companion bridge token."); return; }
+    if (!shodanKey.trim()) { setError("Enter your Shodan API key."); return; }
+    if (assets.length === 0) { setError("Add one or more assets to monitor first."); return; }
+    if (typeof window !== "undefined") window.sessionStorage.setItem("cyberlab.shodanApiKey", shodanKey.trim());
+    setBusy("exposure");
+    try { await sweepAssets(assets, shodanKey, token); }
+    catch (e) { setError(e instanceof Error ? e.message : "Exposure sweep failed. Is the companion paired?"); }
     finally { setBusy(""); }
   }
+
+  // Recurring sweep every 15 minutes while enabled and the console is open.
+  useEffect(() => {
+    if (!autoSweep || assets.length === 0 || !token.trim() || !shodanKey.trim()) return;
+    const id = setInterval(() => { void sweepAssets(assets, shodanKey, token); }, 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [autoSweep, assets, shodanKey, token, sweepAssets]);
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -148,7 +180,7 @@ export default function SocPage() {
         setToken(sessionStorage.getItem(TOKEN_KEY) || "");
         setShodanKey(sessionStorage.getItem("cyberlab.shodanApiKey") || "");
       }
-      if (user) await loadAlerts();
+      if (user) { await loadAlerts(); await loadAssets(); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -308,12 +340,21 @@ export default function SocPage() {
           <Globe size={13} /> Exposure</button>
         {cycleInfo && <span className="soc-cycle-info">{cycleInfo}</span>}
       </section>
-      {showExposure && <section className="soc-controls" style={{ gap: 8 }}>
-        <input value={exposureIps} onChange={(e) => setExposureIps(e.target.value)} placeholder="Asset IPs to assess (comma/space separated)" style={{ flex: 1, minWidth: 220 }} />
-        <input value={shodanKey} onChange={(e) => setShodanKey(e.target.value)} type="password" autoComplete="off" placeholder="Shodan API key" style={{ maxWidth: 190 }} />
-        <button className="soc-btn primary" disabled={busy === "exposure"} onClick={scanExposure}>
-          {busy === "exposure" ? <Loader2 size={13} className="spin" /> : <Globe size={13} />} Scan exposure</button>
-        <span className="soc-cycle-info">Read-only Shodan OSINT → ingests risky ports and known CVEs as alerts.</span>
+      {showExposure && <section className="soc-controls" style={{ flexWrap: "wrap", gap: 8, rowGap: 10 }}>
+        <input value={assetInput} onChange={(e) => setAssetInput(e.target.value)} placeholder="Add asset IPs/hostnames (comma/space separated)" style={{ flex: 1, minWidth: 220 }} />
+        <button className="soc-btn" onClick={addAssets}>Add</button>
+        <input value={shodanKey} onChange={(e) => setShodanKey(e.target.value)} type="password" autoComplete="off" placeholder="Shodan API key" style={{ maxWidth: 170 }} />
+        <button className="soc-btn primary" disabled={busy === "exposure"} onClick={sweepNow}>
+          {busy === "exposure" ? <Loader2 size={13} className="spin" /> : <Globe size={13} />} Sweep now</button>
+        <label className="soc-cycle-info" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <input type="checkbox" checked={autoSweep} onChange={(e) => setAutoSweep(e.target.checked)} /> Auto every 15m</label>
+        <div style={{ flexBasis: "100%", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {assets.length === 0 ? <span className="soc-cycle-info">No monitored assets yet. Add IPs/hostnames you own or are authorized to assess; sweeps run via the companion so your key stays local.</span>
+            : assets.map((a) => <span key={a.id} className="soc-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {a.asset}{a.last_scanned_at ? ` · ${new Date(a.last_scanned_at).toLocaleDateString()}` : " · never"}
+                <button onClick={() => removeAsset(a.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}>✕</button>
+              </span>)}
+        </div>
       </section>}
       {error && <div className="soc-error"><AlertTriangle size={14} /> {error}</div>}
 
