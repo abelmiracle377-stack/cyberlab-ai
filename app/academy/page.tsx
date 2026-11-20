@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2, Trophy } from "lucide-react";
+import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2, Trophy, Terminal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type Task = { id: string; title: string; instructions: string; hint?: string; videoUrl?: string; requiresAnswer: boolean };
@@ -26,6 +26,19 @@ function embed(url?: string): string | null {
 const DIFF: Record<string, string> = {
   intro: "text-sky-300", easy: "text-emerald-300", medium: "text-amber-300", hard: "text-rose-300",
 };
+// Client-safe request presets for the in-browser Attack Console (no flags here).
+const CTF_PRESETS: { id: string; title: string; path: string; query: string; cookie?: string; jwt?: boolean }[] = [
+  { id: "recon", title: "robots.txt", path: "/robots.txt", query: "" },
+  { id: "dotenv", title: ".env", path: "/.env", query: "" },
+  { id: "git", title: ".git", path: "/.git/config", query: "" },
+  { id: "header", title: "X-Flag header", path: "/api/status", query: "" },
+  { id: "sqli", title: "SQLi", path: "/product", query: "id=1'" },
+  { id: "idor", title: "IDOR", path: "/api/orders", query: "id=1000" },
+  { id: "traversal", title: "Traversal", path: "/download", query: "file=../../secret/flag.txt" },
+  { id: "authbypass", title: "Auth bypass", path: "/admin", query: "", cookie: "role=admin" },
+  { id: "jwt", title: "JWT none", path: "/api/profile", query: "", jwt: true },
+  { id: "ssrf", title: "SSRF", path: "/fetch", query: "url=http://169.254.169.254/latest/meta-data/" },
+];
 
 export default function AcademyPage() {
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
@@ -45,6 +58,31 @@ export default function AcademyPage() {
   const [lab, setLab] = useState<LabInfo | null>(null);
   const [labBusy, setLabBusy] = useState(false);
   const [scoreboard, setScoreboard] = useState<{ display_name: string; flags: number; last_capture: string }[] | null>(null);
+  const [conPath, setConPath] = useState("/");
+  const [conQuery, setConQuery] = useState("");
+  const [conCookie, setConCookie] = useState("");
+  const [conAuth, setConAuth] = useState("");
+  const [conResp, setConResp] = useState<{ status: number; headers: Record<string, string>; body: string } | null>(null);
+  const [conBusy, setConBusy] = useState(false);
+
+  async function sendConsole() {
+    setConBusy(true); setError("");
+    try {
+      const headers: Record<string, string> = {};
+      if (conCookie.trim()) headers["Cookie"] = conCookie.trim();
+      if (conAuth.trim()) headers["Authorization"] = conAuth.trim();
+      const data = await api("/api/academy/lab/target", {
+        method: "POST",
+        body: JSON.stringify({ method: "GET", path: conPath, query: conQuery, headers }),
+      });
+      setConResp(data);
+    } catch (e) { setError(e instanceof Error ? e.message : "Target request failed."); }
+    finally { setConBusy(false); }
+  }
+  function buildAdminJwt() {
+    const b64url = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    setConAuth("Bearer " + b64url({ alg: "none", typ: "JWT" }) + "." + b64url({ role: "admin" }) + ".");
+  }
 
   const loadScoreboard = useCallback(async () => {
     try {
@@ -164,6 +202,33 @@ export default function AcademyPage() {
           <p className="mt-2 text-xs text-emerald-200">Target: <code className="rounded bg-black/30 px-1.5 py-0.5">{lab.baseUrl}</code> — point the assessment tool or your browser/repeater here.</p>
           <div className="mt-3 space-y-1.5">{lab.challenges.map((c) => <div key={c.id} className="text-[11px] text-slate-400"><b className="text-slate-300">{c.title}</b> — {c.technique} <code className="text-slate-500">{c.pathHint}</code></div>)}</div>
         </>}
+      </div>}
+      {room.lab && <div className="mt-4 rounded-xl border border-sky-900/50 bg-sky-950/10 p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-sky-200"><Terminal size={15}/> Attack Console — practice in-browser (no setup)</div>
+        <p className="mt-1 text-xs text-slate-400">The vulnerable target is hosted in the app. Craft a request below, send it, and read the flag from the response — then submit it in the task. No companion needed.</p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {CTF_PRESETS.map((p) => <button key={p.id} onClick={() => { setConPath(p.path); setConQuery(p.query); if (p.cookie) setConCookie(p.cookie); if (p.jwt) buildAdminJwt(); }} className="rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-sky-600">{p.title}</button>)}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr]">
+          <div className="flex items-center rounded border border-slate-700 bg-[#06100e] px-2 text-xs text-slate-500">GET</div>
+          <input value={conPath} onChange={(e) => setConPath(e.target.value)} placeholder="/path" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <label className="self-center text-[11px] text-slate-500">query</label>
+          <input value={conQuery} onChange={(e) => setConQuery(e.target.value)} placeholder="id=1'" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <label className="self-center text-[11px] text-slate-500">Cookie</label>
+          <input value={conCookie} onChange={(e) => setConCookie(e.target.value)} placeholder="role=admin" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <label className="self-center text-[11px] text-slate-500">Authorization</label>
+          <input value={conAuth} onChange={(e) => setConAuth(e.target.value)} placeholder="Bearer …" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button onClick={sendConsole} disabled={conBusy} className="rounded bg-sky-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{conBusy ? "Sending…" : "Send request"}</button>
+          <button onClick={() => setConCookie("role=admin")} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">Forge admin cookie</button>
+          <button onClick={buildAdminJwt} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">Build alg:none JWT</button>
+        </div>
+        {conResp && <div className="mt-3 rounded-lg border border-slate-800 bg-[#06100e] p-3 font-mono text-[11px]">
+          <div className={conResp.status < 400 ? "text-emerald-300" : "text-amber-300"}>HTTP {conResp.status}</div>
+          {Object.entries(conResp.headers).map(([k, val]) => <div key={k} className="text-slate-500">{k}: {val}</div>)}
+          <pre className="mt-2 whitespace-pre-wrap break-all text-slate-300">{conResp.body}</pre>
+        </div>}
       </div>}
       {embed(room.videoUrl) && <div className="mt-5 aspect-video w-full overflow-hidden rounded-xl border border-slate-800"><iframe className="h-full w-full" src={embed(room.videoUrl)!} title="Lesson video" allowFullScreen/></div>}
       {room.resources && room.resources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{room.resources.map((r) => <a key={r.url} href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded border border-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-600">{r.title} <ExternalLink size={11}/></a>)}</div>}

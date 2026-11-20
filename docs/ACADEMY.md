@@ -58,6 +58,23 @@ and returns the lesson flag. `build_response` is a pure function, unit-tested in
 `test_academy_lab.py` (15 tests). Bridge routes: `POST /academy/lab/start`,
 `POST /academy/lab/stop`, `GET /academy/lab/status`.
 
+### In-browser Attack Console (no setup)
+
+The lab target is also hosted **inside the web app** (`lib/academy-lab-target.ts`,
+a TypeScript twin of the Python `build_response`, served by
+`POST /api/academy/lab/target`). The CTF room renders an **Attack Console**: a
+request builder (path, query, Cookie, Authorization) with per-challenge presets
+and helpers that forge an `role=admin` cookie or build an `alg:none` JWT. The
+learner crafts the request, sends it, reads the flag from the response and
+submits it — entirely in the browser, with no companion, VPN or local setup.
+Flags are identical across the Python lab and the hosted twin, and the twin is
+import-locked to the server (keys never reach the client bundle). Parity is
+enforced by `tests/academy-lab-target.test.ts`.
+
+This is a self-contained practice target plus attacker tooling, not a full cloud
+Linux desktop; learners who want to point real tools (Burp, curl) at a live
+target can still run the companion lab locally (`Start lab`).
+
 ### Scoreboard
 
 `ctf_scoreboard()` (migration `202611200009_academy_scoreboard.sql`) is a
