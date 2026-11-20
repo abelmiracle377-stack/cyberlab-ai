@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Bug, CircleAlert, ShieldCheck, Target } from "lucide-react";
+import TerminalStream from "../terminal-stream";
 
 type Finding = {
   id: string; title: string; severity: string; owasp: string; cwe: string;
@@ -107,7 +108,10 @@ export default function WebAssessmentPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{SEV_ORDER.map((s) => <div key={s} className="rounded-lg border border-slate-800 bg-[#0b1715] p-4"><div className="text-[10px] uppercase tracking-wider text-slate-500">{s}</div><div className="mt-1 text-2xl font-semibold text-amber-200">{bySeverity[s] ?? 0}</div></div>)}</div>
         <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">FINDINGS ({ranked.length})</h2>
           {ranked.length === 0 ? <p className="text-xs text-slate-400">No issues were detected by these checks. This does not prove the target is secure.</p> : <div className="space-y-3">{ranked.map((f) => <div key={f.id} className="border-b border-slate-800/70 pb-3"><div className="flex flex-wrap items-center gap-2"><span className={"rounded border px-2 py-0.5 text-[9px] uppercase " + (SEV_CLASS[f.severity] || SEV_CLASS.info)}>{f.severity}</span><b className="text-xs">{f.title}</b><span className="text-[10px] text-slate-500">{f.owasp} · {f.cwe} · {f.confidence} confidence</span></div><p className="mt-1 break-all text-[11px] text-slate-500">{f.url}</p><p className="mt-1 text-xs text-slate-400">{f.detail}</p><p className="mt-1 text-xs text-emerald-300/80"><b>Fix:</b> {f.remediation}</p></div>)}</div>}</div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">CHECK LOG ({result.checks.length})</h2><div className="max-h-72 space-y-2 overflow-y-auto">{result.checks.map((c, i) => <div key={i} className="border-b border-slate-800/70 py-2 text-xs"><b className="text-emerald-300">{c.type}</b> · {c.status ?? c.error ?? "done"} {c.parameter ? "· parameter: " + c.parameter : ""}<p className="mt-1 break-all text-slate-500">{c.url}</p></div>)}</div></div>
+        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">CHECK LOG ({result.checks.length})</h2>
+          <div className="max-h-72 overflow-y-auto rounded border border-slate-800 bg-[#06100e] p-3">
+            <TerminalStream lines={result.checks.map((c) => `${c.type} · ${c.status ?? c.error ?? "done"}${c.parameter ? " · param " + c.parameter : ""}  ${c.url}`)} />
+          </div></div>
         <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">LIMITATIONS</h2><ul className="list-disc space-y-1 pl-5 text-xs text-slate-400">{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>
       </section>}
       <p className="mt-8 text-[10px] tracking-wide text-slate-600">CYBERLAB AI · WEB APPLICATION ASSESSMENT · LOCAL COMPANION EXECUTION</p>
