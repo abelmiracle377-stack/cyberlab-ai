@@ -12,7 +12,7 @@ const SEV: Record<string, string> = {
 function Field({ value, onChange, label, ph, w }: { value: string; onChange: (v: string) => void; label: string; ph?: string; w?: string }) {
   return <div className={w || "flex-1"}>
     <label className="mb-1 block text-[11px] text-slate-500">{label}</label>
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={ph} className="w-full rounded border border-slate-700 bg-[#06100e] px-2.5 py-1.5 text-sm outline-none focus:border-emerald-600"/>
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={ph} className="w-full rounded border border-slate-700 bg-[#0D1117] px-2.5 py-1.5 text-sm outline-none focus:border-emerald-600"/>
   </div>;
 }
 function Btn({ label, running, disabled, onClick }: { label: string; running: boolean; disabled: boolean; onClick: () => void }) {
@@ -65,7 +65,7 @@ export default function WifiPage() {
     finally { setBusy(""); }
   }
 
-  const card = "rounded-xl border border-slate-800 bg-[#0b1715] p-4";
+  const card = "rounded-xl border border-slate-800 bg-[#161B22] p-4";
   const audit = (result?.data as { audit?: { findings?: { essid: string; bssid: string; severity: string; posture: string; recommendation: string }[] } })?.audit?.findings;
 
   return <main className="min-h-screen bg-transparent text-[#d7e7e1]">
@@ -76,12 +76,12 @@ export default function WifiPage() {
       <p className="mt-2 max-w-2xl text-sm text-slate-400">Runs the standard Kali tools on your own adapter through the paired companion. For networks you own or are explicitly authorized to test.</p>
 
       <div className="mt-5"><label className="mb-1 block text-xs text-slate-400">Companion bridge token</label>
-        <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="w-full max-w-md rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
+        <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="w-full max-w-md rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
 
       <section className="mt-5 rounded-xl border border-amber-900/50 bg-amber-950/10 p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-amber-200"><ShieldCheck size={15}/> Authorization (required for active operations)</div>
         <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} className="mt-0.5 accent-amber-500"/> I own, or have written authorization to test, the networks I target here.</label>
-        <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Engagement / authorization reference (e.g. LAB-2026-001)" className="mt-3 w-full max-w-md rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-amber-600"/>
+        <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Engagement / authorization reference (e.g. LAB-2026-001)" className="mt-3 w-full max-w-md rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-amber-600"/>
         {!gated && <p className="mt-2 text-[11px] text-slate-500">Active steps (deauth, capture, crack, WPS, auto) unlock once both are provided. Interface listing and scanning are always available.</p>}
       </section>
 
@@ -123,24 +123,24 @@ export default function WifiPage() {
             <a href="/wifi-crack" className="text-[11px] text-sky-300 hover:text-sky-200">Upload a capture instead →</a></div>
           <div className="mt-3 grid gap-2"><Field value={f.capturePath} onChange={(v) => set("capturePath", v)} label="Capture path on companion (.cap / .hc22000)"/><Field value={f.wordlistPath} onChange={(v) => set("wordlistPath", v)} label="Wordlist"/></div>
           <div className="mt-2 flex items-end gap-2">
-            <div><label className="mb-1 block text-[11px] text-slate-500">Tool</label><select value={f.tool} onChange={(e) => set("tool", e.target.value)} className="rounded border border-slate-700 bg-[#06100e] px-2 py-1.5 text-sm"><option value="aircrack">aircrack-ng</option><option value="hashcat">hashcat</option></select></div>
+            <div><label className="mb-1 block text-[11px] text-slate-500">Tool</label><select value={f.tool} onChange={(e) => set("tool", e.target.value)} className="rounded border border-slate-700 bg-[#0D1117] px-2 py-1.5 text-sm"><option value="aircrack">aircrack-ng</option><option value="hashcat">hashcat</option></select></div>
             <Btn label="Crack" running={busy === "crack"} disabled={busy !== "" || !gated} onClick={() => post("/wifi/crack-wpa", { ...auth(), capturePath: f.capturePath, wordlistPath: f.wordlistPath, tool: f.tool }, "crack", "WPA crack")}/></div>
         </div>
 
         <div className={card}>
           <h2 className="text-sm font-semibold">WPS &amp; automated audit</h2>
           <div className="mt-3 flex items-end gap-2"><Field value={f.bssid} onChange={(v) => set("bssid", v)} label="BSSID"/>
-            <div><label className="mb-1 block text-[11px] text-slate-500">WPS tool</label><select value={f.wpsTool} onChange={(e) => set("wpsTool", e.target.value)} className="rounded border border-slate-700 bg-[#06100e] px-2 py-1.5 text-sm"><option value="reaver">reaver</option><option value="bully">bully</option></select></div>
+            <div><label className="mb-1 block text-[11px] text-slate-500">WPS tool</label><select value={f.wpsTool} onChange={(e) => set("wpsTool", e.target.value)} className="rounded border border-slate-700 bg-[#0D1117] px-2 py-1.5 text-sm"><option value="reaver">reaver</option><option value="bully">bully</option></select></div>
             <Btn label="WPS" running={busy === "wps"} disabled={busy !== "" || !gated} onClick={() => post("/wifi/wps", { ...auth(), interface: f.iface, bssid: f.bssid, tool: f.wpsTool }, "wps", "WPS attack")}/></div>
           <div className="mt-2"><Btn label="Auto audit (wifite)" running={busy === "auto"} disabled={busy !== "" || !gated} onClick={() => post("/wifi/auto", { ...auth(), interface: f.iface, bssid: f.bssid || undefined, wordlistPath: f.wordlistPath }, "auto", "Automated audit")}/></div>
         </div>
       </div>
 
       {error && <p className="mt-4 flex items-center gap-2 text-xs text-rose-300"><CircleAlert size={14}/>{error}</p>}
-      {result && <section className="mt-6 rounded-xl border border-slate-800 bg-[#0b1715] p-4">
+      {result && <section className="mt-6 rounded-xl border border-slate-800 bg-[#161B22] p-4">
         <h2 className="mb-2 text-sm font-semibold">{result.title}</h2>
         {audit && <div className="space-y-1.5">{audit.map((x, i) => <div key={i} className="text-xs"><span className={"font-semibold " + (SEV[x.severity] || "text-slate-400")}>[{x.severity}]</span> <b>{x.essid}</b> <code className="text-slate-500">{x.bssid}</code> — {x.posture}. <span className="text-slate-400">{x.recommendation}</span></div>)}</div>}
-        <pre className="mt-2 max-h-80 overflow-auto rounded border border-slate-800 bg-[#06100e] p-3 text-[11px] text-slate-300">{JSON.stringify(result.data, null, 2)}</pre>
+        <pre className="mt-2 max-h-80 overflow-auto rounded border border-slate-800 bg-[#0D1117] p-3 text-[11px] text-slate-300">{JSON.stringify(result.data, null, 2)}</pre>
       </section>}
       <p className="mt-8 text-[10px] tracking-wide text-slate-600">CYBERLAB AI · AUTHORIZED WI-FI TESTING · LOCAL COMPANION EXECUTION</p>
     </div>

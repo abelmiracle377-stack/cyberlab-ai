@@ -66,9 +66,9 @@ export default function ShodanPage() {
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2">
         <div><label className="mb-1 block text-xs text-slate-400">Companion bridge token</label>
-          <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="w-full rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
+          <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="w-full rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
         <div><label className="mb-1 block text-xs text-slate-400">Shodan API key</label>
-          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" autoComplete="off" className="w-full rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
+          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" autoComplete="off" className="w-full rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
       </section>
 
       <div className="mt-5 flex flex-wrap gap-1.5">
@@ -77,14 +77,14 @@ export default function ShodanPage() {
       </div>
 
       <section className="mt-4 flex flex-wrap items-end gap-2">
-        {mode === "host" && <input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="8.8.8.8" className="flex-1 rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/>}
-        {mode === "search" && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder='apache country:"US" port:443' className="flex-1 rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/>}
-        {mode === "dns" && <input value={hostnames} onChange={(e) => setHostnames(e.target.value)} placeholder="google.com,example.com" className="flex-1 rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/>}
+        {mode === "host" && <input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="8.8.8.8" className="flex-1 rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/>}
+        {mode === "search" && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder='apache country:"US" port:443' className="flex-1 rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/>}
+        {mode === "dns" && <input value={hostnames} onChange={(e) => setHostnames(e.target.value)} placeholder="google.com,example.com" className="flex-1 rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/>}
         <button onClick={run} disabled={busy} className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">{busy ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} Run</button>
       </section>
       {error && <p className="mt-3 flex items-center gap-2 text-xs text-rose-300"><CircleAlert size={14}/>{error}</p>}
 
-      {host && <section className="mt-6 rounded-xl border border-slate-800 bg-[#0b1715] p-5">
+      {host && <section className="mt-6 rounded-xl border border-slate-800 bg-[#161B22] p-5">
         <div className="flex items-center gap-2 text-sm font-semibold"><Server size={15}/> {host.ip}</div>
         <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-400">
           <span>Org: {host.org || "—"}</span><span>OS: {host.os || "—"}</span><span>Country: {host.country || "—"}</span>
@@ -93,7 +93,7 @@ export default function ShodanPage() {
         {(host.vulns || []).length > 0 && <div className="mt-2 text-xs text-rose-300">Vulns: {(host.vulns || []).join(", ")}</div>}
         <div className="mt-3 space-y-2">{(host.services || []).map((s, i) => <div key={i} className="rounded border border-slate-800/70 p-2 text-xs"><b className="text-emerald-300">{s.port}/{s.transport}</b> {s.product} {s.version}<pre className="mt-1 whitespace-pre-wrap break-all text-[11px] text-slate-500">{s.banner}</pre></div>)}</div>
       </section>}
-      {result && mode !== "host" && <pre className="mt-6 overflow-x-auto rounded-xl border border-slate-800 bg-[#0b1715] p-4 text-[11px] text-slate-300">{JSON.stringify(result, null, 2)}</pre>}
+      {result && mode !== "host" && <pre className="mt-6 overflow-x-auto rounded-xl border border-slate-800 bg-[#161B22] p-4 text-[11px] text-slate-300">{JSON.stringify(result, null, 2)}</pre>}
       <p className="mt-8 text-[10px] tracking-wide text-slate-600">CYBERLAB AI · SHODAN OSINT · LOCAL COMPANION EXECUTION</p>
     </div>
   </main>;

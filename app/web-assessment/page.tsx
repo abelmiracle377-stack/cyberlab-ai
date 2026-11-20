@@ -76,25 +76,25 @@ export default function WebAssessmentPage() {
         <div className="rounded border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-[10px] tracking-wider text-amber-200">NATIVE · DETECTION-ONLY · APPROVAL REQUIRED</div>
       </div>
       <section className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5">
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Target size={15}/> TARGETS & SCOPE</h2>
           <label className="mb-1 block text-xs text-slate-400">Page URLs (one per line, maximum 10)</label>
-          <textarea value={urls} onChange={(e) => setUrls(e.target.value)} rows={5} className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+          <textarea value={urls} onChange={(e) => setUrls(e.target.value)} rows={5} className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
           <label className="mb-1 block text-xs text-slate-400">Retype exact origin (scheme, hostname and port)</label>
-          <input value={confirmationUrl} onChange={(e) => setConfirmationUrl(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="http://127.0.0.1:3000/"/>
+          <input value={confirmationUrl} onChange={(e) => setConfirmationUrl(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="http://127.0.0.1:3000/"/>
           <label className="mb-1 block text-xs text-slate-400">Engagement / written authorisation reference</label>
-          <input value={reference} onChange={(e) => setReference(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="e.g. HID program / LAB-2026-001"/>
+          <input value={reference} onChange={(e) => setReference(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="e.g. HID program / LAB-2026-001"/>
           <label className="mb-1 block text-xs text-slate-400">Companion pairing token (optional if already in this session)</label>
-          <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="Local bridge token"/>
+          <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="Local bridge token"/>
           <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={localLabMode} onChange={(e) => setLocalLabMode(e.target.checked)} className="mt-0.5 accent-emerald-500"/> Local lab mode (restrict DNS resolution to loopback addresses only)</label>
         </div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5">
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5">
           <h2 className="mb-4 text-sm font-semibold">REQUEST BUDGET</h2>
           <label className="mb-1 flex justify-between text-xs text-slate-400"><span>Maximum requests</span><b className="text-amber-200">{maxRequests}</b></label>
           <input type="range" min="1" max="25" value={maxRequests} onChange={(e) => setMaxRequests(Number(e.target.value))} className="mb-5 w-full accent-amber-500"/>
           <label className="mb-1 flex justify-between text-xs text-slate-400"><span>Delay between requests</span><b className="text-amber-200">{delayMs} ms</b></label>
           <input type="range" min="500" max="2000" step="250" value={delayMs} onChange={(e) => setDelayMs(Number(e.target.value))} className="mb-5 w-full accent-amber-500"/>
-          <div className="rounded border border-slate-800 bg-[#07110f] p-3 text-[11px] leading-5 text-slate-400">Hard limits: 25 requests, 10 URLs, 45 seconds. Sensitive query parameters are skipped. Every finding is a candidate requiring manual verification.</div>
+          <div className="rounded border border-slate-800 bg-[#0D1117] p-3 text-[11px] leading-5 text-slate-400">Hard limits: 25 requests, 10 URLs, 45 seconds. Sensitive query parameters are skipped. Every finding is a candidate requiring manual verification.</div>
         </div>
       </section>
       <section className="mt-5 rounded-xl border border-amber-900/50 bg-amber-950/10 p-5">
@@ -105,14 +105,14 @@ export default function WebAssessmentPage() {
         {error && <p className="mt-3 flex items-center gap-2 text-xs text-rose-300"><CircleAlert size={14}/>{error}</p>}
       </section>
       {result && <section className="mt-7 space-y-5">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{SEV_ORDER.map((s) => <div key={s} className="rounded-lg border border-slate-800 bg-[#0b1715] p-4"><div className="text-[10px] uppercase tracking-wider text-slate-500">{s}</div><div className="mt-1 text-2xl font-semibold text-amber-200">{bySeverity[s] ?? 0}</div></div>)}</div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">FINDINGS ({ranked.length})</h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{SEV_ORDER.map((s) => <div key={s} className="rounded-lg border border-slate-800 bg-[#161B22] p-4"><div className="text-[10px] uppercase tracking-wider text-slate-500">{s}</div><div className="mt-1 text-2xl font-semibold text-amber-200">{bySeverity[s] ?? 0}</div></div>)}</div>
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">FINDINGS ({ranked.length})</h2>
           {ranked.length === 0 ? <p className="text-xs text-slate-400">No issues were detected by these checks. This does not prove the target is secure.</p> : <div className="space-y-3">{ranked.map((f) => <div key={f.id} className="border-b border-slate-800/70 pb-3"><div className="flex flex-wrap items-center gap-2"><span className={"rounded border px-2 py-0.5 text-[9px] uppercase " + (SEV_CLASS[f.severity] || SEV_CLASS.info)}>{f.severity}</span><b className="text-xs">{f.title}</b><span className="text-[10px] text-slate-500">{f.owasp} · {f.cwe} · {f.confidence} confidence</span></div><p className="mt-1 break-all text-[11px] text-slate-500">{f.url}</p><p className="mt-1 text-xs text-slate-400">{f.detail}</p><p className="mt-1 text-xs text-emerald-300/80"><b>Fix:</b> {f.remediation}</p></div>)}</div>}</div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">CHECK LOG ({result.checks.length})</h2>
-          <div className="max-h-72 overflow-y-auto rounded border border-slate-800 bg-[#06100e] p-3">
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">CHECK LOG ({result.checks.length})</h2>
+          <div className="max-h-72 overflow-y-auto rounded border border-slate-800 bg-[#0D1117] p-3">
             <TerminalStream lines={result.checks.map((c) => `${c.type} · ${c.status ?? c.error ?? "done"}${c.parameter ? " · param " + c.parameter : ""}  ${c.url}`)} />
           </div></div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">LIMITATIONS</h2><ul className="list-disc space-y-1 pl-5 text-xs text-slate-400">{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">LIMITATIONS</h2><ul className="list-disc space-y-1 pl-5 text-xs text-slate-400">{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>
       </section>}
       <p className="mt-8 text-[10px] tracking-wide text-slate-600">CYBERLAB AI · WEB APPLICATION ASSESSMENT · LOCAL COMPANION EXECUTION</p>
     </div>

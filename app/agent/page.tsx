@@ -488,7 +488,7 @@ export default function AgentPage() {
           <h1>AI research agent</h1>
           <p>Research security questions, inspect network intelligence, analyse DNS evidence, and look up public CVE records. Open-weight research mode is selected by default.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-[#0b1715] p-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-[#161B22] p-3">
           <span className="mr-2 text-[10px] tracking-wider text-slate-500">NATIVE WEB WORKFLOWS</span>
           <Link href="/web-crawler" className="rounded border border-emerald-900/70 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-950/30">Web discovery & baseline audit</Link>
           <Link href="/web-scanner" className="rounded border border-amber-900/70 px-3 py-2 text-xs text-amber-200 hover:bg-amber-950/30">Safe active checks</Link>

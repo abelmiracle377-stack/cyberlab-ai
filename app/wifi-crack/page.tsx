@@ -63,15 +63,15 @@ export default function WifiCrackPage() {
       <p className="mt-2 max-w-2xl text-sm text-slate-400">Upload a handshake or PMKID capture and audit its passphrase strength against a wordlist, offline. The file is processed by the paired companion (aircrack-ng / hashcat) and deleted afterward — nothing is transmitted to any network.</p>
 
       <div className="mt-5"><label className="mb-1 block text-xs text-slate-400">Companion bridge token</label>
-        <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="w-full max-w-md rounded border border-slate-700 bg-[#0b1715] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
+        <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" className="w-full max-w-md rounded border border-slate-700 bg-[#161B22] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
 
       <section className="mt-5 rounded-xl border border-amber-900/50 bg-amber-950/10 p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-amber-200"><ShieldCheck size={15}/> Authorization</div>
         <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} className="mt-0.5 accent-amber-500"/> This capture is from a network I own or am authorized (in writing) to test.</label>
-        <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Engagement / authorization reference" className="mt-3 w-full max-w-md rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-amber-600"/>
+        <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Engagement / authorization reference" className="mt-3 w-full max-w-md rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-amber-600"/>
       </section>
 
-      <section className="mt-5 rounded-xl border border-slate-800 bg-[#0b1715] p-5">
+      <section className="mt-5 rounded-xl border border-slate-800 bg-[#161B22] p-5">
         <div onClick={() => fileRef.current?.click()} className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 py-8 text-center hover:border-emerald-600">
           <Upload size={22} className="text-slate-500"/>
           <p className="mt-2 text-sm text-slate-300">{file ? file.name : "Click to choose a capture file"}</p>
@@ -80,9 +80,9 @@ export default function WifiCrackPage() {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
           <div><label className="mb-1 block text-xs text-slate-400">Wordlist path (on the companion)</label>
-            <input value={wordlist} onChange={(e) => setWordlist(e.target.value)} className="w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
+            <input value={wordlist} onChange={(e) => setWordlist(e.target.value)} className="w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-emerald-600"/></div>
           <div><label className="mb-1 block text-xs text-slate-400">Tool</label>
-            <select value={tool} onChange={(e) => setTool(e.target.value)} className="rounded border border-slate-700 bg-[#06100e] px-2 py-2 text-sm"><option value="aircrack">aircrack-ng</option><option value="hashcat">hashcat (.hc22000)</option></select></div>
+            <select value={tool} onChange={(e) => setTool(e.target.value)} className="rounded border border-slate-700 bg-[#0D1117] px-2 py-2 text-sm"><option value="aircrack">aircrack-ng</option><option value="hashcat">hashcat (.hc22000)</option></select></div>
         </div>
         <button onClick={run} disabled={busy || !gated || !file} className="mt-4 inline-flex items-center gap-2 rounded bg-amber-700 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{busy ? <Loader2 size={14} className="animate-spin"/> : <KeyRound size={14}/>} {busy ? "Cracking…" : "Crack capture"}</button>
         {!gated && <p className="mt-2 text-[11px] text-slate-500">Confirm authorization above to enable cracking.</p>}

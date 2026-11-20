@@ -52,19 +52,19 @@ export default function NativeWebCrawlerPage() {
         <div className="rounded border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-[10px] tracking-wider text-emerald-300">NATIVE · GET ONLY · SCOPE BOUND</div>
       </div>
       <section className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5">
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Globe size={15}/> TARGET & SCOPE</h2>
           <label className="mb-1 block text-xs text-slate-400">Start URL</label>
-          <input value={url} onChange={e=>setUrl(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="http://127.0.0.1:3000/"/>
+          <input value={url} onChange={e=>setUrl(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="http://127.0.0.1:3000/"/>
           <label className="mb-1 block text-xs text-slate-400">Retype exact origin (scheme, hostname and port)</label>
-          <input value={confirmationUrl} onChange={e=>setConfirmationUrl(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="http://127.0.0.1:3000/"/>
+          <input value={confirmationUrl} onChange={e=>setConfirmationUrl(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="http://127.0.0.1:3000/"/>
           <label className="mb-1 block text-xs text-slate-400">Engagement / written authorisation reference</label>
-          <input value={reference} onChange={e=>setReference(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="e.g. LAB-2026-001"/>
+          <input value={reference} onChange={e=>setReference(e.target.value)} className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="e.g. LAB-2026-001"/>
           <label className="mb-1 block text-xs text-slate-400">Companion pairing token (optional if already in this session)</label>
-          <input value={token} onChange={e=>setToken(e.target.value)} type="password" autoComplete="off" className="mb-4 w-full rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="Local bridge token"/>
+          <input value={token} onChange={e=>setToken(e.target.value)} type="password" autoComplete="off" className="mb-4 w-full rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600" placeholder="Local bridge token"/>
           <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={localLabMode} onChange={e=>setLocalLabMode(e.target.checked)} className="mt-0.5 accent-emerald-500"/> Local lab mode (restrict DNS resolution to loopback addresses only)</label>
         </div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5">
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold"><LockKeyhole size={15}/> CRAWL BUDGET</h2>
           <label className="mb-1 flex justify-between text-xs text-slate-400"><span>Maximum pages</span><b className="text-emerald-300">{maxPages}</b></label>
           <input type="range" min="1" max="20" value={maxPages} onChange={e=>setMaxPages(Number(e.target.value))} className="mb-5 w-full accent-emerald-500"/>
@@ -72,7 +72,7 @@ export default function NativeWebCrawlerPage() {
           <input type="range" min="0" max="2" value={maxDepth} onChange={e=>setMaxDepth(Number(e.target.value))} className="mb-5 w-full accent-emerald-500"/>
           <label className="mb-1 flex justify-between text-xs text-slate-400"><span>Delay between requests</span><b className="text-emerald-300">{delayMs} ms</b></label>
           <input type="range" min="250" max="2000" step="250" value={delayMs} onChange={e=>setDelayMs(Number(e.target.value))} className="mb-5 w-full accent-emerald-500"/>
-          <div className="rounded border border-slate-800 bg-[#07110f] p-3 text-[11px] leading-5 text-slate-400">Hard limits: 20 pages, depth 2, 45 seconds. GET only. No form submission, redirects, payloads or out-of-origin requests.</div>
+          <div className="rounded border border-slate-800 bg-[#0D1117] p-3 text-[11px] leading-5 text-slate-400">Hard limits: 20 pages, depth 2, 45 seconds. GET only. No form submission, redirects, payloads or out-of-origin requests.</div>
         </div>
       </section>
       <section className="mt-5 rounded-xl border border-amber-900/50 bg-amber-950/10 p-5">
@@ -84,15 +84,15 @@ export default function NativeWebCrawlerPage() {
       </section>
       {result && <section className="mt-7 space-y-5">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {Object.entries(result.summary).filter(([key])=>["pagesVisited","htmlPages","formsObserved","findings","requestErrors","outOfScopeLinksBlocked"].includes(key)).map(([key,value])=><div key={key} className="rounded-lg border border-slate-800 bg-[#0b1715] p-4"><div className="text-[10px] uppercase tracking-wider text-slate-500">{key.replace(/[A-Z]/g," $&")}</div><div className="mt-1 text-2xl font-semibold text-emerald-300">{value}</div></div>)}
+          {Object.entries(result.summary).filter(([key])=>["pagesVisited","htmlPages","formsObserved","findings","requestErrors","outOfScopeLinksBlocked"].includes(key)).map(([key,value])=><div key={key} className="rounded-lg border border-slate-800 bg-[#161B22] p-4"><div className="text-[10px] uppercase tracking-wider text-slate-500">{key.replace(/[A-Z]/g," $&")}</div><div className="mt-1 text-2xl font-semibold text-emerald-300">{value}</div></div>)}
         </div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">DISCOVERED PAGES</h2>
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">DISCOVERED PAGES</h2>
           <div className="space-y-2">{result.pages.map((p,i)=><div key={p.url+i} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/70 py-2 text-xs"><span className="min-w-0 break-all text-slate-300">{p.url}</span><span className="text-emerald-300">{p.status ?? p.error ?? "—"}</span></div>)}</div></div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">FORM INVENTORY</h2>
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">FORM INVENTORY</h2>
           {result.pages.flatMap(p=>(p.forms||[]).map((f,i)=>({page:p.url,form:f,key:p.url+"-"+i}))).length===0 ? <p className="text-xs text-slate-400">No HTML forms were found on the pages reached.</p> : <div className="space-y-3">{result.pages.flatMap(p=>(p.forms||[]).map((f,i)=>({page:p.url,form:f,key:p.url+"-"+i}))).map(item=><div key={item.key} className="border-b border-slate-800/70 pb-3"><div className="flex gap-2 text-xs"><span className="rounded bg-slate-800 px-2 py-1 text-emerald-300">{item.form.method}</span><b className="break-all">{item.form.action}</b></div><p className="mt-1 break-all text-[10px] text-slate-500">Page: {item.page}</p><p className="mt-1 text-[11px] text-slate-400">Fields: {item.form.fields.map(field=>(field.name || "(unnamed)")+" ["+field.type+"]").join(", ") || "No input fields detected"} · Not submitted</p></div>)}</div>}</div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">BASELINE FINDINGS</h2>
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">BASELINE FINDINGS</h2>
           {result.findings.length===0 ? <p className="text-xs text-slate-400">No baseline indicators were recorded for the pages reached.</p> : <div className="space-y-3">{result.findings.map(f=><div key={f.id} className="border-b border-slate-800/70 pb-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded bg-slate-800 px-2 py-1 text-[9px] uppercase text-amber-200">{f.severity}</span><b className="text-xs">{f.title}</b></div><p className="mt-1 break-all text-[11px] text-slate-500">{f.url}</p><p className="mt-1 text-xs text-slate-400">{f.detail}</p></div>)}</div>}</div>
-        <div className="rounded-xl border border-slate-800 bg-[#0b1715] p-5"><h2 className="mb-3 text-sm font-semibold">TEST BOUNDARIES</h2><ul className="list-disc space-y-1 pl-5 text-xs text-slate-400">{result.limitations.map(item=><li key={item}>{item}</li>)}</ul></div>
+        <div className="rounded-xl border border-slate-800 bg-[#161B22] p-5"><h2 className="mb-3 text-sm font-semibold">TEST BOUNDARIES</h2><ul className="list-disc space-y-1 pl-5 text-xs text-slate-400">{result.limitations.map(item=><li key={item}>{item}</li>)}</ul></div>
       </section>}
       <a href="/web-scanner" className="mt-6 inline-flex items-center gap-2 rounded border border-amber-900/60 px-4 py-2 text-xs text-amber-200 hover:bg-amber-950/30">Continue to Safe Active Web Checks <ArrowRight size={14}/></a>
       <p className="mt-8 text-[10px] tracking-wide text-slate-600">CYBERLAB AI · NATIVE WEB DISCOVERY · LOCAL COMPANION EXECUTION</p>

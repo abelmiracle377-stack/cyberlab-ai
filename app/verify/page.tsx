@@ -47,7 +47,7 @@ export default function VerifyPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Verify a certificate</h1>
       <p className="mt-2 text-sm text-slate-400">Enter a certificate serial (e.g. CCWT-7F3A9C2D) to confirm it was issued by CyberLab Academy.</p>
       <form onSubmit={(e) => { e.preventDefault(); void verify(serial); }} className="mt-5 flex gap-2">
-        <input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="CODE-XXXXXXXX" className="flex-1 rounded border border-slate-700 bg-[#06100e] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+        <input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="CODE-XXXXXXXX" className="flex-1 rounded border border-slate-700 bg-[#0D1117] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
         <button type="submit" disabled={busy || !serial.trim()} className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{busy ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} Verify</button>
       </form>
       {error && <p className="mt-4 text-xs text-rose-300">{error}</p>}

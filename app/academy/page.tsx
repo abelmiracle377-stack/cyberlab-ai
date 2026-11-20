@@ -166,8 +166,8 @@ export default function AcademyPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not submit exam."); }
   }
 
-  if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><Loader2 className="animate-spin" /></main>;
-  if (!me) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><div className="text-center"><GraduationCap className="mx-auto mb-3" /><h1 className="text-xl font-semibold">CyberLab Academy</h1><p className="mt-2 text-sm text-slate-400">Sign in to track progress and earn certifications.</p><a href="/login" className="mt-4 inline-block rounded bg-emerald-700 px-4 py-2 text-xs font-semibold text-white">Sign in</a></div></main>;
+  if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-[#0D1117] text-[#d7e7e1]"><Loader2 className="animate-spin" /></main>;
+  if (!me) return <main className="flex min-h-screen items-center justify-center bg-[#0D1117] text-[#d7e7e1]"><div className="text-center"><GraduationCap className="mx-auto mb-3" /><h1 className="text-xl font-semibold">CyberLab Academy</h1><p className="mt-2 text-sm text-slate-400">Sign in to track progress and earn certifications.</p><a href="/login" className="mt-4 inline-block rounded bg-emerald-700 px-4 py-2 text-xs font-semibold text-white">Sign in</a></div></main>;
 
   const wrap = (inner: ReactNode) => <main className="min-h-screen bg-transparent text-[#d7e7e1]"><div className="mx-auto max-w-5xl px-5 py-8">{inner}</div></main>;
 
@@ -180,7 +180,7 @@ export default function AcademyPage() {
       <h1 className="text-2xl font-semibold">{cert.title} <span className="text-slate-500">({cert.code})</span></h1>
       <p className="mt-1 text-sm text-slate-400">Pass mark {cert.passPercent}%. Grading is server-side.</p>
       <div className="mt-6 space-y-5">
-        {cert.exam.map((q, i) => <div key={q.id} className="rounded-xl border border-slate-800 bg-[#0b1715] p-4">
+        {cert.exam.map((q, i) => <div key={q.id} className="rounded-xl border border-slate-800 bg-[#161B22] p-4">
           <p className="mb-3 text-sm font-medium">{i + 1}. {q.prompt}</p>
           <div className="space-y-2">{q.options.map((o) => <label key={o.id} className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" name={q.id} checked={answers[q.id] === o.id} onChange={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))} className="accent-emerald-500"/> {o.text}</label>)}</div>
         </div>)}
@@ -220,21 +220,21 @@ export default function AcademyPage() {
           {CTF_PRESETS.map((p) => <button key={p.id} onClick={() => { setConPath(p.path); setConQuery(p.query); if (p.cookie) setConCookie(p.cookie); if (p.jwt) buildAdminJwt(); }} className="rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-sky-600">{p.title}</button>)}
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr]">
-          <div className="flex items-center rounded border border-slate-700 bg-[#06100e] px-2 text-xs text-slate-500">GET</div>
-          <input value={conPath} onChange={(e) => setConPath(e.target.value)} placeholder="/path" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <div className="flex items-center rounded border border-slate-700 bg-[#0D1117] px-2 text-xs text-slate-500">GET</div>
+          <input value={conPath} onChange={(e) => setConPath(e.target.value)} placeholder="/path" className="rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
           <label className="self-center text-[11px] text-slate-500">query</label>
-          <input value={conQuery} onChange={(e) => setConQuery(e.target.value)} placeholder="id=1'" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <input value={conQuery} onChange={(e) => setConQuery(e.target.value)} placeholder="id=1'" className="rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
           <label className="self-center text-[11px] text-slate-500">Cookie</label>
-          <input value={conCookie} onChange={(e) => setConCookie(e.target.value)} placeholder="role=admin" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <input value={conCookie} onChange={(e) => setConCookie(e.target.value)} placeholder="role=admin" className="rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
           <label className="self-center text-[11px] text-slate-500">Authorization</label>
-          <input value={conAuth} onChange={(e) => setConAuth(e.target.value)} placeholder="Bearer …" className="rounded border border-slate-700 bg-[#06100e] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
+          <input value={conAuth} onChange={(e) => setConAuth(e.target.value)} placeholder="Bearer …" className="rounded border border-slate-700 bg-[#0D1117] px-3 py-2 text-sm outline-none focus:border-sky-600"/>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <button onClick={sendConsole} disabled={conBusy} className="rounded bg-sky-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{conBusy ? "Sending…" : "Send request"}</button>
           <button onClick={() => setConCookie("role=admin")} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">Forge admin cookie</button>
           <button onClick={buildAdminJwt} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">Build alg:none JWT</button>
         </div>
-        {conResp && <div className="mt-3 rounded-lg border border-slate-800 bg-[#06100e] p-3 font-mono text-[11px]">
+        {conResp && <div className="mt-3 rounded-lg border border-slate-800 bg-[#0D1117] p-3 font-mono text-[11px]">
           <div className={conResp.status < 400 ? "text-emerald-300" : "text-amber-300"}>HTTP {conResp.status}</div>
           {Object.entries(conResp.headers).map(([k, val]) => <div key={k} className="text-slate-500">{k}: {val}</div>)}
           <pre className="mt-2 whitespace-pre-wrap break-all text-slate-300">{conResp.body}</pre>
@@ -245,7 +245,7 @@ export default function AcademyPage() {
       <div className="mt-6 space-y-3">
         {room.tasks.map((task, i) => {
           const done = completed.has(task.id);
-          return <div key={task.id} className="rounded-xl border border-slate-800 bg-[#0b1715] p-4">
+          return <div key={task.id} className="rounded-xl border border-slate-800 bg-[#161B22] p-4">
             <div className="flex items-start gap-3">
               {done ? <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={18}/> : <Circle className="mt-0.5 shrink-0 text-slate-600" size={18}/>}
               <div className="min-w-0 flex-1">
@@ -254,7 +254,7 @@ export default function AcademyPage() {
                 {!embed(room.videoUrl) && task.videoUrl && <a href={task.videoUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-sky-300"><PlayCircle size={13}/> Open video</a>}
                 {!done && <div className="mt-3">
                   {task.requiresAnswer ? <div className="flex flex-wrap gap-2">
-                    <input value={flag[task.id] || ""} onChange={(e) => setFlag((f) => ({ ...f, [task.id]: e.target.value }))} placeholder="Your answer" className="rounded border border-slate-700 bg-[#06100e] px-3 py-1.5 text-sm outline-none focus:border-emerald-600"/>
+                    <input value={flag[task.id] || ""} onChange={(e) => setFlag((f) => ({ ...f, [task.id]: e.target.value }))} placeholder="Your answer" className="rounded border border-slate-700 bg-[#0D1117] px-3 py-1.5 text-sm outline-none focus:border-emerald-600"/>
                     <button onClick={() => complete(task)} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Submit</button>
                     {task.hint && <span className="self-center text-[11px] text-slate-500">Hint: {task.hint}</span>}
                   </div> : <button onClick={() => complete(task)} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Mark complete</button>}
@@ -262,7 +262,7 @@ export default function AcademyPage() {
                 {done && task.hasWriteup && <div className="mt-3">
                   <button onClick={() => openWriteup(task.id)} className="inline-flex items-center gap-1 rounded border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500"><BookOpen size={12}/> {writeups[task.id] ? "Hide write-up" : "Show write-up & walkthrough"}</button>
                   {writeups[task.id] === "loading" && <p className="mt-2 text-xs text-slate-500">Loading…</p>}
-                  {writeups[task.id] && writeups[task.id] !== "loading" && <div className="mt-2 rounded-lg border border-slate-800 bg-[#06100e] p-3">
+                  {writeups[task.id] && writeups[task.id] !== "loading" && <div className="mt-2 rounded-lg border border-slate-800 bg-[#0D1117] p-3">
                     <p className="text-xs leading-relaxed text-slate-300">{(writeups[task.id] as { writeup: string }).writeup}</p>
                     {(() => { const wu = (writeups[task.id] as { walkthroughUrl: string }).walkthroughUrl; const em = embed(wu);
                       return wu ? (em ? <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-slate-800"><iframe className="h-full w-full" src={em} title="Walkthrough" allowFullScreen/></div>
@@ -290,7 +290,7 @@ export default function AcademyPage() {
       <p className="mt-1 text-xs text-slate-500">{prog.done}/{prog.total} tasks · {prog.percent}%</p>
       {track.id === "ctf-lab" && <div className="mt-4">
         <button onClick={() => { if (scoreboard) setScoreboard(null); else loadScoreboard(); }} className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500"><Trophy size={13}/> {scoreboard ? "Hide scoreboard" : "Scoreboard"}</button>
-        {scoreboard && <div className="mt-3 overflow-hidden rounded-xl border border-slate-800 bg-[#0b1715]">
+        {scoreboard && <div className="mt-3 overflow-hidden rounded-xl border border-slate-800 bg-[#161B22]">
           {scoreboard.length === 0 ? <p className="p-4 text-xs text-slate-400">No flags captured yet. Be the first.</p>
             : <table className="w-full text-sm"><thead><tr className="border-b border-slate-800 text-left text-[10px] uppercase tracking-wider text-slate-500"><th className="px-4 py-2">#</th><th className="px-4 py-2">Player</th><th className="px-4 py-2 text-right">Flags</th></tr></thead>
               <tbody>{scoreboard.map((row, i) => <tr key={i} className="border-b border-slate-800/60"><td className="px-4 py-2 text-slate-500">{i + 1}</td><td className="px-4 py-2">{row.display_name}</td><td className="px-4 py-2 text-right font-semibold text-amber-200">{row.flags}/10</td></tr>)}</tbody></table>}
@@ -299,7 +299,7 @@ export default function AcademyPage() {
       <div className="mt-6 space-y-3">
         {track.rooms.map((r) => {
           const rp = r.tasks.filter((t) => completed.has(t.id)).length;
-          return <button key={r.id} onClick={() => setRoomId(r.id)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-[#0b1715] p-4 text-left hover:border-slate-600">
+          return <button key={r.id} onClick={() => setRoomId(r.id)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-[#161B22] p-4 text-left hover:border-slate-600">
             <div><div className={"text-[10px] uppercase tracking-wider " + (DIFF[r.difficulty] || "text-slate-400")}>{r.difficulty}</div><p className="mt-0.5 text-sm font-medium">{r.title}</p><p className="text-xs text-slate-500">{r.summary}</p></div>
             <div className="shrink-0 text-right text-xs text-slate-400">{rp}/{r.tasks.length}{rp === r.tasks.length && <CheckCircle2 className="ml-auto mt-1 text-emerald-400" size={16}/>}</div>
           </button>;
@@ -324,7 +324,7 @@ export default function AcademyPage() {
     <div className="mt-6 grid gap-4 md:grid-cols-2">
       {tracks.map((t) => {
         const p = progressOf(t);
-        return <button key={t.id} onClick={() => { setTrackId(t.id); setRoomId(null); }} className="rounded-xl border border-slate-800 bg-[#0b1715] p-5 text-left hover:border-slate-600">
+        return <button key={t.id} onClick={() => { setTrackId(t.id); setRoomId(null); }} className="rounded-xl border border-slate-800 bg-[#161B22] p-5 text-left hover:border-slate-600">
           <div className="text-[10px] uppercase tracking-wider text-slate-500">{t.level} · {t.rooms.length} rooms</div>
           <h2 className="mt-1 text-lg font-semibold">{t.title}</h2>
           <p className="mt-1 text-sm text-slate-400">{t.summary}</p>

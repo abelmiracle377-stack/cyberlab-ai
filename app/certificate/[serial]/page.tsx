@@ -40,21 +40,21 @@ export default function CertificatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serial]);
 
-  if (!done) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><Loader2 className="animate-spin"/></main>;
+  if (!done) return <main className="flex min-h-screen items-center justify-center bg-[#0D1117] text-[#d7e7e1]"><Loader2 className="animate-spin"/></main>;
 
-  if (!cert) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><div className="text-center"><ShieldX className="mx-auto mb-2"/><p className="text-sm text-rose-300">{error || "No certificate matches that serial."}</p><a href="/verify" className="mt-3 inline-block text-xs text-emerald-300">Verify another →</a></div></main>;
+  if (!cert) return <main className="flex min-h-screen items-center justify-center bg-[#0D1117] text-[#d7e7e1]"><div className="text-center"><ShieldX className="mx-auto mb-2"/><p className="text-sm text-rose-300">{error || "No certificate matches that serial."}</p><a href="/verify" className="mt-3 inline-block text-xs text-emerald-300">Verify another →</a></div></main>;
 
   const cred = CRED_NAMES[cert.code] || cert.code;
   const track = TRACK_NAMES[cert.track_id] || cert.track_id;
   const issued = new Date(cert.issued_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
-  return <main className="min-h-screen bg-[#0a1412] px-4 py-8 text-[#d7e7e1] print:bg-white print:py-0">
+  return <main className="min-h-screen bg-[#0D1117] px-4 py-8 text-[#d7e7e1] print:bg-white print:py-0">
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex justify-end gap-2 print:hidden">
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-xs font-semibold text-white"><Printer size={14}/> Print / Save as PDF</button>
         <a href="/academy" className="rounded border border-slate-700 px-4 py-2 text-xs text-slate-300">Academy</a>
       </div>
-      <div id="cert" className="relative overflow-hidden rounded-2xl border-[6px] border-double border-emerald-800 bg-[#0b1715] p-10 text-center print:border-emerald-700 print:bg-white print:text-black">
+      <div id="cert" className="relative overflow-hidden rounded-2xl border-[6px] border-double border-emerald-800 bg-[#161B22] p-10 text-center print:border-emerald-700 print:bg-white print:text-black">
         <div className="pointer-events-none absolute inset-0 opacity-[0.04] [background:repeating-linear-gradient(45deg,#10b981_0,#10b981_1px,transparent_1px,transparent_12px)]"/>
         <div className="relative">
           <div className="flex items-center justify-center gap-2 text-emerald-400 print:text-emerald-700"><Award size={22}/><span className="text-[11px] font-semibold tracking-[.3em]">CYBERLAB ACADEMY</span></div>
