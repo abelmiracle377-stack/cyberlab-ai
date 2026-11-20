@@ -7,6 +7,7 @@ import {
   Radar, Search, Server, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
   MessageCircle,
   ShieldAlert,
+  GraduationCap,
 } from "lucide-react";
 
 const groups = [
@@ -61,6 +62,9 @@ const groups = [
   ]},
   { title: "CYBERSOC", items: [
     { label: "CyberSOC", icon: ShieldAlert, href: "/soc" },
+  ]},
+  { title: "LEARN", items: [
+    { label: "Academy", icon: GraduationCap, href: "/academy" },
   ]},
 ];
 

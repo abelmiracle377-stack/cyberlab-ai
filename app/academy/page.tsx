@@ -1,0 +1,201 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+type Task = { id: string; title: string; instructions: string; hint?: string; videoUrl?: string; requiresAnswer: boolean };
+type Room = { id: string; title: string; summary: string; difficulty: string; tool?: string; toolHref?: string; videoUrl?: string; resources?: { title: string; url: string }[]; tasks: Task[] };
+type Cert = { code: string; title: string; passPercent: number; exam: { id: string; prompt: string; options: { id: string; text: string }[] }[] };
+type Track = { id: string; title: string; summary: string; level: string; rooms: Room[]; certification: Cert | null };
+type IssuedCert = { track_id: string; code: string; serial: string; percent: number; issued_at: string };
+
+async function api(path: string, init?: RequestInit) {
+  const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed.");
+  return data;
+}
+function embed(url?: string): string | null {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([\w-]{11})/);
+  return m ? "https://www.youtube.com/embed/" + m[1] : null;
+}
+const DIFF: Record<string, string> = {
+  intro: "text-sky-300", easy: "text-emerald-300", medium: "text-amber-300", hard: "text-rose-300",
+};
+
+export default function AcademyPage() {
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => (supabaseRef.current ??= createClient());
+  const [authChecked, setAuthChecked] = useState(false);
+  const [me, setMe] = useState<string | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [completed, setCompleted] = useState<Set<string>>(new Set());
+  const [certs, setCerts] = useState<IssuedCert[]>([]);
+  const [trackId, setTrackId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [exam, setExam] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [flag, setFlag] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [examResult, setExamResult] = useState<{ passed: boolean; percent: number } | null>(null);
+
+  const load = useCallback(async () => {
+    const [c, p, cert] = await Promise.all([
+      api("/api/academy/content"),
+      api("/api/academy/progress").catch(() => ({ completed: [] })),
+      api("/api/academy/certificate").catch(() => ({ certificates: [] })),
+    ]);
+    setTracks(c.tracks || []);
+    setCompleted(new Set(p.completed || []));
+    setCerts(cert.certificates || []);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await getSupabase().auth.getUser();
+      setMe(user?.id ?? null); setAuthChecked(true);
+      if (user) await load().catch((e) => setError(e instanceof Error ? e.message : "Load failed."));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const track = useMemo(() => tracks.find((t) => t.id === trackId) || null, [tracks, trackId]);
+  const room = useMemo(() => track?.rooms.find((r) => r.id === roomId) || null, [track, roomId]);
+  const progressOf = useCallback((t: Track) => {
+    const all = t.rooms.flatMap((r) => r.tasks);
+    const done = all.filter((x) => completed.has(x.id)).length;
+    return { done, total: all.length, percent: all.length ? Math.round((done / all.length) * 100) : 0, complete: all.length > 0 && done === all.length };
+  }, [completed]);
+
+  async function complete(task: Task) {
+    setError("");
+    try {
+      const data = await api("/api/academy/progress", { method: "POST", body: JSON.stringify({ taskId: task.id, answer: flag[task.id] || "" }) });
+      if (data.completed) { setCompleted((prev) => new Set(prev).add(task.id)); setFlag((f) => ({ ...f, [task.id]: "" })); }
+      else setError(data.error || "Incorrect — try again.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save progress."); }
+  }
+
+  async function submitExam() {
+    if (!track?.certification) return;
+    setError(""); setExamResult(null);
+    try {
+      const data = await api("/api/academy/certificate", { method: "POST", body: JSON.stringify({ trackId: track.id, answers }) });
+      setExamResult({ passed: !!data.passed, percent: data.result?.percent ?? 0 });
+      if (data.passed) { await load(); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not submit exam."); }
+  }
+
+  if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><Loader2 className="animate-spin" /></main>;
+  if (!me) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><div className="text-center"><GraduationCap className="mx-auto mb-3" /><h1 className="text-xl font-semibold">CyberLab Academy</h1><p className="mt-2 text-sm text-slate-400">Sign in to track progress and earn certifications.</p><a href="/login" className="mt-4 inline-block rounded bg-emerald-700 px-4 py-2 text-xs font-semibold text-white">Sign in</a></div></main>;
+
+  const wrap = (inner: ReactNode) => <main className="min-h-screen bg-[#07100f] text-[#d7e7e1]"><div className="mx-auto max-w-5xl px-5 py-8">{inner}</div></main>;
+
+  // Exam view
+  if (exam && track?.certification) {
+    const cert = track.certification;
+    return wrap(<>
+      <button onClick={() => { setExam(false); setExamResult(null); }} className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> {track.title}</button>
+      <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><Award size={14}/> CERTIFICATION EXAM</div>
+      <h1 className="text-2xl font-semibold">{cert.title} <span className="text-slate-500">({cert.code})</span></h1>
+      <p className="mt-1 text-sm text-slate-400">Pass mark {cert.passPercent}%. Grading is server-side.</p>
+      <div className="mt-6 space-y-5">
+        {cert.exam.map((q, i) => <div key={q.id} className="rounded-xl border border-slate-800 bg-[#0b1715] p-4">
+          <p className="mb-3 text-sm font-medium">{i + 1}. {q.prompt}</p>
+          <div className="space-y-2">{q.options.map((o) => <label key={o.id} className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" name={q.id} checked={answers[q.id] === o.id} onChange={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))} className="accent-emerald-500"/> {o.text}</label>)}</div>
+        </div>)}
+      </div>
+      {examResult && <div className={"mt-5 rounded-lg border p-4 text-sm " + (examResult.passed ? "border-emerald-800 bg-emerald-950/30 text-emerald-200" : "border-rose-900 bg-rose-950/20 text-rose-200")}>{examResult.passed ? `Passed with ${examResult.percent}% — certificate issued.` : `Scored ${examResult.percent}%. ${cert.passPercent}% needed — review the rooms and retry.`}</div>}
+      {error && <p className="mt-3 text-xs text-rose-300">{error}</p>}
+      <button onClick={submitExam} disabled={Object.keys(answers).length < cert.exam.length} className="mt-5 inline-flex items-center gap-2 rounded bg-amber-700 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">Submit exam</button>
+    </>);
+  }
+
+  // Room view
+  if (room && track) {
+    return wrap(<>
+      <button onClick={() => setRoomId(null)} className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> {track.title}</button>
+      <div className={"mb-2 text-[10px] uppercase tracking-[.2em] " + (DIFF[room.difficulty] || "text-slate-400")}>{room.difficulty} room</div>
+      <h1 className="text-2xl font-semibold">{room.title}</h1>
+      <p className="mt-1 max-w-2xl text-sm text-slate-400">{room.summary}</p>
+      {room.tool && room.toolHref && <a href={room.toolHref} className="mt-3 inline-flex items-center gap-2 rounded border border-emerald-800 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-200">Open tool: {room.tool} <ExternalLink size={12}/></a>}
+      {embed(room.videoUrl) && <div className="mt-5 aspect-video w-full overflow-hidden rounded-xl border border-slate-800"><iframe className="h-full w-full" src={embed(room.videoUrl)!} title="Lesson video" allowFullScreen/></div>}
+      {room.resources && room.resources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{room.resources.map((r) => <a key={r.url} href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded border border-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-600">{r.title} <ExternalLink size={11}/></a>)}</div>}
+      <div className="mt-6 space-y-3">
+        {room.tasks.map((task, i) => {
+          const done = completed.has(task.id);
+          return <div key={task.id} className="rounded-xl border border-slate-800 bg-[#0b1715] p-4">
+            <div className="flex items-start gap-3">
+              {done ? <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={18}/> : <Circle className="mt-0.5 shrink-0 text-slate-600" size={18}/>}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Task {i + 1}: {task.title}</p>
+                <p className="mt-1 text-sm text-slate-400">{task.instructions}</p>
+                {!embed(room.videoUrl) && task.videoUrl && <a href={task.videoUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-sky-300"><PlayCircle size={13}/> Open video</a>}
+                {!done && <div className="mt-3">
+                  {task.requiresAnswer ? <div className="flex flex-wrap gap-2">
+                    <input value={flag[task.id] || ""} onChange={(e) => setFlag((f) => ({ ...f, [task.id]: e.target.value }))} placeholder="Your answer" className="rounded border border-slate-700 bg-[#06100e] px-3 py-1.5 text-sm outline-none focus:border-emerald-600"/>
+                    <button onClick={() => complete(task)} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Submit</button>
+                    {task.hint && <span className="self-center text-[11px] text-slate-500">Hint: {task.hint}</span>}
+                  </div> : <button onClick={() => complete(task)} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Mark complete</button>}
+                </div>}
+              </div>
+            </div>
+          </div>;
+        })}
+      </div>
+      {error && <p className="mt-3 text-xs text-rose-300">{error}</p>}
+    </>);
+  }
+
+  // Track view (rooms list)
+  if (track) {
+    const prog = progressOf(track);
+    const issued = certs.find((c) => c.track_id === track.id);
+    return wrap(<>
+      <button onClick={() => setTrackId(null)} className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> All tracks</button>
+      <h1 className="text-2xl font-semibold">{track.title}</h1>
+      <p className="mt-1 max-w-2xl text-sm text-slate-400">{track.summary}</p>
+      <div className="mt-4 h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-emerald-500" style={{ width: prog.percent + "%" }}/></div>
+      <p className="mt-1 text-xs text-slate-500">{prog.done}/{prog.total} tasks · {prog.percent}%</p>
+      <div className="mt-6 space-y-3">
+        {track.rooms.map((r) => {
+          const rp = r.tasks.filter((t) => completed.has(t.id)).length;
+          return <button key={r.id} onClick={() => setRoomId(r.id)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-[#0b1715] p-4 text-left hover:border-slate-600">
+            <div><div className={"text-[10px] uppercase tracking-wider " + (DIFF[r.difficulty] || "text-slate-400")}>{r.difficulty}</div><p className="mt-0.5 text-sm font-medium">{r.title}</p><p className="text-xs text-slate-500">{r.summary}</p></div>
+            <div className="shrink-0 text-right text-xs text-slate-400">{rp}/{r.tasks.length}{rp === r.tasks.length && <CheckCircle2 className="ml-auto mt-1 text-emerald-400" size={16}/>}</div>
+          </button>;
+        })}
+      </div>
+      {track.certification && <div className="mt-6 rounded-xl border border-amber-900/50 bg-amber-950/10 p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold text-amber-200"><Award size={16}/> {track.certification.title} ({track.certification.code})</div>
+        {issued ? <p className="mt-2 text-sm text-emerald-200">Certified · serial <code className="text-emerald-300">{issued.serial}</code> · {issued.percent}%</p>
+          : prog.complete ? <button onClick={() => { setExam(true); setAnswers({}); }} className="mt-3 rounded bg-amber-700 px-4 py-2 text-xs font-semibold text-white">Take certification exam</button>
+          : <p className="mt-2 text-xs text-slate-400">Finish every room to unlock the exam ({prog.percent}% done).</p>}
+      </div>}
+    </>);
+  }
+
+  // Tracks home
+  return wrap(<>
+    <a href="/" className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> Dashboard</a>
+    <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><GraduationCap size={14}/> CYBERLAB ACADEMY</div>
+    <h1 className="text-3xl font-semibold tracking-tight">Learn by doing</h1>
+    <p className="mt-2 max-w-2xl text-sm text-slate-400">Hack The Box / TryHackMe-style tracks that teach real skills on CyberLab's own tools — with videos, hands-on rooms, flag answers, and certifications you can earn.</p>
+    {certs.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{certs.map((c) => <span key={c.serial} className="inline-flex items-center gap-1 rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200"><Award size={12}/> {c.code} · {c.serial}</span>)}</div>}
+    <div className="mt-6 grid gap-4 md:grid-cols-2">
+      {tracks.map((t) => {
+        const p = progressOf(t);
+        return <button key={t.id} onClick={() => { setTrackId(t.id); setRoomId(null); }} className="rounded-xl border border-slate-800 bg-[#0b1715] p-5 text-left hover:border-slate-600">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">{t.level} · {t.rooms.length} rooms</div>
+          <h2 className="mt-1 text-lg font-semibold">{t.title}</h2>
+          <p className="mt-1 text-sm text-slate-400">{t.summary}</p>
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-emerald-500" style={{ width: p.percent + "%" }}/></div>
+          <p className="mt-1 text-[11px] text-slate-500">{p.percent}% complete{t.certification ? ` · ${t.certification.code}` : ""}</p>
+        </button>;
+      })}
+    </div>
+    {error && <p className="mt-4 text-xs text-rose-300">{error}</p>}
+  </>);
+}
