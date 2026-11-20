@@ -353,6 +353,26 @@ class ForensicsAndReconBatchTests(unittest.TestCase):
         self.assertIn("-L", run.argv)
         self.assertIn("//198.51.100.7", run.argv)
 
+    def test_registry_tools_are_passive_local_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hive = Path(tmp) / "NTUSER.DAT"
+            hive.write_bytes(b"regf" + b"\x00" * 64)
+            run = ok_runner("key values")
+            kt.run_tool("reglookup", {"file": str(hive)}, confirmed=True, resolve=FAKE, runner=run)
+            self.assertIn(str(hive), run.argv)
+            run2 = ok_runner("value")
+            kt.run_tool("hivexget", {"file": str(hive), "key": "\\Software\\Microsoft"},
+                        confirmed=True, resolve=FAKE, runner=run2)
+            self.assertIn("\\Software\\Microsoft", run2.argv)
+
+    def test_hivexget_rejects_bad_key_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hive = Path(tmp) / "SYSTEM"
+            hive.write_bytes(b"regf")
+            with self.assertRaisesRegex(ValueError, "registry key path"):
+                kt.run_tool("hivexget", {"file": str(hive), "key": "bad;rm -rf /"},
+                            confirmed=True, resolve=FAKE, runner=ok_runner())
+
     def test_cewl_depth_is_bounded(self):
         with self.assertRaises(ValueError):
             kt.run_tool("cewl", {"url": "https://example.com", "depth": 9}, confirmed=True,

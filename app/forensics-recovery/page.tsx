@@ -85,6 +85,7 @@ export default function ForensicsRecoveryPage(){
   const [bridgeToken,setBridgeToken]=useState(""),[paired,setPaired]=useState(false),[devices,setDevices]=useState<BlockDevice[]>([]),[selectedDevice,setSelectedDevice]=useState(""),[destinationDirectory,setDestinationDirectory]=useState("/mnt/backup"),[imageFilename,setImageFilename]=useState("cyberlab-disk.img"),[confirmationSource,setConfirmationSource]=useState(""),[bridgeBusy,setBridgeBusy]=useState(false),[bridgeMessage,setBridgeMessage]=useState(""),[job,setJob]=useState<AcquisitionJob|null>(null),[recoveryParent,setRecoveryParent]=useState("/mnt/backup"),[confirmImage,setConfirmImage]=useState(""),[recoveryJob,setRecoveryJob]=useState<AcquisitionJob|null>(null),[imageProbe,setImageProbe]=useState<ImageProbe|null>(null),[probeBusy,setProbeBusy]=useState(false),[imagePartitions,setImagePartitions]=useState<ImagePartitions|null>(null),[partitionsBusy,setPartitionsBusy]=useState(false),[selectedPartition,setSelectedPartition]=useState(""),[filesystemDetails,setFilesystemDetails]=useState<FilesystemDetails|null>(null),[filesystemBusy,setFilesystemBusy]=useState(false);
   const [deletedFiles,setDeletedFiles]=useState<DeletedFile[]|null>(null),[deletedBusy,setDeletedBusy]=useState(false),[recoveringInode,setRecoveringInode]=useState(""),[recoveredFiles,setRecoveredFiles]=useState<RecoveredFile[]>([]);
   const [carveTypes,setCarveTypes]=useState(""),[bulkBusy,setBulkBusy]=useState(false),[bulkResult,setBulkResult]=useState<{recovered_count:number;failed_count:number;deleted_found:number;output:string}|null>(null);
+  const [artifactPath,setArtifactPath]=useState(""),[artifactBusy,setArtifactBusy]=useState(""),[plistResult,setPlistResult]=useState<{format:string;top_level_type:string;top_level_keys:string[];content:unknown}|null>(null),[sqliteResult,setSqliteResult]=useState<{table_count:number;tables:{name:string;columns:string[];row_count:number|null}[]}|null>(null),[tableRows,setTableRows]=useState<{table:string;columns:string[];rows:unknown[][]}|null>(null);
   useEffect(()=>()=>{Object.values(previewUrls).forEach(url=>URL.revokeObjectURL(url));},[previewUrls]);
   const total=useMemo(()=>items.reduce((sum,x)=>sum+x.size,0),[items]);
   async function pairKali(){
@@ -210,6 +211,27 @@ export default function ForensicsRecoveryPage(){
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Disk imaging failed.");}
     finally{setBridgeBusy(false);}
   }
+  async function postBridge(endpoint:string,body:Record<string,unknown>){
+    const response=await fetch("http://127.0.0.1:8765"+endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify(body)});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||"Request failed.");return data;
+  }
+  async function parsePlist(){
+    if(!artifactPath.trim()){setMessage("Enter the path to a .plist file on the companion.");return;}
+    setArtifactBusy("plist");setPlistResult(null);setSqliteResult(null);setTableRows(null);
+    try{setPlistResult(await postBridge("/forensics/plist-parse",{path:artifactPath.trim()}));}
+    catch(e){setMessage(e instanceof Error?e.message:"Plist parse failed.");}finally{setArtifactBusy("");}
+  }
+  async function inspectSqlite(){
+    if(!artifactPath.trim()){setMessage("Enter the path to a SQLite database on the companion.");return;}
+    setArtifactBusy("sqlite");setPlistResult(null);setTableRows(null);
+    try{setSqliteResult(await postBridge("/forensics/sqlite-inspect",{path:artifactPath.trim()}));}
+    catch(e){setMessage(e instanceof Error?e.message:"SQLite inspect failed.");}finally{setArtifactBusy("");}
+  }
+  async function sampleTable(table:string){
+    setArtifactBusy("row-"+table);setTableRows(null);
+    try{setTableRows(await postBridge("/forensics/sqlite-sample",{path:artifactPath.trim(),table,limit:50}));}
+    catch(e){setMessage(e instanceof Error?e.message:"Table sample failed.");}finally{setArtifactBusy("");}
+  }
   async function choose(e:ChangeEvent<HTMLInputElement>){setSource(e.target.files?.[0]??null);setItems([]);setPreviewUrls({});setHash("");setMessage("");}
   async function scan(){if(!source)return;if(source.size>MAX_BYTES){setMessage("This browser-based scanner is limited to 256 MB per source image. Use a dedicated forensic workstation for larger images.");return;}
     setBusy(true);setItems([]);setPreviewUrls({});setMessage("Reading source image locally…");
@@ -289,6 +311,20 @@ export default function ForensicsRecoveryPage(){
         <div className="panel-header"><div className="panel-title">2 / Recovery candidates</div><span className="panel-kicker">{items.length} FOUND · {formatBytes(total)}</span></div>
         <div className="panel-body">
           {!items.length?<div className="empty-state">No candidates yet. Select an evidence image and run a scan.</div>:<div className="activity-list">{items.map(item=><div className="activity-row" key={item.id}>{previewUrls[item.id]?<img src={previewUrls[item.id]} alt={`Preview of ${item.name}`} style={{width:72,height:56,objectFit:"contain",borderRadius:5,border:"1px solid var(--line)"}}/>:<div className="activity-bullet"/>}<div style={{minWidth:0,flex:1}}><div className="activity-name">{item.name} · {item.kind}</div><div className="activity-detail">Offset {item.start.toLocaleString()}–{item.end.toLocaleString()} · {formatBytes(item.size)}</div></div><button className="icon-button" type="button" aria-label={`Download ${item.name}`} onClick={()=>download(item)}><Download size={14}/></button></div>)}</div>}
+        </div>
+      </section>
+      <section className="panel" style={{marginTop:14}}>
+        <div className="panel-header"><div className="panel-title"><FileSearch size={14} style={{display:"inline",marginRight:7}}/>Artifact inspection · plist / SQLite</div><span className="panel-kicker">READ-ONLY</span></div>
+        <div className="panel-body">
+          <p>Parse a recovered artifact on the companion read-only: Apple property lists (binary or XML) and SQLite databases (browser history, cookies, logins). Point to a file path on the companion machine — for example one recovered to your backup drive above.</p>
+          <label className="vault-field"><span>Artifact file path (on the companion)</span><input value={artifactPath} onChange={e=>setArtifactPath(e.target.value)} placeholder="/mnt/backup/recovered/History  or  …/com.apple.Safari.plist"/></label>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button className="network-run" type="button" onClick={parsePlist} disabled={artifactBusy==="plist"}>{artifactBusy==="plist"?"Parsing…":"Parse as plist"}</button>
+            <button className="network-run" type="button" onClick={inspectSqlite} disabled={artifactBusy==="sqlite"}>{artifactBusy==="sqlite"?"Inspecting…":"Inspect as SQLite"}</button>
+          </div>
+          {plistResult&&<div className="network-note"><strong>{plistResult.format} plist · {plistResult.top_level_type}</strong><div style={{marginTop:6}}>Keys: {plistResult.top_level_keys.join(", ")||"—"}</div><pre style={{whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:260,overflow:"auto",marginTop:6}}>{JSON.stringify(plistResult.content,null,2).slice(0,4000)}</pre></div>}
+          {sqliteResult&&<div className="network-note"><strong>{sqliteResult.table_count} tables</strong><div className="activity-list" style={{marginTop:6}}>{sqliteResult.tables.map(t=><div className="activity-row" key={t.name}><div style={{minWidth:0,flex:1}}><div className="activity-name">{t.name} · {t.row_count??"?"} rows</div><div className="activity-detail">{t.columns.join(", ")}</div></div><button className="icon-button" type="button" onClick={()=>sampleTable(t.name)} disabled={artifactBusy==="row-"+t.name}>{artifactBusy==="row-"+t.name?"…":"Sample"}</button></div>)}</div></div>}
+          {tableRows&&<div className="network-note"><strong>{tableRows.table}</strong> · {tableRows.columns.join(", ")}<pre style={{whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:240,overflow:"auto",marginTop:6}}>{tableRows.rows.map(r=>JSON.stringify(r)).join("\n").slice(0,4000)}</pre></div>}
         </div>
       </section>
       <section className="panel" style={{marginTop:14}}><div className="panel-header"><div className="panel-title"><FileSearch size={14} style={{display:"inline",marginRight:7}}/>Scope and limitations</div></div><div className="panel-body">

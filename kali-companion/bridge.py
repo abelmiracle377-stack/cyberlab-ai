@@ -42,6 +42,8 @@ import balance_check
 import kali_tools
 import host_telemetry
 import pcap_analysis
+import plist_forensics
+import sqlite_forensics
 from task_planner import plan_task
 from research_workflows import run_research_action
 from service_enumeration import enumerate_services
@@ -1319,7 +1321,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1336,7 +1338,7 @@ class Handler(BaseHTTPRequestHandler):
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
                 65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover"} else
-                4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/network/pcap-analyze"} else
+                4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
             )
@@ -1598,6 +1600,18 @@ class Handler(BaseHTTPRequestHandler):
                     str(data.get("imageJobId", "")), str(data.get("confirmationImage", "")),
                     str(data.get("outputDirectory", "")), offset=offset, max_files=max_files)
                 return self.send_json(201, result, origin)
+            if path == "/forensics/plist-parse":
+                return self.send_json(200, plist_forensics.analyze_plist(
+                    str(data.get("path", ""))), origin)
+            if path == "/forensics/sqlite-inspect":
+                return self.send_json(200, sqlite_forensics.inspect_sqlite(
+                    str(data.get("path", ""))), origin)
+            if path == "/forensics/sqlite-sample":
+                limit = data.get("limit", 50)
+                if not isinstance(limit, int) or isinstance(limit, bool):
+                    raise ValueError("limit must be an integer.")
+                return self.send_json(200, sqlite_forensics.sample_table(
+                    str(data.get("path", "")), str(data.get("table", "")), limit=limit), origin)
             if path == "/forensics/deleted-list":
                 offset = data.get("offset", 0)
                 if not isinstance(offset, int) or isinstance(offset, bool):

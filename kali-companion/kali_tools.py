@@ -119,6 +119,13 @@ def v_hash(value: object) -> str:
     return text
 
 
+def v_regpath(value: object) -> str:
+    text = str(value or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9\\ _.\-${}()]{1,256}", text):
+        raise ValueError("Enter a registry key path (e.g. \\Microsoft\\Windows\\CurrentVersion).")
+    return text
+
+
 def v_bounded_int(low: int, high: int):
     def check(value: object) -> str:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -479,6 +486,18 @@ TOOL_SPECS = {
         "binary": "hashid", "package": "hashid", "active": False, "category": "hash-id",
         "params": {"hash": v_hash}, "argv": lambda p: ["hashid", "-m", "--", p["hash"]],
         "purpose": "Identify the likely algorithm(s) of a hash string (offline).",
+    },
+    "reglookup": {
+        "binary": "reglookup", "package": "reglookup", "active": False,
+        "category": "forensics-registry", "params": {"file": v_filepath},
+        "argv": lambda p: ["reglookup", "--", p["file"]],
+        "purpose": "Dump a Windows registry hive file (keys, values, types) read-only.",
+    },
+    "hivexget": {
+        "binary": "hivexget", "package": "libhivex-bin", "active": False,
+        "category": "forensics-registry", "params": {"file": v_filepath, "key": v_regpath},
+        "argv": lambda p: ["hivexget", p["file"], p["key"]],
+        "purpose": "Read one key path from a Windows registry hive file read-only.",
     },
     # --- active network/service recon (authorisation + exact-target confirmation) ---
     "fping": {

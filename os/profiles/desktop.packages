@@ -85,3 +85,5 @@ nfs-common
 ldap-utils
 ike-scan
 cewl
+reglookup
+libhivex-bin
