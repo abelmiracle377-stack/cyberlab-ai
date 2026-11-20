@@ -42,6 +42,8 @@ import balance_check
 import kali_tools
 import host_telemetry
 import soc_engine
+import splunk_connector
+import wazuh_connector
 import pcap_analysis
 import plist_forensics
 import sqlite_forensics
@@ -728,6 +730,45 @@ def wallet_bip38_crack(data: dict) -> dict:
     return result
 
 
+def soc_splunk_send(data: dict) -> dict:
+    """Forward an event to Splunk HEC from the companion."""
+    return splunk_connector.send_hec_event(
+        str(data.get("hecUrl", "")), str(data.get("token", "")), data.get("event"),
+        index=data.get("index"), sourcetype=str(data.get("sourcetype", "cyberlab:soc")),
+        insecure=data.get("insecure") is True)
+
+
+def soc_splunk_search(data: dict) -> dict:
+    """Run a Splunk search and optionally analyze the normalized results."""
+    result = splunk_connector.search(
+        str(data.get("baseUrl", "")), str(data.get("token", "")), str(data.get("query", "")),
+        earliest=str(data.get("earliest", "-24h")), latest=str(data.get("latest", "now")),
+        max_count=int(data.get("maxCount", 100)), insecure=data.get("insecure") is True)
+    if result.get("ok") and data.get("analyze") is True:
+        result["analysis"] = soc_engine.analyze(result["events"])
+    return result
+
+
+def soc_wazuh_agents(data: dict) -> dict:
+    """Authenticate to the Wazuh API and list agents."""
+    token = wazuh_connector.api_login(
+        str(data.get("apiUrl", "")), str(data.get("user", "")), str(data.get("password", "")),
+        insecure=data.get("insecure") is True)
+    return wazuh_connector.list_agents(str(data.get("apiUrl", "")), token,
+                                       insecure=data.get("insecure") is True)
+
+
+def soc_wazuh_alerts(data: dict) -> dict:
+    """Pull recent Wazuh alerts from the Indexer and optionally analyze them."""
+    result = wazuh_connector.search_alerts(
+        str(data.get("indexerUrl", "")), str(data.get("user", "")), str(data.get("password", "")),
+        query=data.get("query") if isinstance(data.get("query"), dict) else None,
+        size=int(data.get("size", 50)), insecure=data.get("insecure") is True)
+    if result.get("ok") and data.get("analyze") is True:
+        result["analysis"] = soc_engine.analyze(result["events"])
+    return result
+
+
 def soc_analyze(data: dict) -> dict:
     """Run the CyberSOC detection engine over supplied events or live telemetry.
 
@@ -1342,7 +1383,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1389,6 +1430,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_electrum_derive(data), origin)
             if path == "/soc/analyze":
                 return self.send_json(200, soc_analyze(data), origin)
+            if path == "/soc/splunk/send":
+                return self.send_json(200, soc_splunk_send(data), origin)
+            if path == "/soc/splunk/search":
+                return self.send_json(200, soc_splunk_search(data), origin)
+            if path == "/soc/wazuh/agents":
+                return self.send_json(200, soc_wazuh_agents(data), origin)
+            if path == "/soc/wazuh/alerts":
+                return self.send_json(200, soc_wazuh_alerts(data), origin)
             if path == "/wallet/solve-seed":
                 return self.send_json(200, wallet_solve_seed(data), origin)
             if path == "/wallet/check-balances":
