@@ -78,5 +78,41 @@ class CommandTests(unittest.TestCase):
             wz.enable_monitor("wlan0; rm -rf /", runner=Recorder())
 
 
+class CrackUploadTests(unittest.TestCase):
+    def _wordlist(self):
+        import tempfile
+        fh = tempfile.NamedTemporaryFile(prefix="wl_", suffix=".txt", delete=False)
+        fh.write(b"password\nhunter2\n")
+        fh.close()
+        self.addCleanup(lambda: __import__("os").remove(fh.name))
+        return fh.name
+
+    def test_upload_requires_authorization(self):
+        with self.assertRaises(ValueError):
+            wz.crack_upload({"captureBase64": "AAAA", "wordlistPath": "/tmp/w"})
+
+    def test_upload_rejects_bad_base64(self):
+        with self.assertRaises(ValueError):
+            wz.crack_upload({**AUTH, "captureBase64": "not base64!!!", "wordlistPath": self._wordlist()})
+
+    def test_upload_rejects_oversize(self):
+        import base64 as b64
+        big = b64.b64encode(b"A" * (wz.MAX_UPLOAD_BYTES + 1)).decode()
+        with self.assertRaises(ValueError):
+            wz.crack_upload({**AUTH, "captureBase64": big, "wordlistPath": self._wordlist()})
+
+    def test_upload_decodes_and_cracks(self):
+        import base64 as b64
+        rec = Recorder("KEY FOUND! [ hunter2 ]")
+        cap = b64.b64encode(b"fake-handshake-bytes").decode()
+        out = wz.crack_upload({**AUTH, "captureBase64": cap, "captureName": "h.cap",
+                               "wordlistPath": self._wordlist(), "tool": "aircrack"}, runner=rec)
+        self.assertTrue(out["keyFound"])
+        self.assertEqual(out["key"], "hunter2")
+        self.assertEqual(out["captureName"], "h.cap")
+        # aircrack-ng was run against the written temp capture file
+        self.assertEqual(rec.calls[0][0], "aircrack-ng")
+
+
 if __name__ == "__main__":
     unittest.main()

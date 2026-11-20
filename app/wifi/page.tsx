@@ -119,8 +119,9 @@ export default function WifiPage() {
         </div>
 
         <div className={card}>
-          <h2 className="text-sm font-semibold">WPA crack (dictionary)</h2>
-          <div className="mt-3 grid gap-2"><Field value={f.capturePath} onChange={(v) => set("capturePath", v)} label="Capture file (.cap / .hc22000)"/><Field value={f.wordlistPath} onChange={(v) => set("wordlistPath", v)} label="Wordlist"/></div>
+          <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">WPA crack (dictionary)</h2>
+            <a href="/wifi-crack" className="text-[11px] text-sky-300 hover:text-sky-200">Upload a capture instead →</a></div>
+          <div className="mt-3 grid gap-2"><Field value={f.capturePath} onChange={(v) => set("capturePath", v)} label="Capture path on companion (.cap / .hc22000)"/><Field value={f.wordlistPath} onChange={(v) => set("wordlistPath", v)} label="Wordlist"/></div>
           <div className="mt-2 flex items-end gap-2">
             <div><label className="mb-1 block text-[11px] text-slate-500">Tool</label><select value={f.tool} onChange={(e) => set("tool", e.target.value)} className="rounded border border-slate-700 bg-[#06100e] px-2 py-1.5 text-sm"><option value="aircrack">aircrack-ng</option><option value="hashcat">hashcat</option></select></div>
             <Btn label="Crack" running={busy === "crack"} disabled={busy !== "" || !gated} onClick={() => post("/wifi/crack-wpa", { ...auth(), capturePath: f.capturePath, wordlistPath: f.wordlistPath, tool: f.tool }, "crack", "WPA crack")}/></div>

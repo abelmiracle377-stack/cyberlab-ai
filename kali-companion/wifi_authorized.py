@@ -14,10 +14,14 @@ not an open-ended jamming primitive.
 """
 from __future__ import annotations
 
+import base64
 import os
 import re
 import subprocess
 import tempfile
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+_CAPTURE_EXTS = (".cap", ".pcap", ".pcapng", ".hccapx", ".hc22000", ".22000")
 
 _BSSID_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 _IFACE_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -173,6 +177,51 @@ def crack_wpa(data: dict, runner=subprocess.run) -> dict:
         return {"status": "error", "error": err}
     return {"status": "completed", "authorizationReference": ref, "keyFound": bool(key), "key": key,
             "tool": tool, "note": ("Passphrase recovered — it is weak; change it." if key else "No wordlist match.")}
+
+
+def crack_upload(data: dict, runner=subprocess.run) -> dict:
+    """Offline WPA crack of an UPLOADED capture (base64) against a local wordlist.
+
+    The browser uploads the capture; the companion writes it to a temp file,
+    runs the crack, and deletes it. The wordlist stays a path on the companion
+    (wordlists are large and already present, e.g. rockyou). Authorization-gated.
+    """
+    _require_auth(data)
+    b64 = data.get("captureBase64")
+    if not isinstance(b64, str) or not b64:
+        raise ValueError("A base64-encoded capture is required.")
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except Exception:
+        raise ValueError("The capture is not valid base64.")
+    if not raw:
+        raise ValueError("The uploaded capture is empty.")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise ValueError("The capture is too large (max 10 MB).")
+    wordlist = data.get("wordlistPath")
+    if not isinstance(wordlist, str) or not wordlist or not os.path.isfile(wordlist):
+        raise ValueError("A valid wordlist file path on this machine is required.")
+
+    name = data.get("captureName", "capture")
+    ext = os.path.splitext(str(name))[1].lower()
+    if ext not in _CAPTURE_EXTS:
+        ext = ".cap"
+    workdir = tempfile.mkdtemp(prefix="cyberlab_upload_")
+    path = os.path.join(workdir, "capture" + ext)
+    with open(path, "wb") as fh:
+        fh.write(raw)
+    try:
+        result = crack_wpa({**data, "capturePath": path, "wordlistPath": wordlist,
+                            "tool": data.get("tool", "aircrack")}, runner=runner)
+    finally:
+        try:
+            os.remove(path)
+            os.rmdir(workdir)
+        except OSError:
+            pass
+    result["captureName"] = str(name)[:120]
+    result["uploadedBytes"] = len(raw)
+    return result
 
 
 def wps_attack(data: dict, runner=subprocess.run) -> dict:

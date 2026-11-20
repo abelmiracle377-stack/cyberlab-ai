@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   GraduationCap,
   Wifi,
+  KeyRound,
 } from "lucide-react";
 
 const groups = [
@@ -70,6 +71,7 @@ const groups = [
   { title: "RECON & WIRELESS", items: [
     { label: "Shodan OSINT", icon: Globe, href: "/shodan" },
     { label: "Wi-Fi Toolkit", icon: Wifi, href: "/wifi" },
+    { label: "Offline WPA Crack", icon: KeyRound, href: "/wifi-crack" },
   ]},
 ];
 
@@ -88,6 +90,7 @@ const modules = [
   { name:"Web Application Assessment", desc:"Bug-bounty baseline: headers, cookies, disclosure, sensitive files, open-redirect and SQL-error detection, mapped to OWASP/CWE.", icon:Bug, state:"NATIVE / DETECTION-ONLY", href:"/web-assessment" },
   { name:"Shodan OSINT", desc:"Host lookup, index search and DNS resolve over the official Shodan API with your own key — read-only internet-exposure recon.", icon:Globe, state:"OSINT / READ-ONLY", href:"/shodan" },
   { name:"Wi-Fi Toolkit", desc:"Authorized Wi-Fi engagement: monitor mode, scan & posture audit, handshake/PMKID capture, WPA crack, WPS and wifite.", icon:Wifi, state:"AUTHORIZED / GATED", href:"/wifi" },
+  { name:"Offline WPA Crack", desc:"Upload a handshake/PMKID capture and audit its passphrase strength against a wordlist, offline via the companion.", icon:KeyRound, state:"AUTHORIZED / GATED", href:"/wifi-crack" },
   { name:"Burp Suite Connector", desc:"Connect the local companion to Burp Suite and inspect proxy history, site map and issues.", icon:Cable, state:"LOCAL / PAIRED", href:"/burp-suite" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
