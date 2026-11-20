@@ -4,6 +4,16 @@ An AI-assisted cybersecurity workspace that unifies OSINT and reconnaissance, au
 
 CyberLab is for work you are authorized to do: systems you own, lab environments, and engagements with written permission. It is not a tool for attacking systems you don't control.
 
+## Downloads
+
+Permanent latest-release links (populate when a version tag is pushed — see [Releases](https://github.com/abelmiracle377-stack/cyberlab-ai/releases)):
+
+- **CyberSOC — standalone** (autonomous detection/correlation/response engine, pure Python): [cybersoc.tar.gz](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz)
+- **CyberLab AI OS — build kit** (Debian-based bootable security workstation; the VM image is produced from this kit): [cyberlab-os-builder.tar.gz](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-os-builder.tar.gz)
+- Checksums: `SHA256SUMS.txt` on each release.
+
+To publish/refresh the artifacts: `git tag v0.1.0 && git push origin v0.1.0` — the release workflow builds and attaches them. Build locally with `scripts/package-cybersoc.sh` and `scripts/package-os-builder.sh`.
+
 ---
 
 ## What's inside
@@ -92,6 +102,10 @@ Open http://localhost:3000.
 - `CYBERLAB_MCP_API_KEY`, `CYBERLAB_UNCENSORED_*` — optional, server-only.
 
 Never commit secrets or put service-role/Paystack keys in browser code.
+
+### Deploy
+- **Cloudflare** (Workers, via the OpenNext adapter) — recommended; config (`wrangler.jsonc`, `open-next.config.ts`) is in the repo. See [docs/CLOUDFLARE_DEPLOY.md](./docs/CLOUDFLARE_DEPLOY.md).
+- **Vercel** — `vercel.json` is included; set the same environment variables.
 
 ### Supabase migrations
 Apply in order in the Supabase SQL Editor:

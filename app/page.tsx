@@ -73,6 +73,10 @@ const groups = [
     { label: "Wi-Fi Toolkit", icon: Wifi, href: "/wifi" },
     { label: "Offline WPA Crack", icon: KeyRound, href: "/wifi-crack" },
   ]},
+  { title: "DOWNLOADS", items: [
+    { label: "CyberLab AI OS (VM)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-os-builder.tar.gz" },
+    { label: "CyberSOC (standalone)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz" },
+  ]},
 ];
 
 const modules = [
@@ -91,6 +95,8 @@ const modules = [
   { name:"Shodan OSINT", desc:"Host lookup, index search and DNS resolve over the official Shodan API with your own key — read-only internet-exposure recon.", icon:Globe, state:"OSINT / READ-ONLY", href:"/shodan" },
   { name:"Wi-Fi Toolkit", desc:"Authorized Wi-Fi engagement: monitor mode, scan & posture audit, handshake/PMKID capture, WPA crack, WPS and wifite.", icon:Wifi, state:"AUTHORIZED / GATED", href:"/wifi" },
   { name:"Offline WPA Crack", desc:"Upload a handshake/PMKID capture and audit its passphrase strength against a wordlist, offline via the companion.", icon:KeyRound, state:"AUTHORIZED / GATED", href:"/wifi-crack" },
+  { name:"Download · CyberLab AI OS", desc:"Build kit for the Debian-based bootable security workstation (VM image produced from the kit). Permanent latest-release download.", icon:HardDriveDownload, state:"DOWNLOAD / RELEASE", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-os-builder.tar.gz" },
+  { name:"Download · CyberSOC", desc:"Standalone autonomous SOC engine (detection, correlation, response). Pure Python, no dependencies. Permanent latest-release download.", icon:HardDriveDownload, state:"DOWNLOAD / RELEASE", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz" },
   { name:"Burp Suite Connector", desc:"Connect the local companion to Burp Suite and inspect proxy history, site map and issues.", icon:Cable, state:"LOCAL / PAIRED", href:"/burp-suite" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
@@ -179,7 +185,7 @@ export default function Home() {
         </div>
         <div className="section-heading module-section-heading"><h2>MODULE DIRECTORY</h2><span className="section-meta">{filtered.length} MODULES · SELECT TO OPEN</span></div>
         <div className="module-search-mobile"><Search size={14}/><input placeholder="Filter operational modules..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
-        <div className="modules-grid command-modules">{filtered.map(module=>{const Icon=module.icon;return <a className="module-card command-module" key={module.name} href={module.href}><div className="module-top"><span className="module-icon"><Icon size={16}/></span><span className="module-status">{module.state}</span></div><div className="module-name">{module.name}</div><div className="module-desc">{module.desc}</div><div className="module-open">OPEN MODULE <ArrowRight size={12}/></div></a>})}</div>
+        <div className="modules-grid command-modules">{filtered.map(module=>{const Icon=module.icon;const ext=module.href.startsWith("http");return <a className="module-card command-module" key={module.name} href={module.href} {...(ext?{target:"_blank",rel:"noreferrer"}:{})}><div className="module-top"><span className="module-icon"><Icon size={16}/></span><span className="module-status">{module.state}</span></div><div className="module-name">{module.name}</div><div className="module-desc">{module.desc}</div><div className="module-open">{ext?"DOWNLOAD":"OPEN MODULE"} <ArrowRight size={12}/></div></a>})}</div>
         {filtered.length===0&&<div className="empty-search">NO MODULE MATCHES THAT QUERY. TRY ANOTHER TERM.</div>}
         <div className="command-footer"><span>CYBERLAB AI // SECURITY RESEARCH WORKSPACE</span><span>AUTHORISED SYSTEMS ONLY · HUMAN APPROVAL REQUIRED</span></div>
       </div>
