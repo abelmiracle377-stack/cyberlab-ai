@@ -41,6 +41,7 @@ import seed_solver
 import balance_check
 import kali_tools
 import host_telemetry
+import soc_engine
 import pcap_analysis
 import plist_forensics
 import sqlite_forensics
@@ -727,6 +728,26 @@ def wallet_bip38_crack(data: dict) -> dict:
     return result
 
 
+def soc_analyze(data: dict) -> dict:
+    """Run the CyberSOC detection engine over supplied events or live telemetry.
+
+    Pass {"events": [...]} with normalized events, and/or {"fromTelemetry": true}
+    to pull this host's live read-only telemetry and fold it into the analysis.
+    """
+    events = data.get("events") or []
+    if not isinstance(events, list):
+        raise ValueError("events must be a list of normalized event objects.")
+    if len(events) > 50000:
+        raise ValueError("Too many events in one request (max 50000).")
+    if data.get("fromTelemetry") is True:
+        security = host_telemetry.collect_security_telemetry()
+        system = host_telemetry.collect_system_telemetry()
+        host = str(data.get("host", "local"))[:120]
+        events = events + soc_engine.events_from_telemetry(security, system, host)
+    config = data.get("config") if isinstance(data.get("config"), dict) else None
+    return soc_engine.analyze(events, config)
+
+
 def wallet_crack(data: dict) -> dict:
     """Run a locally installed hashcat/John against an extracted wallet hash.
 
@@ -1321,7 +1342,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1338,6 +1359,7 @@ class Handler(BaseHTTPRequestHandler):
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
                 65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover"} else
+                1048576 if path == "/soc/analyze" else
                 4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze"} else
                 8192 if path == "/tools/run" else
                 32768 if path in {"/web/request", "/web/crawl", "/web/active-scan", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze"} else MAX_BODY
@@ -1365,6 +1387,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wallet_derive(data), origin)
             if path == "/wallet/electrum-derive":
                 return self.send_json(200, wallet_electrum_derive(data), origin)
+            if path == "/soc/analyze":
+                return self.send_json(200, soc_analyze(data), origin)
             if path == "/wallet/solve-seed":
                 return self.send_json(200, wallet_solve_seed(data), origin)
             if path == "/wallet/check-balances":

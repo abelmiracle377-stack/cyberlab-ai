@@ -58,6 +58,10 @@ The existing Kali companion, authorised Nmap workflow, host telemetry and Ollama
 - Browser-local evidence vault using AES-256-GCM and PBKDF2-SHA-256, with encrypted backup import/export
 - Offline Kali companion for static file triage and Nmap XML parsing
 - Baseline HTTP security headers and secret-file exclusions
+- Community chat: usernames, friend requests, and direct messages with pictures and voice notes, end-to-end encrypted in the browser (ECDH P-256 + AES-GCM) so the server stores only ciphertext — see [docs/SOCIAL_CHAT.md](./docs/SOCIAL_CHAT.md)
+- Read-only forensic artifact parsing on the companion: Apple plists, SQLite databases (browser history/cookies/logins, opened read-only + immutable) and Windows registry hives
+- Local wallet recovery: BIP39 multi-coin derivation and account/change sweep, Electrum (v2 standard/segwit and old) seeds, partial/scrambled seed reconstruction, MetaMask vaults, BIP38 encrypted keys (incl. EC-multiply), and password cracking with the full hashcat/John attack range
+- CyberSOC: an autonomous, AI-driven SOC with a detection/triage engine, Splunk and Wazuh connectors, and an auto-response runner — see [docs/CYBERSOC.md](./docs/CYBERSOC.md)
 
 ## Test
 
