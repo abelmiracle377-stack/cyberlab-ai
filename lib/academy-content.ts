@@ -308,6 +308,96 @@ TRACKS.push({
   },
 });
 
+// Attack techniques explained for defenders — how each works, its impact, and
+// how to stop it. Concepts and defences, not working attack payloads.
+TRACKS.push({
+  id: "attack-defense",
+  title: "Attack Techniques & Defense",
+  summary: "Understand how common attacks work and, more importantly, how to detect and prevent them — Cross-Site Scripting and SSH key security.",
+  level: "intermediate",
+  rooms: [
+    {
+      id: "xss",
+      title: "Cross-Site Scripting (XSS)",
+      summary: "How attacker-controlled script ends up running in another user's browser — and the layered defences that stop it.",
+      difficulty: "medium",
+      tool: "Web Application Assessment", toolHref: "/web-assessment",
+      videoUrl: "https://www.youtube.com/@PortSwiggerTV",
+      resources: [
+        { title: "PortSwigger: Cross-site scripting", url: "https://portswigger.net/web-security/cross-site-scripting" },
+        { title: "OWASP XSS Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" },
+      ],
+      tasks: [
+        { id: "xss-types", title: "The three kinds of XSS",
+          instructions: "Read how XSS splits into reflected (echoed from the request), stored (saved and served to others) and DOM-based (client-side sink). Then continue.",
+          writeup: "XSS is an injection flaw where untrusted input is placed into a page without being neutralised, so the browser executes it as code. Reflected XSS bounces a value straight back from the request into the response; stored XSS is persisted (a comment, a profile field) and runs for every viewer, making it the most dangerous; DOM-based XSS never touches the server — client-side JavaScript writes attacker input into a dangerous sink like innerHTML or document.write. All three share one root cause: mixing data and code. The fix is to keep them apart at every layer.",
+          walkthroughUrl: "https://portswigger.net/web-security/cross-site-scripting" },
+        { id: "xss-acronym", title: "Name the vulnerability class",
+          instructions: "What three-letter acronym names the bug where attacker-controlled script runs in another user's browser? Answer with the acronym.",
+          answer: "XSS",
+          writeup: "XSS = Cross-Site Scripting. The historical 'X' avoided confusion with CSS (stylesheets). Its impact is whatever the victim's session can do: reading or exfiltrating data on the page, performing actions as the user, capturing keystrokes, or stealing a session cookie to hijack the account. Because the script runs with the victim's privileges in their origin, XSS effectively defeats the same-origin policy for that page.",
+          walkthroughUrl: "https://owasp.org/www-community/attacks/xss/" },
+        { id: "xss-httponly", title: "Protecting the session cookie",
+          instructions: "Which cookie flag stops client-side JavaScript from reading the cookie (so XSS can't steal the session via document.cookie)? Answer with the flag name.",
+          answer: "HttpOnly", hint: "It makes the cookie invisible to document.cookie.",
+          writeup: "The HttpOnly flag tells the browser not to expose a cookie to JavaScript, so even if XSS runs, document.cookie won't reveal the session token — closing the classic cookie-theft path. It is defence in depth, not a cure: an attacker can still act through the authenticated page itself. Pair it with Secure (HTTPS-only) and SameSite (cross-site request limits). Note the historical XST (Cross-Site Tracing) trick that abused the HTTP TRACE method to read HttpOnly cookies — which is why you also disable TRACE on servers; modern browsers already block it.",
+          walkthroughUrl: "https://owasp.org/www-community/HttpOnly" },
+        { id: "xss-csp", title: "Stopping inline script execution",
+          instructions: "Which response header lets you block inline scripts and restrict where scripts may load from, neutralising most XSS? Answer with the header name.",
+          answer: "Content-Security-Policy", hint: "Abbreviated CSP.",
+          writeup: "A Content-Security-Policy (CSP) controls which script sources the browser will execute. A policy without 'unsafe-inline' refuses inline <script> and on* handlers, so an injected payload simply doesn't run — turning many XSS findings from critical into inert. CSP is the strongest single mitigation, but it sits on top of, not instead of, the real fix: context-aware output encoding (HTML, attribute, JS, URL) and input validation, plus safe DOM APIs (textContent, not innerHTML) and frameworks that auto-escape. Defence in depth: encode output, add CSP, set HttpOnly/Secure/SameSite, and validate input.",
+          walkthroughUrl: "https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html" },
+      ],
+    },
+    {
+      id: "ssh-security",
+      title: "SSH Security & Key Hygiene",
+      summary: "How SSH keys, agents and trust get abused — and the configuration that keeps them safe.",
+      difficulty: "medium",
+      resources: [
+        { title: "SSH Academy", url: "https://www.ssh.com/academy/ssh" },
+        { title: "CVE-2024-31497 (PuTTY)", url: "https://nvd.nist.gov/vuln/detail/CVE-2024-31497" },
+      ],
+      tasks: [
+        { id: "ssh-perms", title: "Private key permissions",
+          instructions: "What octal file mode should a private key (e.g. id_ed25519) have so only its owner can read it? Answer with the three-digit number.",
+          answer: "600", hint: "Owner read/write only.",
+          writeup: "A private key readable by other users is a handover of your identity. Keys should be 600 (owner read/write only), and ~/.ssh 700; OpenSSH refuses to use an over-permissive key for exactly this reason. Loose permissions are a common lateral-movement foothold: an attacker with a shell simply copies a world-readable id_rsa and authenticates as its owner. Audit for stray keys, store them encrypted with a passphrase, and keep them off shared hosts.",
+          walkthroughUrl: "https://www.ssh.com/academy/ssh/keygen" },
+        { id: "ssh-agent", title: "Agent forwarding risk",
+          instructions: "Read why 'ForwardAgent yes' is risky: it exposes a socket on the remote host that anyone with root there can use to authenticate as you, without ever seeing the key. Then continue.",
+          writeup: "SSH agent forwarding lets a remote host use your local agent to authenticate onward — convenient, but it places a live socket (SSH_AUTH_SOCK) on that host. Anyone with root on the intermediate box can use that socket to impersonate you to any system your keys unlock, for as long as your session lasts. Prefer ProxyJump (ssh -J) which never exposes the agent, set 'AllowAgentForwarding no' on servers you don't fully trust, scope keys per environment, and use 'ssh-add -c' to require confirmation on each use.",
+          walkthroughUrl: "https://www.ssh.com/academy/ssh/agent" },
+        { id: "ssh-authorized-keys", title: "authorized_keys persistence",
+          instructions: "A common persistence trick is appending an attacker key to a victim's ~/.ssh/authorized_keys. What filename holds the public keys permitted to log into an account? Answer with the filename.",
+          answer: "authorized_keys",
+          writeup: "~/.ssh/authorized_keys lists the public keys allowed to log in as that user. Write access to it — via a misconfiguration, a web shell, or a weak account — lets an attacker append their own key for durable, password-less access that survives password changes. Defenders: monitor authorized_keys for unexpected entries (file-integrity monitoring), restrict who can write to home directories, consider centrally-managed keys or certificates (ssh-keygen CA) instead of per-user files, and alert on new public keys.",
+          walkthroughUrl: "https://www.ssh.com/academy/ssh/authorized-keys-file" },
+        { id: "ssh-keytype", title: "The key type to prefer",
+          instructions: "Which modern SSH key type should you prefer over RSA/ECDSA for new keys (and which avoids the PuTTY CVE-2024-31497 P-521 nonce flaw)? Answer with the key type.",
+          answer: "Ed25519", hint: "An EdDSA curve, not NIST P-521.",
+          writeup: "Ed25519 is a fast, modern signature scheme with deterministic nonces, which sidesteps the biased-nonce class of bugs. CVE-2024-31497 affected PuTTY 0.68–0.80 (and tools bundling it): its ECDSA nonce generation for NIST P-521 keys was biased, so roughly 60 signatures — obtainable from a Git server or a rogue SSH host — could recover the private key. Mitigation: update to PuTTY 0.81+, revoke any P-521 key used with a vulnerable version, and prefer Ed25519 for new keys. It's a clean example of why key-type and library hygiene matter as much as key secrecy.",
+          walkthroughUrl: "https://nvd.nist.gov/vuln/detail/CVE-2024-31497" },
+      ],
+    },
+  ],
+  certification: {
+    code: "CCD", title: "CyberLab Certified Defender", passPercent: 80,
+    exam: [
+      { id: "ccd-1", prompt: "Stored XSS is the most dangerous kind because it:",
+        options: [{ id: "a", text: "Only affects the attacker" }, { id: "b", text: "Is served to every user who views the page" }, { id: "c", text: "Requires physical access" }, { id: "d", text: "Cannot steal data" }], answer: "b" },
+      { id: "ccd-2", prompt: "Which flag stops JavaScript reading a cookie?",
+        options: [{ id: "a", text: "Secure" }, { id: "b", text: "SameSite" }, { id: "c", text: "HttpOnly" }, { id: "d", text: "Domain" }], answer: "c" },
+      { id: "ccd-3", prompt: "The strongest single mitigation against inline-script XSS is:",
+        options: [{ id: "a", text: "A faster server" }, { id: "b", text: "A Content-Security-Policy without unsafe-inline" }, { id: "c", text: "Hiding errors" }, { id: "d", text: "A longer password" }], answer: "b" },
+      { id: "ccd-4", prompt: "An SSH private key should have permissions:",
+        options: [{ id: "a", text: "777" }, { id: "b", text: "644" }, { id: "c", text: "600" }, { id: "d", text: "666" }], answer: "c" },
+      { id: "ccd-5", prompt: "To avoid exposing your SSH agent on an intermediate host, prefer:",
+        options: [{ id: "a", text: "ForwardAgent yes" }, { id: "b", text: "ProxyJump (ssh -J)" }, { id: "c", text: "Sharing your private key" }, { id: "d", text: "Disabling encryption" }], answer: "b" },
+    ],
+  },
+});
+
 export function findTrack(id: string): AcademyTrack | undefined {
   return TRACKS.find((t) => t.id === id);
 }

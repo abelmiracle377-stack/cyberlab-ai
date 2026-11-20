@@ -34,6 +34,7 @@ from web_assessment import run_assessment
 import academy_lab
 import shodan_connector
 import wifi_assessment
+import wifi_authorized
 from parameter_lab import inspect_parameters, generate_cases
 from parameter_analysis import compare_responses
 from proxy_certificates import ca_status, ca_certificate_pem, create_local_ca
@@ -1420,7 +1421,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/wps", "/wifi/auto", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1564,6 +1565,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, wifi_assessment.audit_networks(networks), origin)
             if path == "/wifi/crack":
                 return self.send_json(200, wifi_assessment.crack_capture(data), origin)
+            if path == "/wifi/monitor/start":
+                return self.send_json(200, wifi_authorized.enable_monitor(data.get("interface", "")), origin)
+            if path == "/wifi/monitor/stop":
+                return self.send_json(200, wifi_authorized.disable_monitor(data.get("interface", "")), origin)
+            if path == "/wifi/deauth":
+                return self.send_json(200, wifi_authorized.deauth(data), origin)
+            if path == "/wifi/capture/handshake":
+                return self.send_json(200, wifi_authorized.capture_handshake(data), origin)
+            if path == "/wifi/capture/pmkid":
+                return self.send_json(200, wifi_authorized.capture_pmkid(data), origin)
+            if path == "/wifi/crack-wpa":
+                return self.send_json(200, wifi_authorized.crack_wpa(data), origin)
+            if path == "/wifi/wps":
+                return self.send_json(200, wifi_authorized.wps_attack(data), origin)
+            if path == "/wifi/auto":
+                return self.send_json(200, wifi_authorized.auto_audit(data), origin)
             if path == "/web/crawl":
                 if not web_crawl_lock.acquire(blocking=False):
                     return self.send_json(409, {"error": "A native web crawl is already running."}, origin)

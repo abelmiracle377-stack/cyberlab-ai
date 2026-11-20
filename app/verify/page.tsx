@@ -9,6 +9,7 @@ const TRACK_NAMES: Record<string, string> = {
   "web-appsec": "Web Application Security",
   "soc-analyst": "SOC Analyst Fundamentals",
   "ctf-lab": "Capture The Flag: Vulnerable Shop",
+  "attack-defense": "Attack Techniques & Defense",
 };
 
 export default function VerifyPage() {
