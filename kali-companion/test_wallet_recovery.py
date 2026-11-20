@@ -134,6 +134,38 @@ class MultiCoinDerivationTests(unittest.TestCase):
         self.assertEqual(wr.base58check_decode(doge["address"])[0], 0x1E)
         self.assertEqual(wr.base58check_decode(doge["wif"])[0], 0x9E)
 
+    def test_tron_encoder_matches_usdt_contract_vector(self):
+        # Independent authoritative anchor: USDT TRC20 contract hex <-> address.
+        addr = wr.base58check_encode(bytes.fromhex("41A614F803B6FD780986A42C78EC9C7F77E6DED13C"))
+        self.assertEqual(addr, "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t")
+
+    def test_xrp_encoder_matches_account_zero(self):
+        # XRP ACCOUNT_ZERO: AccountID of 20 zero bytes encodes to this address.
+        self.assertEqual(wr.xrp_address.__name__, "xrp_address")
+        payload = b"\x00" + b"\x00" * 20
+        encoded = wr._base58_with_alphabet(payload + wr._sha256(wr._sha256(payload))[:4], wr._XRP_ALPHABET)
+        self.assertEqual(encoded, "rrrrrrrrrrrrrrrrrrrrrhoLvTp")
+
+    def test_new_coin_prefixes_and_versions(self):
+        dash = self.first("dash")
+        self.assertTrue(dash["address"].startswith("X"))
+        self.assertEqual(wr.base58check_decode(dash["address"])[0], 0x4C)
+        self.assertEqual(wr.base58check_decode(dash["wif"])[0], 0xCC)
+        self.assertTrue(self.first("zcash-transparent")["address"].startswith("t1"))
+        self.assertEqual(wr.base58check_decode(self.first("zcash-transparent")["address"])[:2], b"\x1c\xb8")
+        self.assertTrue(self.first("bitcoin-gold")["address"].startswith("G"))
+        self.assertEqual(wr.base58check_decode(self.first("bitcoin-gold")["address"])[0], 0x26)
+        self.assertTrue(self.first("bitcoin-testnet")["address"].startswith(("m", "n")))
+
+    def test_tron_and_xrp_derivation(self):
+        tron = self.first("tron")
+        self.assertTrue(tron["address"].startswith("T") and len(tron["address"]) == 34)
+        self.assertEqual(wr.base58check_decode(tron["address"])[0], 0x41)
+        self.assertEqual(len(tron["privateKey"]), 64)  # raw hex key, no WIF
+        xrp = self.first("xrp")
+        self.assertTrue(xrp["address"].startswith("r"))
+        self.assertIn("privateKey", xrp)
+
     def test_passphrase_changes_derivation(self):
         plain = wr.derive_accounts(self.seed, "bip44-ethereum", 1)[0]["address"]
         seed_pp = wr.mnemonic_to_seed(self.MNEMONIC, "my-25th-word")

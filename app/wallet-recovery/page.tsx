@@ -32,6 +32,12 @@ const ACCOUNT_TEMPLATES: { value: string; label: string }[] = [
   { value: "litecoin-segwit", label: "Litecoin native SegWit (m/84'/2')" },
   { value: "dogecoin-legacy", label: "Dogecoin (m/44'/3')" },
   { value: "bitcoincash", label: "Bitcoin Cash (m/44'/145')" },
+  { value: "dash", label: "Dash (m/44'/5')" },
+  { value: "zcash-transparent", label: "Zcash transparent (m/44'/133')" },
+  { value: "bitcoin-gold", label: "Bitcoin Gold (m/44'/156')" },
+  { value: "bitcoin-testnet", label: "Bitcoin testnet (m/44'/1')" },
+  { value: "tron", label: "TRON (m/44'/195')" },
+  { value: "xrp", label: "XRP / Ripple (m/44'/144')" },
 ];
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;

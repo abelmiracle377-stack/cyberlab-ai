@@ -251,6 +251,44 @@ def ethereum_address(public_key_uncompressed: bytes) -> str:
     return "0x" + out
 
 
+def p2pkh_address_multibyte(public_key: bytes, version_bytes: bytes) -> str:
+    """Base58Check P2PKH with a multi-byte version prefix (e.g. Zcash t-addr)."""
+    return base58check_encode(bytes(version_bytes) + _hash160(public_key))
+
+
+def tron_address(public_key_uncompressed: bytes) -> str:
+    """TRON address: base58check of 0x41 || keccak256(pubkey)[-20:]."""
+    if len(public_key_uncompressed) == 33:
+        raise ValueError("TRON addresses require the uncompressed public key.")
+    body = public_key_uncompressed[1:] if public_key_uncompressed[0] == 0x04 else public_key_uncompressed
+    return base58check_encode(b"\x41" + keccak256(body)[-20:])
+
+
+_XRP_ALPHABET = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
+
+
+def _base58_with_alphabet(data: bytes, alphabet: str) -> str:
+    number = int.from_bytes(data, "big")
+    out = ""
+    while number > 0:
+        number, remainder = divmod(number, 58)
+        out = alphabet[remainder] + out
+    pad = 0
+    for byte in data:
+        if byte == 0:
+            pad += 1
+        else:
+            break
+    return alphabet[0] * pad + out
+
+
+def xrp_address(public_key: bytes) -> str:
+    """XRP classic address: XRP-base58 of AccountID (0x00 || hash160) + checksum."""
+    payload = b"\x00" + _hash160(public_key)
+    checksum = _sha256(_sha256(payload))[:4]
+    return _base58_with_alphabet(payload + checksum, _XRP_ALPHABET)
+
+
 def wif_encode(private_key: bytes, compressed: bool = True, version: int = 0x80) -> str:
     payload = bytes([version]) + private_key + (b"\x01" if compressed else b"")
     return base58check_encode(payload)
@@ -590,6 +628,22 @@ ACCOUNT_TEMPLATES = {
     # Bitcoin Cash (CashAddr)
     "bitcoincash": {"path": "m/44'/145'/0'/0", "address": "cashaddr", "coin": "bitcoincash",
                     "cashaddr_prefix": "bitcoincash", "cashaddr_type": 0, "wif_version": 0x80},
+    # Dash
+    "dash": {"path": "m/44'/5'/0'/0", "address": "p2pkh", "coin": "dash",
+             "addr_version": 0x4C, "wif_version": 0xCC},
+    # Zcash transparent (t-addr; 2-byte version prefix)
+    "zcash-transparent": {"path": "m/44'/133'/0'/0", "address": "p2pkh-multibyte", "coin": "zcash",
+                          "addr_version_bytes": b"\x1c\xb8", "wif_version": 0x80},
+    # Bitcoin Gold
+    "bitcoin-gold": {"path": "m/44'/156'/0'/0", "address": "p2pkh", "coin": "bitcoingold",
+                     "addr_version": 0x26, "wif_version": 0x80},
+    # Bitcoin testnet
+    "bitcoin-testnet": {"path": "m/44'/1'/0'/0", "address": "p2pkh", "coin": "bitcoin-testnet",
+                        "addr_version": 0x6F, "wif_version": 0xEF},
+    # TRON (keccak address, raw-hex keys)
+    "tron": {"path": "m/44'/195'/0'/0", "address": "tron", "coin": "tron", "key_format": "hex"},
+    # XRP / Ripple (classic address, raw-hex keys)
+    "xrp": {"path": "m/44'/144'/0'/0", "address": "xrp", "coin": "xrp", "key_format": "hex"},
     # Ethereum (and EVM chains)
     "bip44-ethereum": {"path": "m/44'/60'/0'/0", "address": "ethereum", "coin": "ethereum"},
 }
@@ -599,6 +653,8 @@ def _encode_address(spec: dict, child: "HDKey") -> str:
     kind = spec["address"]
     if kind == "p2pkh":
         return p2pkh_address(child.public_key(), spec.get("addr_version", 0x00))
+    if kind == "p2pkh-multibyte":
+        return p2pkh_address_multibyte(child.public_key(), spec["addr_version_bytes"])
     if kind == "p2wpkh":
         return p2wpkh_address(child.public_key(), spec.get("hrp", "bc"))
     if kind == "p2sh-p2wpkh":
@@ -607,7 +663,26 @@ def _encode_address(spec: dict, child: "HDKey") -> str:
         return cashaddr_encode(_hash160(child.public_key()),
                                spec.get("cashaddr_prefix", "bitcoincash"),
                                spec.get("cashaddr_type", 0))
+    if kind == "tron":
+        return tron_address(child.public_key(compressed=False))
+    if kind == "xrp":
+        return xrp_address(child.public_key())
     return ethereum_address(child.public_key(compressed=False))
+
+
+def _account_entry(spec: dict, child: "HDKey", path: str, extra: dict | None = None) -> dict:
+    """Build one derived-account entry with the coin's correct key format."""
+    entry = {"path": path, "address": _encode_address(spec, child), "coin": spec["coin"]}
+    key_format = spec.get("key_format") or ("eth" if spec["coin"] == "ethereum" else "wif")
+    if key_format == "eth":
+        entry["privateKey"] = "0x" + child.key.hex()
+    elif key_format == "hex":
+        entry["privateKey"] = child.key.hex()
+    else:
+        entry["wif"] = wif_encode(child.key, version=spec.get("wif_version", 0x80))
+    if extra:
+        entry.update(extra)
+    return entry
 
 
 def derive_accounts(seed: bytes, template: str, count: int = 5) -> list[dict]:
@@ -621,13 +696,7 @@ def derive_accounts(seed: bytes, template: str, count: int = 5) -> list[dict]:
     results = []
     for i in range(count):
         child = root.derive_child(i)
-        entry = {"path": spec["path"] + "/" + str(i), "address": _encode_address(spec, child),
-                 "coin": spec["coin"]}
-        if spec["coin"] == "ethereum":
-            entry["privateKey"] = "0x" + child.key.hex()
-        else:
-            entry["wif"] = wif_encode(child.key, version=spec.get("wif_version", 0x80))
-        results.append(entry)
+        results.append(_account_entry(spec, child, spec["path"] + "/" + str(i)))
     return results
 
 
@@ -663,14 +732,9 @@ def derive_sweep(seed: bytes, template: str, account_count: int = 3,
             root = HDKey.from_seed(seed).derive_path(base)
             for i in range(per_path):
                 child = root.derive_child(i)
-                entry = {"path": base + "/" + str(i), "address": _encode_address(spec, child),
-                         "coin": spec["coin"], "template": template,
-                         "account": account, "change": change}
-                if spec["coin"] == "ethereum":
-                    entry["privateKey"] = "0x" + child.key.hex()
-                else:
-                    entry["wif"] = wif_encode(child.key, version=spec.get("wif_version", 0x80))
-                results.append(entry)
+                results.append(_account_entry(spec, child, base + "/" + str(i),
+                                              {"template": template, "account": account,
+                                               "change": change}))
     return results
 
 
