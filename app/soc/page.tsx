@@ -72,6 +72,20 @@ export default function SocPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [cycleInfo, setCycleInfo] = useState("");
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      const [a, m, c] = await Promise.all([
+        api("/api/soc/alerts"),
+        api("/api/soc/metrics").catch(() => null),
+        api("/api/soc/cases").catch(() => null),
+      ]);
+      setAlerts(a.alerts || []);
+      if (m?.metrics) setMetrics(m.metrics);
+      if (c?.cases) setCases(c.cases);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load alerts."); }
+  }, []);
+
   const [showExposure, setShowExposure] = useState(false);
   const [assetInput, setAssetInput] = useState("");
   const [shodanKey, setShodanKey] = useState("");
@@ -133,19 +147,6 @@ export default function SocPage() {
     const id = setInterval(() => { void sweepAssets(assets, shodanKey, token); }, 15 * 60 * 1000);
     return () => clearInterval(id);
   }, [autoSweep, assets, shodanKey, token, sweepAssets]);
-
-  const loadAlerts = useCallback(async () => {
-    try {
-      const [a, m, c] = await Promise.all([
-        api("/api/soc/alerts"),
-        api("/api/soc/metrics").catch(() => null),
-        api("/api/soc/cases").catch(() => null),
-      ]);
-      setAlerts(a.alerts || []);
-      if (m?.metrics) setMetrics(m.metrics);
-      if (c?.cases) setCases(c.cases);
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not load alerts."); }
-  }, []);
 
   const openCase = useCallback(async (id: string) => {
     try { setActiveCase(await api("/api/soc/cases?id=" + encodeURIComponent(id))); }
