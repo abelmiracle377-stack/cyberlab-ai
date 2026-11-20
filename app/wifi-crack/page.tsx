@@ -55,7 +55,7 @@ export default function WifiCrackPage() {
     finally { setBusy(false); }
   };
 
-  return <main className="min-h-screen bg-[#07100f] text-[#d7e7e1]">
+  return <main className="min-h-screen bg-transparent text-[#d7e7e1]">
     <div className="mx-auto max-w-3xl px-5 py-8">
       <a href="/wifi" className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> Wi-Fi Toolkit</a>
       <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><KeyRound size={14}/> CYBERLAB · OFFLINE WPA CRACK</div>

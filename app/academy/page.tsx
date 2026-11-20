@@ -169,7 +169,7 @@ export default function AcademyPage() {
   if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><Loader2 className="animate-spin" /></main>;
   if (!me) return <main className="flex min-h-screen items-center justify-center bg-[#07100f] text-[#d7e7e1]"><div className="text-center"><GraduationCap className="mx-auto mb-3" /><h1 className="text-xl font-semibold">CyberLab Academy</h1><p className="mt-2 text-sm text-slate-400">Sign in to track progress and earn certifications.</p><a href="/login" className="mt-4 inline-block rounded bg-emerald-700 px-4 py-2 text-xs font-semibold text-white">Sign in</a></div></main>;
 
-  const wrap = (inner: ReactNode) => <main className="min-h-screen bg-[#07100f] text-[#d7e7e1]"><div className="mx-auto max-w-5xl px-5 py-8">{inner}</div></main>;
+  const wrap = (inner: ReactNode) => <main className="min-h-screen bg-transparent text-[#d7e7e1]"><div className="mx-auto max-w-5xl px-5 py-8">{inner}</div></main>;
 
   // Exam view
   if (exam && track?.certification) {

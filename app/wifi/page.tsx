@@ -68,7 +68,7 @@ export default function WifiPage() {
   const card = "rounded-xl border border-slate-800 bg-[#0b1715] p-4";
   const audit = (result?.data as { audit?: { findings?: { essid: string; bssid: string; severity: string; posture: string; recommendation: string }[] } })?.audit?.findings;
 
-  return <main className="min-h-screen bg-[#07100f] text-[#d7e7e1]">
+  return <main className="min-h-screen bg-transparent text-[#d7e7e1]">
     <div className="mx-auto max-w-5xl px-5 py-8">
       <a href="/" className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> Dashboard</a>
       <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><Wifi size={14}/> CYBERLAB · AUTHORIZED WI-FI TESTING</div>

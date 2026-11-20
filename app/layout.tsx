@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import CyberBackground from "./cyber-background";
 
 export const metadata: Metadata = {
   title: "CyberLab AI — Security Research Workspace",
@@ -12,7 +13,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><CyberBackground />{children}</body>
     </html>
   );
 }

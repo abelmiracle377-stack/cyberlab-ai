@@ -1,16 +1,77 @@
 # CyberLab AI
 
-An open-source AI-assisted cybersecurity research workspace for passive OSINT, IP intelligence, authorised assessment planning, vulnerability research, safe malware triage, binary inspection, network evidence analysis and Kali Linux workflows.
+An AI-assisted cybersecurity workspace that unifies OSINT and reconnaissance, authorized offensive testing, a full autonomous SOC, digital forensics and wallet recovery, and a hands-on security academy — with an offline Kali companion that executes real tools on your own machine.
 
-## CyberLab AI OS VM\n\nA separate Debian-based bootable workstation VM build is being added under [os/](./os/). The reproducible QCOW2 build, provisioning scripts, structural verifier and manual image-build workflow are documented there. The VM is not yet represented as boot-verified; image generation and a real QEMU boot acceptance test are separate gates.\n\n## Product roadmap
+CyberLab is for work you are authorized to do: systems you own, lab environments, and engagements with written permission. It is not a tool for attacking systems you don't control.
 
-The additive capability-parity plan and Kodachi-inspired information architecture are documented in [docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md](./docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md). This plan preserves all existing routes, tools and workflows; planned capabilities are not represented as implemented until verified.
+---
 
-## Current status
+## What's inside
 
-The application includes an AI agent interface, passive IP and DNS intelligence, domain registration and certificate-transparency research, NIST NVD CVE search, Nmap XML report parsing, static malware triage, PE/ELF/Mach-O header inspection, authorised assessment scope planning, local Markdown report export, and an offline Kali companion. Not every navigation item represents a completed operational integration; use the dedicated tool pages and their returned status/errors to determine availability.
+### AI agent & research
+- Streaming AI agent with specialist routing (reconnaissance, vulnerability intelligence, malware triage, reverse engineering, blue-team analysis, reporting, general research).
+- Dynamic model catalogue via OpenRouter, with an open-weight research mode (filters for tool-capable, likely open-weight models; safety controls remain on).
+- **Live Research** via Perplexity Sonar through OpenRouter, returning cited public sources.
+- Optional operator-configured unfiltered model gateway (server-only env, per-user monthly token allowance) — see [docs/UNCENSORED_AI_GATEWAY.md](./docs/UNCENSORED_AI_GATEWAY.md).
+- Authenticated read-only MCP JSON-RPC endpoint at `/api/mcp` (`initialize`, `tools/list`, `tools/call`; passive IP/DNS/NVD tools), disabled until `CYBERLAB_MCP_API_KEY` is set.
 
-The encrypted evidence vault is browser-local and passphrase protected. Supabase email/password authentication and route protection are implemented as an optional deployment integration; they remain inactive until Supabase environment variables are configured. Central multi-user project storage and authenticated website synchronisation for the offline companion remain future work. The companion intentionally does not expose a remote shell or run active scans.
+### OSINT & reconnaissance
+- Passive public IP intelligence (ASN/ISP context, reverse DNS), passive DNS (A/AAAA/MX/NS/TXT), RDAP domain metadata and certificate-transparency research.
+- NIST NVD CVE search with CVSS summaries and source references.
+- Domain mail/DNS posture at `/verification`: SPF, DMARC, common DKIM selectors, MX, CAA, plus Internet Archive historical-URL discovery and local browser-fingerprint transparency.
+- **Shodan OSINT** (companion): host lookup, index search, DNS resolve and account info over the official Shodan API with your own key — read-only, executed via the bridge (`/shodan/*`). UI at `/shodan`.
+
+### Web application security
+- **Web Application Assessment** (`/web-assessment`) — a bug-bounty baseline, detection-only within a confirmed authorized scope: security-header and cookie hardening, information disclosure, sensitive-file exposure (`.git`/`.env`/`server-status`), open-redirect, error-based SQL-injection and reflected-input detection, and risky HTTP methods — each mapped to OWASP/CWE with remediation.
+- Native web workbench, crawler, repeater, active checks and a Burp/Montoya connector.
+
+### Authorized Wi-Fi testing
+A full engagement toolkit for networks you own or are authorized to test, executing the standard Kali tools on your own adapter via the bridge (`/wifi/*`). UI at `/wifi` and `/wifi-crack`.
+- **Passive** (`wifi_assessment.py`): enumerate interfaces, inventory nearby networks from beacons, audit posture (open / WEP / WPA / WPA2 / WPA3) with remediation.
+- **Active** (`wifi_authorized.py`, every operation gated behind an authorization confirmation + engagement reference): monitor-mode enable/disable, targeted bounded deauthentication, WPA 4-way-handshake capture, clientless PMKID capture, WPA dictionary cracking (aircrack-ng / hashcat), WPS PIN attacks (reaver Pixie-Dust / bully), and automated audits (wifite).
+- **Offline WPA crack** (`/wifi-crack`): upload a capture; the companion writes it to a temp file, cracks it against a local wordlist, and deletes it — nothing is transmitted.
+
+### CyberSOC — autonomous security operations
+An AI-driven SOC with a restrained enterprise console — see [docs/CYBERSOC.md](./docs/CYBERSOC.md).
+- Detection/triage engine with severity scoring and MITRE ATT&CK mapping; union-find **incident correlation**; threat-intel (IOC) matching; analyst-tunable alert **suppression**; an autonomous auto-response runner (safe actions auto-run, destructive ones escalate).
+- **Case management** — group an incident's alerts into one investigation with a shared, consolidated timeline.
+- **Splunk & Wazuh** connectors (companion), and an **external-exposure** feed that turns Shodan findings (risky exposed services, known CVEs) into correlated alerts, with saved assets and recurring sweeps.
+- Console: KPI strip with MTTR, alerts + incidents + cases views, assignment, investigation notes, one-click rule muting.
+
+### Digital forensics & wallet recovery
+- Static malware triage (SHA-256, signature, entropy, string indicators — no execution), PE/ELF/Mach-O header inspection, Nmap XML parsing.
+- Read-only forensic artifact parsing on the companion: Apple plists, SQLite databases (browser history/cookies/logins, opened read-only + immutable) and Windows registry hives.
+- Local wallet recovery: BIP39 multi-coin derivation and account/change sweep, Electrum (v2 standard/segwit and old) seeds, partial/scrambled seed reconstruction, MetaMask vaults, BIP38 encrypted keys (incl. EC-multiply), and password cracking across the full hashcat/John attack range. Never paste private keys or seed phrases you don't own.
+
+### CyberLab Academy
+Hack The Box / TryHackMe-style learning — see [docs/ACADEMY.md](./docs/ACADEMY.md).
+- Tracks: Web Application Security, SOC Analyst Fundamentals, Attack Techniques & Defense (XSS, SSH key security), and a **Capture The Flag** track with ten flags across three difficulty tiers against a bundled deliberately-vulnerable target (recon/disclosure, SQLi, IDOR, path traversal, cookie auth bypass, JWT `alg:none`, SSRF).
+- Attack the CTF target either with real tools against the local companion lab, or entirely in the browser via a hosted target and an in-app **Attack Console**.
+- Hands-on rooms, embedded videos, server-graded flag answers, per-challenge write-ups and walkthroughs that unlock after capture, a cross-user scoreboard, progress tracking, earnable certifications (CCWT, CCSA, CCCP, CCD), public verification at `/verify`, and a printable certificate at `/certificate/<serial>`.
+
+### Community, evidence & cases
+- Community chat: usernames, friend requests, direct messages with pictures and voice notes, **end-to-end encrypted** in the browser (ECDH P-256 + AES-GCM) so the server stores only ciphertext — see [docs/SOCIAL_CHAT.md](./docs/SOCIAL_CHAT.md).
+- Browser-local evidence vault (AES-256-GCM + PBKDF2-SHA-256) with encrypted backup import/export.
+- Persistent investigation cases at `/investigations` (owner-scoped under Supabase RLS) with timeline events and Markdown export; companion-side case export, local archival with SHA-256 manifests, and read-only integrity/audit-ledger verification.
+- Authorized assessment scope planner, local Markdown report builder, live capability registry at `/tool-registry`.
+
+### Solidity & blockchain
+- `/solidity` reviews bounded Solidity source: contract/interface/library/import inventory plus line-referenced heuristic review leads (incl. NFT/DEX indicators). Optional local compile and constrained test-run via the companion. It does not deploy, connect wallets, sign transactions or touch a chain — see [docs/BLOCKCHAIN_ENGINEERING.md](./docs/BLOCKCHAIN_ENGINEERING.md).
+
+### CyberLab OS
+A Debian-based bootable workstation workstream under [os/](./os/), with read-only host-capability discovery through the companion (`GET /capabilities`). See [docs/CYBERLAB_OS_ARCHITECTURE.md](./docs/CYBERLAB_OS_ARCHITECTURE.md).
+
+---
+
+## Design system
+
+CyberLab uses a tactile, dark-slate workspace rather than a neon sci-fi template, tuned for extreme readability and purposeful motion.
+
+- **Palette** — Deep Obsidian `#0D1117` canvas, Dark Slate `#161B22` panels, Muted Steel `#30363D` borders, Off-White Ash `#E6EDF3` text, Cool Gray `#8B949E` metadata, with meaning-carrying accents: Phosphor Mint `#2EA043` (success/active), Electric Cyan `#58A6FF` (links/paths), Amber Gold `#D29922` (warnings), Signal Crimson `#F85149` (critical).
+- **Typography** — JetBrains Mono for terminals, logs and data columns; Inter for interface and copy.
+- **Motion** — a subtle animated binary-field background, plus reusable micro-animations (character-scramble reveals, typewriter log streaming, marching-ants connection paths, pulsing nodes, snappy ~180ms panel transitions). Motion is driven by actions and honors `prefers-reduced-motion`.
+
+---
 
 ## Run locally
 
@@ -24,70 +85,33 @@ npm run dev
 
 Open http://localhost:3000.
 
-For Supabase authentication, create a Supabase project and add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `.env.local` and Vercel Project Settings → Environment Variables. Configure the Supabase Auth Site URL and redirect URL as `https://cyberlab-ai.vercel.app/auth/callback` (and your local callback for development). Once both variables are present, `proxy.ts` protects workspace pages and API routes, and `/login` supports email/password sign-in and account creation. Use Supabase Row Level Security for any future user-owned database tables. Do not use a service-role key in the browser.\n\nFor AI access, create an OpenRouter API key and add `OPENROUTER_API_KEY` to `.env.local` or Vercel Project Settings → Environment Variables. Never commit secrets or place keys in browser code. Open-weight mode filters the OpenRouter catalogue for models with tool support and likely open-weight provenance; this classification is best-effort, does not guarantee a model is refusal-free, and does not remove CyberLab safety controls.
+### Environment variables
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase auth and data (set the Auth Site URL / redirect to `/auth/callback`). Without them, auth and persistence stay inactive.
+- `OPENROUTER_API_KEY` — AI agent and Live Research.
+- `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, `PAYSTACK_PLAN_CODE` — server-only, for admin and billing.
+- `CYBERLAB_MCP_API_KEY`, `CYBERLAB_UNCENSORED_*` — optional, server-only.
 
-## Unfiltered AI gateway\n\nThe Agent Console can expose operator-configured hosted unfiltered model checkpoints through a separate OpenAI-compatible gateway. Configure `CYBERLAB_UNCENSORED_API_KEY`, `CYBERLAB_UNCENSORED_BASE_URL`, and `CYBERLAB_UNCENSORED_MODELS` as server-only environment variables. Apply `supabase/migrations/202611140001_ai_usage_gateway.sql` after the existing migrations. The initial allowance is 200,000 tokens per user per calendar month. This first integration supports text completion only; tool calling and specialist delegation are not yet integrated into this provider path. See [the gateway implementation notes](./docs/UNCENSORED_AI_GATEWAY.md).\n\n## Solidity and blockchain engineering
+Never commit secrets or put service-role/Paystack keys in browser code.
 
-The first blockchain engineering slice is available at `/solidity`. It accepts bounded Solidity source text and reports contract/interface/library/import inventory plus line-referenced heuristic review leads for selected risky patterns, including NFT and DEX indicators. Optional local compiler and constrained local test-runner integrations are available through the paired companion, with the import/dependency limitations documented. It does not deploy contracts, connect wallets, sign transactions or interact with a chain. Findings are not proof of exploitability, and an empty report is not a security guarantee. See [Blockchain Engineering scope and test strategy](./docs/BLOCKCHAIN_ENGINEERING.md). Never paste private keys or seed phrases.
+### Supabase migrations
+Apply in order in the Supabase SQL Editor:
 
-## CyberLab OS foundation
-
-CyberLab OS is a first-class project workstream. The initial foundation includes the dedicated `/os` environment workspace and read-only local host capability discovery through the existing paired Kali companion at `GET /capabilities`. It reports the host platform, distribution, architecture, CPU count, KVM device presence, WSL detection and installed Docker, Podman, QEMU, libvirt and VirtualBox executables. Discovery does not install software, create containers, start virtual machines or execute terminal commands.
-
-The existing Kali companion, authorised Nmap workflow, host telemetry and Ollama integration remain in place. CyberLab Terminal, managed container profiles, VM lifecycle management and a bootable CyberLab OS image are planned follow-on capabilities, not yet implemented. See [docs/CYBERLAB_OS_ARCHITECTURE.md](./docs/CYBERLAB_OS_ARCHITECTURE.md) and [the additive feature roadmap](./docs/ADDITIVE_FEATURE_PARITY_ROADMAP.md).
-
-## Implemented features
-
-- Live capability registry at `/tool-registry` and `/api/tool-registry`, with explicit operational/configured/partial/setup/planned states
-- Specialist routing in the AI Agent for reconnaissance, vulnerability intelligence, malware triage, reverse engineering, blue-team analysis, reporting and general research; this is a first orchestration layer, not yet independent parallel agents
-- Authenticated read-only MCP JSON-RPC endpoint at `/api/mcp` with `initialize`, `tools/list`, `tools/call`, and passive IP, DNS and NVD tools; disabled until `CYBERLAB_MCP_API_KEY` is configured
-
-- Responsive security research dashboard and streaming AI agent
-- Dynamic model catalogue via OpenRouter
-- Open-weight research mode filters OpenRouter models by open-weight provenance heuristics and tool support, with deeper technical response style; safety boundaries remain enabled
-- Public NVD CVE research with source references; live web search is not currently integrated
-- Passive public IP intelligence, ASN/ISP context and reverse DNS
-- Passive DNS resolution for A, AAAA, MX, NS and TXT records
-- Public domain RDAP metadata and certificate-transparency research
-- Public NIST NVD CVE search and CVSS summaries
-- Nmap XML import with host, port and service summaries (parsing only)
-- Static malware triage: SHA-256, file signature, entropy and selected string indicators (no execution)
-- PE, ELF and Mach-O header inspection (no execution or disassembly)
-- Authorised assessment scope planner with exclusions and pre-engagement checklist
-- Local Markdown security report builder (no server-side storage)
-- Browser-local evidence vault using AES-256-GCM and PBKDF2-SHA-256, with encrypted backup import/export
-- Offline Kali companion for static file triage and Nmap XML parsing
-- Baseline HTTP security headers and secret-file exclusions
-- Community chat: usernames, friend requests, and direct messages with pictures and voice notes, end-to-end encrypted in the browser (ECDH P-256 + AES-GCM) so the server stores only ciphertext — see [docs/SOCIAL_CHAT.md](./docs/SOCIAL_CHAT.md)
-- Read-only forensic artifact parsing on the companion: Apple plists, SQLite databases (browser history/cookies/logins, opened read-only + immutable) and Windows registry hives
-- Local wallet recovery: BIP39 multi-coin derivation and account/change sweep, Electrum (v2 standard/segwit and old) seeds, partial/scrambled seed reconstruction, MetaMask vaults, BIP38 encrypted keys (incl. EC-multiply), and password cracking with the full hashcat/John attack range
-- CyberSOC: an autonomous, AI-driven SOC with a detection/triage engine, union-find incident correlation, threat-intel (IOC) matching, analyst-tunable alert suppression, Splunk and Wazuh connectors, an auto-response runner, and case management (group an incident's alerts into one investigation with a shared timeline), and a restrained enterprise console (KPI strip with MTTR, alerts + incidents + cases views, assignment, investigation timeline with notes, and one-click rule muting) — see [docs/CYBERSOC.md](./docs/CYBERSOC.md)
-- Shodan OSINT connector (companion): host lookup, index search, DNS resolve and account info over the official Shodan API with the operator's own key — read-only reconnaissance, executed by CyberLab via the bridge (`/shodan/*`), with a `/shodan` UI and a CyberSOC "external exposure" feed that turns risky exposed services and Shodan-reported CVEs into correlated SOC alerts
-- Authorized Wi-Fi testing (companion): a full engagement toolkit for networks you own or are authorized to test. Passive side (`wifi_assessment.py`): enumerate interfaces, inventory nearby networks from beacons, and audit security posture (open / WEP / WPA / WPA2 / WPA3) with remediation. Active side (`wifi_authorized.py`, every operation gated behind an authorization confirmation + engagement reference): monitor-mode enable/disable, targeted bounded deauthentication, WPA 4-way-handshake capture, clientless PMKID capture, WPA dictionary cracking (aircrack-ng / hashcat), WPS PIN attacks (reaver Pixie-Dust / bully), automated audits (wifite), and an upload-based offline WPA crack (browser uploads a capture, the companion writes it to a temp file, cracks it against a local wordlist, and deletes it). Executes the standard Kali tools on the operator's own adapter via the bridge (`/wifi/*`); UI at `/wifi` and `/wifi-crack`
-- Web application assessment (bug-bounty baseline, detection-only within a confirmed authorised scope): security-header and cookie hardening, information disclosure, sensitive-file exposure (.git/.env/server-status), open-redirect, error-based SQL-injection and reflected-input detection, and risky HTTP methods — each mapped to OWASP/CWE with remediation, run by the companion over a retyped in-scope origin with request budgets
-- CyberLab Academy: Hack The Box / TryHackMe-style tracks (Web Application Security, SOC Analyst Fundamentals, Attack Techniques & Defense — XSS and SSH key security — and a Capture The Flag track with ten flags across three difficulty tiers against a bundled deliberately-vulnerable target — recon/disclosure, SQLi, IDOR, path traversal, cookie auth bypass, JWT alg:none and SSRF — attackable either with real tools against the local companion lab or entirely in the browser via a hosted target and in-app Attack Console, per-challenge write-ups and walkthroughs that unlock after capture, plus a cross-user scoreboard) with hands-on rooms, embedded videos, server-graded flag answers, progress tracking, earnable certifications (CCWT, CCSA, CCCP), public certificate verification by serial at `/verify`, and a printable certificate page at `/certificate/<serial>` — see [docs/ACADEMY.md](./docs/ACADEMY.md)
-
-## Test
-
-Run the offline companion tests with Python's standard library:
-
-```bash
-python -m unittest discover -s kali-companion -p "test_*.py" -v
+```
+202611130001_investigation_cases        202611200003_cybersoc
+202611130002_billing_and_admin          202611200004_cybersoc_notes
+202611130003_admin_knowledge_base       202611200005_cybersoc_tuning
+202611140001_ai_usage_gateway           202611200006_cybersoc_cases
+202611140002_expand_ai_usage_reservations  202611200007_academy
+202611150001_admin_ai_learning_control  202611200008_academy_verify
+202611200001_social_chat                202611200009_academy_scoreboard
+202611200002_social_chat_e2ee           202611200010_soc_exposure_assets
 ```
 
-The GitHub Actions workflow runs those tests and builds the Next.js application on pushes and pull requests to `main`.
-
-
-### Domain and privacy verification
-
-- `/verification` adds passive domain mail/DNS posture checks: SPF, DMARC, common DKIM selectors, MX and CAA.
-- Historical URL discovery queries the Internet Archive CDX API for public captures under a validated domain. Archived URLs are not proof of current availability or safety.
-- Browser fingerprint transparency reads browser-exposed attributes locally in the browser; it does not submit them to CyberLab's server.
-- This first verification slice does not claim to perform a full DNS leak test, WebRTC STUN test, TLS fingerprint test, global DNS propagation test, or anonymity verification. Those require dedicated controlled infrastructure and explicit privacy handling.
+---
 
 ## Kali companion
 
-The Kali companion now includes passive domain OSINT (RDAP, certificate transparency and DNS), public IP RDAP context, NIST NVD CVE search, static file triage and existing Nmap XML parsing. It uses Python's standard library and requires no pip packages or API keys.
+The companion runs on your Kali/Linux machine, uses Python's standard library (no pip packages or API keys for its core), and exposes a loopback bridge bound to `127.0.0.1` with a machine-local pairing token. It executes the real tools (Nmap, aircrack-ng suite, hashcat, Shodan API, etc.) locally.
 
 ```bash
 git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
@@ -100,91 +124,34 @@ python3 kali-companion/cyberlab.py cve "OpenSSH"
 
 See [kali-companion/README.md](./kali-companion/README.md) for all commands, data sources and limitations.
 
+**Authentication boundary:** the companion and bridge run independently on the Kali machine and don't require a CyberLab web account or subscription to run local commands. The bridge uses local pairing protection (token + `127.0.0.1` binding), not a web login. Hosted AI/API features remain subject to web-app authentication.
 
-## Admin, billing and shared AI knowledge
+---
 
-- The hosted web workspace uses Supabase email/password authentication. The hosted workspace subscription is USD $10/month; Paystack handles recurring payment when its plan and webhook are configured.
-- `/admin/login` is the separate administrator sign-in entry. Only users whose `user_profiles.role` is `admin` can access `/admin`, `/learning`, and admin APIs; other signed-in users receive a not-found response. An existing administrator grants this role from the admin user controls or an owner-run Supabase SQL update.
-- Apply the committed migrations in order in the Supabase SQL Editor: `202611130001_investigation_cases.sql`, `202611130002_billing_and_admin.sql`, then `202611130003_admin_knowledge_base.sql`.
-- Configure server-side Vercel variables: `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, and `PAYSTACK_PLAN_CODE`, alongside the public Supabase URL and anon key. Never expose the service-role or Paystack secret in client code.
-- The Admin Panel links to AI Knowledge Review. Knowledge is stored centrally in `public.knowledge_items`; new entries enter `pending`, and only admin-approved entries are supplied to the hosted agent as bounded reference context. This is retrieval/grounding (RAG), not model-weight fine-tuning. Uploaded content remains untrusted data.
-- Paystack webhook endpoint: `https://cyberlab-ai.vercel.app/api/paystack/webhook`. Configure this exact endpoint in Paystack and verify the merchant account supports the intended USD recurring plan before enabling live subscriptions.
+## Test
 
-## Kali authentication boundary
+```bash
+python -m unittest discover -s kali-companion -p "test_*.py" -v
+```
 
-The Kali companion and local bridge run independently on the Kali machine and do not require a CyberLab web-app account, web login, or subscription to execute local CLI commands. The local bridge uses a machine-local pairing token and binds only to `127.0.0.1`; this is local pairing protection, not a CyberLab account login. The hosted dashboard and hosted AI/API features remain subject to web-app authentication and subscription rules. Cloud-only functionality may still require its own API credentials.
+The GitHub Actions workflow runs the companion tests, the TypeScript/Node unit tests, the Next.js build, and the Burp/Montoya checks on pushes and pull requests.
+
+---
+
+## Accounts & billing
+
+Supabase Auth provides sign-up/login; the hosted workspace is USD $10/user/month via Paystack (plan in USD, amount 1000 minor units, monthly; webhook `…/api/paystack/webhook`). `/admin` (role `admin` only) manages roles and access; `/billing` handles checkout; `/pricing` is public. Promote the owner by setting `public.user_profiles.role='admin'` in Supabase. Test with Paystack test keys first.
+
+---
 
 ## Security principles
 
-- Use assessment features only on systems you own or are explicitly authorised to test.
-- Active or potentially disruptive actions require explicit scope and human approval.
-- The Kali companion does not expose an unauthenticated public shell, run scans, exploit hosts or execute samples.
-- Findings should retain source, timestamp, context and confidence.
-- IP geolocation and registration data are approximate network context, not proof of a private person's identity or exact location.
-- Deceptive tracking, covert camera capture, private subscriber lookups and private browsing-history collection are out of scope.
+- Use assessment and offensive features only on systems you own or are explicitly authorized (in writing) to test. Active operations require explicit scope and human approval; the Wi-Fi, web-assessment and crack tools enforce an authorization confirmation.
+- The companion does not expose an unauthenticated public shell; it binds to `127.0.0.1` and requires its pairing token.
+- CyberLab does not build deployable malware, worms, credential-theft payloads, or anti-bot/CAPTCHA bypass; the Academy teaches those techniques defensively instead.
+- Findings retain source, timestamp, context and confidence. IP geolocation and registration data are approximate network context, not proof of identity or exact location.
+- Deceptive tracking, covert capture, private-subscriber lookups and private browsing-history collection are out of scope.
 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
-
-
-## Live research and authorised active checks
-
-- **Live Research** uses the existing `OPENROUTER_API_KEY` with Perplexity Sonar through OpenRouter to search current public web sources and return citations. Search requests may incur OpenRouter/provider charges.
-- **AI Agent** can call the live research tool as part of a response. Confirm important claims against primary vendor, maintainer, NIST or CISA sources.
-- **Active Security Lab** performs a deliberately limited TCP connection check against a public IPv4 address or domain after the operator confirms the exact target, provides an authorisation reference and retypes the target. It permits up to five selected common TCP ports and blocks private, loopback, link-local and reserved IPv4 ranges.
-- The hosted TCP check is not Nmap, a full port scan, service fingerprinting, a vulnerability scan or proof of exploitability. Use the Kali companion locally for a fuller assessment within a verified written scope.
-- Never test assets without explicit permission. Respect third-party/cloud-provider rules, engagement windows, exclusions and stop conditions.
-
-
-### Local SOC host telemetry
-
-The paired Kali companion exposes an authenticated `GET /system` endpoint for an on-demand, read-only host health snapshot. The Kali Connection workspace displays platform/release, uptime, load average, available memory, root-disk capacity, process count and Nmap availability. It does not collect usernames, process names, command lines, file contents, network payloads or authentication logs. It is not a continuous SIEM, EDR, intrusion-detection or ATT&CK event pipeline. The bridge remains bound to `127.0.0.1`, requires the existing pairing token and official-site origin, and must run on the same machine as the browser using it.
-
-
-### Defensive Malware Workshop
-
-- The Malware Lab includes a defensive workshop that generates an EICAR antivirus test signature as plain text, synthetic IOC JSON using reserved example domains/documentation IP ranges, inert endpoint-behaviour event records, and starter YARA/Sigma training rules.
-- Generated artefacts are returned as downloadable text/data files. The behaviour fixture describes hypothetical events only; it does not create files, launch processes, modify registry/persistence settings or open network connections.
-- YARA and Sigma structural checks are lightweight lint checks, not official compiler or schema validation. Run official tools and test against representative telemetry before deployment.
-- The SOC simulation workspace provides hypothetical file-write, process, persistence and network event scenarios with response guidance and downloadable investigation notes; no host activity is performed.
-- This is not a malware builder. It does not generate deployable malware, destructive payloads, credential theft, stealth, persistence, evasion or command-and-control code. Review and validate detection rules against your own telemetry before operational use.
-
-
-### Persistent investigation cases
-
-- `/investigations` provides authenticated case creation, severity/status tracking, analyst-authored timeline events and Markdown export.
-- `/api/investigations` and `/api/investigations/[id]/events` use the signed-in Supabase session. Row Level Security restricts each case and its events to its owner.
-- Malware Lab can attach YARA/Sigma structural-check results and inert behaviour simulations to a selected case timeline.
-- Apply `supabase/migrations/202611130001_investigation_cases.sql` in the Supabase SQL Editor before using this feature. Supabase URL/key configuration and user sign-in are required; without them, cases are not persisted.
-- The initial integration is analyst-triggered. It does not silently ingest or claim to correlate every module's findings. Additional integrations should retain source, timestamp, severity, provenance and explicit analyst approval.
-\n\n### Operator-curated Learning Centre\n\n- `/learning` provides a browser-local knowledge review queue. Analysts can submit notes, paste research, upload text-based files (TXT, Markdown, JSON, CSV, LOG, YAML and XML), tag and categorise entries, then approve or reject each item.\n- Only approved entries are sent as bounded reference context with AI Agent requests. The agent is instructed to treat them as untrusted reference material, preserve provenance and flag stale or conflicting claims.\n- Knowledge is stored in the current browser's local storage and can be exported/imported as JSON. Imported items return to pending review. Clearing browser storage can remove the local collection; keep backups.\n- This is retrieval-augmented context, not fine-tuning or a change to model weights. It does not yet synchronise across devices or users; persistent shared knowledge requires a later database integration.\n
- 
-### Accounts, subscriptions and billing
-- Membership pricing is $10 USD per user per month.
-- Supabase Auth provides sign-up/login. Run `supabase/migrations/202611130002_billing_and_admin.sql` in Supabase SQL Editor.
-- Configure `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, and `PAYSTACK_PLAN_CODE` as server-only Vercel environment variables. Never expose the service-role key.
-- Create a Paystack plan in USD, amount 1000 (minor units), interval monthly. Register webhook URL `https://cyberlab-ai.vercel.app/api/paystack/webhook`.
-- After a user signs up, promote the owner account by setting `public.user_profiles.role='admin'` for that user's UUID in Supabase SQL Editor.
-- Admins use `/admin` to manage roles and grant, suspend, cancel or expire access. Customers use `/billing` for checkout and payment history. `/pricing` is public.
-- Test with Paystack test keys before going live and confirm your merchant account's USD recurring-card eligibility and settlement settings.
-
-
-### Kali companion case export and preservation
-
-- A completed unified investigation case can be exported as structured JSON and a standalone HTML report from the paired local bridge.
-- The bridge also writes a private local archive under `~/.local/state/cyberlab/exports/<case-id>/`, with `case.json`, `case.html` and `manifest.json`. The directory is restricted to mode 0700 and files to mode 0600 where supported; files are created exclusively and existing case archives are never overwritten.
-- The manifest records SHA-256 digests and byte sizes for the JSON and HTML exports, plus the source-report digests. Verify these hashes after transfer or storage.
-- HTML report fields are escaped and the document applies a restrictive Content Security Policy. The export contains report observations and metadata, not original samples, disk images or recovered file contents.
-
-- The paired local bridge exposes `POST /evidence/case/verify`. Supply only the case identifier; the verifier resolves it beneath the configured export directory and never accepts a caller-selected filesystem path.
-- Verification checks the exact expected file set, rejects symlinks/non-regular files, validates the manifest schema and case ID, and recomputes SHA-256 and byte sizes for the JSON and HTML reports. It is read-only and reports missing or altered files without repairing them.
-- A successful check confirms consistency with the local manifest only. It does not prove who created the files, when they were created, or that the manifest itself is authentic.
-- This is integrity-oriented local archiving, not a digital signature, immutable storage, trusted timestamp or formal chain-of-custody system. Preserve original media and acquisition maps separately under your evidence-retention policy.
-
-
-### Kali companion audit-ledger verification
-
-- The paired local bridge exposes read-only `GET /evidence/case/ledger/verify` to verify the local append-only case audit ledger without creating a case.
-- Verification rejects missing, oversized, symlinked or non-regular ledger files; checks each JSONL record's required metadata, source-digest shape, record hash and previous-record hash; and reports line-numbered errors.
-- The verifier opens the fixed ledger read-only under a shared file lock and does not repair, rewrite or append to it. A valid result confirms the local hash chain is internally consistent, not that it is signed, immutable or tamper-proof.

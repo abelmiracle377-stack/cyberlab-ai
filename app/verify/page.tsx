@@ -41,7 +41,7 @@ export default function VerifyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <main className="min-h-screen bg-[#07100f] text-[#d7e7e1]">
+  return <main className="min-h-screen bg-transparent text-[#d7e7e1]">
     <div className="mx-auto max-w-xl px-5 py-12">
       <div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><BadgeCheck size={14}/> CYBERLAB ACADEMY</div>
       <h1 className="text-2xl font-semibold tracking-tight">Verify a certificate</h1>
