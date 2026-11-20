@@ -1,9 +1,13 @@
 export type GatewayMessage = { role: "system" | "user" | "assistant"; content: string };
 export type GatewayResult = { text: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number }; provider: string; model: string };
 
-function getProviderConfig() {
-  const apiKey = process.env.CYBERLAB_UNCENSORED_API_KEY || process.env.UNCENSOREDLLM_API_KEY;
+export function getProviderConfig() {
+  const apiKey = process.env.CYBERLAB_UNCENSORED_API_KEY || process.env.UNCENSOREDLLM_API_KEY || "";
   const configuredUrl = process.env.CYBERLAB_UNCENSORED_BASE_URL || "";
+  // Operators point this at any OpenAI-compatible endpoint they host — a reverse-
+  // proxied Ollama / vLLM / LM Studio, or a hosted unfiltered provider. HTTPS is
+  // required (no plaintext to a remote model, and it blocks SSRF to internal
+  // services); expose a local Ollama through an HTTPS tunnel or reverse proxy.
   let baseUrl = "";
   try {
     const parsed = new URL(configuredUrl);
@@ -11,7 +15,13 @@ function getProviderConfig() {
       baseUrl = parsed.toString().replace(/\/+$/, "");
     }
   } catch { /* Missing or invalid configuration remains unavailable. */ }
-  return { apiKey, baseUrl };
+  // Self-hosted Ollama needs no key; allow keyless calls only when the operator
+  // explicitly opts in (the endpoint is theirs and access-controlled on their side).
+  const allowKeyless = process.env.CYBERLAB_UNCENSORED_ALLOW_KEYLESS === "true";
+  // The chat-completions path varies: Ollama/vLLM expose /v1/chat/completions.
+  const rawPath = (process.env.CYBERLAB_UNCENSORED_COMPLETIONS_PATH || "/chat/completions").trim();
+  const completionsPath = /^\/[A-Za-z0-9/_-]{1,80}$/.test(rawPath) ? rawPath : "/chat/completions";
+  return { apiKey, baseUrl, allowKeyless, completionsPath };
 }
 
 type ConfiguredModel = { id: string; name: string; contextLength: number | null; openWeight: boolean; supportsTools: boolean };
@@ -66,12 +76,15 @@ async function readBoundedProviderResponse(response: Response, maxBytes = 128000
 }
 
 export async function runUnfilteredCompletion(input: { model: string; messages: GatewayMessage[]; maxTokens?: number }): Promise<GatewayResult> {
-  const { apiKey, baseUrl } = getProviderConfig();
-  if (!apiKey || !baseUrl) throw new Error("Unfiltered model provider is not configured. Add server-only provider secrets.");
+  const { apiKey, baseUrl, allowKeyless, completionsPath } = getProviderConfig();
+  if (!baseUrl) throw new Error("Unfiltered model provider is not configured. Set CYBERLAB_UNCENSORED_BASE_URL.");
+  if (!apiKey && !allowKeyless) throw new Error("Unfiltered model provider is not configured. Add a provider key, or set CYBERLAB_UNCENSORED_ALLOW_KEYLESS=true for a self-hosted endpoint.");
   const configured = getUnfilteredModels().find((item) => item.id === `uncensored:${input.model}`);
   if (!configured) throw new Error("This model is not in CyberLab's server-approved model catalogue.");
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Title": "CyberLab AI" },
+  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Title": "CyberLab AI" };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const response = await fetch(`${baseUrl}${completionsPath}`, {
+    method: "POST", headers,
     body: JSON.stringify({ model: input.model, messages: input.messages, temperature: 0.25, max_tokens: Math.min(Math.max(input.maxTokens ?? 1800, 128), 4096), stream: false }),
     cache: "no-store", signal: AbortSignal.timeout(90000),
   });

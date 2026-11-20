@@ -31,3 +31,17 @@ No active scanning, exploitation, credential access, file changes or host execut
 The Qwen2.5-7B-Instruct-abliterated-v2 checkpoint is a proposed hosted GPU target, not a provisioned endpoint. Verify its tool-call template/parser and real provider behaviour before setting `tools:true`. No live model/tool compatibility test has yet been performed.
 
 The monthly token allowance is a starter platform control, not a financial billing meter. Add provider-cost metering, team budgets, concurrency controls, abuse controls and retention policy before public scale.
+
+## Self-hosted endpoints (Ollama / vLLM / LM Studio)
+
+The gateway targets any OpenAI-compatible `/chat/completions` endpoint. To point it at your own inference server (for example a self-hosted Ollama with open-weight / abliterated models):
+
+Environment (server-only):
+
+- `CYBERLAB_UNCENSORED_BASE_URL` — **HTTPS** base URL of your endpoint. HTTPS is required (no plaintext to a remote model; it also blocks SSRF to internal services). Expose a local Ollama through an HTTPS reverse proxy or tunnel (e.g. Caddy/Nginx/Cloudflare Tunnel in front of `http://127.0.0.1:11434`). Example: `https://llm.example.com`
+- `CYBERLAB_UNCENSORED_COMPLETIONS_PATH` — optional; defaults to `/chat/completions`. Ollama/vLLM expose `/v1/chat/completions`, so set this to `/v1/chat/completions` (or bake `/v1` into the base URL).
+- `CYBERLAB_UNCENSORED_API_KEY` — bearer token sent to your endpoint. Omit only if your endpoint is keyless **and** you set the opt-in below.
+- `CYBERLAB_UNCENSORED_ALLOW_KEYLESS=true` — opt in to keyless calls for a self-hosted endpoint you access-control yourself (e.g. the proxy restricts by IP/mTLS). When unset, a key is mandatory.
+- `CYBERLAB_UNCENSORED_MODELS` — JSON array of the models you serve, e.g. `[{"id":"dolphin-llama3:70b","name":"Dolphin Llama3 70B","contextLength":8192}]`. Only ids in this server-approved catalogue are callable.
+
+The reverse proxy, not CyberLab, terminates TLS and authenticates; CyberLab forwards the bearer token when present and enforces auth, an active subscription, the server-approved model catalogue, per-user token reservations/settlement, bounded request/response sizes and timeouts. Parsing of these variables is unit-tested in `tests/ai-gateway.test.ts`.
