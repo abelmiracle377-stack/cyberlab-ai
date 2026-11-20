@@ -8,7 +8,6 @@ import {
   MessageCircle,
   ShieldAlert,
   GraduationCap,
-  Globe,
   Wifi,
 } from "lucide-react";
 
