@@ -21,7 +21,7 @@ export default function ShodanPage() {
   const [hostnames, setHostnames] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
