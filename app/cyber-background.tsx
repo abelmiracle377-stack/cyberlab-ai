@@ -64,5 +64,10 @@ export default function CyberBackground() {
     };
   }, []);
 
-  return <canvas ref={ref} className="cyber-bg" aria-hidden="true" />;
+  return (
+    <>
+      <div className="cyber-figure" aria-hidden="true" />
+      <canvas ref={ref} className="cyber-bg" aria-hidden="true" />
+    </>
+  );
 }

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" aria-hidden="true">
+  <!-- Original low-poly hooded-figure backdrop for CyberLab AI. Hand-authored geometry. -->
+  <defs>
+    <linearGradient id="hood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2EA043" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#2EA043" stop-opacity="0.03"/>
+    </linearGradient>
+    <radialGradient id="void" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#0D1117" stop-opacity="1"/>
+      <stop offset="1" stop-color="#0D1117" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g stroke="#2EA043" stroke-opacity="0.55" stroke-width="1" fill="url(#hood)" stroke-linejoin="round">
+    <!-- hood outer silhouette -->
+    <polygon points="400,120 486,196 512,312 470,392 330,392 288,312 314,196"/>
+    <!-- hood facets -->
+    <polyline points="400,120 400,392" fill="none" stroke-opacity="0.28"/>
+    <polygon points="400,120 486,196 440,250 400,190" fill="#2EA043" fill-opacity="0.05"/>
+    <polygon points="400,120 314,196 360,250 400,190" fill="#2EA043" fill-opacity="0.05"/>
+    <polygon points="486,196 512,312 452,330 440,250" fill="#2EA043" fill-opacity="0.04"/>
+    <polygon points="314,196 288,312 348,330 360,250" fill="#2EA043" fill-opacity="0.04"/>
+    <polygon points="440,250 452,330 400,352 348,330 360,250 400,300" fill="#2EA043" fill-opacity="0.03"/>
+    <!-- face void -->
+    <ellipse cx="400" cy="296" rx="74" ry="92" fill="url(#void)" stroke="none"/>
+    <!-- shoulders / torso facets -->
+    <polygon points="330,392 470,392 560,470 548,560 252,560 240,470"/>
+    <polyline points="330,392 300,520" fill="none" stroke-opacity="0.3"/>
+    <polyline points="470,392 500,520" fill="none" stroke-opacity="0.3"/>
+    <polygon points="330,392 240,470 300,520 356,440" fill="#2EA043" fill-opacity="0.04"/>
+    <polygon points="470,392 560,470 500,520 444,440" fill="#2EA043" fill-opacity="0.04"/>
+    <polygon points="356,440 444,440 400,560 300,520 500,520" fill="#2EA043" fill-opacity="0.03"/>
+  </g>
+  <!-- vertex nodes -->
+  <g fill="#3FB950">
+    <circle cx="400" cy="120" r="2.6"/><circle cx="486" cy="196" r="2.2"/><circle cx="314" cy="196" r="2.2"/>
+    <circle cx="512" cy="312" r="2.2"/><circle cx="288" cy="312" r="2.2"/><circle cx="330" cy="392" r="2.2"/>
+    <circle cx="470" cy="392" r="2.2"/><circle cx="560" cy="470" r="2.4"/><circle cx="240" cy="470" r="2.4"/>
+    <circle cx="548" cy="560" r="2.2"/><circle cx="252" cy="560" r="2.2"/><circle cx="440" cy="250" r="1.8"/>
+    <circle cx="360" cy="250" r="1.8"/><circle cx="400" cy="300" r="1.8"/>
+  </g>
+  <g fill="#58A6FF"><circle cx="486" cy="196" r="1.4"/><circle cx="240" cy="470" r="1.4"/><circle cx="400" cy="120" r="1.4"/></g>
+</svg>

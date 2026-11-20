@@ -775,6 +775,13 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
   z-index: -1; pointer-events: none; opacity: .42;
 }
 @media (prefers-reduced-motion: reduce) { .cyber-bg { opacity: .14; } }
+/* Original low-poly hooded-figure backdrop, balanced behind the binary field. */
+.cyber-figure {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background: url('/cyberlab-figure.svg') center 18% no-repeat;
+  background-size: min(560px, 54vw) auto;
+  opacity: .7;
+}
 
 /* ===== Purposeful micro-animations ===== */
 /* Marching-ants connection path (active data between nodes). */
