@@ -73,6 +73,24 @@ companion, so it travels with the Kali companion and the CyberLab OS VM.
 
 ## Web app
 
-The `/soc` dashboard and `/api/soc/*` routes surface alerts, triage and response,
-and let CyberLab AI act as the analyst in the browser — see the web section of
-this repo. Alerts persist in Supabase (`soc_alerts`) with Row-Level Security.
+Apply `supabase/migrations/202611200003_cybersoc.sql` (after the earlier
+migrations) to create `soc_alerts` and `soc_actions` with Row-Level Security
+(owner-scoped) and Realtime on alerts.
+
+- **Dashboard** `/soc` (linked under **CyberSOC** in the sidebar): live alert
+  list coloured by severity with a severity summary, an alert detail panel
+  (MITRE, entities, description), status triage
+  (new → acknowledged → investigating → contained → resolved / false positive),
+  the recommended response actions (destructive ones badged "needs
+  authorization"), and an action log. "Run cycle (dry)" calls the paired
+  companion's `/soc/run-cycle` over the loopback bridge, persists the resulting
+  alerts, and shows them; "Run live" lets the companion's authorized safe
+  actions run. Alerts update live via a Supabase Realtime subscription.
+- **API** `/api/soc/alerts` (list / ingest-by-key / update status) and
+  `/api/soc/actions` (record / approve / update outcome). Ingest upserts by
+  `alert_key` and preserves an alert's triage status across re-ingests. Pure
+  validation lives in `lib/soc.ts` (unit-tested in `tests/soc.test.ts`).
+
+So the same CyberSOC runs headless (standalone), on the companion, and in the
+browser — and a human can review every alert, change its status, and authorize
+or decline each response action.

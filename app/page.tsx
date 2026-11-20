@@ -6,6 +6,7 @@ import {
   Database, FileLock2, FileSearch, Fingerprint, HardDriveDownload, Globe, Globe2, Layers3, Menu, Network,
   Radar, Search, Server, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
   MessageCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 const groups = [
@@ -56,6 +57,9 @@ const groups = [
   ]},
   { title: "COMMUNITY", items: [
     { label: "Chat", icon: MessageCircle, href: "/chat" },
+  ]},
+  { title: "CYBERSOC", items: [
+    { label: "CyberSOC", icon: ShieldAlert, href: "/soc" },
   ]},
 ];
 
