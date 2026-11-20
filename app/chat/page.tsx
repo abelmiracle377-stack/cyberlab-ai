@@ -22,7 +22,11 @@ async function api(path: string, init?: RequestInit) {
 }
 
 export default function ChatPage() {
-  const supabase = createClient();
+  // Create the Supabase client lazily so it is only constructed in the browser
+  // (inside effects/handlers), never during the server prerender where the
+  // public env vars are absent.
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => (supabaseRef.current ??= createClient());
   const [me, setMe] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -50,7 +54,7 @@ export default function ChatPage() {
   // --- bootstrap: who am I, my profile, my friends ---
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getSupabase().auth.getUser();
       setMe(user?.id ?? null);
       setAuthChecked(true);
       if (!user) return;
@@ -75,7 +79,7 @@ export default function ChatPage() {
   // --- realtime: new messages addressed to me ---
   useEffect(() => {
     if (!me) return;
-    const channel = supabase
+    const channel = getSupabase()
       .channel("chat-" + me)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `recipient_id=eq.${me}` },
@@ -84,7 +88,7 @@ export default function ChatPage() {
           setMessages((prev) => (active && msg.sender_id === active.user.user_id ? [...prev, msg] : prev));
         })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { void getSupabase().removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me, active]);
 
@@ -95,7 +99,7 @@ export default function ChatPage() {
     (async () => {
       for (const m of messages) {
         if (m.media_url && !mediaUrls[m.media_url]) {
-          const { data } = await supabase.storage.from("chat-media").createSignedUrl(m.media_url, 3600);
+          const { data } = await getSupabase().storage.from("chat-media").createSignedUrl(m.media_url, 3600);
           if (data?.signedUrl) setMediaUrls((prev) => ({ ...prev, [m.media_url as string]: data.signedUrl }));
         }
       }
@@ -171,7 +175,7 @@ export default function ChatPage() {
     try {
       const ext = extensionForMime(mime) || "bin";
       const path = `${me}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("chat-media").upload(path, file, { contentType: mime, upsert: false });
+      const { error: upErr } = await getSupabase().storage.from("chat-media").upload(path, file, { contentType: mime, upsert: false });
       if (upErr) throw new Error(upErr.message);
       await sendMessage(path, check.value.kind);
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed."); }
