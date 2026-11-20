@@ -2,9 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, ChevronDown, CircleHelp, Code2, Command, CreditCard,
-  Database, FileLock2, FileSearch, Fingerprint, Globe, Globe2, Layers3, Menu, Network,
-  Radar, Search, Settings2, Shield, ShieldCheck, Terminal, Workflow, X, Zap,
+  Activity, ArrowRight, Bell, Bot, BookOpen, Bug, Cable, Camera, ChevronDown, CircleHelp, Code2, Command, CreditCard, Laptop, FileCode2,
+  Database, FileLock2, FileSearch, Fingerprint, HardDriveDownload, Globe, Globe2, Layers3, Menu, Network,
+  Radar, Search, Server, Settings2, Shield, ShieldCheck, Terminal, Workflow, Wallet, X, Zap,
+  MessageCircle,
+  ShieldAlert,
+  GraduationCap,
+  Wifi,
+  KeyRound,
 } from "lucide-react";
 
 const groups = [
@@ -12,6 +17,8 @@ const groups = [
     { label: "Overview", icon: Layers3, href: "/" },
     { label: "Billing", icon: CreditCard, href: "/billing" },
     { label: "AI Agent", icon: Bot, href: "/agent" },
+    { label: "Model Intelligence", icon: Workflow, href: "/models" },
+    { label: "CyberLab OS", icon: Laptop, href: "/os" },
   ]},
   { title: "INTELLIGENCE", items: [
     { label: "IP Intelligence", icon: Globe2, href: "/ip-intelligence" },
@@ -22,41 +29,95 @@ const groups = [
   ]},
   { title: "ASSESSMENT", items: [
     { label: "Network Analysis", icon: Network, href: "/network-analysis" },
+    { label: "Network Intelligence", icon: Activity, href: "/network-intelligence" },
+    { label: "Native Web Workbench", icon: Globe, href: "/web-workbench" },
+    { label: "Native Web Repeater", icon: Workflow, href: "/web-repeater" },
+    { label: "Native Web Crawler", icon: Radar, href: "/web-crawler" },
+    { label: "Safe Active Web Checks", icon: Bug, href: "/web-scanner" },
+    { label: "Web Application Assessment", icon: Bug, href: "/web-assessment" },
+    { label: "Burp Suite Connector", icon: Cable, href: "/burp-suite" },
     { label: "Penetration Testing", icon: Radar, href: "/penetration-testing" },
     { label: "Active Security Lab", icon: Radar, href: "/active-security-lab" },
     { label: "Vulnerability Lab", icon: Bug, href: "/vulnerability-lab" },
+    { label: "Solidity Lab", icon: FileCode2, href: "/solidity" },
+    { label: "Crypto Wallet Recovery", icon: Wallet, href: "/wallet-recovery" },
   ]},
   { title: "ANALYSIS & EVIDENCE", items: [
     { label: "Malware Lab", icon: Shield, href: "/malware-lab" },
     { label: "Reverse Engineering", icon: Code2, href: "/reverse-engineering" },
     { label: "Reports", icon: FileSearch, href: "/reports" },
     { label: "Evidence Vault", icon: FileLock2, href: "/evidence-vault" },
+    { label: "File & Picture Recovery", icon: HardDriveDownload, href: "/forensics-recovery" },
   ]},
   { title: "OPERATIONS", items: [
     { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
+    { label: "Tool Runner", icon: Terminal, href: "/tool-runner" },
     { label: "SOC Host Telemetry", icon: Activity, href: "/kali-connection" },
     { label: "Investigations", icon: FileSearch, href: "/investigations" },
     { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
+    { label: "Camera Intelligence", icon: Camera, href: "/kali-connection#camera-intelligence" },
+    { label: "Personal VPS Gateway", icon: Server, href: "/kali-connection#vps-gateway" },
     { label: "Settings", icon: Settings2, href: "/settings" },
+  ]},
+  { title: "COMMUNITY", items: [
+    { label: "Chat", icon: MessageCircle, href: "/chat" },
+  ]},
+  { title: "CYBERSOC", items: [
+    { label: "CyberSOC", icon: ShieldAlert, href: "/soc" },
+  ]},
+  { title: "LEARN", items: [
+    { label: "Academy", icon: GraduationCap, href: "/academy" },
+  ]},
+  { title: "RECON & WIRELESS", items: [
+    { label: "Shodan OSINT", icon: Globe, href: "/shodan" },
+    { label: "Wi-Fi Toolkit", icon: Wifi, href: "/wifi" },
+    { label: "Offline WPA Crack", icon: KeyRound, href: "/wifi-crack" },
+  ]},
+  { title: "DOWNLOADS", items: [
+    { label: "CyberLab AI OS · ISO", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.iso" },
+    { label: "CyberLab AI OS · VM (OVA)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.ova" },
+    { label: "All images & checksums", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest" },
+    { label: "CyberSOC (standalone)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz" },
   ]},
 ];
 
 const modules = [
+  { name:"CyberLab OS", desc:"Manage local Linux environments, detect runtimes and prepare isolated security workspaces.", icon:Laptop, state:"FOUNDATION", href:"/os" },
   { name:"AI Agent", desc:"Coordinate scoped security workflows with tool-assisted analysis.", icon:Bot, state:"CONFIG CHECK", href:"/agent" },
   { name:"IP Intelligence", desc:"Inspect public IP, ASN, DNS, hosting and ownership signals.", icon:Globe2, state:"AVAILABLE", href:"/ip-intelligence" },
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
   { name:"Domain & Privacy Verification", desc:"Review SPF, DMARC, DKIM, CAA, historical URLs and local browser attributes.", icon:ShieldCheck, state:"NEW", href:"/verification" },
   { name:"Network Analysis", desc:"Import and interpret Nmap XML evidence.", icon:Network, state:"IMPORT / ANALYSE", href:"/network-analysis" },
+  { name:"Network Intelligence", desc:"Capture bounded passive traffic and inspect protocol metadata locally through the paired companion.", icon:Activity, state:"PASSIVE / LOCAL", href:"/network-intelligence" },
+  { name:"Native Web Workbench", desc:"Inspect and replay bounded HTTP requests through CyberLab's scoped local proxy.", icon:Globe, state:"NATIVE / AUTHORISED", href:"/web-workbench" },
+  { name:"Native Web Repeater", desc:"Edit and resend explicitly approved HTTP requests through the native workbench.", icon:Workflow, state:"MANUAL / SCOPED", href:"/web-repeater" },
+  { name:"Native Web Crawler", desc:"Discover same-origin pages with bounded, approved GET requests.", icon:Radar, state:"NATIVE / GET ONLY", href:"/web-crawler" },
+  { name:"Safe Active Web Checks", desc:"Run bounded CORS and query-reflection checks with explicit approval.", icon:Bug, state:"NATIVE / LIMITED", href:"/web-scanner" },
+  { name:"Web Application Assessment", desc:"Bug-bounty baseline: headers, cookies, disclosure, sensitive files, open-redirect and SQL-error detection, mapped to OWASP/CWE.", icon:Bug, state:"NATIVE / DETECTION-ONLY", href:"/web-assessment" },
+  { name:"Shodan OSINT", desc:"Host lookup, index search and DNS resolve over the official Shodan API with your own key — read-only internet-exposure recon.", icon:Globe, state:"OSINT / READ-ONLY", href:"/shodan" },
+  { name:"Wi-Fi Toolkit", desc:"Authorized Wi-Fi engagement: monitor mode, scan & posture audit, handshake/PMKID capture, WPA crack, WPS and wifite.", icon:Wifi, state:"AUTHORIZED / GATED", href:"/wifi" },
+  { name:"Offline WPA Crack", desc:"Upload a handshake/PMKID capture and audit its passphrase strength against a wordlist, offline via the companion.", icon:KeyRound, state:"AUTHORIZED / GATED", href:"/wifi-crack" },
+  { name:"Download · CyberLab AI OS (ISO)", desc:"Prebuilt bootable Debian-based security OS. Boot on real hardware or in VirtualBox/VMware (new VM → attach ISO). BIOS + UEFI, QEMU boot-tested in CI.", icon:HardDriveDownload, state:"DOWNLOAD / ISO", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.iso" },
+  { name:"Download · CyberLab AI OS (VirtualBox/VMware OVA)", desc:"Prebuilt importable appliance. VirtualBox: File → Import Appliance. VMware: open the .ova. Boots straight into the CyberLab workstation.", icon:HardDriveDownload, state:"DOWNLOAD / OVA", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.ova" },
+  { name:"Download · CyberLab AI OS (VMware VMDK)", desc:"Prebuilt VMware-compatible virtual disk. Attach to a new 64-bit Debian VM (BIOS firmware) as the primary disk and boot.", icon:HardDriveDownload, state:"DOWNLOAD / VMDK", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.vmdk" },
+  { name:"Download · CyberSOC", desc:"Standalone autonomous SOC engine (detection, correlation, response). Pure Python, no dependencies. Permanent latest-release download.", icon:HardDriveDownload, state:"DOWNLOAD / RELEASE", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz" },
+  { name:"Burp Suite Connector", desc:"Connect the local companion to Burp Suite and inspect proxy history, site map and issues.", icon:Cable, state:"LOCAL / PAIRED", href:"/burp-suite" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
   { name:"Live Research", desc:"Research current CVEs, advisories and technical references.", icon:Globe, state:"PROVIDER REQUIRED", href:"/research" },
   { name:"Website Assessment", desc:"Passive HTTPS, headers and cookie security review.", icon:Globe2, state:"AVAILABLE", href:"/website-assessment" },
   { name:"Vulnerability Lab", desc:"Research CVEs, impact and remediation guidance.", icon:Bug, state:"AVAILABLE", href:"/vulnerability-lab" },
+  { name:"Solidity Lab", desc:"Review Solidity source for security-sensitive patterns and contract surface.", icon:FileCode2, state:"HEURISTIC REVIEW", href:"/solidity" },
+  { name:"Crypto Wallet Recovery", desc:"Inspect owned wallet backup formats locally without uploading recovery secrets.", icon:Wallet, state:"LOCAL TRIAGE", href:"/wallet-recovery" },
+  { name:"File & Picture Recovery", desc:"Carve supported file signatures from a supplied evidence image and use the paired Linux companion for guarded disk workflows.", icon:HardDriveDownload, state:"LOCAL / AUTHORISED", href:"/forensics-recovery" },
   { name:"Malware Lab", desc:"Static triage, inert threat fixtures, YARA/Sigma structural checks and SOC behaviour simulations.", icon:Shield, state:"DEFENSIVE ANALYSIS", href:"/malware-lab" },
   { name:"Reverse Engineering", desc:"Inspect executable formats and supplied binaries.", icon:Code2, state:"ANALYSIS", href:"/reverse-engineering" },
   { name:"Reports", desc:"Turn findings and evidence into technical reports.", icon:FileSearch, state:"AVAILABLE", href:"/reports" },
   { name:"Evidence Vault", desc:"Keep investigation notes in a browser-local encrypted vault.", icon:FileLock2, state:"LOCAL", href:"/evidence-vault" },
+  { name:"File & Picture Recovery", desc:"Carve contiguous JPEG, PNG, GIF and PDF candidates from a supplied evidence image without modifying the source.", icon:HardDriveDownload, state:"LIMITED / LOCAL", href:"/forensics-recovery" },
   { name:"SOC Host Telemetry", desc:"Read-only, on-demand health metrics from a paired local Kali host.", icon:Activity, state:"LOCAL / ON DEMAND", href:"/kali-connection" },
+  { name:"Camera Intelligence", desc:"Discover devices only on an operator-selected private LAN or view one explicitly authorised camera through the local Kali companion.", icon:Camera, state:"LOCAL / EXPLICIT CONSENT", href:"/kali-connection#camera-intelligence" },
+  { name:"Personal VPS Gateway", desc:"Optional separately deployed personal gateway with revocable per-device permissions; not hosted by Vercel.", icon:Server, state:"OPTIONAL / NOT DEPLOYED", href:"/kali-connection#vps-gateway" },
   { name:"Investigations", desc:"Persistent case records and analyst-authored event timelines across security modules.", icon:FileSearch, state:"SUPABASE REQUIRED", href:"/investigations" },
 ];
 
@@ -128,7 +189,7 @@ export default function Home() {
         </div>
         <div className="section-heading module-section-heading"><h2>MODULE DIRECTORY</h2><span className="section-meta">{filtered.length} MODULES · SELECT TO OPEN</span></div>
         <div className="module-search-mobile"><Search size={14}/><input placeholder="Filter operational modules..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
-        <div className="modules-grid command-modules">{filtered.map(module=>{const Icon=module.icon;return <a className="module-card command-module" key={module.name} href={module.href}><div className="module-top"><span className="module-icon"><Icon size={16}/></span><span className="module-status">{module.state}</span></div><div className="module-name">{module.name}</div><div className="module-desc">{module.desc}</div><div className="module-open">OPEN MODULE <ArrowRight size={12}/></div></a>})}</div>
+        <div className="modules-grid command-modules">{filtered.map(module=>{const Icon=module.icon;const ext=module.href.startsWith("http");return <a className="module-card command-module" key={module.name} href={module.href} {...(ext?{target:"_blank",rel:"noreferrer"}:{})}><div className="module-top"><span className="module-icon"><Icon size={16}/></span><span className="module-status">{module.state}</span></div><div className="module-name">{module.name}</div><div className="module-desc">{module.desc}</div><div className="module-open">{ext?"DOWNLOAD":"OPEN MODULE"} <ArrowRight size={12}/></div></a>})}</div>
         {filtered.length===0&&<div className="empty-search">NO MODULE MATCHES THAT QUERY. TRY ANOTHER TERM.</div>}
         <div className="command-footer"><span>CYBERLAB AI // SECURITY RESEARCH WORKSPACE</span><span>AUTHORISED SYSTEMS ONLY · HUMAN APPROVAL REQUIRED</span></div>
       </div>

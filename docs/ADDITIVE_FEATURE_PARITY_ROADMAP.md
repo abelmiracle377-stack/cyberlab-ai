@@ -67,6 +67,130 @@ Kodachi's public whitepaper describes three tiers: client/workstation services, 
 - Searchable tool catalogue, command builder, workflow queue, output formats, job history and cancellation.
 - System status, API docs, help center and guided remediation.
 
+## Blockchain engineering and Solidity security workstream
+
+This workstream begins after the hosted AI gateway foundation. Delivery is incremental and additive; no wallet or chain action is enabled by the initial source-review slice.
+
+### Solidity delivery sequence
+1. **Source intake and static review (first slice):** bounded Solidity source input, contract/interface/library/import inventory, compiler pragma visibility and deterministic pattern-based review leads with line references.
+2. **Compiler and project validation:** optional isolated compiler integration with pinned solc versions, reproducible project manifests, import resolution and no deployment by default.
+3. **Deeper security analysis:** Slither and other reviewed static-analysis integrations, AST-aware checks, test generation, fuzzing and symbolic analysis in isolated environments.
+4. **Smart-contract engineering:** project scaffolding, contract templates, test harnesses, deployment simulation and verified build artefacts.
+5. **Chain-aware review:** EVM target selection, compiler/EVM compatibility, proxy/storage-layout analysis and chain-specific source provenance.
+6. **Human-approved transaction workflows:** only later, with explicit chain/network, contract address, simulation, gas/fee preview and separate approval; never request private keys or seed phrases in chat.
+
+The first Solidity source-review module is a heuristic aid, not a compiler, auditor, exploitability verdict or formal verification system. Wallet security and recovery are separate later workstreams and must not be conflated with contract analysis.
+
+### Expanded Web3 engineering scope (user-directed)
+
+The Solidity Lab is intended to grow into a full Web3 engineering workspace. These are planned capabilities, not claims that they are already implemented:
+
+1. **Multi-language smart-contract authoring:** accept natural-language instructions and generate, explain, refactor and test Solidity first, then add other supported contract languages such as Vyper and Move where toolchains and target ecosystems are verified. Let the user specify language, compiler version, target chain/VM, standards, dependencies and project structure. Generated code must be clearly labelled as AI-authored and unverified until compiled and tested.
+2. **Project build and test:** reproducible project scaffolding, pinned compiler/tool versions, dependency lockfiles, import resolution, unit/integration tests, static analysis, fuzz/property testing, gas snapshots and build artefacts. Support established toolchains through isolated, resource-bounded workers rather than assuming compilers exist in the hosted web process.
+3. **NFT engineering:** ERC-721/ERC-1155 and chain-specific equivalents; metadata and media validation; minting/burning/royalty/access-control patterns; allowlists, reveal and supply controls; marketplace integration and testnets. Include metadata permanence, storage availability, royalty-enforcement limitations and marketplace compatibility in generated project notes.
+4. **DEX engineering:** AMM and order-book design where appropriate; pools, swaps, liquidity provision/removal, routing, fee accounting, oracle integration, slippage/deadline protections, MEV and sandwich-risk analysis, flash-loan and reentrancy review, invariant/property tests, simulations and testnet deployment. Do not present a generated DEX as audited or production-safe.
+5. **Deployment and wallet connection:** support user-selected networks and compatible wallets through standard wallet-provider interfaces. Before any transaction, show chain/network, account, contract address, constructor arguments, bytecode/build verification, transaction calldata, estimated gas limit, fee/gas price, native-token total, simulation result and any approvals. The user signs and submits in their own wallet; the app never asks for or handles a seed phrase or raw private key. Require a fresh explicit confirmation for every deployment, approval or value transfer. Provide testnet-first defaults, chain-ID checks, simulation, cancellation/error handling and transaction receipt tracking. A user-paid gas fee is paid by the wallet on the selected network; estimates can change before inclusion.
+6. **Contract operations:** verify published source/bytecode where supported, inspect events and transactions, compare deployed bytecode, monitor configured contracts and create post-deployment reports. Any automated action remains separately permissioned and bounded.
+
+### Wallet security and recovery workstream (after Web3 engineering)
+
+**This is an active recovery-engineering workstream, not a guidance-only feature.** CyberLab AI's coordinator should be able to select, configure and run approved recovery utilities through the Kali companion or CyberLab OS sandbox, collect structured results, and help the user validate recovered access. It must not simply tell the user to go elsewhere and run a tool manually when the supported operation can safely be executed in CyberLab.
+
+#### Wallet-format compatibility reference (implementation input)
+
+The recovery UI should begin with wallet-type selection, then identify the actual backup format/version before choosing an extractor. Treat hash-mode numbers as compatibility hints only: they are not proof that a particular file can be extracted or cracked. The worker must check its pinned Hashcat/John/BTCRecover version, detect the extracted hash format, validate the extractor output, and refuse unsupported or ambiguous formats rather than guessing.
+
+| Wallet / backup family | Candidate extraction or recovery path | Hashcat mode reference | Important qualification |
+|---|---|---:|---|
+| Bitcoin Core `wallet.dat` | John `bitcoin2john.py`; BTCRecover for supported wallet/password/seed workflows | 11300 | Confirm wallet version and extractor compatibility first |
+| Electrum | John `electrum2john.py`; BTCRecover where the exact wallet version is supported | 16600, 21700, 21800 | Electrum salt/version variants use different modes; never assume 16600 fits every wallet |
+| Ethereum UTC keystore JSON | John `ethereum2john.py` or a validated keystore adapter | 15600 (PBKDF2-HMAC-SHA256), 15700 (scrypt) | Identify KDF from the keystore JSON; scrypt can be resource-intensive |
+| Ethereum presale wallet | Format-specific extractor | 16300 | Do not confuse presale wallets with modern UTC keystores |
+| MetaMask | Version-aware extraction from a user-supplied, locally obtained vault/extension backup; BTCRecover support only where documented | No generic mode asserted here | Do not scrape browser logs or collect extension state remotely; vault formats and derivation context vary |
+| Blockchain.com / legacy Blockchain My Wallet | John `blockchain2john.py` or validated adapter | 12700; 15200 (V2); 18800 (second-password SHA-256) | Distinguish wallet generation and second-password formats |
+| Exodus | Version-aware local extraction/adapter | 18900 (Exodus Desktop scrypt) | The mode must match the extracted format; do not reuse Blockchain.com or MultiBit modes |
+| MultiBit Classic / MultiBit HD | John `multibit2john.py` where supported | 22500 (Classic key), 22700 (Classic wallet / HD) | Mode depends on the exact MultiBit product and backup file |
+| BIP39 seed with missing/incorrect words | BTCRecover `seedrecover.py` / supported mnemonic recovery flow | Not a general Hashcat hash mode | Requires useful known words, positions, passphrase clues or a known address; validate derived public addresses |
+| Ledger / Trezor and other hardware wallets | Recover or repair the owner's backup seed using compatible BIP39/BIP39-passphrase tooling | Not an off-device device-PIN cracking mode | Do not attack device firmware/PIN; a Trezor-style optional passphrase is a separate recovery search |
+| KeePass database containing wallet material | John `keepass2john` | 13400 (KeePass 1/2 AES formats supported by the mode) | This recovers the database password, not a wallet key directly |
+
+**Important corrections to the supplied quick-reference draft:** the commonly documented Exodus Desktop scrypt mode is 18900, not 28200; MultiBit uses 22500/22700 variants rather than assuming 12700; Ethereum presale wallets use 16300, distinct from UTC keystore modes 15600/15700. Do not ship the proposed MetaMask mode 26600 as a supported mapping without a verified current extractor/hashcat example. The same caution applies to any tool/version-specific mapping.
+
+For any future adapter, maintain a checked-in compatibility manifest containing wallet family, exact file/version signature, extractor name and pinned version, emitted hash signature, supported Hashcat mode(s) or BTCRecover workflow, fixture provenance, and test result. A mapping remains **planned/unverified** until it passes a local fixture test using synthetic or public test data. The runtime should also query the installed tool's own mode list (for example, `hashcat --help` / `hashcat --example-hashes`) instead of relying solely on this documentation.
+
+#### Recovery capabilities
+- **Bitcoin and other wallet recovery:** integrate maintained, reviewed tools such as BTCRecover where their supported wallet formats and recovery modes match the user's backup. Add format adapters for supported Bitcoin Core, Electrum, hardware-wallet backup and other documented formats as validation establishes compatibility; do not claim universal wallet support.
+- **Password/passphrase recovery:** run user-authorised candidate-based and typo-tolerant recovery against a supplied wallet backup, encrypted keystore or user-provided recovery material. Support bounded masks, known fragments and user-supplied candidate lists. Allow the user to configure time, memory, CPU/GPU and attempt budgets, and stop/cancel immediately.
+- **Wallet discovery and validation:** identify backup/keystore formats, inspect non-secret metadata, test known derivation paths and account discovery, derive public addresses in the isolated worker, and compare them with addresses supplied by the owner. Validate a recovered wallet by deriving expected public addresses or checking a signed challenge; never ask the user to reveal the seed phrase in chat.
+- **Other ecosystems:** add tool adapters only after format-specific support, tool licensing, test fixtures and security review. Prioritise Bitcoin first, then Ethereum-compatible keystores and other requested ecosystems according to verified tooling.
+- **Outcome reporting:** report the exact backup format, tool/version, recovery mode, constraints, elapsed time, whether a candidate was recovered, validation evidence and limitations. Never fabricate a recovered secret or report success merely because a tool exited with code zero.
+
+#### Sandbox and secret-handling architecture
+- Run recovery tools in an isolated, disposable worker/container with a read-only input mount, encrypted ephemeral scratch storage, no inbound network, and outbound network disabled by default. Apply CPU, memory, disk, process, wall-clock and output-size limits. Destroy ephemeral scratch material after the user exports the result or the job expires.
+- The AI coordinator may plan jobs and inspect redacted status/results, but must not receive raw seed phrases, private keys, keystore passwords or recovered secrets in model prompts, tool traces, telemetry, logs, analytics or hosted inference requests.
+- Secret-bearing input is transferred directly from the user's local client or an explicitly trusted encrypted upload channel to the recovery worker, never through model context. Prefer local CyberLab OS execution when available; hosted recovery workers must require an explicit opt-in and disclose where encrypted data is processed.
+- Provide a secret-safe result handoff: deliver recovered material directly to a user-controlled local vault/download channel protected by encryption and user authentication, never echo it into chat. Let the user verify and move funds using their own wallet software.
+- Do not retain seed phrases, candidate passwords, recovered keys or plaintext wallet files. Redact command arguments and process output before audit logging. Record job metadata, tool version, timestamps, input hashes and outcome—not secrets.
+- Use a strict tool registry with fixed executable paths, typed arguments, allowlisted operations, signed/pinned tool versions and per-tool permission tiers. No unrestricted shell, arbitrary downloads, or model-generated command execution.
+- Require an ownership/authorisation declaration, explicit selection of the target backup and recovery scope, and a separate confirmation before starting expensive or long-running recovery. Show estimated resource use and let the user cancel.
+- Keep recovery operations offline unless the user explicitly enables a separately justified public-chain lookup. Never broadcast transactions, move funds or sign on the user's behalf as part of recovery.
+
+#### Safety and honest limits
+- Support only wallets and backups the user owns or is explicitly authorised to recover. Refuse recovery attempts against third-party targets, stolen files or arbitrary addresses.
+- This is not a promise to crack a wallet without adequate information. If the secret material is irretrievably lost and no useful backup, password clues or recoverable entropy remains, software cannot recreate it.
+- A connected wallet exposes public account information and requests signatures/transactions through the wallet's own approval UI. CyberLab must not silently sign, export keys or bypass wallet protections.
+- Include scam/phishing detection, malicious approval review, revoke-approval guidance, address poisoning warnings and transaction simulation where the chain/tooling supports it.
+- The user must explicitly export any recovered secret into their own wallet. Never automatically sweep, transfer or consolidate recovered funds.
+
+### File, photo and digital-evidence recovery workstream (after wallet recovery)
+
+**Status: planned workstream, not yet an operational deleted-file recovery feature.** Existing file triage, hashing or metadata extraction must not be labelled file recovery.
+
+- Build a dedicated recovery workflow for user-owned or explicitly authorised disks, removable media, memory cards and disk images. Identify partitions/filesystems and estimate recoverability before recovery begins.
+- **Photo and image recovery:** explicitly support deleted or damaged image recovery where the source format and carving tool are validated. Prioritise JPEG/JPG and PNG, then add HEIC/HEIF, TIFF, GIF, WebP and camera RAW families only after fixture-based validation. Preserve recoverable EXIF/IPTC/XMP metadata where possible, report when metadata or original filenames are lost, and distinguish thumbnails/previews from full-resolution originals.
+- **Video and media recovery:** add common video/container formats only after validated carving and fragment-reassembly support; do not promise playable output from fragmented or overwritten media.
+- Recover deleted files through filesystem-aware undelete where supported and signature-based carving where filesystem metadata is unavailable. Report the recovery method and confidence separately; carving may lose original filenames, folder paths and timestamps.
+- Preserve originals: read-only acquisition, verified working copies, SHA-256 hashes, chain-of-custody events, timestamps and examiner notes. Never write recovered output back to the source device.
+- Run parsers and carving tools in isolated, resource-limited workers; never execute recovered files automatically. Flag encrypted, overwritten, fragmented, damaged and unsupported data rather than promising recovery.
+- Add synthetic and public test fixtures for intact, deleted, fragmented, truncated and corrupt image files. Test byte-for-byte integrity, false-positive handling, metadata preservation, cancellation, output quotas and source immutability before marking a format supported.
+- Support exports and evidence reports with source image, tool/version, parameters, hashes, findings and limitations. Do not overwrite source media or write recovered output back to the source device.
+
+
+- Build a dedicated recovery and forensics workflow for user-owned or explicitly authorised media: disk/image intake, filesystem and partition identification, deleted-file carving where supported, metadata/timeline analysis, hash manifests and recoverability estimates.
+- Preserve originals: read-only acquisition, verified working copies, SHA-256 hashes, chain-of-custody events, timestamps and examiner notes.
+- Run parsers and carving tools in isolated, resource-limited workers; never execute recovered files automatically. Flag encrypted, overwritten, damaged and unsupported data rather than promising recovery.
+- Support exports and evidence reports with source image, tool/version, parameters, hashes, findings and limitations. Do not overwrite source media or write recovered output back to the source device.
+
+### Delivery order override
+
+The user has explicitly set the next product sequence: **(1) complete Solidity and Web3 engineering, (2) wallet security/recovery, (3) file and digital forensics/recovery, (4) full UI/UX design and integration, then (5) continue the remaining original CyberLab scope. CyberLab OS is deferred until those original CyberLab workstreams have been reached.** This ordering supersedes any earlier roadmap placement of CyberLab OS as an immediate next phase. Preserve its architecture notes and existing work; do not delete or disable it.
+
+## CyberLab OS — first-class platform workstream
+
+CyberLab OS is now a core product workstream, not a separate side project. It is the unified operating environment and local runtime management layer for CyberLab AI. It must preserve all existing web, agent, evidence, model and Kali companion functionality.
+
+The detailed architecture and acceptance criteria are maintained in [docs/CYBERLAB_OS_ARCHITECTURE.md](./CYBERLAB_OS_ARCHITECTURE.md).
+
+### CyberLab OS capabilities and delivery
+- OS control plane integrated into the existing CyberLab AI dashboard, with a dedicated additive `/os` workspace.
+- Read-only host and runtime capability discovery; report operating system, architecture, CPU, memory/disk headroom, hardware virtualisation and installed container/hypervisor runtimes.
+- Environment inventory and lifecycle status with explicit available/configured/running/unsupported/planned states.
+- CyberLab Terminal with a paired local runtime, bounded command execution, allowlists, audit trail and human approval for privileged, destructive or network-active actions. Never expose an unrestricted public shell.
+- First-class integration with the existing Kali companion, pairing token, Nmap workflow, telemetry and Ollama adapter; preserve existing endpoints and behaviour.
+- Optional Ubuntu, Kali-compatible and CyberLab Minimal/Security profiles using upstream images and package sources.
+- Container environments before VM management where host support permits; explicit resource previews, filesystem/network isolation and confirmation for lifecycle changes.
+- Local VM integration with QEMU/KVM, VirtualBox, VMware or Hyper-V only when detected and supported. Never attempt to run a hypervisor in the hosted web application.
+- Future reproducible and signed bootable CyberLab OS image based on a maintained upstream Linux distribution. A custom kernel is not an initial requirement.
+- Verify upstream distribution licensing, trademarks, image terms, package provenance, update and rollback strategy before redistributing images.
+
+### CyberLab OS compatibility invariants
+- Existing CyberLab AI pages, APIs, tools, Kali bridge routes, pairing and Ollama features remain available.
+- Capability discovery is read-only; no package installation, container creation or VM lifecycle operation during discovery.
+- No automatic scans, exploits, privileged commands, host mounts or network-enabled lab actions.
+- Low-resource hosts receive lightweight environment recommendations; full desktop VMs are never assumed to be viable.
+- Environment actions require explicit user initiation, clear scope/resource preview and approval where risk warrants it.
+- The OS workspace remains useful when no container runtime or hypervisor is installed.
+
 ## Kodachi-inspired information architecture
 
 Keep every existing route and page. Organize navigation into these additive sections:

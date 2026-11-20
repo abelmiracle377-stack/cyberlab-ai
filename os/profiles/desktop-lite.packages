@@ -1,0 +1,44 @@
+# CyberLab AI OS — lightweight graphical desktop profile
+# Keeps XFCE and a browser while omitting heavyweight specialist suites.
+live-boot
+live-config
+live-config-systemd
+linux-image-amd64
+systemd-sysv
+sudo
+network-manager
+wpasupplicant
+xfce4
+xfce4-terminal
+lightdm
+dbus-x11
+firefox-esr
+thunar
+mousepad
+fonts-dejavu
+fonts-liberation
+bash-completion
+git
+curl
+wget
+ca-certificates
+python3
+nmap
+tcpdump
+file
+jq
+unzip
+xz-utils
+tmux
+htop
+# CyberLab essential security tooling (Debian Trixie)
+whois
+bind9-dnsutils
+dnsrecon
+whatweb
+nikto
+netcat-openbsd
+john
+hashcat
+sslscan
+openssl

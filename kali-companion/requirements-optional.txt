@@ -1,0 +1,2 @@
+# Optional enrichment for menu option 16: phone numbering-plan metadata
+phonenumbers>=8.13.0

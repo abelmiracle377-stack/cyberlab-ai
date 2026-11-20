@@ -1,0 +1,949 @@
+"""Local-first wallet recovery primitives for owned or explicitly authorised backups.
+
+Everything here is real, standards-based cryptography implemented on Python's
+standard library only (hashlib/hmac) — no third-party dependencies, no network,
+no simulated results. Functions either produce a correct result or raise.
+
+Covered:
+  * secp256k1 field/curve arithmetic (keys and public points)
+  * BIP32 hierarchical deterministic derivation (xprv master + child keys)
+  * BIP39 mnemonic -> seed (PBKDF2-HMAC-SHA512) and checksum validation
+  * BIP44/BIP49/BIP84 account paths
+  * Address encoding: P2PKH (Base58Check), P2WPKH (bech32), Ethereum (keccak)
+  * WIF private-key encoding
+  * Password-recovery hash extraction from Ethereum V3 keystores and Bitcoin
+    Core wallet.dat master keys, in hashcat/John formats
+
+This module never transmits key material and never decrypts a backup without the
+owner's password. Cracking is performed only by invoking a real, locally
+installed tool (see wallet_cracking.py); this file prepares inputs for it.
+"""
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+import re
+import struct
+import unicodedata
+from pathlib import Path
+
+import aes
+
+# --- secp256k1 -------------------------------------------------------------
+_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+_A = 0
+_B = 7
+_GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+_G = (_GX, _GY)
+
+
+def _inv(value: int, modulus: int = _P) -> int:
+    return pow(value % modulus, modulus - 2, modulus)
+
+
+def _point_add(p, q):
+    if p is None:
+        return q
+    if q is None:
+        return p
+    (x1, y1), (x2, y2) = p, q
+    if x1 == x2 and (y1 + y2) % _P == 0:
+        return None
+    if p == q:
+        slope = (3 * x1 * x1 + _A) * _inv(2 * y1) % _P
+    else:
+        slope = (y2 - y1) * _inv(x2 - x1) % _P
+    x3 = (slope * slope - x1 - x2) % _P
+    y3 = (slope * (x1 - x3) - y1) % _P
+    return (x3, y3)
+
+
+def _point_mul(scalar: int, point=_G):
+    scalar %= _N
+    result = None
+    addend = point
+    while scalar:
+        if scalar & 1:
+            result = _point_add(result, addend)
+        addend = _point_add(addend, addend)
+        scalar >>= 1
+    return result
+
+
+def _ser32(index: int) -> bytes:
+    return struct.pack(">I", index)
+
+
+def _ser_point(point) -> bytes:
+    x, y = point
+    return (b"\x03" if y & 1 else b"\x02") + x.to_bytes(32, "big")
+
+
+def private_to_public(private_key: bytes, compressed: bool = True) -> bytes:
+    """Return the public key for a 32-byte private key."""
+    secret = int.from_bytes(private_key, "big")
+    if not 1 <= secret < _N:
+        raise ValueError("Private key is out of the valid secp256k1 range.")
+    point = _point_mul(secret)
+    if point is None:
+        raise ValueError("Derived the point at infinity; invalid private key.")
+    if compressed:
+        return _ser_point(point)
+    x, y = point
+    return b"\x04" + x.to_bytes(32, "big") + y.to_bytes(32, "big")
+
+
+# --- hashing helpers -------------------------------------------------------
+def _sha256(data: bytes) -> bytes:
+    return hashlib.sha256(data).digest()
+
+
+def _hash160(data: bytes) -> bytes:
+    return hashlib.new("ripemd160", _sha256(data)).digest()
+
+
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_KECCAK_ROT = [
+    [0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+    [28, 55, 25, 21, 56], [27, 20, 39, 8, 14],
+]
+
+
+def keccak256(data: bytes) -> bytes:
+    """Keccak-256 (Ethereum's hash, distinct from NIST SHA3-256)."""
+    rate = 136  # 1088-bit rate for 256-bit output
+    state = [[0] * 5 for _ in range(5)]
+    padded = bytearray(data)
+    padded.append(0x01)
+    while len(padded) % rate != 0:
+        padded.append(0x00)
+    padded[-1] ^= 0x80
+    mask = (1 << 64) - 1
+    for block in range(0, len(padded), rate):
+        chunk = padded[block:block + rate]
+        for i in range(rate // 8):
+            lane = int.from_bytes(chunk[i * 8:i * 8 + 8], "little")
+            state[i % 5][i // 5] ^= lane
+        # Keccak-f[1600]
+        for rnd in range(24):
+            c = [state[x][0] ^ state[x][1] ^ state[x][2] ^ state[x][3] ^ state[x][4] for x in range(5)]
+            d = [c[(x - 1) % 5] ^ (((c[(x + 1) % 5] << 1) | (c[(x + 1) % 5] >> 63)) & mask) for x in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    state[x][y] ^= d[x]
+            b = [[0] * 5 for _ in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    rot = _KECCAK_ROT[x][y]
+                    value = state[x][y]
+                    b[y][(2 * x + 3 * y) % 5] = ((value << rot) | (value >> (64 - rot))) & mask if rot else value
+            for x in range(5):
+                for y in range(5):
+                    state[x][y] = b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y]) & mask
+            state[0][0] ^= _KECCAK_RC[rnd]
+    out = bytearray()
+    for i in range(4):  # 32 bytes
+        out += (state[i % 5][i // 5] & mask).to_bytes(8, "little")
+    return bytes(out)
+
+
+# --- Base58 / bech32 -------------------------------------------------------
+_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def base58check_encode(payload: bytes) -> str:
+    checksum = _sha256(_sha256(payload))[:4]
+    data = payload + checksum
+    number = int.from_bytes(data, "big")
+    encoded = ""
+    while number > 0:
+        number, remainder = divmod(number, 58)
+        encoded = _B58[remainder] + encoded
+    pad = len(data) - len(data.lstrip(b"\x00"))
+    return _B58[0] * pad + encoded
+
+
+def base58check_decode(text: str) -> bytes:
+    number = 0
+    for char in text:
+        index = _B58.find(char)
+        if index < 0:
+            raise ValueError("Invalid Base58 character in input.")
+        number = number * 58 + index
+    full = number.to_bytes((number.bit_length() + 7) // 8, "big")
+    pad = len(text) - len(text.lstrip(_B58[0]))
+    full = b"\x00" * pad + full
+    if len(full) < 4 or _sha256(_sha256(full[:-4]))[:4] != full[-4:]:
+        raise ValueError("Base58Check checksum does not validate.")
+    return full[:-4]
+
+
+_BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def _bech32_polymod(values):
+    generator = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3]
+    chk = 1
+    for value in values:
+        top = chk >> 25
+        chk = (chk & 0x1FFFFFF) << 5 ^ value
+        for i in range(5):
+            chk ^= generator[i] if (top >> i) & 1 else 0
+    return chk
+
+
+def _bech32_hrp_expand(hrp):
+    return [ord(c) >> 5 for c in hrp] + [0] + [ord(c) & 31 for c in hrp]
+
+
+def _convertbits(data, frombits, tobits, pad=True):
+    acc = 0
+    bits = 0
+    result = []
+    maxv = (1 << tobits) - 1
+    for value in data:
+        acc = (acc << frombits) | value
+        bits += frombits
+        while bits >= tobits:
+            bits -= tobits
+            result.append((acc >> bits) & maxv)
+    if pad and bits:
+        result.append((acc << (tobits - bits)) & maxv)
+    return result
+
+
+def bech32_encode_segwit(witness_program: bytes, hrp: str = "bc", witver: int = 0) -> str:
+    data = [witver] + _convertbits(list(witness_program), 8, 5)
+    values = _bech32_hrp_expand(hrp) + data
+    polymod = _bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ 1
+    checksum = [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
+    return hrp + "1" + "".join(_BECH32_CHARSET[d] for d in data + checksum)
+
+
+# --- address + WIF ---------------------------------------------------------
+def p2pkh_address(public_key: bytes, version: int = 0x00) -> str:
+    return base58check_encode(bytes([version]) + _hash160(public_key))
+
+
+def p2wpkh_address(public_key: bytes, hrp: str = "bc") -> str:
+    return bech32_encode_segwit(_hash160(public_key), hrp=hrp)
+
+
+def ethereum_address(public_key_uncompressed: bytes) -> str:
+    if len(public_key_uncompressed) == 33:
+        raise ValueError("Ethereum addresses require the uncompressed public key.")
+    body = public_key_uncompressed[1:] if public_key_uncompressed[0] == 0x04 else public_key_uncompressed
+    digest = keccak256(body)[-20:]
+    hex_addr = digest.hex()
+    checksum_hash = keccak256(hex_addr.encode()).hex()
+    out = "".join(c.upper() if int(checksum_hash[i], 16) >= 8 else c for i, c in enumerate(hex_addr))
+    return "0x" + out
+
+
+def p2pkh_address_multibyte(public_key: bytes, version_bytes: bytes) -> str:
+    """Base58Check P2PKH with a multi-byte version prefix (e.g. Zcash t-addr)."""
+    return base58check_encode(bytes(version_bytes) + _hash160(public_key))
+
+
+def tron_address(public_key_uncompressed: bytes) -> str:
+    """TRON address: base58check of 0x41 || keccak256(pubkey)[-20:]."""
+    if len(public_key_uncompressed) == 33:
+        raise ValueError("TRON addresses require the uncompressed public key.")
+    body = public_key_uncompressed[1:] if public_key_uncompressed[0] == 0x04 else public_key_uncompressed
+    return base58check_encode(b"\x41" + keccak256(body)[-20:])
+
+
+_XRP_ALPHABET = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
+
+
+def _base58_with_alphabet(data: bytes, alphabet: str) -> str:
+    number = int.from_bytes(data, "big")
+    out = ""
+    while number > 0:
+        number, remainder = divmod(number, 58)
+        out = alphabet[remainder] + out
+    pad = 0
+    for byte in data:
+        if byte == 0:
+            pad += 1
+        else:
+            break
+    return alphabet[0] * pad + out
+
+
+def xrp_address(public_key: bytes) -> str:
+    """XRP classic address: XRP-base58 of AccountID (0x00 || hash160) + checksum."""
+    payload = b"\x00" + _hash160(public_key)
+    checksum = _sha256(_sha256(payload))[:4]
+    return _base58_with_alphabet(payload + checksum, _XRP_ALPHABET)
+
+
+def wif_encode(private_key: bytes, compressed: bool = True, version: int = 0x80) -> str:
+    payload = bytes([version]) + private_key + (b"\x01" if compressed else b"")
+    return base58check_encode(payload)
+
+
+def p2sh_p2wpkh_address(public_key: bytes, version: int = 0x05) -> str:
+    """BIP49 nested SegWit: a P2WPKH program wrapped in P2SH (addresses start 3/M)."""
+    redeem_script = b"\x00\x14" + _hash160(public_key)  # OP_0 <20-byte keyhash>
+    return base58check_encode(bytes([version]) + _hash160(redeem_script))
+
+
+# --- Bitcoin Cash CashAddr -------------------------------------------------
+_CASHADDR_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def _cashaddr_polymod(values) -> int:
+    generator = [0x98f2bc8e61, 0x79b76d99e2, 0xf33e5fb3c4, 0xae2eabe2a8, 0x1e4f43e470]
+    chk = 1
+    for value in values:
+        top = chk >> 35
+        chk = ((chk & 0x07ffffffff) << 5) ^ value
+        for i in range(5):
+            chk ^= generator[i] if (top >> i) & 1 else 0
+    return chk ^ 1
+
+
+def cashaddr_encode(pubkey_hash: bytes, prefix: str = "bitcoincash", type_bits: int = 0) -> str:
+    """Encode a 160-bit hash as a CashAddr (type 0 = P2PKH, 1 = P2SH)."""
+    if len(pubkey_hash) != 20:
+        raise ValueError("CashAddr here supports 160-bit hashes only.")
+    version_byte = (type_bits & 0x0f) << 3  # size bits 0 => 160-bit hash
+    payload = _convertbits([version_byte] + list(pubkey_hash), 8, 5)
+    prefix_expand = [ord(c) & 31 for c in prefix] + [0]
+    polymod = _cashaddr_polymod(prefix_expand + payload + [0] * 8)
+    checksum = [(polymod >> 5 * (7 - i)) & 31 for i in range(8)]
+    return prefix + ":" + "".join(_CASHADDR_CHARSET[d] for d in payload + checksum)
+
+
+# --- BIP32 -----------------------------------------------------------------
+_HARDENED = 0x80000000
+
+
+class HDKey:
+    def __init__(self, key: bytes, chain_code: bytes, depth=0, parent_fp=b"\x00\x00\x00\x00", index=0):
+        self.key = key  # 32-byte private key
+        self.chain_code = chain_code
+        self.depth = depth
+        self.parent_fp = parent_fp
+        self.index = index
+
+    @classmethod
+    def from_seed(cls, seed: bytes) -> "HDKey":
+        digest = hmac.new(b"Bitcoin seed", seed, hashlib.sha512).digest()
+        secret = int.from_bytes(digest[:32], "big")
+        if secret == 0 or secret >= _N:
+            raise ValueError("Seed produced an invalid master key; use a different seed.")
+        return cls(digest[:32], digest[32:])
+
+    def public_key(self, compressed: bool = True) -> bytes:
+        return private_to_public(self.key, compressed)
+
+    def fingerprint(self) -> bytes:
+        return _hash160(self.public_key())[:4]
+
+    def derive_child(self, index: int) -> "HDKey":
+        if index & _HARDENED:
+            data = b"\x00" + self.key + _ser32(index)
+        else:
+            data = self.public_key() + _ser32(index)
+        digest = hmac.new(self.chain_code, data, hashlib.sha512).digest()
+        offset = int.from_bytes(digest[:32], "big")
+        child = (offset + int.from_bytes(self.key, "big")) % _N
+        if offset >= _N or child == 0:
+            raise ValueError("Invalid child key at index %d; skip to the next index." % index)
+        return HDKey(child.to_bytes(32, "big"), digest[32:], self.depth + 1, self.fingerprint(), index)
+
+    def derive_path(self, path: str) -> "HDKey":
+        if path in ("m", "m/", ""):
+            return self
+        if not path.startswith("m/"):
+            raise ValueError("Derivation path must start with 'm/'.")
+        node = self
+        for element in path[2:].split("/"):
+            if not element:
+                continue
+            hardened = element.endswith("'") or element.endswith("h")
+            number = int(element.rstrip("'h"))
+            if not 0 <= number < _HARDENED:
+                raise ValueError("Path index out of range: " + element)
+            node = node.derive_child(number + _HARDENED if hardened else number)
+        return node
+
+    def xprv(self, version: int = 0x0488ADE4) -> str:
+        payload = (struct.pack(">I", version) + bytes([self.depth]) + self.parent_fp
+                   + _ser32(self.index) + self.chain_code + b"\x00" + self.key)
+        return base58check_encode(payload)
+
+    def xpub(self, version: int = 0x0488B21E) -> str:
+        payload = (struct.pack(">I", version) + bytes([self.depth]) + self.parent_fp
+                   + _ser32(self.index) + self.chain_code + self.public_key())
+        return base58check_encode(payload)
+
+
+# --- BIP39 -----------------------------------------------------------------
+# sha256 of the canonical BIP-0039 English wordlist (english.txt).
+BIP39_ENGLISH_SHA256 = "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda"
+
+
+# Electrum v2 seeds are not BIP39: their validity is an HMAC-SHA512 prefix,
+# so BIP39/BIP44 tooling cannot recover an Electrum wallet. Detecting one lets
+# the dashboard tell the user to use the Electrum client instead of guessing.
+_ELECTRUM_PREFIXES = {"01": "standard", "100": "segwit", "101": "2fa", "102": "2fa-segwit"}
+
+
+def _electrum_normalize(text: str) -> str:
+    text = unicodedata.normalize("NFKD", str(text)).lower().strip()
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.split())
+
+
+def electrum_seed_type(mnemonic: str) -> str | None:
+    """Return the Electrum v2 seed type (standard/segwit/2fa/...) or None."""
+    digest = hmac.new(b"Seed version", _electrum_normalize(mnemonic).encode("utf-8"),
+                      hashlib.sha512).hexdigest()
+    for prefix, kind in _ELECTRUM_PREFIXES.items():
+        if digest.startswith(prefix):
+            return kind
+    return None
+
+
+def is_electrum_seed(mnemonic: str) -> bool:
+    return electrum_seed_type(mnemonic) is not None
+
+
+# Electrum v2 single-signature seed types we can recover from the seed alone.
+# 2fa / 2fa-segwit need the TrustedCoin cosigner and cannot be recovered offline.
+ELECTRUM_SUPPORTED = {"standard", "segwit"}
+
+
+def electrum_root(mnemonic: str, passphrase: str = "") -> "HDKey":
+    """Electrum v2 seed -> BIP32 root (PBKDF2 with the 'electrum' salt, not BIP39)."""
+    seed = hashlib.pbkdf2_hmac("sha512", _electrum_normalize(mnemonic).encode("utf-8"),
+                               b"electrum" + passphrase.encode("utf-8"), 2048, dklen=64)
+    return HDKey.from_seed(seed)
+
+
+def derive_electrum_accounts(mnemonic: str, passphrase: str = "", count: int = 5,
+                             include_change: bool = True) -> dict:
+    """Derive addresses for an Electrum v2 standard (legacy) or segwit seed.
+
+    Verified against Electrum's own test vectors: standard uses m/{change}/{i}
+    (P2PKH), segwit uses m/0'/{change}/{i} (P2WPKH).
+    """
+    kind = electrum_seed_type(mnemonic)
+    if kind is None:
+        raise ValueError("Not a recognised Electrum v2 seed.")
+    if kind not in ELECTRUM_SUPPORTED:
+        raise ValueError("Electrum '" + kind + "' seeds use a 2FA (TrustedCoin) cosigner and cannot "
+                         "be recovered from the seed alone. Recover it in the Electrum client.")
+    if not 1 <= count <= 100:
+        raise ValueError("Address count must be between 1 and 100.")
+    root = electrum_root(mnemonic, passphrase)
+    account = root.derive_child(_HARDENED) if kind == "segwit" else root  # m/0' for segwit
+    chains = (0, 1) if include_change else (0,)
+    results = []
+    for change in chains:
+        branch = account.derive_child(change)
+        for index in range(count):
+            child = branch.derive_child(index)
+            if kind == "segwit":
+                address = p2wpkh_address(child.public_key())
+                path = "m/0'/" + str(change) + "/" + str(index)
+            else:
+                address = p2pkh_address(child.public_key())
+                path = "m/" + str(change) + "/" + str(index)
+            results.append({"path": path, "address": address, "coin": "bitcoin",
+                            "seedType": kind, "change": change, "wif": wif_encode(child.key)})
+    return {"seedType": kind, "count": len(results), "accounts": results}
+
+
+# --- Electrum v1 (old) seeds -----------------------------------------------
+# Pre-v2 Electrum: a 12-word phrase from a 1626-word list (or a 32-hex string)
+# stretched 100k rounds into a master key, with its own non-BIP32 address chain.
+_OLD_ELECTRUM_WORDLIST_SHA256 = "c8da327d316f8ee758b790068e618077ac271a89fd77ec1250c59ae40e7b599e"
+_OLD_ELECTRUM_WORDS_PATH = Path(__file__).with_name("electrum_old_wordlist.txt")
+_OLD_ELECTRUM_WORDS: list | None = None
+_OLD_SEED_HEX = re.compile(r"\A[0-9a-fA-F]{32}\Z")
+
+
+def old_electrum_wordlist() -> list:
+    """Load and SHA-256-verify the bundled 1626-word old Electrum wordlist."""
+    global _OLD_ELECTRUM_WORDS
+    if _OLD_ELECTRUM_WORDS is None:
+        raw = _OLD_ELECTRUM_WORDS_PATH.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != _OLD_ELECTRUM_WORDLIST_SHA256:
+            raise ValueError("Old Electrum wordlist failed its SHA-256 integrity check.")
+        words = raw.decode("utf-8").split()
+        if len(words) != 1626:
+            raise ValueError("The old Electrum wordlist must contain exactly 1626 words.")
+        _OLD_ELECTRUM_WORDS = words
+    return _OLD_ELECTRUM_WORDS
+
+
+def old_electrum_mn_decode(words: list, wordlist: list) -> str:
+    """Decode a 12-word old Electrum phrase into its hex seed."""
+    index = {word: position for position, word in enumerate(wordlist)}
+    size = len(wordlist)
+    out = ""
+    for i in range(len(words) // 3):
+        try:
+            w1 = index[words[3 * i]]
+            w2 = index[words[3 * i + 1]] % size
+            w3 = index[words[3 * i + 2]] % size
+        except KeyError as exc:
+            raise ValueError("Word not in the old Electrum wordlist: " + str(exc)) from exc
+        out += "%08x" % (w1 + size * ((w2 - w1) % size) + size * size * ((w3 - w2) % size))
+    return out
+
+
+def _old_electrum_hex_seed(mnemonic: str) -> str:
+    text = " ".join(str(mnemonic).strip().lower().split())
+    compact = text.replace(" ", "")
+    if _OLD_SEED_HEX.match(compact):
+        return compact.lower()
+    words = text.split()
+    if len(words) != 12:
+        raise ValueError("An old Electrum seed is 12 words or a 32-character hex string.")
+    return old_electrum_mn_decode(words, old_electrum_wordlist())
+
+
+def is_old_electrum_seed(mnemonic: str) -> bool:
+    """True when the phrase is a 32-hex seed or 12 words all in the old list."""
+    text = " ".join(str(mnemonic).strip().lower().split())
+    if _OLD_SEED_HEX.match(text.replace(" ", "")):
+        return True
+    words = text.split()
+    if len(words) != 12:
+        return False
+    wordset = set(old_electrum_wordlist())
+    return all(word in wordset for word in words)
+
+
+def _old_electrum_stretch(hex_seed: str) -> int:
+    seed = hex_seed.encode("ascii")
+    x = seed
+    for _ in range(100000):
+        x = hashlib.sha256(x + seed).digest()
+    return int.from_bytes(x, "big")
+
+
+def derive_old_electrum_accounts(mnemonic: str, count: int = 5,
+                                 include_change: bool = True) -> dict:
+    """Derive addresses for an Electrum v1 (old) seed, as 12 words or hex.
+
+    Verified against Electrum's own old-seed receiving and change test vectors.
+    Old Electrum uses uncompressed P2PKH keys and a master-public-key sequence
+    chain (m/{change}/{index}), not BIP32.
+    """
+    if not 1 <= count <= 100:
+        raise ValueError("Address count must be between 1 and 100.")
+    hex_seed = _old_electrum_hex_seed(mnemonic)
+    secexp = _old_electrum_stretch(hex_seed)
+    mx, my = _point_mul(secexp, _G)
+    mpk = mx.to_bytes(32, "big") + my.to_bytes(32, "big")
+    chains = (0, 1) if include_change else (0,)
+    results = []
+    for change in chains:
+        for index in range(count):
+            prefix = ("%d:%d:" % (index, change)).encode("ascii")
+            seq = int.from_bytes(hashlib.sha256(hashlib.sha256(prefix + mpk).digest()).digest(), "big")
+            px, py = _point_add((mx, my), _point_mul(seq, _G))
+            public_key = b"\x04" + px.to_bytes(32, "big") + py.to_bytes(32, "big")
+            private_key = ((secexp + seq) % _N).to_bytes(32, "big")
+            results.append({"path": "m/%d/%d" % (change, index),
+                            "address": p2pkh_address(public_key), "coin": "bitcoin",
+                            "seedType": "old", "change": change,
+                            "wif": wif_encode(private_key, compressed=False)})
+    return {"seedType": "old", "count": len(results), "accounts": results}
+
+
+def mnemonic_to_seed(mnemonic: str, passphrase: str = "") -> bytes:
+    """BIP39 mnemonic -> 64-byte seed. Does not require the wordlist."""
+    mnemonic_n = unicodedata.normalize("NFKD", mnemonic.strip())
+    salt = unicodedata.normalize("NFKD", "mnemonic" + passphrase)
+    return hashlib.pbkdf2_hmac("sha512", mnemonic_n.encode(), salt.encode(), 2048, dklen=64)
+
+
+def load_wordlist(path: Path) -> list[str]:
+    """Load and verify the canonical English wordlist by its SHA-256 before use."""
+    raw = Path(path).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != BIP39_ENGLISH_SHA256:
+        raise ValueError("Wordlist SHA-256 does not match the canonical BIP-0039 English list.")
+    words = raw.decode("utf-8").split()
+    if len(words) != 2048:
+        raise ValueError("A BIP-0039 wordlist must contain exactly 2048 words.")
+    return words
+
+
+def validate_mnemonic(mnemonic: str, wordlist: list[str]) -> bool:
+    """Validate a mnemonic's checksum against the supplied 2048-word list."""
+    words = unicodedata.normalize("NFKD", mnemonic.strip()).split()
+    if len(words) not in (12, 15, 18, 21, 24):
+        raise ValueError("Mnemonic length must be 12, 15, 18, 21 or 24 words.")
+    index = {word: i for i, word in enumerate(wordlist)}
+    try:
+        bits = "".join(format(index[word], "011b") for word in words)
+    except KeyError as exc:
+        raise ValueError("Mnemonic contains a word that is not in the wordlist: " + str(exc)) from exc
+    checksum_len = len(words) * 11 // 33
+    entropy_bits, checksum_bits = bits[:-checksum_len], bits[-checksum_len:]
+    entropy = int(entropy_bits, 2).to_bytes(len(entropy_bits) // 8, "big")
+    expected = format(_sha256(entropy)[0], "08b")[:checksum_len]
+    return checksum_bits == expected
+
+
+# Standard account templates for recovery sweeps. Each carries the derivation
+# path, the address encoding, and the coin's version bytes so one derivation
+# routine serves every supported coin and script type.
+ACCOUNT_TEMPLATES = {
+    # Bitcoin
+    "bip44-legacy": {"path": "m/44'/0'/0'/0", "address": "p2pkh", "coin": "bitcoin",
+                     "addr_version": 0x00, "wif_version": 0x80},
+    "bip49-p2sh-segwit": {"path": "m/49'/0'/0'/0", "address": "p2sh-p2wpkh", "coin": "bitcoin",
+                          "addr_version": 0x05, "wif_version": 0x80},
+    "bip84-segwit": {"path": "m/84'/0'/0'/0", "address": "p2wpkh", "coin": "bitcoin",
+                     "hrp": "bc", "wif_version": 0x80},
+    # Litecoin
+    "litecoin-legacy": {"path": "m/44'/2'/0'/0", "address": "p2pkh", "coin": "litecoin",
+                        "addr_version": 0x30, "wif_version": 0xB0},
+    "litecoin-p2sh-segwit": {"path": "m/49'/2'/0'/0", "address": "p2sh-p2wpkh", "coin": "litecoin",
+                             "addr_version": 0x32, "wif_version": 0xB0},
+    "litecoin-segwit": {"path": "m/84'/2'/0'/0", "address": "p2wpkh", "coin": "litecoin",
+                        "hrp": "ltc", "wif_version": 0xB0},
+    # Dogecoin
+    "dogecoin-legacy": {"path": "m/44'/3'/0'/0", "address": "p2pkh", "coin": "dogecoin",
+                        "addr_version": 0x1E, "wif_version": 0x9E},
+    # Bitcoin Cash (CashAddr)
+    "bitcoincash": {"path": "m/44'/145'/0'/0", "address": "cashaddr", "coin": "bitcoincash",
+                    "cashaddr_prefix": "bitcoincash", "cashaddr_type": 0, "wif_version": 0x80},
+    # Dash
+    "dash": {"path": "m/44'/5'/0'/0", "address": "p2pkh", "coin": "dash",
+             "addr_version": 0x4C, "wif_version": 0xCC},
+    # Zcash transparent (t-addr; 2-byte version prefix)
+    "zcash-transparent": {"path": "m/44'/133'/0'/0", "address": "p2pkh-multibyte", "coin": "zcash",
+                          "addr_version_bytes": b"\x1c\xb8", "wif_version": 0x80},
+    # Bitcoin Gold
+    "bitcoin-gold": {"path": "m/44'/156'/0'/0", "address": "p2pkh", "coin": "bitcoingold",
+                     "addr_version": 0x26, "wif_version": 0x80},
+    # Bitcoin testnet
+    "bitcoin-testnet": {"path": "m/44'/1'/0'/0", "address": "p2pkh", "coin": "bitcoin-testnet",
+                        "addr_version": 0x6F, "wif_version": 0xEF},
+    # TRON (keccak address, raw-hex keys)
+    "tron": {"path": "m/44'/195'/0'/0", "address": "tron", "coin": "tron", "key_format": "hex"},
+    # XRP / Ripple (classic address, raw-hex keys)
+    "xrp": {"path": "m/44'/144'/0'/0", "address": "xrp", "coin": "xrp", "key_format": "hex"},
+    # Ethereum (and EVM chains)
+    "bip44-ethereum": {"path": "m/44'/60'/0'/0", "address": "ethereum", "coin": "ethereum"},
+}
+
+
+def _encode_address(spec: dict, child: "HDKey") -> str:
+    kind = spec["address"]
+    if kind == "p2pkh":
+        return p2pkh_address(child.public_key(), spec.get("addr_version", 0x00))
+    if kind == "p2pkh-multibyte":
+        return p2pkh_address_multibyte(child.public_key(), spec["addr_version_bytes"])
+    if kind == "p2wpkh":
+        return p2wpkh_address(child.public_key(), spec.get("hrp", "bc"))
+    if kind == "p2sh-p2wpkh":
+        return p2sh_p2wpkh_address(child.public_key(), spec.get("addr_version", 0x05))
+    if kind == "cashaddr":
+        return cashaddr_encode(_hash160(child.public_key()),
+                               spec.get("cashaddr_prefix", "bitcoincash"),
+                               spec.get("cashaddr_type", 0))
+    if kind == "tron":
+        return tron_address(child.public_key(compressed=False))
+    if kind == "xrp":
+        return xrp_address(child.public_key())
+    return ethereum_address(child.public_key(compressed=False))
+
+
+def _account_entry(spec: dict, child: "HDKey", path: str, extra: dict | None = None) -> dict:
+    """Build one derived-account entry with the coin's correct key format."""
+    entry = {"path": path, "address": _encode_address(spec, child), "coin": spec["coin"]}
+    key_format = spec.get("key_format") or ("eth" if spec["coin"] == "ethereum" else "wif")
+    if key_format == "eth":
+        entry["privateKey"] = "0x" + child.key.hex()
+    elif key_format == "hex":
+        entry["privateKey"] = child.key.hex()
+    else:
+        entry["wif"] = wif_encode(child.key, version=spec.get("wif_version", 0x80))
+    if extra:
+        entry.update(extra)
+    return entry
+
+
+def derive_accounts(seed: bytes, template: str, count: int = 5) -> list[dict]:
+    """Derive the first `count` receiving addresses for a standard account template."""
+    if template not in ACCOUNT_TEMPLATES:
+        raise ValueError("Unknown account template: " + template)
+    if not 1 <= count <= 100:
+        raise ValueError("Address count must be between 1 and 100.")
+    spec = ACCOUNT_TEMPLATES[template]
+    root = HDKey.from_seed(seed).derive_path(spec["path"])
+    results = []
+    for i in range(count):
+        child = root.derive_child(i)
+        results.append(_account_entry(spec, child, spec["path"] + "/" + str(i)))
+    return results
+
+
+def _account_path(template_path: str, account: int, change: int) -> str:
+    """Rebuild a BIP44-style path for a given account index and change chain."""
+    parts = template_path.split("/")
+    if len(parts) != 5 or parts[0] != "m":
+        raise ValueError("Sweep supports BIP44-style 5-level paths only.")
+    return "m/{purpose}/{coin}/{account}'/{change}".format(
+        purpose=parts[1], coin=parts[2], account=account, change=change)
+
+
+def derive_sweep(seed: bytes, template: str, account_count: int = 3,
+                 include_change: bool = True, per_path: int = 3) -> list[dict]:
+    """Derive across account indices and both change chains for one template.
+
+    Real wallets often hold funds on account 1+, or on the internal (change)
+    chain, which a first-receiving-address check misses. This sweeps
+    account 0..account_count-1 and change 0 (receiving) / 1 (change).
+    """
+    if template not in ACCOUNT_TEMPLATES:
+        raise ValueError("Unknown account template: " + template)
+    if not 1 <= account_count <= 20:
+        raise ValueError("account_count must be between 1 and 20.")
+    if not 1 <= per_path <= 50:
+        raise ValueError("per_path must be between 1 and 50.")
+    spec = ACCOUNT_TEMPLATES[template]
+    changes = (0, 1) if include_change else (0,)
+    results = []
+    for account in range(account_count):
+        for change in changes:
+            base = _account_path(spec["path"], account, change)
+            root = HDKey.from_seed(seed).derive_path(base)
+            for i in range(per_path):
+                child = root.derive_child(i)
+                results.append(_account_entry(spec, child, base + "/" + str(i),
+                                              {"template": template, "account": account,
+                                               "change": change}))
+    return results
+
+
+# --- password-recovery hash extraction -------------------------------------
+def extract_keystore_hash(keystore_json: str) -> dict:
+    """Extract a John/hashcat hash from an Ethereum V3 (Web3 Secret Storage) keystore."""
+    data = json.loads(keystore_json)
+    if not isinstance(data, dict) or data.get("version") != 3:
+        raise ValueError("Not a version 3 Ethereum keystore.")
+    crypto = data.get("crypto") or data.get("Crypto")
+    if not isinstance(crypto, dict):
+        raise ValueError("Keystore has no crypto section.")
+    kdf = str(crypto.get("kdf", "")).lower()
+    params = crypto.get("kdfparams") or {}
+    ciphertext = str(crypto.get("ciphertext", ""))
+    mac = str(crypto.get("mac", ""))
+    salt = str(params.get("salt", ""))
+    if not re.fullmatch(r"[0-9a-fA-F]+", ciphertext or "") or not re.fullmatch(r"[0-9a-fA-F]{64}", mac or ""):
+        raise ValueError("Keystore ciphertext or MAC is malformed.")
+    if kdf == "scrypt":
+        john = "$ethereum$s*{n}*{r}*{p}*{salt}*{ct}*{mac}".format(
+            n=int(params["n"]), r=int(params["r"]), p=int(params["p"]),
+            salt=salt, ct=ciphertext, mac=mac)
+        mode = 15700
+    elif kdf == "pbkdf2":
+        john = "$ethereum$p*{c}*{salt}*{ct}*{mac}".format(
+            c=int(params["c"]), salt=salt, ct=ciphertext, mac=mac)
+        mode = 16300
+    else:
+        raise ValueError("Unsupported keystore KDF: " + kdf)
+    return {"format": "ethereum-keystore-v3", "kdf": kdf, "hashcatMode": mode,
+            "hash": john, "note": "Run against a locally installed hashcat/John with your own wordlist."}
+
+
+_MKEY = re.compile(rb"\x04mkey\x01\x00\x00\x00")
+
+
+def extract_wallet_dat_hash(wallet_dat: bytes) -> dict:
+    """Extract the encrypted master-key hash ($bitcoin$...) from a Bitcoin Core wallet.dat.
+
+    Scans the Berkeley DB file for the 'mkey' record rather than fully parsing BDB,
+    matching the approach used by bitcoin2john.
+    """
+    match = _MKEY.search(wallet_dat)
+    if not match:
+        raise ValueError("No encrypted master key (mkey) record found in this wallet.dat.")
+    pos = match.end()
+    enc_len = wallet_dat[pos]
+    pos += 1
+    encrypted = wallet_dat[pos:pos + enc_len]
+    pos += enc_len
+    salt_len = wallet_dat[pos]
+    pos += 1
+    salt = wallet_dat[pos:pos + salt_len]
+    pos += salt_len
+    pos += 1  # derivation method byte
+    (deriv_iters,) = struct.unpack("<I", wallet_dat[pos:pos + 4])
+    if enc_len not in (48, 64) or salt_len != 8 or not 1 <= deriv_iters <= 10_000_000:
+        raise ValueError("Master-key record is present but its fields are out of range.")
+    john = "$bitcoin${el}${ec}${sl}${sc}${it}$2$00$2$00".format(
+        el=enc_len * 2, ec=encrypted.hex(), sl=salt_len * 2, sc=salt.hex(), it=deriv_iters)
+    return {"format": "bitcoin-core-wallet.dat", "hashcatMode": 11300, "hash": john,
+            "iterations": deriv_iters,
+            "note": "Run against a locally installed hashcat (-m 11300) or John with your own wordlist."}
+
+
+def _find_metamask_vault(obj, depth: int = 0):
+    """Locate the {data, iv, salt} vault inside a MetaMask export at any nesting."""
+    if depth > 6:
+        return None
+    if isinstance(obj, dict):
+        if all(isinstance(obj.get(k), str) and obj.get(k) for k in ("data", "iv", "salt")):
+            return obj
+        for value in obj.values():
+            if isinstance(value, str) and value.strip().startswith("{"):
+                try:
+                    found = _find_metamask_vault(json.loads(value), depth + 1)
+                except (ValueError, TypeError):
+                    found = None
+                if found:
+                    return found
+            elif isinstance(value, (dict, list)):
+                found = _find_metamask_vault(value, depth + 1)
+                if found:
+                    return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _find_metamask_vault(item, depth + 1)
+            if found:
+                return found
+    return None
+
+
+def extract_metamask_hash(vault_json: str) -> dict:
+    """Extract a hashcat -m 26600 hash from a MetaMask (browser) encrypted vault.
+
+    Accepts the raw vault object {data, iv, salt}, or an export that nests it
+    (for example a KeyringController 'vault' string). The vault holds the
+    AES-GCM ciphertext; recovering the password lets MetaMask itself decrypt it.
+    """
+    try:
+        parsed = json.loads(vault_json)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("MetaMask vault is not valid JSON.") from exc
+    vault = _find_metamask_vault(parsed)
+    if not vault:
+        raise ValueError("No MetaMask vault (data/iv/salt) was found in this export.")
+    salt, iv, data = vault["salt"], vault["iv"], vault["data"]
+    for name, value in (("salt", salt), ("iv", iv), ("data", data)):
+        try:
+            base64.b64decode(value, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("MetaMask vault field '" + name + "' is not valid base64.") from exc
+    hashline = "$metamask$" + salt + "$" + iv + "$" + data
+    return {"format": "metamask-vault", "hashcatMode": 26600, "hash": hashline,
+            "note": "Run against a locally installed hashcat (-m 26600) with your own wordlist."}
+
+
+# --- BIP38 encrypted private keys (encrypted paper wallets, "6P...") --------
+def _parse_bip38(encrypted_key: str) -> dict:
+    raw = base58check_decode(encrypted_key)
+    if len(raw) != 39 or raw[0] != 0x01:
+        raise ValueError("Not a BIP38 encrypted private key (it should start with 6P).")
+    prefix2 = raw[1]
+    flagbyte = raw[2]
+    if prefix2 == 0x42:  # non-EC-multiply (passphrase encrypts the key directly)
+        return {"mode": "plain", "addresshash": raw[3:7],
+                "encrypted1": raw[7:23], "encrypted2": raw[23:39],
+                "compressed": bool(flagbyte & 0x20)}
+    if prefix2 == 0x43:  # EC-multiply (made from an intermediate passphrase code)
+        return {"mode": "ec", "addresshash": raw[3:7], "ownerentropy": raw[7:15],
+                "encrypted1_half": raw[15:23], "encrypted2": raw[23:39],
+                "compressed": bool(flagbyte & 0x20), "has_lotseq": bool(flagbyte & 0x04)}
+    raise ValueError("Unrecognised BIP38 key type.")
+
+
+def _bip38_try_plain(parsed: dict, passphrase: str):
+    pw = unicodedata.normalize("NFC", passphrase).encode("utf-8")
+    derived = hashlib.scrypt(pw, salt=parsed["addresshash"], n=16384, r=8, p=8,
+                             dklen=64, maxmem=132 * 1024 * 1024)
+    derived_half1, derived_half2 = derived[:32], derived[32:]
+    decrypted1 = aes.decrypt_block(parsed["encrypted1"], derived_half2)
+    decrypted2 = aes.decrypt_block(parsed["encrypted2"], derived_half2)
+    private_key = (bytes(a ^ b for a, b in zip(decrypted1, derived_half1[:16]))
+                   + bytes(a ^ b for a, b in zip(decrypted2, derived_half1[16:])))
+    return private_key
+
+
+def _bip38_try_ec(parsed: dict, passphrase: str):
+    pw = unicodedata.normalize("NFC", passphrase).encode("utf-8")
+    owner = parsed["ownerentropy"]
+    if parsed["has_lotseq"]:
+        prefactor = hashlib.scrypt(pw, salt=owner[:4], n=16384, r=8, p=8, dklen=32,
+                                   maxmem=132 * 1024 * 1024)
+        passfactor = int.from_bytes(_sha256(_sha256(prefactor + owner)), "big")
+    else:
+        passfactor = int.from_bytes(hashlib.scrypt(pw, salt=owner, n=16384, r=8, p=8, dklen=32,
+                                                   maxmem=132 * 1024 * 1024), "big")
+    passpoint = private_to_public((passfactor % _N).to_bytes(32, "big"), compressed=True)
+    derived = hashlib.scrypt(passpoint, salt=parsed["addresshash"] + owner, n=1024, r=1, p=1,
+                             dklen=64, maxmem=132 * 1024 * 1024)
+    derived_half1, derived_half2 = derived[:32], derived[32:]
+    decrypted2 = bytes(a ^ b for a, b in zip(aes.decrypt_block(parsed["encrypted2"], derived_half2),
+                                             derived_half1[16:32]))
+    encrypted1_full = parsed["encrypted1_half"] + decrypted2[:8]
+    decrypted1 = bytes(a ^ b for a, b in zip(aes.decrypt_block(encrypted1_full, derived_half2),
+                                             derived_half1[:16]))
+    seedb = decrypted1[:16] + decrypted2[8:16]
+    factorb = int.from_bytes(_sha256(_sha256(seedb)), "big")
+    return ((passfactor * factorb) % _N).to_bytes(32, "big")
+
+
+def _bip38_try(parsed: dict, passphrase: str):
+    """Try one passphrase; return the recovered key dict or None on mismatch."""
+    if parsed["mode"] == "ec":
+        private_key = _bip38_try_ec(parsed, passphrase)
+    else:
+        private_key = _bip38_try_plain(parsed, passphrase)
+    public_key = private_to_public(private_key, compressed=parsed["compressed"])
+    address = p2pkh_address(public_key)
+    if _sha256(_sha256(address.encode("ascii")))[:4] != parsed["addresshash"]:
+        return None
+    return {"wif": wif_encode(private_key, compressed=parsed["compressed"]),
+            "address": address, "compressed": parsed["compressed"]}
+
+
+def decrypt_bip38(encrypted_key: str, passphrase: str) -> dict:
+    """Decrypt a BIP38 key (non-EC-multiply or EC-multiply) with a known passphrase.
+
+    Verified against the BIP38 specification's own test vectors. The address
+    hash embedded in the key confirms the passphrase, so a wrong passphrase is
+    reported rather than returning a bogus key.
+    """
+    result = _bip38_try(_parse_bip38(encrypted_key), passphrase)
+    if result is None:
+        raise ValueError("Incorrect passphrase for this BIP38 key.")
+    return result
+
+
+def crack_bip38(encrypted_key: str, passphrases, max_attempts: int = 1_000_000) -> dict:
+    """Try each passphrase from an iterable against a BIP38 key, offline."""
+    parsed = _parse_bip38(encrypted_key)
+    attempts = 0
+    for passphrase in passphrases:
+        if attempts >= max_attempts:
+            break
+        attempts += 1
+        result = _bip38_try(parsed, passphrase)
+        if result is not None:
+            return {"status": "cracked", "attempts": attempts, "passphrase": passphrase, **result}
+    return {"status": "exhausted", "attempts": attempts,
+            "note": "No passphrase in the list matched. Try a larger or more targeted list."}

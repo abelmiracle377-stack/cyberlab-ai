@@ -10,3 +10,6 @@ coverage
 .vercel
 *.log
 .DS_Store
+
+# Build artifacts
+/dist/

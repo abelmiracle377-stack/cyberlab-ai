@@ -2,7 +2,7 @@ name: CyberLab CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/model-intelligence-workspace, feat/crypto-wallet-recovery-lab, integration/cyberlab-unified-workstation, feature/cyberlab-burp-integration]
   pull_request:
     branches: [main]
 
@@ -16,12 +16,16 @@ permissions:
 jobs:
   companion-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install gateway test dependencies
+        run: python -m pip install -r kali-companion/vps_gateway/requirements.txt
       - name: Test offline Kali companion
+        timeout-minutes: 15
         run: python -m unittest discover -s kali-companion -p "test_*.py" -v
 
   web-build:
@@ -33,5 +37,26 @@ jobs:
           node-version: "22"
       - name: Install dependencies
         run: npm install --prefer-offline --no-audit --no-fund
+      - name: Test Solidity static analyzer
+        run: |
+          npx tsc --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-build lib/solidity-static-analysis.ts lib/chain-registry.ts lib/dex-registry.ts lib/wallet-backup-inspection.ts lib/companion-tools.ts lib/subdomain-extract.ts lib/social.ts lib/e2ee.ts lib/soc.ts lib/academy.ts lib/academy-content.ts lib/academy-lab-target.ts lib/exposure.ts lib/ai-gateway.ts tests/social.test.ts tests/e2ee.test.ts tests/soc.test.ts tests/academy.test.ts tests/academy-lab-target.test.ts tests/exposure.test.ts tests/ai-gateway.test.ts tests/solidity-static-analysis.test.ts tests/solidity-structural-analysis.test.ts tests/wallet-backup-inspection.test.ts tests/companion-tools.test.ts tests/research-tools.test.ts tests/dex-registry.test.ts
+          node --test .test-build/tests/social.test.js .test-build/tests/e2ee.test.js .test-build/tests/soc.test.js .test-build/tests/academy.test.js .test-build/tests/academy-lab-target.test.js .test-build/tests/exposure.test.js .test-build/tests/ai-gateway.test.js .test-build/tests/solidity-static-analysis.test.js .test-build/tests/solidity-structural-analysis.test.js .test-build/tests/wallet-backup-inspection.test.js .test-build/tests/companion-tools.test.js .test-build/tests/research-tools.test.js .test-build/tests/dex-registry.test.js
       - name: Build Next.js application
         run: npm run build
+
+  os-definition-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate OS shell syntax
+        run: |
+          for script in scripts/os/*.sh; do bash -n "$script"; done
+      - name: Test OS build definitions and guest security checks
+        run: |
+          bash scripts/os/test-build-definition.sh
+          bash scripts/os/test-guest-security-check.sh
+          bash scripts/os/test-live-build-definition.sh
+          python scripts/os/test_cyberlab_menu.py

@@ -5,9 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, FileUp, Network, ShieldCheck, AlertTriangle } from "lucide-react";
 import InvestigationLink from "@/components/investigation-link";
 
-type Port = { protocol: string; port: number; state: string; service: string; product: string; version: string };
-type Host = { index: number; status: string; addresses: { address: string; type: string }[]; hostnames: string[]; ports: Port[] };
-type Result = { summary: { hosts: number; up: number; ports: number; openPorts: number }; hosts: Host[]; openPorts: (Port & { host: string })[]; note: string };
+type Port = { protocol: string; port: number; state: string; reason?: string; reason_ttl?: string | null; service: string; product: string; version: string; extra_info?: string; tunnel?: string; method?: string; confidence?: string | null };
+type Host = { index: number; status: string; status_reason?: string; addresses: { address: string; type: string }[]; hostnames: string[]; ports: Port[] };
+type Result = { summary: { hosts: number; up: number; ports: number; openPorts: number; stateCounts?: Record<string, number> }; hosts: Host[]; openPorts: (Port & { host: string })[]; note: string; evidenceStatus?: string; scaninfo?: { type?: string; protocol?: string; numservices?: string; services?: string }[]; completion?: { finished?: Record<string, string>; hosts?: Record<string, string>; scanner?: string; version?: string; args?: string; start?: string } };
 
 export default function NetworkAnalysisPage() {
   const [fileName, setFileName] = useState("");
@@ -52,6 +52,32 @@ export default function NetworkAnalysisPage() {
     }
   }
 
+  function downloadReport(format: "json" | "csv") {
+    if (!result) return;
+    let content = "";
+    let mime = "application/json";
+    let extension = "json";
+    if (format === "json") {
+      content = JSON.stringify({ fileName, ...result }, null, 2);
+    } else {
+      mime = "text/csv";
+      extension = "csv";
+      const quote = (value: unknown) => '"' + String(value ?? "").replaceAll('"', '""') + '"';
+      const rows: unknown[][] = [["host", "protocol", "port", "state", "reason", "service", "product", "version", "detection_method", "confidence"]];
+      for (const host of result.hosts) {
+        const address = host.addresses.map((item) => item.address).join("; ") || ("Host " + host.index);
+        for (const port of host.ports) rows.push([address, port.protocol, port.port, port.state, port.reason || "", port.service, port.product, port.version, port.method || "", port.confidence || ""]);
+      }
+      content = rows.map((row) => row.map(quote).join(",")).join("\r\n");
+    }
+    const url = URL.createObjectURL(new Blob([content], { type: mime + ";charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "cyberlab-nmap-report." + extension;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return <main className="agent-shell">
     <header className="agent-topbar">
       <Link href="/" className="agent-back"><ArrowLeft size={14} /> Dashboard</Link>
@@ -85,12 +111,13 @@ export default function NetworkAnalysisPage() {
           <div><span>Open ports</span><strong>{result.summary.openPorts}</strong></div>
         </div>
         <section className="network-results">
-          <h2>Open services</h2>
-          {result.openPorts.length ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>Service</th><th>Version</th></tr></thead><tbody>{result.openPorts.map((port, index) => <tr key={index}><td>{port.host}</td><td>{port.port}</td><td>{port.protocol}</td><td>{port.service}</td><td>{[port.product, port.version].filter(Boolean).join(" ") || "Not reported"}</td></tr>)}</tbody></table></div> : <p>No open ports were recorded in this report.</p>}
+          <div className="network-actions"><button className="network-run" onClick={() => downloadReport("json")}>Export JSON</button><button className="network-run" onClick={() => downloadReport("csv")}>Export CSV</button></div>
+          <h2>Evidence status: {(result.evidenceStatus || "unknown").replaceAll("_", " ")}</h2><p>Port-state totals: {Object.entries(result.summary.stateCounts || {}).map(([state, count]) => `${state}: ${count}`).join(" · ") || "No state counts returned"}</p><p>Scanner: {result.completion?.scanner || "Not recorded"} {result.completion?.version || ""} · Finish: {result.completion?.finished?.exit || "Not recorded"}</p><p>Scan types: {(result.scaninfo || []).map((item) => `${item.type || "unknown"}/${item.protocol || "unknown"} (${item.numservices || "?"} ports)`).join(" · ") || "Not recorded"}</p><h2>Open services</h2>
+          {result.openPorts.length ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>Service</th><th>Version</th></tr></thead><tbody>{result.openPorts.map((port, index) => <tr key={index}><td>{port.host}</td><td>{port.port}</td><td>{port.protocol}</td><td>{port.service}</td><td>{[port.product, port.version, port.extra_info].filter(Boolean).join(" ") || "Not reported"}{port.method ? ` · ${port.method}${port.confidence ? ` (${port.confidence})` : ""}` : ""}</td></tr>)}</tbody></table></div> : <p>No open ports were recorded in this report.</p>}
         </section>
         <section className="network-results">
           <h2>Hosts and port states</h2>
-          {result.hosts.map((host) => <details className="network-host" key={host.index}><summary>{host.addresses.map((a) => a.address).join(", ") || `Host ${host.index}`} <span>{host.status.toUpperCase()} · {host.ports.length} PORTS</span></summary><div>{host.hostnames.length > 0 && <p>Names: {host.hostnames.join(", ")}</p>}{host.ports.map((port, index) => <div className="network-port" key={index}><span>{port.port}/{port.protocol}</span><span>{port.state}</span><span>{port.service}</span></div>)}</div></details>)}
+          {result.hosts.map((host) => <details className="network-host" key={host.index}><summary>{host.addresses.map((a) => a.address).join(", ") || `Host ${host.index}`} <span>{host.status.toUpperCase()} · {host.ports.length} PORTS</span></summary><div>{host.hostnames.length > 0 && <p>Names: {host.hostnames.join(", ")}</p>}{host.ports.map((port, index) => <div className="network-port" key={index}><span>{port.port}/{port.protocol}</span><span>{port.state}{port.reason ? ` · ${port.reason}` : ""}{port.reason_ttl ? ` · TTL ${port.reason_ttl}` : ""}</span><span>{port.service}{port.method ? ` · ${port.method}` : ""}</span></div>)}</div></details>)}
         </section>
         <p className="network-note"><ShieldCheck size={13} /> {result.note}</p>
       </>}

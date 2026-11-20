@@ -1,0 +1,283 @@
+name: Build CyberLab AI OS Live ISOs
+
+on:
+  workflow_dispatch:
+  push:
+    # Tags are intentionally NOT path-filtered: a tag that points at an
+    # already-pushed commit carries no file diff, so a `paths:` filter would
+    # silently skip the release build. Keep the dev-branch trigger, drop paths.
+    branches:
+      - feature/additive-forensics-recovery
+    tags:
+      - 'v*'
+
+concurrency:
+  group: cyberlab-os-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-live-isos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    container:
+      image: debian:trixie
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DIST_DIR: ${{ github.workspace }}/cyberlab-dist
+    steps:
+      - name: Install Debian live-build toolchain
+        run: |
+          apt-get update
+          apt-get install -y \
+            live-build debootstrap debian-archive-keyring \
+            xorriso squashfs-tools mtools dosfstools cpio \
+            grub-pc-bin grub-efi-amd64-bin isolinux syslinux-common \
+            qemu-system-x86 ovmf git wget ca-certificates
+
+      - uses: actions/checkout@v4
+
+      - name: Validate OS shell script syntax
+        run: |
+          bash -n scripts/os/build-live-iso.sh
+          bash -n scripts/os/boot-smoke-test.sh
+          bash -n scripts/os/uefi-smoke-test.sh
+
+      - name: Record tool versions
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/cyberlab-dist"
+          dpkg-query -W live-build debootstrap ovmf
+          qemu-system-x86_64 --version | head -n 1 \
+            > "$GITHUB_WORKSPACE/cyberlab-dist/QEMU-VERSION.txt"
+          find /usr/share/OVMF -maxdepth 1 -type f -name 'OVMF_CODE*.fd' -print \
+            | sort > "$GITHUB_WORKSPACE/cyberlab-dist/OVMF-FIRMWARE.txt"
+
+      - name: Build lightweight desktop ISO
+        run: |
+          chmod +x scripts/os/*.sh
+          ./scripts/os/build-live-iso.sh desktop-lite "$GITHUB_WORKSPACE/cyberlab-dist"
+
+      - name: Boot-test lightweight desktop ISO in QEMU (BIOS)
+        run: >
+          ./scripts/os/boot-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
+          desktop-lite
+          "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-boot.log"
+
+      - name: Boot-test lightweight desktop ISO in QEMU (UEFI)
+        id: desktop_lite_uefi
+        continue-on-error: true
+        run: >
+          ./scripts/os/uefi-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
+          desktop-lite
+          "$GITHUB_WORKSPACE/cyberlab-dist/desktop-lite-uefi-boot.log"
+
+      - name: Inspect desktop ISO UEFI boot catalog
+        if: always()
+        run: |
+          xorriso -indev "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso" -report_el_torito as_mkisofs
+          xorriso -indev "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso" -find /EFI -type f -exec lsdl
+
+      - name: Inspect Desktop Lite GRUB configuration
+        if: always()
+        run: |
+          ISO="$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso"
+          CFG="$RUNNER_TEMP/desktop-lite-grub.cfg"
+          if [[ ! -s "$ISO" ]]; then
+            echo "Desktop Lite ISO is unavailable; GRUB configuration inspection skipped."
+            exit 0
+          fi
+          if xorriso -osirrox on -indev "$ISO" -extract /boot/grub/grub.cfg "$CFG"; then
+            if [[ -s "$CFG" ]]; then
+              echo "Extracted /boot/grub/grub.cfg:"
+              sed -n '1,240p' "$CFG"
+            else
+              echo "GRUB configuration extraction produced an empty file."
+            fi
+          else
+            echo "No /boot/grub/grub.cfg could be extracted from the ISO."
+          fi
+          CONFIG_CFG="$RUNNER_TEMP/desktop-lite-grub-config.cfg"
+          if xorriso -osirrox on -indev "$ISO" -extract /boot/grub/config.cfg "$CONFIG_CFG"; then
+            if [[ -s "$CONFIG_CFG" ]]; then
+              echo "Extracted /boot/grub/config.cfg:"
+              sed -n '1,240p' "$CONFIG_CFG"
+            else
+              echo "GRUB config.cfg extraction produced an empty file."
+            fi
+          else
+            echo "No /boot/grub/config.cfg could be extracted from the ISO."
+          fi
+
+      - name: Free lightweight desktop build space
+        run: rm -rf /var/tmp/cyberlab-ai-os-build/desktop-lite
+
+      - name: Build lightweight terminal ISO
+        run: ./scripts/os/build-live-iso.sh terminal "$GITHUB_WORKSPACE/cyberlab-dist"
+
+      - name: Boot-test terminal ISO in QEMU (BIOS)
+        run: >
+          ./scripts/os/boot-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso"
+          terminal
+          "$GITHUB_WORKSPACE/cyberlab-dist/terminal-boot.log"
+
+      - name: Boot-test terminal ISO in QEMU (UEFI)
+        id: terminal_uefi
+        continue-on-error: true
+        run: >
+          ./scripts/os/uefi-smoke-test.sh
+          "$GITHUB_WORKSPACE/cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso"
+          terminal
+          "$GITHUB_WORKSPACE/cyberlab-dist/terminal-uefi-boot.log"
+
+      - name: Upload boot diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-boot-diagnostics
+          path: cyberlab-dist/*-boot.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce required UEFI boot checks
+        if: always()
+        run: |
+          failed=0
+          if [[ "${{ steps.desktop_lite_uefi.outcome }}" != "success" ]]; then
+            echo "Desktop Lite UEFI boot verification did not pass."
+            failed=1
+          fi
+          if [[ "${{ steps.terminal_uefi.outcome }}" != "success" ]]; then
+            echo "Terminal UEFI boot verification did not pass."
+            failed=1
+          fi
+          if [[ "$failed" -ne 0 ]]; then
+            echo "ISO artifacts will not be published until every required UEFI boot check passes."
+            exit 1
+          fi
+
+      - name: Publish ISO checksums
+        run: |
+          cd "$GITHUB_WORKSPACE/cyberlab-dist"
+          sha256sum *.iso > SHA256SUMS
+
+      - name: Upload lightweight desktop edition
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-desktop-lite-amd64
+          path: |
+            cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso
+            cyberlab-dist/cyberlab-ai-os-desktop-lite-amd64.iso.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload terminal edition
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-terminal-amd64
+          path: |
+            cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso
+            cyberlab-dist/cyberlab-ai-os-terminal-amd64.iso.sha256
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish versioned GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CyberLab AI ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            CyberLab AI OS — a prebuilt, standalone, bootable security OS (Debian-based, XFCE, CyberLab tools and companion included), plus the standalone CyberSOC engine.
+
+            **Images** (verify with `SHA256SUMS` for ISOs, `APPLIANCE-SHA256SUMS` for OVA/VMDK/CyberSOC):
+            - Bootable **ISO** — physical hardware or a new VM (BIOS + UEFI, QEMU boot-tested)
+            - VirtualBox/VMware **appliance (OVA)** and VMware **disk (VMDK)**
+            - **CyberSOC** standalone (`cybersoc.tar.gz`)
+
+            **Install guide:** [docs/INSTALL_OVA.md](https://github.com/abelmiracle377-stack/cyberlab-ai/blob/${{ github.ref_name }}/docs/INSTALL_OVA.md) · **Release notes:** [CHANGELOG.md](https://github.com/abelmiracle377-stack/cyberlab-ai/blob/${{ github.ref_name }}/CHANGELOG.md)
+
+            Authorized use only — systems you own, lab environments, and engagements with written permission.
+          files: |
+            cyberlab-dist/*.iso
+            cyberlab-dist/SHA256SUMS
+
+  # Prebuilt, importable VM appliances (VirtualBox OVA + VMware VMDK).
+  # Runs on its own fresh runner so the multi-GB disk build does not contend
+  # with the ISO job. Heavy, so only on manual dispatch or a version tag.
+  build-vm-appliance:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    container:
+      image: debian:trixie
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DIST_DIR: ${{ github.workspace }}/cyberlab-appliance
+      CYBERLAB_OS_HDD_SIZE_MB: "7000"
+    steps:
+      - name: Install live-build + image conversion toolchain
+        run: |
+          apt-get update
+          apt-get install -y \
+            live-build debootstrap debian-archive-keyring \
+            parted mtools dosfstools syslinux syslinux-common \
+            squashfs-tools qemu-utils xz-utils ca-certificates git
+
+      - uses: actions/checkout@v4
+
+      - name: Validate appliance script syntax
+        run: bash -n scripts/os/build-vm-appliance.sh
+
+      - name: Build desktop-lite VM appliance (OVA + VMDK)
+        run: |
+          mkdir -p "$DIST_DIR"
+          chmod +x scripts/os/*.sh
+          ./scripts/os/build-vm-appliance.sh desktop-lite "$DIST_DIR"
+          rm -rf /var/tmp/cyberlab-ai-os-vm || true
+
+      - name: Build CyberSOC standalone tarball
+        run: bash scripts/package-cybersoc.sh "$DIST_DIR"
+
+      - name: Publish appliance checksums
+        run: |
+          cd "$DIST_DIR"
+          sha256sum *.ova *.vmdk *.tar.gz > APPLIANCE-SHA256SUMS
+
+      - name: Upload VM appliance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-appliance
+          path: |
+            cyberlab-appliance/*.ova
+            cyberlab-appliance/*.vmdk
+            cyberlab-appliance/*.tar.gz
+            cyberlab-appliance/APPLIANCE-SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Attach appliances to the GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CyberLab AI ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            cyberlab-appliance/*.ova
+            cyberlab-appliance/*.vmdk
+            cyberlab-appliance/cybersoc.tar.gz
+            cyberlab-appliance/APPLIANCE-SHA256SUMS
