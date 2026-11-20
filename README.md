@@ -140,7 +140,7 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - Malware Lab can attach YARA/Sigma structural-check results and inert behaviour simulations to a selected case timeline.
 - Apply `supabase/migrations/202611130001_investigation_cases.sql` in the Supabase SQL Editor before using this feature. Supabase URL/key configuration and user sign-in are required; without them, cases are not persisted.
 - The initial integration is analyst-triggered. It does not silently ingest or claim to correlate every module's findings. Additional integrations should retain source, timestamp, severity, provenance and explicit analyst approval.
-\n\n### Operator-curated Learning Centre\n\n- `/learning` provides a browser-local knowledge review queue. Analysts can submit notes, paste research, upload text-based files (TXT, Markdown, JSON, CSV, LOG, YAML and XML), tag and categorise entries, then approve or reject each item.\n- Only approved entries are sent as bounded reference context with AI Agent requests. The agent is instructed to treat them as untrusted reference material, preserve provenance and flag stale or conflicting claims.\n- Knowledge is stored in the current browser's local storage and can be exported/imported as JSON. Imported items return to pending review. Clearing browser storage can remove the local collection; keep backups.\n- This is retrieval-augmented context, not fine-tuning or a change to model weights. It does not yet synchronise across devices or users; persistent shared knowledge requires a later database integration.\n
+\n\n\n### Operator-curated Learning Centre\n\n- `/learning` provides a browser-local knowledge review queue. Analysts can submit notes, paste research, upload text-based files (TXT, Markdown, JSON, CSV, LOG, YAML and XML), tag and categorise entries, then approve or reject each item.\n- Only approved entries are sent as bounded reference context with AI Agent requests. The agent is instructed to treat them as untrusted reference material, preserve provenance and flag stale or conflicting claims.\n- Knowledge is stored in the current browser's local storage and can be exported/imported as JSON. Imported items return to pending review. Clearing browser storage can remove the local collection; keep backups.\n- This is retrieval-augmented context, not fine-tuning or a change to model weights. It does not yet synchronise across devices or users; persistent shared knowledge requires a later database integration.\n
  
 ### Accounts, subscriptions and billing
 - Membership pricing is $10 USD per user per month.
@@ -150,3 +150,30 @@ The paired Kali companion exposes an authenticated `GET /system` endpoint for an
 - After a user signs up, promote the owner account by setting `public.user_profiles.role='admin'` for that user's UUID in Supabase SQL Editor.
 - Admins use `/admin` to manage roles and grant, suspend, cancel or expire access. Customers use `/billing` for checkout and payment history. `/pricing` is public.
 - Test with Paystack test keys before going live and confirm your merchant account's USD recurring-card eligibility and settlement settings.
+
+
+## Planned capability: authorised Wi-Fi penetration testing (not implemented)
+
+**Status: specification only.** This section records a future product requirement. It does not claim that CyberLab AI currently performs Wi-Fi penetration testing. No implementation, tool installation, scan, test, deployment or runtime action is authorised by this documentation entry.
+
+### Product requirement / implementation prompt
+
+> Design a dedicated wireless security assessment capability for CyberLab AI that can perform genuine, technically meaningful Wi-Fi penetration testing only for users who are authenticated and have verifiable, explicit permission to assess the specific wireless network.
+>
+> The capability must support a complete, scope-bound wireless assessment workflow: wireless adapter and chipset capability checks; access-point and client discovery; passive 802.11 observation and packet capture; channel and signal analysis; WPA/WPA2/WPA3 and WPS configuration assessment; enterprise 802.1X/EAP configuration review; controlled authentication and protocol testing; offline password-strength auditing of captures supplied or collected within the approved scope; rogue-access-point detection and consent-based lab simulation; router and wireless firmware research; evidence preservation; and clear technical reports with reproducible findings.
+>
+> Do not represent a feature as operational until its integration has been implemented and verified on compatible hardware. Clearly identify prerequisites and limitations, including monitor-mode and packet-injection support, driver/kernel compatibility, adapter chipset requirements, regulatory constraints and the difference between passive observation, active testing and offline analysis. Integrate established tools where appropriate (for example Aircrack-ng, Kismet, Wireshark/TShark, Wifite, Reaver/Bully/PixieWPS, hcxtools, Hashcat, hostapd and Scapy), but do not assume that listing or detecting a tool means it is integrated or safe to execute.
+>
+> **Mandatory authorization and safety controls:**
+> - Require an authenticated user and a recorded authorization statement or engagement reference before any assessment begins. Authentication alone is not proof of permission.
+> - Require the operator to identify the exact SSID/BSSID and permitted access points, the network owner or responsible authority, the authorized time window, permitted techniques, exclusions and stop conditions. Where possible, verify ownership or authorization through an owner-controlled confirmation process.
+> - Enforce a server-side scope policy and revalidate scope immediately before every active operation. Never infer permission from proximity, visibility, an available signal, a saved password or the user's account role.
+> - Default to passive discovery. Require separate, informed human approval for each active or potentially disruptive test, with a clear explanation of impact and a cancel/stop control.
+> - Keep testing confined to the explicitly authorized network and lab environment. Prevent scope expansion to neighbouring access points, clients, networks or internet targets.
+> - Do not conduct covert credential harvesting, phishing against real users, unauthorized deauthentication, denial-of-service, persistence, interception of third-party communications or attempts to access networks outside the approved scope. Rogue-AP and Evil-Twin scenarios must be isolated simulations using consenting test clients and test credentials.
+> - Permit offline password auditing only for captures obtained within the verified engagement or explicitly supplied by the network owner. Never transmit recovered credentials to external services; protect, redact and securely handle secrets.
+> - Maintain tamper-evident audit records of the authorizing user, scope, approvals, tool/version, commands or operation identifiers, timestamps, results, errors and stop events. Preserve evidence provenance and minimize collection of unrelated client data.
+> - Fail closed when authorization, scope, hardware capability, tool integrity or safety checks are missing, invalid, expired or uncertain. Never silently fall back to an unapproved technique.
+>
+> The intended outcome is a real wireless penetration-testing workstation for authorized security professionals—not merely a Wi-Fi scanner, a simulated demonstration, or an unrestricted Wi-Fi attack tool. Keep this capability marked **planned** until separately approved, implemented, tested and documented.
+
