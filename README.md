@@ -6,13 +6,19 @@ CyberLab is for work you are authorized to do: systems you own, lab environments
 
 ## Downloads
 
-Permanent latest-release links (populate when a version tag is pushed — see [Releases](https://github.com/abelmiracle377-stack/cyberlab-ai/releases)):
+CyberLab AI OS is a **prebuilt, standalone, bootable operating system** — a Debian-based security workstation with XFCE, a curated toolset and the CyberLab companion baked in, in the same spirit as Kali and Parrot. Download an image and run it; you do not build the OS yourself.
 
+Permanent latest-release links (populated when a version tag is pushed — see [Releases](https://github.com/abelmiracle377-stack/cyberlab-ai/releases)):
+
+- **CyberLab AI OS — bootable ISO** (physical hardware, or a new VM with the ISO attached; BIOS + UEFI, QEMU boot-tested in CI): [cyberlab-ai-os-desktop-lite-amd64.iso](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.iso)
+- **CyberLab AI OS — VirtualBox/VMware appliance (OVA)** (File → Import Appliance, or open in VMware): [cyberlab-ai-os-desktop-lite-amd64.ova](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.ova)
+- **CyberLab AI OS — VMware disk (VMDK)** (attach to a new 64-bit Debian VM, BIOS firmware): [cyberlab-ai-os-desktop-lite-amd64.vmdk](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.vmdk)
 - **CyberSOC — standalone** (autonomous detection/correlation/response engine, pure Python): [cybersoc.tar.gz](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz)
-- **CyberLab AI OS — build kit** (Debian-based bootable security workstation; the VM image is produced from this kit): [cyberlab-os-builder.tar.gz](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-os-builder.tar.gz)
-- Checksums: `SHA256SUMS.txt` on each release.
+- Checksums: `SHA256SUMS` (ISOs) and `APPLIANCE-SHA256SUMS` (OVA/VMDK/CyberSOC) on each release.
 
-To publish/refresh the artifacts: `git tag v0.1.0 && git push origin v0.1.0` — the release workflow builds and attaches them. Build locally with `scripts/package-cybersoc.sh` and `scripts/package-os-builder.sh`.
+A `terminal` edition ISO is also published. The full desktop edition and physical-media/QEMU usage are documented in [`os/README.md`](os/README.md).
+
+To publish/refresh the images: `git tag v0.1.0 && git push origin v0.1.0`. The **Build CyberLab AI OS Live ISOs** workflow then builds and QEMU boot-tests the ISOs and builds the VirtualBox/VMware appliances, attaching every image to the release. These are multi-gigabyte images built on GitHub's runners; they are not produced by the normal web/companion CI.
 
 ---
 

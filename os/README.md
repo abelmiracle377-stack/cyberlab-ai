@@ -51,6 +51,39 @@ Each edition includes its ISO and SHA-256 checksum. Downloading the Lite artifac
 
 This workflow is manual so normal web/companion CI does not incur the cost of building multi-gigabyte operating-system images.
 
+## Prebuilt VM appliances (VirtualBox / VMware)
+
+Besides the ISO, the release pipeline publishes prebuilt, importable virtual-machine
+images so you do not have to install anything manually:
+
+- `cyberlab-ai-os-desktop-lite-amd64.ova` — an OVF 1.0 appliance. In VirtualBox use
+  **File → Import Appliance**; in VMware Workstation/Player use **Open** and select the
+  `.ova`. It boots straight into the CyberLab workstation (BIOS firmware, ~2 vCPU / 2 GB
+  RAM defaults you can change on import).
+- `cyberlab-ai-os-desktop-lite-amd64.vmdk` — the bare VMware-compatible virtual disk, for
+  building your own VM: create a new 64-bit Debian guest with **BIOS** firmware and attach
+  this as the primary disk.
+
+These are produced by `scripts/os/build-vm-appliance.sh`, which reuses the same
+`live-build` chroot as the ISO to create a bootable disk image, then converts it with
+`qemu-img` to a stream-optimized VMDK and packages the OVA. Build one locally on a
+Debian/Ubuntu amd64 host with internet access:
+
+```bash
+sudo apt update
+sudo apt install -y live-build debootstrap parted mtools dosfstools \
+  syslinux syslinux-common squashfs-tools qemu-utils
+chmod +x scripts/os/*.sh
+sudo ./scripts/os/build-vm-appliance.sh desktop-lite ./dist
+```
+
+Outputs `dist/cyberlab-ai-os-desktop-lite-amd64.{ova,vmdk}` plus a `.appliance.sha256`.
+Verify the checksum before importing. Through CI, the **Build CyberLab AI OS Live ISOs**
+workflow builds these on a version tag (or manual run) and attaches them to the release.
+
+The `qcow2` path (`scripts/os/build-vm.sh`, via `virt-builder`) remains available for
+QEMU/libvirt users who prefer a traditionally installed guest.
+
 ## Boot from USB or in a VM
 
 Verify the downloaded ISO against its SHA-256 file before use. To test with QEMU:

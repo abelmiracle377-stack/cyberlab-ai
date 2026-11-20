@@ -74,7 +74,9 @@ const groups = [
     { label: "Offline WPA Crack", icon: KeyRound, href: "/wifi-crack" },
   ]},
   { title: "DOWNLOADS", items: [
-    { label: "CyberLab AI OS (VM)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-os-builder.tar.gz" },
+    { label: "CyberLab AI OS · ISO", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.iso" },
+    { label: "CyberLab AI OS · VM (OVA)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.ova" },
+    { label: "All images & checksums", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest" },
     { label: "CyberSOC (standalone)", icon: HardDriveDownload, href: "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz" },
   ]},
 ];
@@ -95,7 +97,9 @@ const modules = [
   { name:"Shodan OSINT", desc:"Host lookup, index search and DNS resolve over the official Shodan API with your own key — read-only internet-exposure recon.", icon:Globe, state:"OSINT / READ-ONLY", href:"/shodan" },
   { name:"Wi-Fi Toolkit", desc:"Authorized Wi-Fi engagement: monitor mode, scan & posture audit, handshake/PMKID capture, WPA crack, WPS and wifite.", icon:Wifi, state:"AUTHORIZED / GATED", href:"/wifi" },
   { name:"Offline WPA Crack", desc:"Upload a handshake/PMKID capture and audit its passphrase strength against a wordlist, offline via the companion.", icon:KeyRound, state:"AUTHORIZED / GATED", href:"/wifi-crack" },
-  { name:"Download · CyberLab AI OS", desc:"Build kit for the Debian-based bootable security workstation (VM image produced from the kit). Permanent latest-release download.", icon:HardDriveDownload, state:"DOWNLOAD / RELEASE", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-os-builder.tar.gz" },
+  { name:"Download · CyberLab AI OS (ISO)", desc:"Prebuilt bootable Debian-based security OS. Boot on real hardware or in VirtualBox/VMware (new VM → attach ISO). BIOS + UEFI, QEMU boot-tested in CI.", icon:HardDriveDownload, state:"DOWNLOAD / ISO", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.iso" },
+  { name:"Download · CyberLab AI OS (VirtualBox/VMware OVA)", desc:"Prebuilt importable appliance. VirtualBox: File → Import Appliance. VMware: open the .ova. Boots straight into the CyberLab workstation.", icon:HardDriveDownload, state:"DOWNLOAD / OVA", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.ova" },
+  { name:"Download · CyberLab AI OS (VMware VMDK)", desc:"Prebuilt VMware-compatible virtual disk. Attach to a new 64-bit Debian VM (BIOS firmware) as the primary disk and boot.", icon:HardDriveDownload, state:"DOWNLOAD / VMDK", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.vmdk" },
   { name:"Download · CyberSOC", desc:"Standalone autonomous SOC engine (detection, correlation, response). Pure Python, no dependencies. Permanent latest-release download.", icon:HardDriveDownload, state:"DOWNLOAD / RELEASE", href:"https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cybersoc.tar.gz" },
   { name:"Burp Suite Connector", desc:"Connect the local companion to Burp Suite and inspect proxy history, site map and issues.", icon:Cable, state:"LOCAL / PAIRED", href:"/burp-suite" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },

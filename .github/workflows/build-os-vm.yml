@@ -202,3 +202,73 @@ jobs:
           files: |
             cyberlab-dist/*.iso
             cyberlab-dist/SHA256SUMS
+
+  # Prebuilt, importable VM appliances (VirtualBox OVA + VMware VMDK).
+  # Runs on its own fresh runner so the multi-GB disk build does not contend
+  # with the ISO job. Heavy, so only on manual dispatch or a version tag.
+  build-vm-appliance:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    container:
+      image: debian:trixie
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DIST_DIR: ${{ github.workspace }}/cyberlab-appliance
+      CYBERLAB_OS_HDD_SIZE_MB: "7000"
+    steps:
+      - name: Install live-build + image conversion toolchain
+        run: |
+          apt-get update
+          apt-get install -y \
+            live-build debootstrap debian-archive-keyring \
+            parted mtools dosfstools syslinux syslinux-common \
+            squashfs-tools qemu-utils xz-utils ca-certificates git
+
+      - uses: actions/checkout@v4
+
+      - name: Validate appliance script syntax
+        run: bash -n scripts/os/build-vm-appliance.sh
+
+      - name: Build desktop-lite VM appliance (OVA + VMDK)
+        run: |
+          mkdir -p "$DIST_DIR"
+          chmod +x scripts/os/*.sh
+          ./scripts/os/build-vm-appliance.sh desktop-lite "$DIST_DIR"
+          rm -rf /var/tmp/cyberlab-ai-os-vm || true
+
+      - name: Build CyberSOC standalone tarball
+        run: bash scripts/package-cybersoc.sh "$DIST_DIR"
+
+      - name: Publish appliance checksums
+        run: |
+          cd "$DIST_DIR"
+          sha256sum *.ova *.vmdk *.tar.gz > APPLIANCE-SHA256SUMS
+
+      - name: Upload VM appliance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberlab-ai-os-appliance
+          path: |
+            cyberlab-appliance/*.ova
+            cyberlab-appliance/*.vmdk
+            cyberlab-appliance/*.tar.gz
+            cyberlab-appliance/APPLIANCE-SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Attach appliances to the GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CyberLab AI ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            cyberlab-appliance/*.ova
+            cyberlab-appliance/*.vmdk
+            cyberlab-appliance/cybersoc.tar.gz
+            cyberlab-appliance/APPLIANCE-SHA256SUMS
