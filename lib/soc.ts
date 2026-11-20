@@ -81,3 +81,107 @@ export function summarizeBySeverity(alerts: { severity: string }[]): Record<Seve
   for (const alert of alerts) if (isSeverity(alert.severity)) counts[alert.severity] += 1;
   return counts;
 }
+
+const OPEN_STATUSES = new Set(["new", "acknowledged", "investigating", "contained"]);
+
+export type MetricAlert = { severity: string; status: string; created_at?: string; updated_at?: string };
+export type SocMetrics = {
+  total: number; open: number; resolved: number; false_positive: number;
+  open_critical: number; open_high: number;
+  by_severity: Record<Severity, number>; by_status: Record<AlertStatus, number>;
+  resolved_rate: number; mttr_seconds: number | null;
+};
+
+// Operational KPIs over a set of alerts (open load, resolved rate, mean time to
+// resolve). MTTR uses the span from created_at to updated_at on resolved alerts.
+export function computeMetrics(alerts: MetricAlert[]): SocMetrics {
+  const by_severity = { informational: 0, low: 0, medium: 0, high: 0, critical: 0 } as Record<Severity, number>;
+  const by_status = {
+    new: 0, acknowledged: 0, investigating: 0, contained: 0, resolved: 0, false_positive: 0,
+  } as Record<AlertStatus, number>;
+  let open = 0, resolved = 0, falsePositive = 0, openCritical = 0, openHigh = 0;
+  let resolveSum = 0, resolveCount = 0;
+
+  for (const alert of alerts) {
+    if (isSeverity(alert.severity)) by_severity[alert.severity] += 1;
+    if (isAlertStatus(alert.status)) by_status[alert.status] += 1;
+    const isOpen = OPEN_STATUSES.has(alert.status);
+    if (isOpen) open += 1;
+    if (alert.status === "resolved") resolved += 1;
+    if (alert.status === "false_positive") falsePositive += 1;
+    if (isOpen && alert.severity === "critical") openCritical += 1;
+    if (isOpen && alert.severity === "high") openHigh += 1;
+    if (alert.status === "resolved" && alert.created_at && alert.updated_at) {
+      const span = (Date.parse(alert.updated_at) - Date.parse(alert.created_at)) / 1000;
+      if (Number.isFinite(span) && span >= 0) { resolveSum += span; resolveCount += 1; }
+    }
+  }
+  const total = alerts.length;
+  return {
+    total, open, resolved, false_positive: falsePositive,
+    open_critical: openCritical, open_high: openHigh,
+    by_severity, by_status,
+    resolved_rate: total ? Math.round((resolved / total) * 100) / 100 : 0,
+    mttr_seconds: resolveCount ? Math.round(resolveSum / resolveCount) : null,
+  };
+}
+
+const PIVOT_ENTITIES = ["host", "src_ip", "user"] as const;
+
+export type IncidentAlert = {
+  id: string; title: string; severity: string; score: number; status: string;
+  entities?: Record<string, unknown>; mitre?: { tactic?: string };
+};
+export type Incident = {
+  id: string; title: string; severity: Severity; score: number;
+  alert_count: number; alert_ids: string[]; open_count: number;
+  entities: Record<string, string>; tactics: string[];
+};
+
+// Cluster alerts that share a pivot entity (host / src_ip / user) into incidents,
+// mirroring the companion's union-find grouping so the web view matches the engine.
+export function groupIncidents(alerts: IncidentAlert[]): Incident[] {
+  const parent = alerts.map((_, i) => i);
+  const find = (i: number): number => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const union = (a: number, b: number) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+
+  const seen = new Map<string, number>();
+  alerts.forEach((alert, i) => {
+    for (const key of PIVOT_ENTITIES) {
+      const raw = alert.entities?.[key];
+      if (raw === undefined || raw === null || raw === "") continue;
+      const token = `${key}:${String(raw)}`;
+      const prev = seen.get(token);
+      if (prev === undefined) seen.set(token, i); else union(prev, i);
+    }
+  });
+
+  const groups = new Map<number, number[]>();
+  alerts.forEach((_, i) => { const r = find(i); (groups.get(r) ?? groups.set(r, []).get(r)!).push(i); });
+
+  const incidents: Incident[] = [];
+  for (const members of groups.values()) {
+    const rows = members.map((i) => alerts[i]);
+    const top = rows.reduce((a, b) => (severityRank(b.severity) > severityRank(a.severity) ? b : a));
+    const entities: Record<string, string> = {};
+    const tactics = new Set<string>();
+    let openCount = 0;
+    for (const r of rows) {
+      for (const key of PIVOT_ENTITIES) { const v = r.entities?.[key]; if (v) entities[key] = String(v); }
+      if (r.mitre?.tactic) tactics.add(r.mitre.tactic);
+      if (OPEN_STATUSES.has(r.status)) openCount += 1;
+    }
+    incidents.push({
+      id: "inc-" + rows.map((r) => r.id).sort().join("-").slice(0, 60),
+      title: top.title,
+      severity: isSeverity(top.severity) ? top.severity : "informational",
+      score: rows.reduce((sum, r) => sum + (r.score || 0), 0),
+      alert_count: rows.length,
+      alert_ids: rows.map((r) => r.id),
+      open_count: openCount,
+      entities, tactics: [...tactics],
+    });
+  }
+  incidents.sort((a, b) => b.score - a.score || b.alert_count - a.alert_count);
+  return incidents;
+}

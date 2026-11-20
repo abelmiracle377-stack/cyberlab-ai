@@ -96,5 +96,36 @@ class DetectionRuleTests(unittest.TestCase):
             se.analyze({"not": "a list"})
 
 
+class IncidentCorrelationTests(unittest.TestCase):
+    def test_alerts_sharing_a_host_group_into_one_incident(self):
+        events = (auth_failures("web01", "45.33.32.156", "root", 6)
+                  + [{"type": "auth_success", "host": "web01", "src_ip": "45.33.32.156", "user": "root"}]
+                  + [{"type": "listening_socket", "host": "web01", "port": 4444}])
+        out = se.analyze(events)
+        self.assertGreaterEqual(out["alert_count"], 3)
+        # All three alerts share host web01 -> a single incident.
+        self.assertEqual(out["incident_count"], 1)
+        incident = out["incidents"][0]
+        self.assertEqual(incident["severity"], "critical")
+        self.assertEqual(incident["alert_count"], out["alert_count"])
+        self.assertIn("Credential Access", incident["tactics"])
+        self.assertIn("Command and Control", incident["tactics"])
+
+    def test_unrelated_alerts_stay_separate(self):
+        events = ([{"type": "listening_socket", "host": "web01", "port": 4444}]
+                  + [{"type": "listening_socket", "host": "db02", "port": 31337}])
+        out = se.analyze(events)
+        self.assertEqual(out["incident_count"], 2)
+
+    def test_incidents_ranked_by_score(self):
+        events = (auth_failures("a", "10.0.0.1", "root", 6)
+                  + [{"type": "listening_socket", "host": "b", "port": 4444}])
+        incidents = se.analyze(events)["incidents"]
+        self.assertEqual([i["score"] for i in incidents], sorted((i["score"] for i in incidents), reverse=True))
+
+    def test_empty_has_no_incidents(self):
+        self.assertEqual(se.group_incidents([]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

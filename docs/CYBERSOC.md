@@ -32,6 +32,13 @@ involved, and concrete recommended response actions. Current rules:
 (listening sockets, logins, failed logins) into events. `POST /soc/analyze`
 analyzes supplied events and/or live host telemetry.
 
+**Incident correlation.** `group_incidents()` clusters alerts that share a pivot
+entity — host, source IP or user — into a single incident using union-find, the
+way an analyst groups "all the noise from one box." Each incident rolls up the
+highest severity, the summed score, the combined ATT&CK tactics, the entities,
+and the merged recommended actions, ranked by score. `analyze()` returns both the
+ranked `alerts` and the correlated `incidents`.
+
 ## SIEM connectors (companion)
 
 - **Splunk** (`splunk_connector.py`): send events to a HEC, and run REST searches
@@ -73,23 +80,32 @@ companion, so it travels with the Kali companion and the CyberLab OS VM.
 
 ## Web app
 
-Apply `supabase/migrations/202611200003_cybersoc.sql` (after the earlier
-migrations) to create `soc_alerts` and `soc_actions` with Row-Level Security
-(owner-scoped) and Realtime on alerts.
+Apply `supabase/migrations/202611200003_cybersoc.sql` then
+`202611200004_cybersoc_notes.sql` (after the earlier migrations) to create
+`soc_alerts`, `soc_actions` and `soc_notes` with Row-Level Security (owner-scoped)
+and Realtime on alerts. The notes migration also adds `soc_alerts.assignee`.
 
-- **Dashboard** `/soc` (linked under **CyberSOC** in the sidebar): live alert
-  list coloured by severity with a severity summary, an alert detail panel
-  (MITRE, entities, description), status triage
-  (new → acknowledged → investigating → contained → resolved / false positive),
-  the recommended response actions (destructive ones badged "needs
-  authorization"), and an action log. "Run cycle (dry)" calls the paired
-  companion's `/soc/run-cycle` over the loopback bridge, persists the resulting
-  alerts, and shows them; "Run live" lets the companion's authorized safe
-  actions run. Alerts update live via a Supabase Realtime subscription.
-- **API** `/api/soc/alerts` (list / ingest-by-key / update status) and
-  `/api/soc/actions` (record / approve / update outcome). Ingest upserts by
-  `alert_key` and preserves an alert's triage status across re-ingests. Pure
-  validation lives in `lib/soc.ts` (unit-tested in `tests/soc.test.ts`).
+- **Console** `/soc` (linked under **CyberSOC** in the sidebar) — a dense,
+  restrained SOC console, not a demo. A KPI strip shows critical/high open load,
+  total open, correlated incident count, resolved rate, and mean time to resolve
+  (MTTR). Two views: **Alerts** (severity-accented rows with a filter across
+  title, rule, technique and entities) and **Incidents** (the correlated
+  clusters). The detail panel carries MITRE tactic/technique, entities, first-seen
+  time, status triage (new → acknowledged → investigating → contained → resolved /
+  false positive), **assign-to-me**, the recommended response actions (destructive
+  ones badged "needs authorization"), and an **investigation timeline** that
+  interleaves response actions with free-text analyst notes. The palette is a
+  muted enterprise severity scheme (no neon). "Run (dry)" calls the paired
+  companion's `/soc/run-cycle` over the loopback bridge and persists the alerts;
+  "Run live" lets the companion's authorized safe actions run. Alerts update live
+  via a Supabase Realtime subscription.
+- **API** `/api/soc/alerts` (list / ingest-by-key / update status / assign),
+  `/api/soc/actions` (record / approve / update outcome), `/api/soc/metrics`
+  (operational KPIs), and `/api/soc/notes` (list / add investigation notes).
+  Ingest upserts by `alert_key` and preserves an alert's triage status across
+  re-ingests. Pure logic — severity ranking, metrics, and incident correlation —
+  lives in `lib/soc.ts` (unit-tested in `tests/soc.test.ts`), mirroring the
+  companion engine so the browser's incident view matches the headless runner.
 
 So the same CyberSOC runs headless (standalone), on the companion, and in the
 browser — and a human can review every alert, change its status, and authorize

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALERT_COLS = "id,alert_key,rule,title,severity,score,mitre,description,entities," +
-  "event_count,first_seen,last_seen,recommended_actions,source,status,created_at,updated_at";
+  "event_count,first_seen,last_seen,recommended_actions,source,status,assignee,created_at,updated_at";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser();
@@ -53,14 +53,23 @@ export async function PATCH(request: NextRequest) {
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Expected JSON." }, { status: 400 }); }
   const value = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   const id = typeof value.id === "string" ? value.id : "";
-  const status = value.status;
-  if (!id || !isAlertStatus(status)) {
-    return NextResponse.json({ error: "Provide an alert id and a valid status." }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "Provide an alert id." }, { status: 400 });
+  const update: Record<string, unknown> = {};
+  if (value.status !== undefined) {
+    if (!isAlertStatus(value.status)) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
+    update.status = value.status;
+  }
+  // assignee: "me" self-assigns, null clears, omitted leaves unchanged.
+  if (value.assignee === "me") update.assignee = undefined; // set below to the user id
+  if (value.assignee === null) update.assignee = null;
+  if (Object.keys(update).length === 0 && value.assignee === undefined) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
+  if (value.assignee === "me") update.assignee = auth.user.id;
   const { data, error } = await auth.supabase.from("soc_alerts")
-    .update({ status }).eq("id", id).eq("owner", auth.user.id).select("id,status").maybeSingle();
+    .update(update).eq("id", id).eq("owner", auth.user.id).select("id,status,assignee").maybeSingle();
   if (error) return dbError(error.message);
   if (!data) return NextResponse.json({ error: "Alert not found." }, { status: 404 });
   return NextResponse.json({ alert: data });

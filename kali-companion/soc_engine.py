@@ -277,6 +277,76 @@ RULES = [
 ]
 
 
+# Entity keys that, when shared, link two alerts into the same incident.
+_PIVOT_ENTITIES = ("host", "src_ip", "user")
+
+
+def group_incidents(alerts: list) -> list:
+    """Cluster alerts that share a host, source IP or user into incidents.
+
+    An incident rolls up the member alerts: the highest severity/score, every
+    ATT&CK tactic in the chain, the combined entities, and a de-duplicated set of
+    recommended actions. This is how analysts actually work — on the related
+    whole, not each alert in isolation.
+    """
+    if not alerts:
+        return []
+    parent = list(range(len(alerts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a, b):
+        parent[find(a)] = find(b)
+
+    # Link alerts sharing any pivot entity value.
+    seen: dict = {}
+    for index, alert in enumerate(alerts):
+        entities = alert.get("entities", {}) or {}
+        for key in _PIVOT_ENTITIES:
+            value = entities.get(key)
+            if value in (None, "", "*"):
+                continue
+            token = key + "=" + str(value)
+            if token in seen:
+                union(index, seen[token])
+            else:
+                seen[token] = index
+
+    clusters: dict = defaultdict(list)
+    for index in range(len(alerts)):
+        clusters[find(index)].append(alerts[index])
+
+    incidents = []
+    for members in clusters.values():
+        top = max(members, key=lambda a: a.get("score", 0))
+        tactics, entities, actions, alert_ids = [], {}, {}, []
+        for member in members:
+            alert_ids.append(member.get("id"))
+            tactic = (member.get("mitre", {}) or {}).get("tactic")
+            if tactic and tactic not in tactics:
+                tactics.append(tactic)
+            for key, value in (member.get("entities", {}) or {}).items():
+                if value not in (None, "", "*"):
+                    entities.setdefault(key, value)
+            for action in member.get("recommended_actions", []):
+                actions.setdefault(action.get("action"), action)
+        incident_id = hashlib.sha1("|".join(sorted(str(a) for a in alert_ids)).encode()).hexdigest()[:16]
+        incidents.append({
+            "id": incident_id, "title": top.get("title", "Incident"),
+            "severity": top.get("severity", "medium"), "score": top.get("score", 0),
+            "alert_count": len(members), "alert_ids": alert_ids,
+            "tactics": tactics, "entities": entities,
+            "recommended_actions": list(actions.values()),
+            "first_seen": min((m.get("first_seen", "") for m in members if m.get("first_seen")), default=""),
+            "last_seen": max((m.get("last_seen", "") for m in members if m.get("last_seen")), default=""),
+        })
+    return sorted(incidents, key=lambda i: (-i["score"], -i["alert_count"]))
+
+
 def events_from_telemetry(security: dict | None, system: dict | None, host: str = "local") -> list:
     """Convert companion telemetry into normalized SOC events the rules understand."""
     events = []
@@ -319,8 +389,10 @@ def analyze(events: list, config: dict | None = None) -> dict:
     by_severity = {level: 0 for level in SEVERITY_ORDER}
     for alert in ranked:
         by_severity[alert["severity"]] += 1
+    incidents = group_incidents(ranked)
     return {
         "alerts": ranked, "alert_count": len(ranked),
+        "incidents": incidents, "incident_count": len(incidents),
         "events_analyzed": len(events), "by_severity": by_severity,
         "highest_severity": ranked[0]["severity"] if ranked else "none",
         "note": "Deterministic correlation of the supplied events; no telemetry is fabricated.",
