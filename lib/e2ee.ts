@@ -25,11 +25,17 @@ function toBase64(bytes: ArrayBuffer | Uint8Array): string {
   return globalThis.btoa(binary);
 }
 
-function fromBase64(value: string): Uint8Array {
+function fromBase64(value: string): ArrayBuffer {
   const binary = globalThis.atob(value);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
-  return out;
+  // Return a plain ArrayBuffer so it is always a valid BufferSource for WebCrypto,
+  // regardless of the TypeScript lib's Uint8Array<ArrayBufferLike> typing.
+  return out.buffer;
+}
+
+function randomIv(): Uint8Array {
+  return globalThis.crypto.getRandomValues(new Uint8Array(12));
 }
 
 export async function generateKeyPair(): Promise<CryptoKeyPair> {
@@ -66,8 +72,9 @@ export async function deriveSharedKey(privateKey: CryptoKey, otherPublicKey: Cry
 export type Sealed = { ciphertext: string; iv: string };
 
 export async function encryptText(key: CryptoKey, plaintext: string): Promise<Sealed> {
-  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-  const ct = await subtle().encrypt({ name: "AES-GCM", iv }, key, textEncoder.encode(plaintext));
+  const iv = randomIv();
+  const data = textEncoder.encode(plaintext).buffer as ArrayBuffer;
+  const ct = await subtle().encrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, data);
   return { ciphertext: toBase64(ct), iv: toBase64(iv) };
 }
 
@@ -77,8 +84,8 @@ export async function decryptText(key: CryptoKey, sealed: Sealed): Promise<strin
 }
 
 export async function encryptBytes(key: CryptoKey, data: ArrayBuffer): Promise<{ data: ArrayBuffer; iv: string }> {
-  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-  const ct = await subtle().encrypt({ name: "AES-GCM", iv }, key, data);
+  const iv = randomIv();
+  const ct = await subtle().encrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, data);
   return { data: ct, iv: toBase64(iv) };
 }
 
