@@ -121,7 +121,7 @@ test("cap suppression downgrades severity and score", () => {
     [{ host: "lab", action: "cap", max_severity: "low" }]);
   assert.equal(kept[0].severity, "low");
   assert.equal(kept[0].score, 30);
-  assert.equal(kept[0].suppressed, "capped");
+  assert.equal((kept[0] as { suppressed?: string }).suppressed, "capped");
 });
 
 test("expired and over-broad suppressions are ignored", () => {
