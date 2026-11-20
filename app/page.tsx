@@ -8,6 +8,8 @@ import {
   MessageCircle,
   ShieldAlert,
   GraduationCap,
+  Globe,
+  Wifi,
 } from "lucide-react";
 
 const groups = [
@@ -66,6 +68,10 @@ const groups = [
   { title: "LEARN", items: [
     { label: "Academy", icon: GraduationCap, href: "/academy" },
   ]},
+  { title: "RECON & WIRELESS", items: [
+    { label: "Shodan OSINT", icon: Globe, href: "/shodan" },
+    { label: "Wi-Fi Toolkit", icon: Wifi, href: "/wifi" },
+  ]},
 ];
 
 const modules = [
@@ -81,6 +87,8 @@ const modules = [
   { name:"Native Web Crawler", desc:"Discover same-origin pages with bounded, approved GET requests.", icon:Radar, state:"NATIVE / GET ONLY", href:"/web-crawler" },
   { name:"Safe Active Web Checks", desc:"Run bounded CORS and query-reflection checks with explicit approval.", icon:Bug, state:"NATIVE / LIMITED", href:"/web-scanner" },
   { name:"Web Application Assessment", desc:"Bug-bounty baseline: headers, cookies, disclosure, sensitive files, open-redirect and SQL-error detection, mapped to OWASP/CWE.", icon:Bug, state:"NATIVE / DETECTION-ONLY", href:"/web-assessment" },
+  { name:"Shodan OSINT", desc:"Host lookup, index search and DNS resolve over the official Shodan API with your own key — read-only internet-exposure recon.", icon:Globe, state:"OSINT / READ-ONLY", href:"/shodan" },
+  { name:"Wi-Fi Toolkit", desc:"Authorized Wi-Fi engagement: monitor mode, scan & posture audit, handshake/PMKID capture, WPA crack, WPS and wifite.", icon:Wifi, state:"AUTHORIZED / GATED", href:"/wifi" },
   { name:"Burp Suite Connector", desc:"Connect the local companion to Burp Suite and inspect proxy history, site map and issues.", icon:Cable, state:"LOCAL / PAIRED", href:"/burp-suite" },
   { name:"Penetration Testing", desc:"Plan authorised assessments and document scope.", icon:Radar, state:"WORKSPACE", href:"/penetration-testing" },
   { name:"Active Security Lab", desc:"Limited TCP checks after exact target and authorisation confirmation.", icon:Zap, state:"CONTROLLED", href:"/active-security-lab" },
