@@ -61,7 +61,7 @@ The existing Kali companion, authorised Nmap workflow, host telemetry and Ollama
 - Community chat: usernames, friend requests, and direct messages with pictures and voice notes, end-to-end encrypted in the browser (ECDH P-256 + AES-GCM) so the server stores only ciphertext — see [docs/SOCIAL_CHAT.md](./docs/SOCIAL_CHAT.md)
 - Read-only forensic artifact parsing on the companion: Apple plists, SQLite databases (browser history/cookies/logins, opened read-only + immutable) and Windows registry hives
 - Local wallet recovery: BIP39 multi-coin derivation and account/change sweep, Electrum (v2 standard/segwit and old) seeds, partial/scrambled seed reconstruction, MetaMask vaults, BIP38 encrypted keys (incl. EC-multiply), and password cracking with the full hashcat/John attack range
-- CyberSOC: an autonomous, AI-driven SOC with a detection/triage engine, union-find incident correlation, threat-intel (IOC) matching, analyst-tunable alert suppression, Splunk and Wazuh connectors, an auto-response runner, and a restrained enterprise console (KPI strip with MTTR, alerts + incidents views, assignment, investigation timeline with notes, and one-click rule muting) — see [docs/CYBERSOC.md](./docs/CYBERSOC.md)
+- CyberSOC: an autonomous, AI-driven SOC with a detection/triage engine, union-find incident correlation, threat-intel (IOC) matching, analyst-tunable alert suppression, Splunk and Wazuh connectors, an auto-response runner, and case management (group an incident's alerts into one investigation with a shared timeline), and a restrained enterprise console (KPI strip with MTTR, alerts + incidents + cases views, assignment, investigation timeline with notes, and one-click rule muting) — see [docs/CYBERSOC.md](./docs/CYBERSOC.md)
 
 ## Test
 

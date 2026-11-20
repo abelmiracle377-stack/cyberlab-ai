@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALERT_COLS = "id,alert_key,rule,title,severity,score,mitre,description,entities," +
-  "event_count,first_seen,last_seen,recommended_actions,source,status,assignee,created_at,updated_at";
+  "event_count,first_seen,last_seen,recommended_actions,source,status,assignee,case_id,created_at,updated_at";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser();

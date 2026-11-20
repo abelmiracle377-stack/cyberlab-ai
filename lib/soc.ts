@@ -12,6 +12,13 @@ export type AlertStatus = (typeof ALERT_STATUSES)[number];
 export const ACTION_STATUSES = ["pending", "approved", "executed", "failed", "declined"] as const;
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 
+export const CASE_STATUSES = ["open", "investigating", "contained", "resolved", "closed"] as const;
+export type CaseStatus = (typeof CASE_STATUSES)[number];
+
+export function isCaseStatus(value: unknown): value is CaseStatus {
+  return typeof value === "string" && (CASE_STATUSES as readonly string[]).includes(value);
+}
+
 // Actions that change a system and need explicit human authorization.
 export const DESTRUCTIVE_ACTIONS = new Set([
   "block_ip", "isolate_host", "kill_process", "reset_credentials", "restrict_firewall", "enforce_mfa",
@@ -124,6 +131,30 @@ export function computeMetrics(alerts: MetricAlert[]): SocMetrics {
     resolved_rate: total ? Math.round((resolved / total) * 100) / 100 : 0,
     mttr_seconds: resolveCount ? Math.round(resolveSum / resolveCount) : null,
   };
+}
+
+export type CaseMember = { severity: string; status: string; score?: number };
+export type CaseRollup = {
+  severity: Severity; score: number; total: number; open: number;
+  by_severity: Record<Severity, number>;
+};
+
+// Derive a case's headline figures from its member alerts: highest severity,
+// summed score, and how many members are still open. Keeps a case honest —
+// it is exactly as severe as its worst live alert.
+export function summarizeCase(members: CaseMember[]): CaseRollup {
+  const by_severity = { informational: 0, low: 0, medium: 0, high: 0, critical: 0 } as Record<Severity, number>;
+  let severity: Severity = "informational";
+  let score = 0, open = 0;
+  for (const m of members) {
+    if (isSeverity(m.severity)) {
+      by_severity[m.severity] += 1;
+      if (severityRank(m.severity) > severityRank(severity)) severity = m.severity;
+    }
+    score += typeof m.score === "number" ? m.score : 0;
+    if (OPEN_STATUSES.has(m.status)) open += 1;
+  }
+  return { severity, score, total: members.length, open, by_severity };
 }
 
 const PIVOT_ENTITIES = ["host", "src_ip", "user"] as const;

@@ -95,10 +95,12 @@ companion, so it travels with the Kali companion and the CyberLab OS VM.
 
 ## Web app
 
-Apply `supabase/migrations/202611200003_cybersoc.sql` then
-`202611200004_cybersoc_notes.sql` (after the earlier migrations) to create
-`soc_alerts`, `soc_actions` and `soc_notes` with Row-Level Security (owner-scoped)
-and Realtime on alerts. The notes migration also adds `soc_alerts.assignee`.
+Apply, in order after the earlier migrations: `202611200003_cybersoc.sql`,
+`202611200004_cybersoc_notes.sql`, `202611200005_cybersoc_tuning.sql`,
+`202611200006_cybersoc_cases.sql`. These create `soc_alerts`, `soc_actions`,
+`soc_notes`, `soc_suppressions` and `soc_cases` with owner-scoped Row-Level
+Security and Realtime on alerts; the later ones add `soc_alerts.assignee` and
+`soc_alerts.case_id`.
 
 - **Console** `/soc` (linked under **CyberSOC** in the sidebar) — a dense,
   restrained SOC console, not a demo. A KPI strip shows critical/high open load,
@@ -114,10 +116,18 @@ and Realtime on alerts. The notes migration also adds `soc_alerts.assignee`.
   companion's `/soc/run-cycle` over the loopback bridge and persists the alerts;
   "Run live" lets the companion's authorized safe actions run. Alerts update live
   via a Supabase Realtime subscription.
+- **Cases** — an investigation that spans several alerts. "Open case" on an
+  incident groups its alerts into one case with a shared severity roll-up (as
+  severe as its worst live alert), status lifecycle
+  (open → investigating → contained → resolved → closed), assignee, member list,
+  and a **consolidated timeline** merging the actions and notes of every member
+  alert. Backed by `soc_cases` + `soc_alerts.case_id`.
 - **API** `/api/soc/alerts` (list / ingest-by-key / update status / assign),
   `/api/soc/actions` (record / approve / update outcome), `/api/soc/metrics`
-  (operational KPIs), `/api/soc/notes` (list / add investigation notes), and
-  `/api/soc/suppressions` (list / add / delete tuning rules). Ingest upserts by
+  (operational KPIs), `/api/soc/notes` (list / add investigation notes),
+  `/api/soc/suppressions` (list / add / delete tuning rules), and
+  `/api/soc/cases` (list / detail with roll-up + timeline / create / update /
+  attach-detach alerts / delete). Ingest upserts by
   `alert_key`, preserves an alert's triage status across re-ingests, and
   **applies the operator's active suppressions at ingest** — tuned-out noise is
   never stored and capped alerts persist at the reduced severity. Pure logic —

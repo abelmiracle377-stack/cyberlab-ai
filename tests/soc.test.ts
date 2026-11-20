@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   severityRank, isSeverity, isAlertStatus, isDestructive,
   normalizeIngestAlert, summarizeBySeverity, computeMetrics, groupIncidents,
-  applySuppressions, matchesSuppression,
+  applySuppressions, matchesSuppression, summarizeCase, isCaseStatus,
 } from "../lib/soc";
 
 test("severity rank and guards", () => {
@@ -130,6 +130,31 @@ test("expired and over-broad suppressions are ignored", () => {
     [{ rule: "implant_port", host: "s", expires: "2020-01-01T00:00:00Z" }], "2026-11-20T00:00:00Z");
   assert.equal(expired.suppressed, 0);
   assert.equal(matchesSuppression({ rule: "x", severity: "high", entities: {} }, { action: "drop" }), false);
+});
+
+test("summarize case: worst severity, summed score, open count", () => {
+  const roll = summarizeCase([
+    { severity: "medium", status: "resolved", score: 55 },
+    { severity: "critical", status: "new", score: 95 },
+    { severity: "low", status: "investigating", score: 30 },
+  ]);
+  assert.equal(roll.severity, "critical");  // as severe as its worst member
+  assert.equal(roll.score, 180);            // summed
+  assert.equal(roll.total, 3);
+  assert.equal(roll.open, 2);               // new + investigating
+  assert.equal(roll.by_severity.critical, 1);
+});
+
+test("empty case rolls up to informational", () => {
+  const roll = summarizeCase([]);
+  assert.equal(roll.severity, "informational");
+  assert.equal(roll.total, 0);
+  assert.equal(roll.open, 0);
+});
+
+test("case status guard", () => {
+  assert.equal(isCaseStatus("investigating"), true);
+  assert.equal(isCaseStatus("new"), false);  // alert status, not a case status
 });
 
 test("summarize by severity", () => {

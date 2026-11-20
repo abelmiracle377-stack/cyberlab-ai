@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShieldAlert, Activity, Play, RefreshCw, AlertTriangle, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ALERT_STATUSES, isDestructive, groupIncidents, computeMetrics,
+  ALERT_STATUSES, CASE_STATUSES, isDestructive, groupIncidents, computeMetrics,
   type Severity, type SocMetrics,
 } from "@/lib/soc";
 
@@ -17,6 +17,16 @@ type Alert = {
 };
 type ActionRow = { id: string; action: string; status: string; created_at: string };
 type NoteRow = { id: string; body: string; created_at: string };
+type CaseRow = {
+  id: string; title: string; summary: string | null; severity: Severity; status: string;
+  assignee: string | null; member_count: number; open_count: number; created_at: string;
+};
+type CaseMemberRow = { id: string; title: string; severity: Severity; score: number; status: string; rule: string };
+type CaseDetail = {
+  case: CaseRow; members: CaseMemberRow[];
+  rollup: { severity: Severity; score: number; total: number; open: number };
+  timeline: { kind: string; at: string; text: string }[];
+};
 
 const BRIDGE = "http://127.0.0.1:8765";
 const TOKEN_KEY = "cyberlab.kaliBridgeToken";
@@ -53,7 +63,9 @@ export default function SocPage() {
   const [actions, setActions] = useState<ActionRow[]>([]);
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
-  const [view, setView] = useState<"alerts" | "incidents">("alerts");
+  const [cases, setCases] = useState<CaseRow[]>([]);
+  const [activeCase, setActiveCase] = useState<CaseDetail | null>(null);
+  const [view, setView] = useState<"alerts" | "incidents" | "cases">("alerts");
   const [query, setQuery] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -62,11 +74,40 @@ export default function SocPage() {
 
   const loadAlerts = useCallback(async () => {
     try {
-      const [a, m] = await Promise.all([api("/api/soc/alerts"), api("/api/soc/metrics").catch(() => null)]);
+      const [a, m, c] = await Promise.all([
+        api("/api/soc/alerts"),
+        api("/api/soc/metrics").catch(() => null),
+        api("/api/soc/cases").catch(() => null),
+      ]);
       setAlerts(a.alerts || []);
       if (m?.metrics) setMetrics(m.metrics);
+      if (c?.cases) setCases(c.cases);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load alerts."); }
   }, []);
+
+  const openCase = useCallback(async (id: string) => {
+    try { setActiveCase(await api("/api/soc/cases?id=" + encodeURIComponent(id))); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not open case."); }
+  }, []);
+
+  async function createCaseFromIncident(inc: { title: string; severity: Severity; alert_ids: string[] }) {
+    try {
+      const data = await api("/api/soc/cases", {
+        method: "POST",
+        body: JSON.stringify({ title: inc.title, severity: inc.severity, alertIds: inc.alert_ids }),
+      });
+      await loadAlerts();
+      setView("cases");
+      await openCase(data.case.id);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not create case."); }
+  }
+
+  async function patchCase(id: string, patch: Record<string, unknown>) {
+    try {
+      await api("/api/soc/cases", { method: "PATCH", body: JSON.stringify({ id, ...patch }) });
+      await Promise.all([loadAlerts(), openCase(id)]);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not update case."); }
+  }
 
   useEffect(() => {
     (async () => {
@@ -220,6 +261,7 @@ export default function SocPage() {
         <div className="soc-tabs">
           <button className={"soc-tab" + (view === "alerts" ? " on" : "")} onClick={() => setView("alerts")}>Alerts</button>
           <button className={"soc-tab" + (view === "incidents" ? " on" : "")} onClick={() => setView("incidents")}>Incidents</button>
+          <button className={"soc-tab" + (view === "cases" ? " on" : "")} onClick={() => setView("cases")}>Cases{cases.length ? ` (${cases.length})` : ""}</button>
         </div>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter by title, rule, technique, entity…" />
         <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Companion token" style={{ maxWidth: 170 }} />
@@ -254,7 +296,7 @@ export default function SocPage() {
                   </span>
                 </button>
               ))
-          ) : (
+          ) : view === "incidents" ? (
             incidents.length === 0
               ? <div className="soc-empty">No correlated incidents. Related alerts sharing a host, source IP or user are grouped here.</div>
               : incidents.map((inc) => (
@@ -269,15 +311,74 @@ export default function SocPage() {
                   </span>
                   <span className="soc-row-right">
                     <span className={"soc-sevtag sevtag-" + inc.severity}>{inc.severity}</span>
-                    <span className="soc-score">{inc.score}</span>
+                    <button className="soc-mini" onClick={() => createCaseFromIncident(inc)}>Open case</button>
                   </span>
                 </div>
+              ))
+          ) : null}
+          {view === "cases" && (
+            cases.length === 0
+              ? <div className="soc-empty">No cases yet. Open one from an incident to group its alerts into a single investigation.</div>
+              : cases.map((c) => (
+                <button key={c.id} className={"soc-row" + (activeCase?.case.id === c.id ? " active" : "")} onClick={() => openCase(c.id)}>
+                  <span className={"soc-row-accent sev-accent-" + c.severity} />
+                  <span className="soc-row-body">
+                    <span className="soc-row-title">{c.title}</span>
+                    <span className="soc-row-meta">
+                      <span>{c.status}</span><span>{c.member_count} alerts</span><span>{c.open_count} open</span>
+                    </span>
+                  </span>
+                  <span className="soc-row-right">
+                    <span className={"soc-sevtag sevtag-" + c.severity}>{c.severity}</span>
+                  </span>
+                </button>
               ))
           )}
         </div>
 
         <div className="soc-detail">
-          {!active ? <div className="soc-empty">Select an alert to triage, assign and respond.</div> : (
+          {view === "cases" ? (
+            !activeCase ? <div className="soc-empty">Select a case to manage its investigation.</div> : (
+              <>
+                <div className="soc-detail-head">
+                  <h2>{activeCase.case.title}</h2>
+                  <div className="soc-detail-meta">
+                    <span className={"soc-sevtag sevtag-" + activeCase.rollup.severity}>{activeCase.rollup.severity}</span>
+                    <span className="soc-chip">score {activeCase.rollup.score}</span>
+                    <span className="soc-chip">{activeCase.rollup.open}/{activeCase.rollup.total} open</span>
+                    <button className="soc-mini" onClick={() => patchCase(activeCase.case.id, { assignee: activeCase.case.assignee === me ? null : "me" })}>
+                      {activeCase.case.assignee === me ? "Unassign" : "Assign to me"}</button>
+                  </div>
+                </div>
+                {activeCase.case.summary && <p className="soc-desc">{activeCase.case.summary}</p>}
+
+                <div className="soc-section-label">Case status</div>
+                <div className="soc-status-row">
+                  {CASE_STATUSES.map((s) => (
+                    <button key={s} className={"soc-status" + (activeCase.case.status === s ? " on" : "")}
+                      onClick={() => patchCase(activeCase.case.id, { status: s })}>{s}</button>
+                  ))}
+                </div>
+
+                <div className="soc-section-label">Member alerts ({activeCase.members.length})</div>
+                {activeCase.members.map((m) => (
+                  <div className="soc-action" key={m.id}>
+                    <div>
+                      <strong>{m.title}</strong>
+                      <div className="soc-action-why">{m.rule} · {m.status} · <span className={"soc-sevtag sevtag-" + m.severity}>{m.severity}</span></div>
+                    </div>
+                    <button className="soc-mini" onClick={() => patchCase(activeCase.case.id, { removeAlerts: [m.id] })}>Remove</button>
+                  </div>
+                ))}
+
+                <div className="soc-section-label">Case timeline</div>
+                {activeCase.timeline.length === 0 && <div className="soc-empty" style={{ padding: "4px 0" }}>No actions or notes across member alerts yet.</div>}
+                {activeCase.timeline.map((t, i) => (
+                  <div className={t.kind === "note" ? "soc-note" : "soc-logrow"} key={i}>{t.text}<time>{fmtTime(t.at)}</time></div>
+                ))}
+              </>
+            )
+          ) : !active ? <div className="soc-empty">Select an alert to triage, assign and respond.</div> : (
             <>
               <div className="soc-detail-head">
                 <h2>{active.title}</h2>
