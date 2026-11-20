@@ -102,6 +102,14 @@ Apply, in order after the earlier migrations: `202611200003_cybersoc.sql`,
 Security and Realtime on alerts; the later ones add `soc_alerts.assignee` and
 `soc_alerts.case_id`.
 
+- **External exposure (Shodan)** — the console's **Exposure** control takes a
+  list of asset IPs, queries Shodan through the paired companion (read-only
+  OSINT), and turns the results into alerts: risky internet-facing services
+  (Telnet, RDP, SMB, databases, Docker API, …) and Shodan-reported CVEs, mapped
+  to ATT&CK T1133 / T1190. They ingest via the normal pipeline (`source:
+  shodan`), so external attack-surface findings correlate into incidents and
+  cases alongside host telemetry. Logic in `lib/exposure.ts`
+  (`tests/exposure.test.ts`).
 - **Console** `/soc` (linked under **CyberSOC** in the sidebar) — a dense,
   restrained SOC console, not a demo. A KPI strip shows critical/high open load,
   total open, correlated incident count, resolved rate, and mean time to resolve

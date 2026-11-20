@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ShieldAlert, Activity, Play, RefreshCw, AlertTriangle, Loader2 } from "lucide-react";
+import { ShieldAlert, Activity, Play, RefreshCw, AlertTriangle, Loader2, Globe } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   ALERT_STATUSES, CASE_STATUSES, isDestructive, groupIncidents, computeMetrics,
   type Severity, type SocMetrics,
 } from "@/lib/soc";
+import { exposureAlerts } from "@/lib/exposure";
 
 type Alert = {
   id: string; alert_key: string; rule: string; title: string; severity: Severity; score: number;
@@ -71,6 +72,35 @@ export default function SocPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [cycleInfo, setCycleInfo] = useState("");
+  const [showExposure, setShowExposure] = useState(false);
+  const [exposureIps, setExposureIps] = useState("");
+  const [shodanKey, setShodanKey] = useState("");
+
+  async function scanExposure() {
+    setError(""); setCycleInfo("");
+    if (!token.trim()) { setError("Enter the companion bridge token."); return; }
+    if (!shodanKey.trim()) { setError("Enter your Shodan API key."); return; }
+    const ips = exposureIps.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 25);
+    if (ips.length === 0) { setError("Enter one or more asset IPs to assess."); return; }
+    setBusy("exposure");
+    try {
+      if (typeof window !== "undefined") window.sessionStorage.setItem("cyberlab.shodanApiKey", shodanKey.trim());
+      const alerts: Record<string, unknown>[] = [];
+      let scanned = 0;
+      for (const ip of ips) {
+        const res = await fetch(BRIDGE + "/shodan/host", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token.trim() },
+          body: JSON.stringify({ apiKey: shodanKey.trim(), ip }),
+        });
+        const host = await res.json();
+        if (res.ok) { scanned += 1; alerts.push(...exposureAlerts(host)); }
+      }
+      if (alerts.length) await api("/api/soc/alerts", { method: "POST", body: JSON.stringify({ alerts, source: "shodan" }) });
+      setCycleInfo(`External exposure: scanned ${scanned}/${ips.length} assets · ${alerts.length} findings ingested as alerts`);
+      await loadAlerts();
+    } catch (e) { setError(e instanceof Error ? e.message : "Exposure scan failed. Is the companion paired?"); }
+    finally { setBusy(""); }
+  }
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -114,7 +144,10 @@ export default function SocPage() {
       const { data: { user } } = await getSupabase().auth.getUser();
       setMe(user?.id ?? null);
       setAuthChecked(true);
-      if (typeof window !== "undefined") setToken(sessionStorage.getItem(TOKEN_KEY) || "");
+      if (typeof window !== "undefined") {
+        setToken(sessionStorage.getItem(TOKEN_KEY) || "");
+        setShodanKey(sessionStorage.getItem("cyberlab.shodanApiKey") || "");
+      }
       if (user) await loadAlerts();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,8 +304,17 @@ export default function SocPage() {
           title="Lets authorized safe actions run on the companion">
           {busy === "cycle-live" ? <Loader2 size={13} className="spin" /> : <Activity size={13} />} Run live</button>
         <button className="soc-btn" onClick={() => loadAlerts()} aria-label="Refresh"><RefreshCw size={14} /></button>
+        <button className="soc-btn" onClick={() => setShowExposure((s) => !s)} title="Assess external attack surface via Shodan">
+          <Globe size={13} /> Exposure</button>
         {cycleInfo && <span className="soc-cycle-info">{cycleInfo}</span>}
       </section>
+      {showExposure && <section className="soc-controls" style={{ gap: 8 }}>
+        <input value={exposureIps} onChange={(e) => setExposureIps(e.target.value)} placeholder="Asset IPs to assess (comma/space separated)" style={{ flex: 1, minWidth: 220 }} />
+        <input value={shodanKey} onChange={(e) => setShodanKey(e.target.value)} type="password" autoComplete="off" placeholder="Shodan API key" style={{ maxWidth: 190 }} />
+        <button className="soc-btn primary" disabled={busy === "exposure"} onClick={scanExposure}>
+          {busy === "exposure" ? <Loader2 size={13} className="spin" /> : <Globe size={13} />} Scan exposure</button>
+        <span className="soc-cycle-info">Read-only Shodan OSINT → ingests risky ports and known CVEs as alerts.</span>
+      </section>}
       {error && <div className="soc-error"><AlertTriangle size={14} /> {error}</div>}
 
       <div className="soc-body">
