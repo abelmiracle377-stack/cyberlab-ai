@@ -166,6 +166,45 @@ Supabase Auth provides sign-up/login; the hosted workspace is USD $10/user/month
 
 ---
 
+## Live research and authorised active checks
+
+- **Live Research** uses the existing `OPENROUTER_API_KEY` with Perplexity Sonar through OpenRouter to search current public web sources and return citations. Search requests may incur OpenRouter/provider charges.
+- **AI Agent** can call the live research tool as part of a response. Confirm important claims against primary vendor, maintainer, NIST or CISA sources.
+- **Active Security Lab** performs a deliberately limited TCP connection check against a public IPv4 address or domain after the operator confirms the exact target, provides an authorisation reference and retypes the target. It permits up to five selected common TCP ports and blocks private, loopback, link-local and reserved IPv4 ranges.
+- The hosted TCP check is not Nmap, a full port scan, service fingerprinting, a vulnerability scan or proof of exploitability. Use the Kali companion locally for a fuller assessment within a verified written scope.
+- Never test assets without explicit permission. Respect third-party/cloud-provider rules, engagement windows, exclusions and stop conditions.
+
+
+### Local SOC host telemetry
+
+The paired Kali companion exposes an authenticated `GET /system` endpoint for an on-demand, read-only host health snapshot. The Kali Connection workspace displays platform/release, uptime, load average, available memory, root-disk capacity, process count and Nmap availability. It does not collect usernames, process names, command lines, file contents, network payloads or authentication logs. It is not a continuous SIEM, EDR, intrusion-detection or ATT&CK event pipeline. The bridge remains bound to `127.0.0.1`, requires the existing pairing token and official-site origin, and must run on the same machine as the browser using it.
+
+
+### Defensive Malware Workshop
+
+- The Malware Lab includes a defensive workshop that generates an EICAR antivirus test signature as plain text, synthetic IOC JSON using reserved example domains/documentation IP ranges, inert endpoint-behaviour event records, and starter YARA/Sigma training rules.
+- Generated artefacts are returned as downloadable text/data files. The behaviour fixture describes hypothetical events only; it does not create files, launch processes, modify registry/persistence settings or open network connections.
+- YARA and Sigma structural checks are lightweight lint checks, not official compiler or schema validation. Run official tools and test against representative telemetry before deployment.
+- The SOC simulation workspace provides hypothetical file-write, process, persistence and network event scenarios with response guidance and downloadable investigation notes; no host activity is performed.
+- This is not a malware builder. It does not generate deployable malware, destructive payloads, credential theft, stealth, persistence, evasion or command-and-control code. Review and validate detection rules against your own telemetry before operational use.
+
+
+### Persistent investigation cases
+
+- `/investigations` provides authenticated case creation, severity/status tracking, analyst-authored timeline events and Markdown export.
+- `/api/investigations` and `/api/investigations/[id]/events` use the signed-in Supabase session. Row Level Security restricts each case and its events to its owner.
+- Malware Lab can attach YARA/Sigma structural-check results and inert behaviour simulations to a selected case timeline.
+- Apply `supabase/migrations/202611130001_investigation_cases.sql` in the Supabase SQL Editor before using this feature. Supabase URL/key configuration and user sign-in are required; without them, cases are not persisted.
+- The initial integration is analyst-triggered. It does not silently ingest or claim to correlate every module's findings. Additional integrations should retain source, timestamp, severity, provenance and explicit analyst approval.
+### Operator-curated Learning Centre
+
+- `/learning` provides a browser-local knowledge review queue. Analysts can submit notes, paste research, upload text-based files (TXT, Markdown, JSON, CSV, LOG, YAML and XML), tag and categorise entries, then approve or reject each item.
+- Only approved entries are sent as bounded reference context with AI Agent requests. The agent is instructed to treat them as untrusted reference material, preserve provenance and flag stale or conflicting claims.
+- Knowledge is stored in the current browser's local storage and can be exported/imported as JSON. Imported items return to pending review. Clearing browser storage can remove the local collection; keep backups.
+- This is retrieval-augmented context, not fine-tuning or a change to model weights. It does not yet synchronise across devices or users; persistent shared knowledge requires a later database integration.
+
+
+
 ## Security principles
 
 - Use assessment and offensive features only on systems you own or are explicitly authorized (in writing) to test. Active operations require explicit scope and human approval; the Wi-Fi, web-assessment and crack tools enforce an authorization confirmation.
