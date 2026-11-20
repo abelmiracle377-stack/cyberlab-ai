@@ -11,7 +11,7 @@ async function profilesFor(auth: Authed, ids: string[]) {
   const map = new Map<string, Record<string, unknown>>();
   if (!ids.length) return map;
   const { data } = await auth.supabase
-    .from("profiles").select("user_id,username,display_name,avatar_url,bio").in("user_id", ids);
+    .from("profiles").select("user_id,username,display_name,avatar_url,bio,public_key").in("user_id", ids);
   for (const p of data ?? []) map.set(p.user_id as string, p);
   return map;
 }

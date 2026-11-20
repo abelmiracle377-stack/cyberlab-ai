@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const like = q.replace(/[%_\\]/g, "\\$&");
   const { data: users, error } = await auth.supabase
     .from("profiles")
-    .select("user_id,username,display_name,avatar_url,bio")
+    .select("user_id,username,display_name,avatar_url,bio,public_key")
     .ilike("username", `%${like}%`)
     .neq("user_id", auth.user.id)
     .order("username")

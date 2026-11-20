@@ -49,6 +49,36 @@ the pure helpers in `lib/social.ts` (unit-tested in `tests/social.test.ts`):
 - `GET/POST/PATCH/DELETE /api/social/friends` — list, request, accept/decline/block, remove.
 - `GET/POST /api/social/messages?with=<id>` — conversation history and sending.
 
+## End-to-end encryption
+
+Direct messages are end-to-end encrypted in the browser (`lib/e2ee.ts`, WebCrypto):
+
+- Each member holds an **ECDH P-256** key pair. The private key is generated on
+  the device and stored only in that browser's `localStorage` (exported JWK); it
+  is never sent to the server. The public key is published to `profiles.public_key`.
+- For a conversation, both sides derive the **same** AES-GCM key from
+  ECDH(their private key, the other's public key). Message text is encrypted with
+  AES-256-GCM; the server stores only base64 ciphertext plus the IV
+  (`messages.body`, `body_iv`, `encrypted = true`).
+- **Media is encrypted too**: picture/voice bytes are AES-GCM encrypted in the
+  browser before upload, so the private bucket holds ciphertext; the recipient
+  downloads and decrypts it client-side (`media_iv`).
+- The conversation header shows a lock when the other party has published a key.
+  If a brand-new friend hasn't opened chat yet (no key), messages fall back to
+  server-stored (RLS-protected) delivery until their key appears.
+
+Apply `supabase/migrations/202611200002_social_chat_e2ee.sql` for the
+`public_key` / IV columns.
+
+**Honest limits.** This is baseline E2EE (static ECDH keys + AES-GCM): it keeps
+message content and media out of the server's reach, and AES-GCM authentication
+rejects tampering. It does **not** provide per-message forward secrecy (no Signal
+double ratchet), and because the private key lives on one device, clearing site
+data or switching devices creates a new key — older messages encrypted to the
+old key can't be read on the new device (no key-escrow/backup yet). Conversation
+metadata (who messages whom, and when) remains visible to the server, as with
+any mainstream messenger.
+
 ## UI
 
 `/chat` (linked under **Community** in the sidebar): pick a username, search and

@@ -39,8 +39,8 @@ jobs:
         run: npm install --prefer-offline --no-audit --no-fund
       - name: Test Solidity static analyzer
         run: |
-          npx tsc --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-build lib/solidity-static-analysis.ts lib/chain-registry.ts lib/dex-registry.ts lib/wallet-backup-inspection.ts lib/companion-tools.ts lib/subdomain-extract.ts lib/social.ts tests/social.test.ts tests/solidity-static-analysis.test.ts tests/solidity-structural-analysis.test.ts tests/wallet-backup-inspection.test.ts tests/companion-tools.test.ts tests/research-tools.test.ts tests/dex-registry.test.ts
-          node --test .test-build/tests/social.test.js .test-build/tests/solidity-static-analysis.test.js .test-build/tests/solidity-structural-analysis.test.js .test-build/tests/wallet-backup-inspection.test.js .test-build/tests/companion-tools.test.js .test-build/tests/research-tools.test.js .test-build/tests/dex-registry.test.js
+          npx tsc --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-build lib/solidity-static-analysis.ts lib/chain-registry.ts lib/dex-registry.ts lib/wallet-backup-inspection.ts lib/companion-tools.ts lib/subdomain-extract.ts lib/social.ts lib/e2ee.ts tests/social.test.ts tests/e2ee.test.ts tests/solidity-static-analysis.test.ts tests/solidity-structural-analysis.test.ts tests/wallet-backup-inspection.test.ts tests/companion-tools.test.ts tests/research-tools.test.ts tests/dex-registry.test.ts
+          node --test .test-build/tests/social.test.js .test-build/tests/e2ee.test.js .test-build/tests/solidity-static-analysis.test.js .test-build/tests/solidity-structural-analysis.test.js .test-build/tests/wallet-backup-inspection.test.js .test-build/tests/companion-tools.test.js .test-build/tests/research-tools.test.js .test-build/tests/dex-registry.test.js
       - name: Build Next.js application
         run: npm run build
 

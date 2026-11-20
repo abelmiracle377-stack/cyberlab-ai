@@ -2,16 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
-import { Send, UserPlus, Check, X, Mic, Square, ImagePlus, Loader2, MessageCircle } from "lucide-react";
+import { Send, UserPlus, Check, X, Mic, Square, ImagePlus, Loader2, MessageCircle, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { extensionForMime, validateMedia, MESSAGE_MAX } from "@/lib/social";
+import { loadOrCreateIdentity, type Identity } from "@/lib/social-keys";
+import { importPublicKey, deriveSharedKey, encryptText, decryptText, encryptBytes, decryptBytes } from "@/lib/e2ee";
 
-type Profile = { user_id: string; username: string; display_name?: string; avatar_url?: string | null; bio?: string };
+type Profile = { user_id: string; username: string; display_name?: string; avatar_url?: string | null; bio?: string; public_key?: string | null };
 type UserResult = Profile & { friendship: { id: string; status: string; role: string } | null };
 type FriendEdge = { id: string; status: string; created_at: string; role: string; user: Profile };
 type Message = {
   id: string; sender_id: string; recipient_id: string; body: string;
-  media_url: string | null; media_type: "image" | "voice" | null; created_at: string; read_at: string | null;
+  media_url: string | null; media_type: "image" | "voice" | null;
+  encrypted?: boolean; body_iv?: string | null; media_iv?: string | null;
+  created_at: string; read_at: string | null;
 };
 
 async function api(path: string, init?: RequestInit) {
@@ -36,6 +40,9 @@ export default function ChatPage() {
   const [active, setActive] = useState<FriendEdge | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+  const [plainBodies, setPlainBodies] = useState<Record<string, string>>({});
+  const identityRef = useRef<Identity | null>(null);
+  const sharedKeys = useRef<Map<string, CryptoKey>>(new Map());
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<UserResult[]>([]);
   const [draft, setDraft] = useState("");
@@ -58,13 +65,36 @@ export default function ChatPage() {
       setMe(user?.id ?? null);
       setAuthChecked(true);
       if (!user) return;
+      // Load (or create) this device's E2EE identity.
+      try { identityRef.current = await loadOrCreateIdentity(user.id); } catch { /* crypto unavailable */ }
       try {
         const p = await api("/api/social/profile");
         setProfile(p.profile);
+        // Publish our public key if the profile is missing it or it changed.
+        if (p.profile && identityRef.current && p.profile.public_key !== identityRef.current.publicKeyB64) {
+          await api("/api/social/profile", { method: "PUT", body: JSON.stringify({
+            username: p.profile.username, display_name: p.profile.display_name ?? "",
+            bio: p.profile.bio ?? "", public_key: identityRef.current.publicKeyB64,
+          }) }).catch(() => {});
+        }
       } catch { /* profile not set yet */ }
       await loadFriends();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Derive (and cache) the shared AES key for the conversation with `user`.
+  const sharedKeyFor = useCallback(async (user?: Profile): Promise<CryptoKey | null> => {
+    const identity = identityRef.current;
+    if (!identity || !user?.user_id || !user.public_key) return null;
+    const cached = sharedKeys.current.get(user.user_id);
+    if (cached) return cached;
+    try {
+      const theirPub = await importPublicKey(user.public_key);
+      const key = await deriveSharedKey(identity.privateKey, theirPub);
+      sharedKeys.current.set(user.user_id, key);
+      return key;
+    } catch { return null; }
   }, []);
 
   const loadFriends = useCallback(async () => {
@@ -94,24 +124,44 @@ export default function ChatPage() {
 
   useEffect(() => { threadRef.current?.scrollTo(0, threadRef.current.scrollHeight); }, [messages]);
 
-  // Resolve signed URLs for any media messages we haven't resolved yet.
+  // Decrypt text and resolve/decrypt media for messages we haven't handled yet.
   useEffect(() => {
     (async () => {
+      const key = active ? await sharedKeyFor(active.user) : null;
       for (const m of messages) {
+        if (m.encrypted && m.body && m.body_iv && !plainBodies[m.id] && key) {
+          try {
+            const text = await decryptText(key, { ciphertext: m.body, iv: m.body_iv });
+            setPlainBodies((p) => ({ ...p, [m.id]: text }));
+          } catch { /* leave locked */ }
+        }
         if (m.media_url && !mediaUrls[m.media_url]) {
           const { data } = await getSupabase().storage.from("chat-media").createSignedUrl(m.media_url, 3600);
-          if (data?.signedUrl) setMediaUrls((prev) => ({ ...prev, [m.media_url as string]: data.signedUrl }));
+          if (!data?.signedUrl) continue;
+          if (m.encrypted && m.media_iv && key) {
+            try {
+              const buf = await (await fetch(data.signedUrl)).arrayBuffer();
+              const clear = await decryptBytes(key, buf, m.media_iv);
+              const url = URL.createObjectURL(new Blob([clear]));
+              setMediaUrls((prev) => ({ ...prev, [m.media_url as string]: url }));
+            } catch { /* skip undecryptable media */ }
+          } else {
+            setMediaUrls((prev) => ({ ...prev, [m.media_url as string]: data.signedUrl }));
+          }
         }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]);
+  }, [messages, active]);
 
   async function saveProfile() {
     setError(""); setBusy("profile");
     try {
       const data = await api("/api/social/profile", {
-        method: "PUT", body: JSON.stringify({ username, display_name: displayName, bio }),
+        method: "PUT", body: JSON.stringify({
+          username, display_name: displayName, bio,
+          public_key: identityRef.current?.publicKeyB64,
+        }),
       });
       setProfile(data.profile);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save profile."); }
@@ -152,32 +202,55 @@ export default function ChatPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load messages."); }
   }
 
-  async function sendMessage(mediaPath?: string, mediaType?: "image" | "voice") {
+  async function sendMessage(mediaPath?: string, mediaType?: "image" | "voice", mediaIv?: string) {
     if (!active) return;
     if (!mediaPath && !draft.trim()) return;
     setBusy("send");
     try {
-      const data = await api("/api/social/messages", {
-        method: "POST",
-        body: JSON.stringify({ recipientId: active.user.user_id, body: draft, mediaPath, mediaType }),
-      });
-      setMessages((prev) => [...prev, data.message]);
+      const key = await sharedKeyFor(active.user);
+      let payload: Record<string, unknown>;
+      if (key) {
+        // End-to-end encrypt the text; media was already encrypted before upload.
+        const sealed = draft.trim() ? await encryptText(key, draft.trim()) : null;
+        payload = {
+          recipientId: active.user.user_id, encrypted: true,
+          body: sealed?.ciphertext ?? "", bodyIv: sealed?.iv ?? null,
+          mediaPath, mediaType, mediaIv,
+        };
+      } else {
+        payload = { recipientId: active.user.user_id, body: draft, mediaPath, mediaType };
+      }
+      const data = await api("/api/social/messages", { method: "POST", body: JSON.stringify(payload) });
+      const msg = data.message as Message;
+      // Show our own outgoing text immediately without a decrypt round-trip.
+      if (msg.encrypted && draft.trim()) setPlainBodies((p) => ({ ...p, [msg.id]: draft.trim() }));
+      setMessages((prev) => [...prev, msg]);
       setDraft("");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not send."); }
     finally { setBusy(""); }
   }
 
   async function uploadAndSend(file: Blob, mime: string) {
-    if (!me) return;
+    if (!me || !active) return;
     const check = validateMedia(mime, file.size);
     if (!check.ok) { setError(check.error); return; }
     setBusy("send");
     try {
       const ext = extensionForMime(mime) || "bin";
       const path = `${me}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await getSupabase().storage.from("chat-media").upload(path, file, { contentType: mime, upsert: false });
+      const key = await sharedKeyFor(active.user);
+      let uploadBody: Blob = file;
+      let mediaIv: string | undefined;
+      if (key) {
+        // Encrypt the file bytes before upload; the server stores only ciphertext.
+        const sealed = await encryptBytes(key, await file.arrayBuffer());
+        uploadBody = new Blob([sealed.data], { type: "application/octet-stream" });
+        mediaIv = sealed.iv;
+      }
+      const { error: upErr } = await getSupabase().storage.from("chat-media")
+        .upload(path, uploadBody, { contentType: key ? "application/octet-stream" : mime, upsert: false });
       if (upErr) throw new Error(upErr.message);
-      await sendMessage(path, check.value.kind);
+      await sendMessage(path, check.value.kind, mediaIv);
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed."); }
     finally { setBusy(""); }
   }
@@ -287,18 +360,25 @@ export default function ChatPage() {
           <div className="chat-empty-main"><MessageCircle size={30} /><p>Select a friend to start chatting.</p></div>
         ) : (
           <>
-            <header className="chat-header">@{active.user.username}</header>
+            <header className="chat-header">@{active.user.username}
+              {active.user.public_key
+                ? <span className="chat-e2ee"><Lock size={11} /> End-to-end encrypted</span>
+                : <span className="chat-e2ee dim">Not encrypted — they haven&apos;t opened chat yet</span>}
+            </header>
             <div className="chat-thread" ref={threadRef}>
-              {messages.map((m) => (
+              {messages.map((m) => {
+                const shownText = m.encrypted ? plainBodies[m.id] : m.body;
+                return (
                 <div key={m.id} className={"chat-bubble " + (m.sender_id === me ? "mine" : "theirs")}>
-                  {m.body && <div>{m.body}</div>}
+                  {shownText && <div>{shownText}</div>}
+                  {m.encrypted && !shownText && !m.media_url && <div className="chat-locked">🔒 Encrypted</div>}
                   {m.media_type === "image" && m.media_url && mediaUrls[m.media_url] &&
                     <img src={mediaUrls[m.media_url]} alt="attachment" className="chat-image" />}
                   {m.media_type === "voice" && m.media_url && mediaUrls[m.media_url] &&
                     <audio controls src={mediaUrls[m.media_url]} />}
                   <time>{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                 </div>
-              ))}
+              ); })}
             </div>
             {error && <div className="chat-error">{error}</div>}
             <div className="chat-compose">

@@ -679,3 +679,7 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 @keyframes chat-spin{to{transform:rotate(360deg)}}
 @keyframes chat-pulse{50%{opacity:.4}}
 @media(max-width:720px){.chat-layout{grid-template-columns:1fr;grid-template-rows:auto 1fr}.chat-sidebar{max-height:38vh}}
+.chat-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chat-e2ee{display:inline-flex;align-items:center;gap:4px;font-family:var(--sans);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--green)}
+.chat-e2ee.dim{color:var(--dim);text-transform:none;letter-spacing:0}
+.chat-locked{font-size:12px;opacity:.6;font-style:italic}

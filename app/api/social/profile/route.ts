@@ -5,7 +5,7 @@ import { validateUsername, validateDisplayName, validateBio } from "@/lib/social
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PROFILE_COLS = "user_id,username,display_name,avatar_url,bio,created_at,updated_at";
+const PROFILE_COLS = "user_id,username,display_name,avatar_url,bio,public_key,created_at,updated_at";
 
 export async function GET() {
   const auth = await requireUser();
@@ -28,17 +28,24 @@ export async function PUT(request: NextRequest) {
   const bio = validateBio(value.bio);
   if (!bio.ok) return NextResponse.json({ error: bio.error }, { status: 400 });
   const avatarUrl = typeof value.avatar_url === "string" && value.avatar_url.length <= 500 ? value.avatar_url : null;
+  // The ECDH public key (base64 SPKI) is published so friends can encrypt to this user.
+  const publicKey = typeof value.public_key === "string" && value.public_key.length > 0 && value.public_key.length <= 400
+    ? value.public_key : undefined;
 
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
 
-  const { data, error } = await auth.supabase.from("profiles").upsert({
+  const row: Record<string, unknown> = {
     user_id: auth.user.id,
     username: username.value,
     display_name: displayName.value,
     bio: bio.value,
     avatar_url: avatarUrl,
-  }, { onConflict: "user_id" }).select(PROFILE_COLS).single();
+  };
+  if (publicKey !== undefined) row.public_key = publicKey;
+
+  const { data, error } = await auth.supabase.from("profiles")
+    .upsert(row, { onConflict: "user_id" }).select(PROFILE_COLS).single();
 
   if (error) {
     if (error.code === "23505") return NextResponse.json({ error: "That username is already taken." }, { status: 409 });

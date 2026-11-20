@@ -5,7 +5,7 @@ import { validateMessageBody } from "@/lib/social";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MSG_COLS = "id,sender_id,recipient_id,body,media_url,media_type,created_at,read_at";
+const MSG_COLS = "id,sender_id,recipient_id,body,media_url,media_type,encrypted,body_iv,media_iv,created_at,read_at";
 
 // Conversation history with one friend. Marks the friend's messages read.
 export async function GET(request: NextRequest) {
@@ -38,8 +38,22 @@ export async function POST(request: NextRequest) {
   const recipientId = typeof value.recipientId === "string" ? value.recipientId : "";
   if (!recipientId) return NextResponse.json({ error: "Provide recipientId." }, { status: 400 });
 
-  const text = validateMessageBody(value.body);
-  if (!text.ok) return NextResponse.json({ error: text.error }, { status: 400 });
+  const encrypted = value.encrypted === true;
+  const bodyIv = typeof value.bodyIv === "string" && value.bodyIv.length <= 64 ? value.bodyIv : null;
+  const mediaIv = typeof value.mediaIv === "string" && value.mediaIv.length <= 64 ? value.mediaIv : null;
+
+  // Encrypted bodies are opaque base64 ciphertext; only bound their size.
+  // Plaintext bodies are validated/trimmed as before.
+  let bodyValue = "";
+  if (encrypted) {
+    const raw = typeof value.body === "string" ? value.body : "";
+    if (raw.length > 20000) return NextResponse.json({ error: "Encrypted message is too large." }, { status: 400 });
+    bodyValue = raw;
+  } else {
+    const text = validateMessageBody(value.body);
+    if (!text.ok) return NextResponse.json({ error: text.error }, { status: 400 });
+    bodyValue = text.value;
+  }
 
   const mediaType = value.mediaType === "image" || value.mediaType === "voice" ? value.mediaType : null;
   const mediaPath = typeof value.mediaPath === "string" ? value.mediaPath : "";
@@ -55,13 +69,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Media must be uploaded to your own folder first." }, { status: 400 });
     }
   }
-  if (!text.value && !mediaPath) {
+  if (!bodyValue && !mediaPath) {
     return NextResponse.json({ error: "Send some text or an attachment." }, { status: 400 });
   }
 
   const { data, error } = await auth.supabase.from("messages").insert({
     sender_id: me, recipient_id: recipientId,
-    body: text.value, media_url: mediaPath || null, media_type: mediaPath ? mediaType : null,
+    body: bodyValue, media_url: mediaPath || null, media_type: mediaPath ? mediaType : null,
+    encrypted, body_iv: encrypted ? bodyIv : null, media_iv: encrypted ? mediaIv : null,
   }).select(MSG_COLS).single();
 
   if (error) {
