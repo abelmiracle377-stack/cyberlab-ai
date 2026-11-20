@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowLeft, Box, Cpu, HardDrive, Laptop, Network, RefreshCw, ShieldCheck, Terminal, Workflow } from "lucide-react";
+import { Activity, ArrowLeft, Box, Cpu, Download, HardDrive, Laptop, Network, RefreshCw, ShieldCheck, Terminal, Workflow } from "lucide-react";
 
 type RuntimeInfo = { installed: boolean; executable: string | null };
 type Capabilities = {
@@ -84,6 +84,13 @@ export default function CyberLabOsPage() {
 
   const cardStyle = { border: "1px solid rgba(148,163,184,.2)", borderRadius: 14, padding: 18, background: "rgba(15,23,42,.52)" };
   const muted = { color: "var(--muted-foreground, #94a3b8)" } as const;
+  const osBase = "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/";
+  const osReleases = "https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest";
+  const osDownloads = [
+    { file: "cyberlab-ai-os-desktop-lite-amd64.iso", label: "Bootable ISO", desc: "Physical hardware, or a new VM with the ISO attached. BIOS + UEFI, QEMU boot-tested in CI." },
+    { file: "cyberlab-ai-os-desktop-lite-amd64.ova", label: "VirtualBox / VMware (OVA)", desc: "VirtualBox: File → Import Appliance. VMware: open the .ova. Boots straight into the workstation." },
+    { file: "cyberlab-ai-os-desktop-lite-amd64.vmdk", label: "VMware disk (VMDK)", desc: "Attach to a new 64-bit Debian VM (BIOS firmware) as the primary disk and boot." },
+  ];
 
   return (
     <main className="agent-shell">
@@ -98,6 +105,20 @@ export default function CyberLabOsPage() {
           <h1>Your security workstation</h1>
           <p>Discover local Linux, container and virtualisation capabilities. This first workspace is read-only: it does not install software, create environments, start virtual machines or execute terminal commands.</p>
         </div>
+
+        <section style={{ ...cardStyle, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}><HardDrive size={17} /> Download CyberLab AI OS</div>
+          <p style={{ ...muted, margin: "7px 0 14px" }}>Prebuilt, standalone bootable security OS — Debian-based, XFCE desktop, the curated toolset and the CyberLab companion preinstalled. Download an image and run it; you do not build the OS yourself. Permanent latest-release links.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 }}>
+            {osDownloads.map(d => (
+              <a key={d.file} href={osBase + d.file} target="_blank" rel="noreferrer" style={{ border: "1px solid rgba(148,163,184,.22)", borderRadius: 10, padding: 13, textDecoration: "none", color: "inherit", display: "block" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}><strong>{d.label}</strong><Download size={14} /></div>
+                <p style={{ ...muted, fontSize: 12, margin: "6px 0 0", overflowWrap: "anywhere" }}>{d.desc}</p>
+              </a>
+            ))}
+          </div>
+          <p style={{ ...muted, fontSize: 12, margin: "12px 0 0" }}>A <code>terminal</code> edition and the full desktop ISO are published too. Links resolve once a version tag is released. <a href={osReleases} target="_blank" rel="noreferrer">All images &amp; checksums ↗</a></p>
+        </section>
 
         <section style={{ ...cardStyle, marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -153,7 +174,7 @@ export default function CyberLabOsPage() {
           <div style={cardStyle}><Box size={18} /><h3>Ubuntu / containers</h3><span style={{ color: "#fbbf24", fontSize: 12 }}>Planned</span><p style={muted}>Optional isolated Ubuntu and CyberLab profiles after runtime support and resource limits are verified.</p></div>
           <div style={cardStyle}><Workflow size={18} /><h3>Virtual machines</h3><span style={{ color: "#fbbf24", fontSize: 12 }}>Planned</span><p style={muted}>Local QEMU/KVM, VirtualBox or other supported hypervisor integration with explicit lifecycle approvals.</p></div>
         </div>
-        <p className="agent-disclaimer" style={{ marginTop: 18 }}>CyberLab OS is currently an environment-management foundation, not a bootable Linux distribution or a hypervisor. The future bootable image will be built only after the local environment and update model are validated.</p>
+        <p className="agent-disclaimer" style={{ marginTop: 18 }}>CyberLab AI OS ships as prebuilt bootable images (ISO plus VirtualBox/VMware appliances) with the CyberLab tools and companion preinstalled — download them above. This page is also an environment-management foundation for discovering and, in future, managing local Linux, container and virtualisation environments on a host you have paired; it is not itself a hypervisor.</p>
       </section>
     </main>
   );
