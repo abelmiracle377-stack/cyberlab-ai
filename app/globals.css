@@ -812,3 +812,10 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .anim-type { display: inline-block; overflow: hidden; white-space: nowrap; animation: cyber-type .5s steps(40,end) both; }
 /* Snappy panel transition — sharp ease-out, like a hardware switch. */
 .snappy { transition: transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s cubic-bezier(.2,.8,.2,1), background-color .18s ease, border-color .18s ease; }
+
+/* ===== Agent typewriter output ===== */
+.agent-tw{white-space:pre-wrap;word-break:break-word}
+.agent-tw-caret{display:inline-block;color:var(--green);margin-left:1px;animation:tw-blink 1s steps(1) infinite;transform:translateY(1px)}
+@keyframes tw-blink{50%{opacity:0}}
+.tw-mint{color:var(--green)} .tw-cyan{color:var(--cyan)} .tw-amber{color:var(--amber)}
+.tw-crimson{color:var(--crimson)} .tw-dim{color:var(--muted)} .tw-flag{color:var(--green-strong);font-weight:600}
