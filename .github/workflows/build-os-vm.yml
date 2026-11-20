@@ -3,13 +3,11 @@ name: Build CyberLab AI OS Live ISOs
 on:
   workflow_dispatch:
   push:
+    # Tags are intentionally NOT path-filtered: a tag that points at an
+    # already-pushed commit carries no file diff, so a `paths:` filter would
+    # silently skip the release build. Keep the dev-branch trigger, drop paths.
     branches:
       - feature/additive-forensics-recovery
-    paths:
-      - .github/workflows/build-os-vm.yml
-      - scripts/os/**
-      - os/**
-      - kali-companion/**
     tags:
       - 'v*'
 

@@ -8,7 +8,7 @@ CyberLab is for work you are authorized to do: systems you own, lab environments
 
 CyberLab AI OS is a **prebuilt, standalone, bootable operating system** — a Debian-based security workstation with XFCE, a curated toolset and the CyberLab companion baked in, in the same spirit as Kali and Parrot. Download an image and run it; you do not build the OS yourself.
 
-Permanent latest-release links (populated when a version tag is pushed — see [Releases](https://github.com/abelmiracle377-stack/cyberlab-ai/releases)):
+Permanent latest-release links. The inaugural release **`v0.1.0`** is built on GitHub's runners when the tag is pushed; the ISO is QEMU boot-tested and every image is attached to the release. The build takes a while (multi-gigabyte images), so if a link 404s the release is still building — watch [Actions](https://github.com/abelmiracle377-stack/cyberlab-ai/actions) or the [Releases](https://github.com/abelmiracle377-stack/cyberlab-ai/releases) page.
 
 - **CyberLab AI OS — bootable ISO** (physical hardware, or a new VM with the ISO attached; BIOS + UEFI, QEMU boot-tested in CI): [cyberlab-ai-os-desktop-lite-amd64.iso](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.iso)
 - **CyberLab AI OS — VirtualBox/VMware appliance (OVA)** (File → Import Appliance, or open in VMware): [cyberlab-ai-os-desktop-lite-amd64.ova](https://github.com/abelmiracle377-stack/cyberlab-ai/releases/latest/download/cyberlab-ai-os-desktop-lite-amd64.ova)
@@ -18,7 +18,7 @@ Permanent latest-release links (populated when a version tag is pushed — see [
 
 A `terminal` edition ISO is also published. The full desktop edition and physical-media/QEMU usage are documented in [`os/README.md`](os/README.md).
 
-To publish/refresh the images: `git tag v0.1.0 && git push origin v0.1.0`. The **Build CyberLab AI OS Live ISOs** workflow then builds and QEMU boot-tests the ISOs and builds the VirtualBox/VMware appliances, attaching every image to the release. These are multi-gigabyte images built on GitHub's runners; they are not produced by the normal web/companion CI.
+To cut a new release, bump the tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`). The **Build CyberLab AI OS Live ISOs** workflow then builds and QEMU boot-tests the ISOs and builds the VirtualBox/VMware appliances, attaching every image to the release. These are multi-gigabyte images built on GitHub's runners; they are not produced by the normal web/companion CI. You can also run the workflow manually from the Actions tab (**Run workflow**).
 
 ---
 
