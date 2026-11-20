@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2, Trophy } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type Task = { id: string; title: string; instructions: string; hint?: string; videoUrl?: string; requiresAnswer: boolean };
@@ -44,6 +44,16 @@ export default function AcademyPage() {
   const [examResult, setExamResult] = useState<{ passed: boolean; percent: number } | null>(null);
   const [lab, setLab] = useState<LabInfo | null>(null);
   const [labBusy, setLabBusy] = useState(false);
+  const [scoreboard, setScoreboard] = useState<{ display_name: string; flags: number; last_capture: string }[] | null>(null);
+
+  const loadScoreboard = useCallback(async () => {
+    try {
+      const { data, error } = await getSupabase().rpc("ctf_scoreboard", { p_limit: 50 });
+      if (error) throw new Error(error.message);
+      setScoreboard(data ?? []);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load scoreboard."); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const BRIDGE = "http://127.0.0.1:8765";
   async function labAction(action: "start" | "stop") {
@@ -193,6 +203,14 @@ export default function AcademyPage() {
       <p className="mt-1 max-w-2xl text-sm text-slate-400">{track.summary}</p>
       <div className="mt-4 h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-emerald-500" style={{ width: prog.percent + "%" }}/></div>
       <p className="mt-1 text-xs text-slate-500">{prog.done}/{prog.total} tasks · {prog.percent}%</p>
+      {track.id === "ctf-lab" && <div className="mt-4">
+        <button onClick={() => { if (scoreboard) setScoreboard(null); else loadScoreboard(); }} className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500"><Trophy size={13}/> {scoreboard ? "Hide scoreboard" : "Scoreboard"}</button>
+        {scoreboard && <div className="mt-3 overflow-hidden rounded-xl border border-slate-800 bg-[#0b1715]">
+          {scoreboard.length === 0 ? <p className="p-4 text-xs text-slate-400">No flags captured yet. Be the first.</p>
+            : <table className="w-full text-sm"><thead><tr className="border-b border-slate-800 text-left text-[10px] uppercase tracking-wider text-slate-500"><th className="px-4 py-2">#</th><th className="px-4 py-2">Player</th><th className="px-4 py-2 text-right">Flags</th></tr></thead>
+              <tbody>{scoreboard.map((row, i) => <tr key={i} className="border-b border-slate-800/60"><td className="px-4 py-2 text-slate-500">{i + 1}</td><td className="px-4 py-2">{row.display_name}</td><td className="px-4 py-2 text-right font-semibold text-amber-200">{row.flags}/10</td></tr>)}</tbody></table>}
+        </div>}
+      </div>}
       <div className="mt-6 space-y-3">
         {track.rooms.map((r) => {
           const rp = r.tasks.filter((t) => completed.has(t.id)).length;

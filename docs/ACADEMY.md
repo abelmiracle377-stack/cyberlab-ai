@@ -38,22 +38,32 @@ Each room or task may carry a `videoUrl`:
 The *Capture The Flag: Vulnerable Shop* track runs against a real, deliberately
 vulnerable web app bundled with the companion (`kali-companion/academy_lab.py`).
 It binds **127.0.0.1 only** — a sandbox on the learner's own machine, nothing
-external. The "The Vulnerable Shop" room has a **Start lab** button that calls
-the paired companion (`POST /academy/lab/start`); the learner then attacks the
-target with the assessment tool, a browser or a repeater and submits the five
-flags they capture:
+external. A **Start lab** button calls the paired companion
+(`POST /academy/lab/start`); the learner then attacks the target with the
+assessment tool, a browser or a repeater and submits the **ten flags** across
+three difficulty tiers:
 
-- `/robots.txt` recon → a disallowed hidden path reveals a flag
-- `/.env` file disclosure
-- `/.git/config` source disclosure
-- an `X-Flag` response header on `/api/status`
-- error-based SQL injection on `/product?id=1'`
+- **Tier 1 — Recon & Disclosure:** `/robots.txt` recon → hidden path, `/.env`
+  disclosure, `/.git/config` source leak, and an `X-Flag` header on `/api/status`.
+- **Tier 2 — Injection & Broken Access:** error-based SQLi on `/product?id=1'`,
+  an IDOR on `/api/orders?id=1000`, and a path traversal on `/download?file=`.
+- **Tier 3 — Auth & Advanced:** a cookie auth bypass on `/admin`
+  (`Cookie: role=admin`), a JWT `alg:none` bypass on `/api/profile`, and an SSRF
+  to the internal metadata address on `/fetch?url=`.
 
 Flags are fixed and matched by the track's task answers (stripped from the
-browser), so a learner must actually perform the technique to capture them.
-`build_response` is a pure function, unit-tested in `test_academy_lab.py`.
-Bridge routes: `POST /academy/lab/start`, `POST /academy/lab/stop`,
-`GET /academy/lab/status`.
+browser), so a learner must actually perform the technique to capture them. The
+SSRF challenge never makes a real request — it recognises the internal target
+and returns the lesson flag. `build_response` is a pure function, unit-tested in
+`test_academy_lab.py` (15 tests). Bridge routes: `POST /academy/lab/start`,
+`POST /academy/lab/stop`, `GET /academy/lab/status`.
+
+### Scoreboard
+
+`ctf_scoreboard()` (migration `202611200009_academy_scoreboard.sql`) is a
+`SECURITY DEFINER` aggregate that ranks players by flags captured across users,
+exposing only a public handle (the chat username, else `anonymous`) and the
+count — never the owner id. The CTF track shows a **Scoreboard** button.
 
 ## Public certificate verification
 

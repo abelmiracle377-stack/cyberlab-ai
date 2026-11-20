@@ -43,6 +43,43 @@ class LabResponseTests(unittest.TestCase):
         self.assertEqual(status_err, 500)
         self.assertIn(lab.FLAG_SQLI, err)
 
+    def test_idor_reveals_other_order(self):
+        _, _, mine = lab.build_response("GET", "/api/orders", "id=1001")
+        self.assertNotIn(lab.FLAG_IDOR, mine)
+        _, _, other = lab.build_response("GET", "/api/orders", "id=1000")
+        self.assertIn(lab.FLAG_IDOR, other)
+
+    def test_path_traversal_only_on_climb_to_flag(self):
+        _, _, normal = lab.build_response("GET", "/download", "file=report.txt")
+        self.assertNotIn(lab.FLAG_TRAVERSAL, normal)
+        _, _, hacked = lab.build_response("GET", "/download", "file=../../secret/flag.txt")
+        self.assertIn(lab.FLAG_TRAVERSAL, hacked)
+
+    def test_admin_requires_forged_role_cookie(self):
+        status, _, body = lab.build_response("GET", "/admin")
+        self.assertEqual(status, 403)
+        status2, _, body2 = lab.build_response("GET", "/admin", "", {"Cookie": "session=x; role=admin"})
+        self.assertEqual(status2, 200)
+        self.assertIn(lab.FLAG_AUTHBYPASS, body2)
+
+    def test_jwt_alg_none_admin(self):
+        import base64 as b64, json as j
+        def seg(d): return b64.urlsafe_b64encode(j.dumps(d).encode()).decode().rstrip("=")
+        token = seg({"alg": "none", "typ": "JWT"}) + "." + seg({"role": "admin"}) + "."
+        status, _, body = lab.build_response("GET", "/api/profile", "", {"Authorization": "Bearer " + token})
+        self.assertEqual(status, 200)
+        self.assertIn(lab.FLAG_JWT, body)
+        # A signed HS256 token (alg not none) is rejected.
+        bad = seg({"alg": "HS256"}) + "." + seg({"role": "admin"}) + ".sig"
+        status2, _, _ = lab.build_response("GET", "/api/profile", "", {"Authorization": "Bearer " + bad})
+        self.assertEqual(status2, 401)
+
+    def test_ssrf_internal_target(self):
+        _, _, ext = lab.build_response("GET", "/fetch", "url=https://example.com")
+        self.assertNotIn(lab.FLAG_SSRF, ext)
+        _, _, ssrf = lab.build_response("GET", "/fetch", "url=http://169.254.169.254/latest/meta-data/")
+        self.assertIn(lab.FLAG_SSRF, ssrf)
+
     def test_unknown_path_is_404(self):
         status, _, _ = lab.build_response("GET", "/does-not-exist")
         self.assertEqual(status, 404)
