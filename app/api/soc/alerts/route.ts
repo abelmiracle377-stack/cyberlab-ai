@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, dbError } from "@/lib/social-auth";
-import { normalizeIngestAlert, isAlertStatus, isSeverity } from "@/lib/soc";
+import { normalizeIngestAlert, isAlertStatus, isSeverity, applySuppressions, type Suppression } from "@/lib/soc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,16 +36,27 @@ export async function POST(request: NextRequest) {
   if ("error" in auth) return auth.error;
 
   // Omit status so re-ingesting an existing alert keeps its triage state.
-  const rows = incoming
+  const normalized = incoming
     .map((a) => normalizeIngestAlert(a, source))
-    .filter((r): r is NonNullable<typeof r> => r !== null)
-    .map((r) => ({ ...r, owner: auth.user.id }));
-  if (rows.length === 0) return NextResponse.json({ error: "No valid alerts to store." }, { status: 400 });
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  if (normalized.length === 0) return NextResponse.json({ error: "No valid alerts to store." }, { status: 400 });
+
+  // Apply the operator's active suppressions at ingest, so tuned-out noise is
+  // never stored and capped alerts persist at their reduced severity.
+  const { data: supRows } = await auth.supabase.from("soc_suppressions")
+    .select("rule,host,src_ip,match_user,action,max_severity,expires_at").eq("owner", auth.user.id);
+  const suppressions: Suppression[] = (supRows ?? []).map((s) => ({
+    rule: s.rule, host: s.host, src_ip: s.src_ip, user: s.match_user,
+    action: s.action, max_severity: s.max_severity, expires: s.expires_at,
+  }));
+  const { kept, suppressed } = applySuppressions(normalized, suppressions, new Date().toISOString());
+  const rows = kept.map((r) => ({ ...r, owner: auth.user.id }));
+  if (rows.length === 0) return NextResponse.json({ ingested: 0, suppressed, alerts: [] }, { status: 200 });
 
   const { data, error } = await auth.supabase
     .from("soc_alerts").upsert(rows, { onConflict: "owner,alert_key" }).select("id,alert_key,severity,status");
   if (error) return dbError(error.message);
-  return NextResponse.json({ ingested: data?.length ?? 0, alerts: data ?? [] }, { status: 200 });
+  return NextResponse.json({ ingested: data?.length ?? 0, suppressed, alerts: data ?? [] }, { status: 200 });
 }
 
 export async function PATCH(request: NextRequest) {

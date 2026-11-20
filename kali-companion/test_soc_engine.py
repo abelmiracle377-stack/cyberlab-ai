@@ -127,5 +127,59 @@ class IncidentCorrelationTests(unittest.TestCase):
         self.assertEqual(se.group_incidents([]), [])
 
 
+class ThreatIntelTests(unittest.TestCase):
+    def test_known_bad_ip_raises_critical_alert(self):
+        events = [{"type": "network_connection", "host": "web01", "src_ip": "45.33.32.156", "dst_ip": "203.0.113.9"}]
+        out = se.analyze(events, {"indicators": {"ips": ["45.33.32.156"]}})
+        alert = next(a for a in out["alerts"] if a["rule"] == "known_indicator")
+        self.assertEqual(alert["severity"], "critical")
+        self.assertEqual(alert["entities"]["indicator_type"], "ip")
+        self.assertIn("block_ip", [a["action"] for a in alert["recommended_actions"]])
+
+    def test_known_bad_hash_and_domain(self):
+        events = [
+            {"type": "process", "host": "wks3", "details": {"sha256": "ABCDEF"}},
+            {"type": "network_connection", "host": "wks3", "domain": "Evil.Example"},
+        ]
+        out = se.analyze(events, {"indicators": {"hashes": ["abcdef"], "domains": ["evil.example"]}})
+        rules = [a for a in out["alerts"] if a["rule"] == "known_indicator"]
+        types = {a["entities"]["indicator_type"] for a in rules}
+        self.assertEqual(types, {"hash", "domain"})  # case-insensitive match
+
+    def test_no_indicators_no_alert(self):
+        events = [{"type": "network_connection", "host": "web01", "src_ip": "45.33.32.156"}]
+        out = se.analyze(events)
+        self.assertFalse(any(a["rule"] == "known_indicator" for a in out["alerts"]))
+
+
+class SuppressionTests(unittest.TestCase):
+    def test_drop_suppression_removes_matching_alert(self):
+        events = [{"type": "listening_socket", "host": "scanner", "port": 4444}]
+        base = se.analyze(events)
+        self.assertEqual(base["alert_count"], 1)
+        tuned = se.analyze(events, {"suppressions": [{"rule": "suspicious_listening_port", "host": "scanner"}]})
+        self.assertEqual(tuned["alert_count"], 0)
+        self.assertEqual(tuned["suppressed_count"], 1)
+
+    def test_cap_suppression_downgrades_severity(self):
+        events = [{"type": "listening_socket", "host": "lab", "port": 4444}]
+        tuned = se.analyze(events, {"suppressions": [
+            {"host": "lab", "action": "cap", "max_severity": "low"}]})
+        alert = tuned["alerts"][0]
+        self.assertEqual(alert["severity"], "low")
+        self.assertEqual(alert["suppressed"], "capped")
+
+    def test_expired_suppression_is_ignored(self):
+        events = [{"type": "listening_socket", "host": "scanner", "port": 4444}]
+        tuned = se.analyze(events, {"now": "2026-11-20T00:00:00Z", "suppressions": [
+            {"rule": "suspicious_listening_port", "host": "scanner", "expires": "2026-11-19T00:00:00Z"}]})
+        self.assertEqual(tuned["alert_count"], 1)  # suppression already expired
+
+    def test_overbroad_suppression_with_no_selector_ignored(self):
+        events = [{"type": "listening_socket", "host": "scanner", "port": 4444}]
+        tuned = se.analyze(events, {"suppressions": [{"action": "drop"}]})
+        self.assertEqual(tuned["alert_count"], 1)  # refuses to drop everything
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -752,7 +752,8 @@ def soc_run_cycle(data: dict) -> dict:
         policy = {**policy, "allowed_actions": set(policy["allowed_actions"])}
     dry_run = data.get("dryRun") is not False
     responder = None if dry_run else cybersoc.build_default_responder()
-    report = cybersoc.run_cycle(collectors, responder=responder, policy=policy)
+    config = data.get("config") if isinstance(data.get("config"), dict) else None
+    report = cybersoc.run_cycle(collectors, responder=responder, policy=policy, config=config)
     report["dry_run"] = dry_run
     return report
 

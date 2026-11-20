@@ -114,10 +114,13 @@ export default function SocPage() {
       });
       const report = await res.json();
       if (!res.ok) throw new Error(report.error || "Companion cycle failed.");
+      let suppressed = 0;
       if ((report.alerts || []).length) {
-        await api("/api/soc/alerts", { method: "POST", body: JSON.stringify({ alerts: report.alerts, source: "companion" }) });
+        const ing = await api("/api/soc/alerts", { method: "POST", body: JSON.stringify({ alerts: report.alerts, source: "companion" }) });
+        suppressed = ing.suppressed ?? 0;
       }
-      setCycleInfo(`${report.events_collected} events · ${report.alert_count} alerts · ${report.escalations?.length ?? 0} escalations` +
+      setCycleInfo(`${report.events_collected} events · ${report.alert_count} alerts` +
+        (suppressed ? ` · ${suppressed} suppressed` : "") + ` · ${report.escalations?.length ?? 0} escalations` +
         (dryRun ? " (dry run)" : ` · ${report.actions_taken?.length ?? 0} actions taken`));
       await loadAlerts();
     } catch (e) { setError(e instanceof Error ? e.message : "Companion cycle failed. Is the companion paired?"); }
@@ -159,6 +162,21 @@ export default function SocPage() {
       const data = await api("/api/soc/notes", { method: "POST", body: JSON.stringify({ alertId: alert.id, body }) });
       setNotes((prev) => [...prev, data.note]); setNoteDraft("");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save note."); }
+  }
+
+  async function suppressRule(alert: Alert) {
+    const ent = alert.entities || {};
+    const host = typeof ent.host === "string" ? ent.host : "";
+    const src = typeof ent.src_ip === "string" ? ent.src_ip : "";
+    const scope = host ? { host } : src ? { src_ip: src } : {};
+    if (!host && !src) { setError("This alert has no host or source IP to scope a suppression to."); return; }
+    try {
+      await api("/api/soc/suppressions", {
+        method: "POST",
+        body: JSON.stringify({ rule: alert.rule, ...scope, action: "drop", reason: `Muted from console: ${alert.title}` }),
+      });
+      setCycleInfo(`Muted rule "${alert.rule}" for ${host || src}. Future matching alerts won't be stored.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not create suppression."); }
   }
 
   async function approveAction(alert: Alert, action: string, params: Record<string, unknown> | undefined) {
@@ -271,6 +289,8 @@ export default function SocPage() {
                   <span className="soc-chip">{active.event_count} events</span>
                   <button className="soc-mini" onClick={() => toggleAssign(active)}>
                     {active.assignee === me ? "Unassign" : "Assign to me"}</button>
+                  <button className="soc-mini" onClick={() => suppressRule(active)}
+                    title="Stop storing this rule for this host/IP (tune out noise)">Mute rule here</button>
                 </div>
               </div>
               <p className="soc-desc">{active.description}</p>

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   severityRank, isSeverity, isAlertStatus, isDestructive,
   normalizeIngestAlert, summarizeBySeverity, computeMetrics, groupIncidents,
+  applySuppressions, matchesSuppression,
 } from "../lib/soc";
 
 test("severity rank and guards", () => {
@@ -102,6 +103,33 @@ test("group incidents: ranked by score, unrelated stay separate", () => {
   assert.equal(incidents[0].title, "Crit");
   assert.equal(incidents[0].open_count, 1);
   assert.equal(incidents[1].open_count, 0);
+});
+
+test("suppression drops a matching alert", () => {
+  const { kept, suppressed } = applySuppressions(
+    [{ rule: "implant_port", severity: "critical", entities: { host: "scanner" } },
+     { rule: "port_scan", severity: "high", entities: { host: "db" } }],
+    [{ rule: "implant_port", host: "scanner" }]);
+  assert.equal(suppressed, 1);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].rule, "port_scan");
+});
+
+test("cap suppression downgrades severity and score", () => {
+  const { kept } = applySuppressions(
+    [{ rule: "implant_port", severity: "critical", score: 95, entities: { host: "lab" } }],
+    [{ host: "lab", action: "cap", max_severity: "low" }]);
+  assert.equal(kept[0].severity, "low");
+  assert.equal(kept[0].score, 30);
+  assert.equal(kept[0].suppressed, "capped");
+});
+
+test("expired and over-broad suppressions are ignored", () => {
+  const expired = applySuppressions(
+    [{ rule: "implant_port", severity: "critical", entities: { host: "s" } }],
+    [{ rule: "implant_port", host: "s", expires: "2020-01-01T00:00:00Z" }], "2026-11-20T00:00:00Z");
+  assert.equal(expired.suppressed, 0);
+  assert.equal(matchesSuppression({ rule: "x", severity: "high", entities: {} }, { action: "drop" }), false);
 });
 
 test("summarize by severity", () => {

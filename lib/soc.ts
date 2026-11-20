@@ -185,3 +185,51 @@ export function groupIncidents(alerts: IncidentAlert[]): Incident[] {
   incidents.sort((a, b) => b.score - a.score || b.alert_count - a.alert_count);
   return incidents;
 }
+
+const SEVERITY_SCORE: Record<Severity, number> = {
+  informational: 10, low: 30, medium: 55, high: 78, critical: 95,
+};
+
+export type Suppression = {
+  rule?: string | null; host?: string | null; src_ip?: string | null; user?: string | null;
+  action?: "drop" | "cap"; max_severity?: string | null; expires?: string | null;
+};
+export type SuppressibleAlert = {
+  rule: string; severity: string; score?: number; entities?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export function matchesSuppression(alert: SuppressibleAlert, rule: Suppression): boolean {
+  if (rule.rule && rule.rule !== alert.rule) return false;
+  const entities = alert.entities || {};
+  for (const key of ["host", "src_ip", "user"] as const) {
+    const want = rule[key];
+    if (want && String(want) !== String(entities[key] ?? "")) return false;
+  }
+  return Boolean(rule.rule || rule.host || rule.src_ip || rule.user);
+}
+
+// Drop or down-rank alerts matching an active operator suppression, mirroring
+// the companion engine so web ingest and the headless runner tune identically.
+export function applySuppressions<T extends SuppressibleAlert>(
+  alerts: T[], suppressions: Suppression[], now?: string,
+): { kept: T[]; suppressed: number } {
+  const active = (suppressions || []).filter((s) => !(s.expires && now && String(s.expires) < String(now)));
+  if (active.length === 0) return { kept: [...alerts], suppressed: 0 };
+  const kept: T[] = [];
+  let suppressed = 0;
+  for (const alert of alerts) {
+    const rule = active.find((s) => matchesSuppression(alert, s));
+    if (!rule) { kept.push(alert); continue; }
+    if (rule.action === "cap" && isSeverity(rule.max_severity)) {
+      if (severityRank(alert.severity) > severityRank(rule.max_severity)) {
+        kept.push({ ...alert, severity: rule.max_severity, score: SEVERITY_SCORE[rule.max_severity], suppressed: "capped" });
+      } else {
+        kept.push(alert);
+      }
+    } else {
+      suppressed += 1; // dropped
+    }
+  }
+  return { kept, suppressed };
+}

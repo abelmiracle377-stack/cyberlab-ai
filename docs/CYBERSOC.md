@@ -26,6 +26,7 @@ involved, and concrete recommended response actions. Current rules:
 | Exposed sensitive service (Telnet/RDP/SMB/DB/Docker API…) | T1133 | medium–critical |
 | Privileged login from an external address | T1078.003 | high |
 | Port scan (many ports from one source) | T1046 | medium/high |
+| Known-bad indicator (operator IOC: IP/domain/hash) | T1071 | critical |
 | SIEM pass-through (Splunk/Wazuh alerts) | from source | mapped |
 
 `events_from_telemetry()` folds the companion's own read-only telemetry
@@ -38,6 +39,20 @@ way an analyst groups "all the noise from one box." Each incident rolls up the
 highest severity, the summed score, the combined ATT&CK tactics, the entities,
 and the merged recommended actions, ranked by score. `analyze()` returns both the
 ranked `alerts` and the correlated `incidents`.
+
+**Threat intel (IOCs).** Pass `config["indicators"] = {ips, domains, hashes}` —
+the operator's own indicator list, exported from whatever feed they use; nothing
+is fetched. Any event whose source/destination IP, domain, or file hash matches
+raises a critical alert with a block/isolate response. Matching is
+case-insensitive for domains and hashes.
+
+**Detection tuning (suppression).** `config["suppressions"]` lets an analyst tune
+out known-good noise without disabling a whole rule. Each entry selects on any of
+`rule`, `host`, `src_ip`, `user` and either drops the alert (`action: "drop"`,
+the default) or caps it to a ceiling (`action: "cap"`, `max_severity`). Entries
+with an `expires` in the past are ignored, and an entry with no selector is
+refused (it would mute everything). `analyze()` applies them after ranking and
+reports `suppressed_count`.
 
 ## SIEM connectors (companion)
 
@@ -101,11 +116,15 @@ and Realtime on alerts. The notes migration also adds `soc_alerts.assignee`.
   via a Supabase Realtime subscription.
 - **API** `/api/soc/alerts` (list / ingest-by-key / update status / assign),
   `/api/soc/actions` (record / approve / update outcome), `/api/soc/metrics`
-  (operational KPIs), and `/api/soc/notes` (list / add investigation notes).
-  Ingest upserts by `alert_key` and preserves an alert's triage status across
-  re-ingests. Pure logic — severity ranking, metrics, and incident correlation —
-  lives in `lib/soc.ts` (unit-tested in `tests/soc.test.ts`), mirroring the
-  companion engine so the browser's incident view matches the headless runner.
+  (operational KPIs), `/api/soc/notes` (list / add investigation notes), and
+  `/api/soc/suppressions` (list / add / delete tuning rules). Ingest upserts by
+  `alert_key`, preserves an alert's triage status across re-ingests, and
+  **applies the operator's active suppressions at ingest** — tuned-out noise is
+  never stored and capped alerts persist at the reduced severity. Pure logic —
+  severity ranking, metrics, incident correlation and suppression — lives in
+  `lib/soc.ts` (unit-tested in `tests/soc.test.ts`), mirroring the companion
+  engine so the browser matches the headless runner. The console's **Mute rule
+  here** button scopes a drop suppression to the alert's rule and host/IP.
 
 So the same CyberSOC runs headless (standalone), on the companion, and in the
 browser — and a human can review every alert, change its status, and authorize

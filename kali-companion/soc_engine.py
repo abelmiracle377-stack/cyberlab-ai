@@ -271,10 +271,123 @@ def _rule_siem_passthrough(events, config) -> list:
     return alerts
 
 
+def _indicator_sets(config) -> dict:
+    """Normalize the operator-supplied threat-intel indicators into lookup sets."""
+    raw = config.get("indicators") or {}
+    ips = {str(v).strip() for v in (raw.get("ips") or []) if str(v).strip()}
+    domains = {str(v).strip().lower() for v in (raw.get("domains") or []) if str(v).strip()}
+    hashes = {str(v).strip().lower() for v in (raw.get("hashes") or []) if str(v).strip()}
+    return {"ips": ips, "domains": domains, "hashes": hashes}
+
+
+def _rule_known_indicator(events, config) -> list:
+    """Match events against operator-supplied threat-intel indicators (IOCs).
+
+    The operator provides their own indicator list (e.g. exported from a feed);
+    nothing is fetched or invented. A hit is a critical alert — a known-bad IP,
+    domain or file hash seen on the estate is high-confidence by definition.
+    """
+    ioc = _indicator_sets(config)
+    if not (ioc["ips"] or ioc["domains"] or ioc["hashes"]):
+        return []
+    grouped: dict[str, dict] = {}
+    for e in events:
+        details = e.get("details") or {}
+        candidates = []  # (indicator_value, indicator_type, matched)
+        for key in ("src_ip", "dst_ip"):
+            val = str(e.get(key) or "").strip()
+            if val and val in ioc["ips"]:
+                candidates.append((val, "ip"))
+        domain = str(e.get("domain") or details.get("domain") or "").strip().lower()
+        if domain and domain in ioc["domains"]:
+            candidates.append((domain, "domain"))
+        file_hash = str(details.get("hash") or details.get("sha256") or details.get("md5") or "").strip().lower()
+        if file_hash and file_hash in ioc["hashes"]:
+            candidates.append((file_hash, "hash"))
+        for value, itype in candidates:
+            entities = {
+                "indicator": value, "indicator_type": itype,
+                "host": e.get("host", ""), "src_ip": e.get("src_ip", ""),
+            }
+            key = _alert_id("known_indicator", entities)
+            actions = [{"action": "isolate_host", "tool": None, "params": {"host": e.get("host", "")},
+                        "rationale": "Contain the host that touched a known-bad indicator."}]
+            if itype == "ip":
+                actions.insert(0, {"action": "block_ip", "tool": None, "params": {"ip": value},
+                                   "rationale": "Block the known-malicious address at the perimeter."})
+            grouped.setdefault(key, {"value": value, "itype": itype, "entities": entities,
+                                     "events": [], "actions": actions})
+            grouped[key]["events"].append(e)
+    alerts = []
+    for g in grouped.values():
+        label = {"ip": "address", "domain": "domain", "hash": "file hash"}[g["itype"]]
+        alerts.append(_make_alert(
+            "known_indicator",
+            f"Known-bad {label} observed: {g['value']}"[:160],
+            "critical",
+            {"tactic": "command-and-control", "technique_id": "T1071", "technique": "Application Layer Protocol"},
+            f"Traffic or activity matched a threat-intel indicator ({g['itype']}={g['value']}). "
+            "This indicator was supplied by the operator's intel set.",
+            g["entities"], g["events"], g["actions"],
+        ))
+    return alerts
+
+
 RULES = [
     _rule_brute_force, _rule_successful_after_failures, _rule_implant_port,
-    _rule_exposed_service, _rule_privileged_login, _rule_port_scan, _rule_siem_passthrough,
+    _rule_exposed_service, _rule_privileged_login, _rule_port_scan,
+    _rule_known_indicator, _rule_siem_passthrough,
 ]
+
+
+def _suppression_matches(alert: dict, rule: dict) -> bool:
+    """A suppression matches when every field it specifies matches the alert."""
+    if rule.get("rule") and rule["rule"] != alert.get("rule"):
+        return False
+    entities = alert.get("entities") or {}
+    for key in ("host", "src_ip", "user"):
+        want = rule.get(key)
+        if want and str(want) != str(entities.get(key, "")):
+            return False
+    # A suppression with no selective field at all is ignored (too broad).
+    return any(rule.get(k) for k in ("rule", "host", "src_ip", "user"))
+
+
+def apply_suppressions(alerts: list, suppressions: list, now: str | None = None) -> tuple:
+    """Drop or down-rank alerts that match an active operator suppression.
+
+    Suppression shape: {rule?, host?, src_ip?, user?, action: "drop"|"cap",
+    max_severity?, expires?}. This is how an analyst tunes out known-good noise
+    without disabling a whole rule. Expired suppressions (expires < now) are
+    skipped. Returns (kept_alerts, suppressed_count).
+    """
+    active = []
+    for s in suppressions or []:
+        if not isinstance(s, dict):
+            continue
+        exp = s.get("expires")
+        if exp and now and str(exp) < str(now):
+            continue
+        active.append(s)
+    if not active:
+        return list(alerts), 0
+
+    kept, suppressed = [], 0
+    for alert in alerts:
+        rule = next((s for s in active if _suppression_matches(alert, s)), None)
+        if rule is None:
+            kept.append(alert)
+            continue
+        if rule.get("action") == "cap" and rule.get("max_severity") in SEVERITY_ORDER:
+            capped = dict(alert)
+            if SEVERITY_ORDER.index(alert["severity"]) > SEVERITY_ORDER.index(rule["max_severity"]):
+                capped["severity"] = rule["max_severity"]
+                capped["score"] = SEVERITY_SCORE[rule["max_severity"]]
+                capped["suppressed"] = "capped"
+            kept.append(capped)
+        else:
+            suppressed += 1  # dropped
+    return kept, suppressed
 
 
 # Entity keys that, when shared, link two alerts into the same incident.
@@ -386,6 +499,10 @@ def analyze(events: list, config: dict | None = None) -> dict:
             if not existing or alert["score"] > existing["score"]:
                 alerts[alert["id"]] = alert
     ranked = sorted(alerts.values(), key=lambda a: (-a["score"], a["rule"]))
+    ranked, suppressed_count = apply_suppressions(
+        ranked, settings.get("suppressions", []), settings.get("now"))
+    # Capping may change scores; re-sort so ranking stays truthful.
+    ranked = sorted(ranked, key=lambda a: (-a["score"], a["rule"]))
     by_severity = {level: 0 for level in SEVERITY_ORDER}
     for alert in ranked:
         by_severity[alert["severity"]] += 1
@@ -394,6 +511,7 @@ def analyze(events: list, config: dict | None = None) -> dict:
         "alerts": ranked, "alert_count": len(ranked),
         "incidents": incidents, "incident_count": len(incidents),
         "events_analyzed": len(events), "by_severity": by_severity,
+        "suppressed_count": suppressed_count,
         "highest_severity": ranked[0]["severity"] if ranked else "none",
         "note": "Deterministic correlation of the supplied events; no telemetry is fabricated.",
     }
