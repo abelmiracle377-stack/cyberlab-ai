@@ -11,6 +11,8 @@ export type AcademyResource = { title: string; url: string };
 export type AcademyTask = {
   id: string; title: string; instructions: string;
   answer?: string; hint?: string; videoUrl?: string;
+  // Spoiler content — revealed only after the learner captures this task's flag.
+  writeup?: string; walkthroughUrl?: string;
 };
 export type AcademyRoom = {
   id: string; title: string; summary: string;
@@ -214,16 +216,24 @@ TRACKS.push({
       tasks: [
         { id: "ctf-recon", title: "Robots recon",
           instructions: "Start the lab (button above). Request /robots.txt on the lab's base URL, follow the Disallowed path, and submit the flag it returns.",
-          answer: "CYBERLAB{recon_robots_txt}", hint: "Disallow: points at a hidden path." },
+          answer: "CYBERLAB{recon_robots_txt}", hint: "Disallow: points at a hidden path.",
+          walkthroughUrl: "https://owasp.org/www-project-web-security-testing-guide/",
+          writeup: "robots.txt tells crawlers which paths to avoid — which means it often advertises exactly the sensitive paths a developer wanted hidden. It is one of the first files a tester requests. Here, the Disallow entry points at /flag-7a1c; visiting it returns the flag. The lesson: 'security through obscurity' isn't security. A path is not protected just because it isn't linked. Fix: never list sensitive locations in robots.txt, and protect them with real authentication and authorization instead." },
         { id: "ctf-dotenv", title: "Exposed .env",
           instructions: "The app serves its environment file. Request /.env and submit the FLAG= value.",
-          answer: "CYBERLAB{dotenv_secrets_exposed}" },
+          answer: "CYBERLAB{dotenv_secrets_exposed}",
+          walkthroughUrl: "https://owasp.org/www-project-web-security-testing-guide/",
+          writeup: "A .env file holds an app's configuration secrets — database passwords, API keys, signing keys. It belongs outside the web root, but a misconfigured server (or a deploy that copied it into the public folder) serves it like any other file. Requesting /.env returns KEY=VALUE lines, here including the flag. In the real world this is a full compromise: the leaked DB password or API key is immediately usable. Fix: keep .env out of the document root, block dotfiles at the web server, and rotate any secret that was ever exposed." },
         { id: "ctf-git", title: "Exposed .git",
           instructions: "The version-control folder is downloadable. Read /.git/config and submit the flag in its comment.",
-          answer: "CYBERLAB{git_source_leak}", hint: "Also try /.git/HEAD to confirm the exposure." },
+          answer: "CYBERLAB{git_source_leak}", hint: "Also try /.git/HEAD to confirm the exposure.",
+          walkthroughUrl: "https://owasp.org/www-project-web-security-testing-guide/",
+          writeup: "When a site is deployed by copying a git working tree, the hidden .git/ folder often ships too. Because the server lists it like any directory, an attacker can download the whole repository — full source code and commit history — with tools like git-dumper. /.git/HEAD returning 'ref: refs/heads/main' confirms the exposure; /.git/config here carries the flag. The impact is total source disclosure, which often includes hard-coded secrets in old commits. Fix: deploy build artifacts rather than the git tree, and deny access to /.git at the web server." },
         { id: "ctf-header", title: "Leaky response header",
           instructions: "Inspect the response headers of /api/status (use the assessment tool or a repeater). Submit the value of the X-Flag header.",
-          answer: "CYBERLAB{response_header_leak}" },
+          answer: "CYBERLAB{response_header_leak}",
+          walkthroughUrl: "https://owasp.org/www-project-secure-headers/",
+          writeup: "The body of a response is only half of it — the headers carry just as much. Debug builds, proxies and frameworks frequently leak internal data in custom headers (X-Debug, X-Powered-By, verbose Server strings). Here /api/status returns an X-Flag header that the page body never shows, so you only find it by inspecting the raw response. Always read headers in a repeater or the assessment tool, not just the rendered page. Fix: strip debug and technology-disclosure headers in production." },
       ],
     },
     {
@@ -236,13 +246,19 @@ TRACKS.push({
       tasks: [
         { id: "ctf-sqli", title: "Error-based SQL injection",
           instructions: "Break the product query: request /product?id=1' (a single quote). The database error leaks a debug flag. Submit it.",
-          answer: "CYBERLAB{error_based_sqli}", hint: "A single quote breaks SQL string context." },
+          answer: "CYBERLAB{error_based_sqli}", hint: "A single quote breaks SQL string context.",
+          walkthroughUrl: "https://portswigger.net/web-security/sql-injection",
+          writeup: "When user input is concatenated straight into a SQL query, a single quote breaks out of the string literal and corrupts the query's syntax. A server that returns the raw database error (error-based SQLi) confirms the injection point and often leaks schema detail — here, a debug flag. Real exploitation would move on to UNION or boolean/blind techniques to read arbitrary data. CyberLab's engine only detects the error signature; it never extracts data. Fix: use parameterised queries / prepared statements so input is always bound as data, never parsed as SQL, and return generic error pages." },
         { id: "ctf-idor", title: "IDOR on orders",
           instructions: "Your order is /api/orders?id=1001. Change the id to read another user's order and submit the flag it contains.",
-          answer: "CYBERLAB{idor_order_access}", hint: "Try the id just below yours." },
+          answer: "CYBERLAB{idor_order_access}", hint: "Try the id just below yours.",
+          walkthroughUrl: "https://portswigger.net/web-security/access-control/idor",
+          writeup: "An Insecure Direct Object Reference is broken access control: the app looks up an object by an id you supply, but never checks that the object belongs to you. Your order is 1001; changing the id to 1000 returns another user's order — and the flag. IDOR is one of the most common and highest-impact real-world bugs because it exposes other users' data at scale, just by incrementing a number. Fix: enforce an authorization check on every object access (does this user own this record?), and prefer unguessable identifiers as defence in depth, never as the only control." },
         { id: "ctf-traversal", title: "Path traversal",
           instructions: "The /download?file= endpoint reads a file by name. Traverse up the directories to reach the secret flag file and submit the flag.",
-          answer: "CYBERLAB{path_traversal_secret}", hint: "../../ … /flag.txt" },
+          answer: "CYBERLAB{path_traversal_secret}", hint: "../../ … /flag.txt",
+          walkthroughUrl: "https://portswigger.net/web-security/file-path-traversal",
+          writeup: "Path (directory) traversal happens when an app builds a filesystem path from user input without constraining it. Sequences like ../ climb out of the intended directory, letting you read files the app never meant to serve — classically /etc/passwd, or here a secret flag file. The impact is arbitrary file read: source code, config, keys. Fix: resolve the path and verify it stays within an allow-listed base directory, reject any input containing path separators or '..', and prefer mapping an opaque id to a known file rather than taking a filename at all." },
       ],
     },
     {
@@ -259,13 +275,19 @@ TRACKS.push({
       tasks: [
         { id: "ctf-authbypass", title: "Cookie auth bypass",
           instructions: "/admin trusts a client-set role. Send a request with the header Cookie: role=admin (use a repeater or the browser dev tools) and submit the flag.",
-          answer: "CYBERLAB{cookie_role_forgery}" },
+          answer: "CYBERLAB{cookie_role_forgery}",
+          walkthroughUrl: "https://portswigger.net/web-security/access-control",
+          writeup: "This is broken access control via a trusted client value. The app decides who is an admin by reading a role=... cookie — but cookies are fully attacker-controlled. Setting Cookie: role=admin grants the admin area and the flag. Anything the client can set (cookies, hidden fields, headers) must be treated as untrusted. Fix: derive privileges from a server-side session tied to an authenticated identity, sign/encrypt session state, and check authorization on the server for every privileged action — never from a client-supplied role flag." },
         { id: "ctf-jwt", title: "JWT alg:none",
           instructions: "/api/profile accepts an unsigned token. Craft a JWT with header {\"alg\":\"none\"} and payload {\"role\":\"admin\"} (base64url, trailing dot, no signature) and send it as Authorization: Bearer <token>. Submit the flag.",
-          answer: "CYBERLAB{jwt_alg_none}", hint: "No signature needed when the server trusts alg:none." },
+          answer: "CYBERLAB{jwt_alg_none}", hint: "No signature needed when the server trusts alg:none.",
+          walkthroughUrl: "https://portswigger.net/web-security/jwt",
+          writeup: "A JWT is header.payload.signature; the header's 'alg' field says how it was signed. The spec allows alg 'none' (an unsigned token), and libraries that honour it will accept a token with no signature at all. So you forge one: set the header to {\"alg\":\"none\"} and the payload to {\"role\":\"admin\"}, base64url-encode both, and send header.payload. with an empty signature and the trailing dot. The server trusts it and returns the flag. Fix: never accept alg 'none', pin the expected algorithm server-side, and always verify the signature with the correct key — use verify(), not decode()." },
         { id: "ctf-ssrf", title: "SSRF to internal metadata",
           instructions: "/fetch?url= will request a URL you give it. Point it at the internal metadata address 169.254.169.254 and submit the flag it returns.",
-          answer: "CYBERLAB{ssrf_internal_metadata}" },
+          answer: "CYBERLAB{ssrf_internal_metadata}",
+          walkthroughUrl: "https://portswigger.net/web-security/ssrf",
+          writeup: "Server-Side Request Forgery tricks the server into making a request on your behalf. Because that request originates from inside the network, it can reach things you can't — internal admin panels, databases, and cloud metadata services. The classic target is 169.254.169.254, the link-local metadata endpoint on AWS/GCP/Azure, which can hand out temporary cloud credentials. Here, pointing /fetch?url= at it returns the flag. (CyberLab's lab recognises the internal target and returns the lesson flag; it never makes a real request.) Fix: allow-list permitted destinations, block link-local/private ranges and redirects, and require IMDSv2 / disable metadata where possible." },
       ],
     },
   ],
@@ -311,6 +333,8 @@ export function publicTracks() {
       tasks: r.tasks.map((task) => ({
         id: task.id, title: task.title, instructions: task.instructions,
         hint: task.hint, videoUrl: task.videoUrl, requiresAnswer: Boolean(task.answer),
+        // writeup/walkthrough are spoilers — gated behind /api/academy/writeup.
+        hasWriteup: Boolean(task.writeup || task.walkthroughUrl),
       })),
     })),
     certification: t.certification ? {

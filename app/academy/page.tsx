@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2, Trophy, Terminal } from "lucide-react";
+import { ArrowLeft, GraduationCap, PlayCircle, CheckCircle2, Circle, Award, ExternalLink, Loader2, Trophy, Terminal, BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-type Task = { id: string; title: string; instructions: string; hint?: string; videoUrl?: string; requiresAnswer: boolean };
+type Task = { id: string; title: string; instructions: string; hint?: string; videoUrl?: string; requiresAnswer: boolean; hasWriteup?: boolean };
 type Room = { id: string; title: string; summary: string; difficulty: string; tool?: string; toolHref?: string; videoUrl?: string; lab?: boolean; resources?: { title: string; url: string }[]; tasks: Task[] };
 type LabChallenge = { id: string; title: string; technique: string; pathHint: string };
 type LabInfo = { status: string; baseUrl: string | null; challenges: LabChallenge[] };
@@ -64,6 +64,16 @@ export default function AcademyPage() {
   const [conAuth, setConAuth] = useState("");
   const [conResp, setConResp] = useState<{ status: number; headers: Record<string, string>; body: string } | null>(null);
   const [conBusy, setConBusy] = useState(false);
+  const [writeups, setWriteups] = useState<Record<string, { writeup: string; walkthroughUrl: string } | "loading">>({});
+
+  async function openWriteup(taskId: string) {
+    if (writeups[taskId]) { setWriteups((w) => { const n = { ...w }; delete n[taskId]; return n; }); return; }
+    setWriteups((w) => ({ ...w, [taskId]: "loading" }));
+    try {
+      const data = await api("/api/academy/writeup?taskId=" + encodeURIComponent(taskId));
+      setWriteups((w) => ({ ...w, [taskId]: { writeup: data.writeup || "", walkthroughUrl: data.walkthroughUrl || "" } }));
+    } catch (e) { setWriteups((w) => { const n = { ...w }; delete n[taskId]; return n; }); setError(e instanceof Error ? e.message : "Could not load write-up."); }
+  }
 
   async function sendConsole() {
     setConBusy(true); setError("");
@@ -248,6 +258,16 @@ export default function AcademyPage() {
                     <button onClick={() => complete(task)} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Submit</button>
                     {task.hint && <span className="self-center text-[11px] text-slate-500">Hint: {task.hint}</span>}
                   </div> : <button onClick={() => complete(task)} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Mark complete</button>}
+                </div>}
+                {done && task.hasWriteup && <div className="mt-3">
+                  <button onClick={() => openWriteup(task.id)} className="inline-flex items-center gap-1 rounded border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500"><BookOpen size={12}/> {writeups[task.id] ? "Hide write-up" : "Show write-up & walkthrough"}</button>
+                  {writeups[task.id] === "loading" && <p className="mt-2 text-xs text-slate-500">Loading…</p>}
+                  {writeups[task.id] && writeups[task.id] !== "loading" && <div className="mt-2 rounded-lg border border-slate-800 bg-[#06100e] p-3">
+                    <p className="text-xs leading-relaxed text-slate-300">{(writeups[task.id] as { writeup: string }).writeup}</p>
+                    {(() => { const wu = (writeups[task.id] as { walkthroughUrl: string }).walkthroughUrl; const em = embed(wu);
+                      return wu ? (em ? <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-slate-800"><iframe className="h-full w-full" src={em} title="Walkthrough" allowFullScreen/></div>
+                        : <a href={wu} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-sky-300"><PlayCircle size={13}/> Watch walkthrough</a>) : null; })()}
+                  </div>}
                 </div>}
               </div>
             </div>

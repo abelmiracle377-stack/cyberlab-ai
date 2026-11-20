@@ -75,6 +75,18 @@ This is a self-contained practice target plus attacker tooling, not a full cloud
 Linux desktop; learners who want to point real tools (Burp, curl) at a live
 target can still run the companion lab locally (`Start lab`).
 
+### Write-ups & walkthroughs (unlock after capture)
+
+Every CTF challenge has a full **write-up** (what the vulnerability is, how to
+capture it here, real-world impact, and the fix) and a **walkthrough** link to an
+authoritative resource. Both are spoilers, so they are stripped from the public
+curriculum and released only once the learner captures that challenge's flag —
+served by `GET /api/academy/writeup?taskId=` after an `academy_progress` check.
+In the room, a completed challenge shows a **Show write-up & walkthrough** button;
+if a walkthrough URL is a YouTube watch link it embeds inline, otherwise it opens
+out. Operators can set a specific `walkthroughUrl` per task (including an uploaded
+video) in `lib/academy-content.ts`.
+
 ### Scoreboard
 
 `ctf_scoreboard()` (migration `202611200009_academy_scoreboard.sql`) is a
