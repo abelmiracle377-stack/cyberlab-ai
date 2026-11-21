@@ -406,7 +406,7 @@ def view_shared_file(token: str):
 class RelayJobCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     device_id: str = Field(min_length=1, max_length=80)
-    action: Literal["desktop.browser.inspect", "kali.health", "kali.tools.inventory", "kali.ollama.models", "kali.ollama.chat", "kali.tool.run"]
+    action: Literal["desktop.browser.inspect", "kali.health", "kali.tools.inventory", "kali.ollama.models", "kali.ollama.chat", "kali.tool.run", "kali.bridge.request"]
     payload: dict = Field(default_factory=dict)
     approval_reference: str = Field(min_length=3, max_length=160)
     operator_approved: bool
@@ -438,6 +438,62 @@ def validate_relay_payload(action, payload, approval_reference, approved):
         if not isinstance(origins, list) or not 1 <= len(origins) <= 10 or origin not in origins or any(not isinstance(x, str) or len(x) > 300 for x in origins):
             raise HTTPException(400, "Exact target origin must be in the approved-origin list.")
         return "desktop-browser"
+    if action == "kali.bridge.request":
+        from urllib.parse import urlsplit, parse_qs
+        if set(payload) - {"method", "path", "body"} or not {"method", "path"} <= set(payload):
+            raise HTTPException(400, "Bridge request accepts method, path and optional JSON body.")
+        method, path = payload.get("method"), payload.get("path")
+        if method not in {"GET", "POST"} or not isinstance(path, str) or len(path) > 240:
+            raise HTTPException(400, "Only bounded GET and POST bridge requests are supported.")
+        parsed = urlsplit(path)
+        if parsed.scheme or parsed.netloc or parsed.fragment or not parsed.path.startswith("/") or ".." in parsed.path.split("/"):
+            raise HTTPException(400, "Bridge path must be a local absolute path, not a URL.")
+        get_paths = {
+            "/", "/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models",
+            "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners",
+            "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status",
+            "/burp/extension/status", "/burp/proxy/history", "/burp/scanner/tasks", "/burp/site-map",
+            "/burp/issues", "/network/interfaces", "/academy/lab/status", "/wifi/interfaces", "/web/history",
+            "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts",
+            "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts",
+            "/evidence/case/ledger/verify",
+        }
+        post_paths = {
+            "/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case",
+            "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/foremost", "/forensics/photorec",
+            "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat",
+            "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect",
+            "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request",
+            "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel",
+            "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment",
+            "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create",
+            "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision",
+            "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile",
+            "/solidity/tests/run", "/wallet/recovery-assess", "/wallet/recovery-run", "/wallet/extract-hash",
+            "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances",
+            "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle",
+            "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts",
+            "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search",
+            "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop",
+            "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/wps",
+            "/wifi/auto", "/tools/run", "/ssh/audit",
+        }
+        allowed = parsed.path in (get_paths if method == "GET" else post_paths)
+        if parsed.path.startswith("/forensics/jobs/") and method == "GET":
+            allowed = bool(__import__("re").fullmatch(r"/forensics/jobs/[a-f0-9]{32}", parsed.path))
+        if not allowed:
+            raise HTTPException(404, "Kali bridge route is not in the relay allowlist.")
+        query = parse_qs(parsed.query)
+        if query and (set(query) != {"limit"} or len(query["limit"]) != 1 or not query["limit"][0].isdigit()):
+            raise HTTPException(400, "Only a numeric limit query parameter is supported.")
+        body = payload.get("body")
+        if method == "GET" and body is not None:
+            raise HTTPException(400, "GET bridge requests cannot include a body.")
+        if method == "POST" and not isinstance(body, dict):
+            raise HTTPException(400, "POST bridge requests require a JSON object body.")
+        if len(json.dumps(body or {}).encode("utf-8")) > 32768:
+            raise HTTPException(413, "Bridge request body exceeds 32 KB.")
+        return "kali"
     if action == "kali.ollama.chat":
         if set(payload) != {"model", "prompt"}:
             raise HTTPException(400, "Local Ollama chat accepts only model and prompt.")
