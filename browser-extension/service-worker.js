@@ -33,7 +33,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
     record(source.tabId, { kind: "network-error", error: String(params.errorText || "Request failed").slice(0, 200) });
   }
 });
-chrome.debugger.onDetach.addListener(source => { attachedTabs.delete(source.tabId); if (sharedTabId === source.tabId) sharedTabId = null; });
+chrome.debugger.onDetach.addListener(source => { attachedTabs.delete(source.tabId); if (sharedTabId === source.tabId) { sharedTabId = null; clearSessionCookies(); } });
 chrome.runtime.onConnect.addListener(port => { if (port.name === "cyberlab-workspace") port.onDisconnect.addListener(() => {}); });
 
 async function appTab() {
@@ -191,7 +191,8 @@ async function stopSharing() {
   if (tabId) attachedTabs.delete(tabId);
   sharedTabId = null;
   editHistory.length = 0;
-  return { ok: true, message: "Browser sharing stopped and temporary edit history cleared." };
+  clearSessionCookies();
+  return { ok: true, message: "Browser sharing stopped; temporary edits and captured session cookies cleared." };
 }
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "inspect-active-tab") {
