@@ -36,3 +36,15 @@ The Kali bridge currently binds to `127.0.0.1`. Do not expose it directly to the
 ## Local model privacy
 
 ego(lite) page snapshots are processed by whichever model/provider the local agent harness is configured to use. For private assessment data, configure a local model provider and verify the actual network path before use. The Kali companion already has a loopback-only Ollama integration; it is not remotely exposed to the desktop. Do not expose Ollama port 11434 publicly or send raw session credentials to a hosted model.
+
+## Outbound CyberLab relay worker
+
+A desktop worker is now included at `relay-worker.mjs`. It polls the paired gateway over HTTPS and accepts only the typed `desktop.browser.inspect` action. It invokes the local `ego-browser nodejs` executable with a fixed snapshot script; job payloads cannot supply JavaScript or executable arguments.
+
+After pairing the desktop in CyberLab's admin console at `/execution-relay`, set `CYBERLAB_RELAY_URL` and `CYBERLAB_DEVICE_TOKEN` in the desktop user's private environment, then run:
+
+```bash
+node integrations/ego-lite/relay-worker.mjs
+```
+
+The browser worker is outbound-only. It does not expose a local HTTP listener. Its current browser task is read-only navigation plus a page snapshot. It does not inspect/export cookies, submit forms, or run XSS/SQL injection payloads. Results are returned to the gateway as bounded execution receipts. Use an authorised test account and avoid pages containing unrelated personal or confidential data.
