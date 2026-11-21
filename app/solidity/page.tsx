@@ -6,6 +6,31 @@ import { CHAIN_REGISTRY, getChainById } from "@/lib/chain-registry";
 import { ArrowLeft, ShieldCheck, Code2, Search, AlertTriangle, FileCode2, Sparkles, LoaderCircle } from "lucide-react";
 
 type Model = { id: string; name: string; provider: string; openWeight: boolean };
+type Finding = { id: string; severity: "critical" | "high" | "medium" | "low" | "info"; title: string; description: string; recommendation: string; line: number; evidence: string };
+type Analysis = { compilerPragmas: string[]; contracts: string[]; interfaces: string[]; libraries: string[]; imports: string[]; functions: number; findings: Finding[]; summary: Record<string, number>; limitations: string[] };
+
+const sample = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract ExampleVault {
+    mapping(address => uint256) public balances;
+
+    function deposit() external payable {
+        balances[msg.sender] += msg.value;
+    }
+
+    function withdraw(uint256 amount) external {
+        require(balances[msg.sender] >= amount, "insufficient");
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        require(ok, "transfer failed");
+        balances[msg.sender] -= amount;
+    }
+
+    function ownerCheck() external view returns (bool) {
+        return tx.origin == msg.sender;
+    }
+}`;
+
 type EvmProvider = { request: (args: { method: string }) => Promise<unknown>; providers?: EvmProvider[]; isMetaMask?: boolean };
 type Eip6963Announcement = { info?: { uuid?: string; name?: string; rdns?: string }; provider?: EvmProvider };
 
