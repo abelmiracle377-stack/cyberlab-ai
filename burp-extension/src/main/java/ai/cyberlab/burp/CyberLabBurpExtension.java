@@ -304,6 +304,9 @@ public final class CyberLabBurpExtension implements BurpExtension {
         if (!api.scope().isInScope(target)) {
             send(e, 403, "{\"error\":\"target_not_in_burp_suite_scope; add_it_in_burp_and_refresh\"}"); return;
         }
+        if (SCAN_TASKS.size() >= 10) {
+            send(e, 429, "{\"status\":\"task_limit_reached\",\"error\":\"At most 10 Scanner tasks are retained per extension session. Cancel old tasks or restart Burp after recording their results.\"}"); return;
+        }
         try {
             ScanTask task;
             if ("crawl".equals(kind)) {
