@@ -117,7 +117,7 @@ export default function AgentPage() {
     }
     setScanBusy(true); setScanStatus("Submitting approved scan to the paired local Kali bridge…");
     try {
-      const response = await fetch("http://127.0.0.1:8765/scan", {
+      const response = await fetch("/api/kali/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
@@ -216,7 +216,7 @@ export default function AgentPage() {
         authorizationConfirmed: webAuthorised,
         localLabMode,
       };
-      const crawlResponse = await fetch("http://127.0.0.1:8765/web/crawl", {
+      const crawlResponse = await fetch("/api/kali/web/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ ...base, url: webAssessmentRequest.url, confirmRun: webApproveCrawl, maxPages: 10, maxDepth: 2, delayMs: 500 }),
@@ -230,7 +230,7 @@ export default function AgentPage() {
         const discovered = crawl.pages.filter(page => typeof page.status === "number").map(page => page.url).slice(0, 10);
         const urls = discovered.length ? discovered : [webAssessmentRequest.url];
         try {
-          const scanResponse = await fetch("http://127.0.0.1:8765/web/active-scan", {
+          const scanResponse = await fetch("/api/kali/web/active-scan", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
             body: JSON.stringify({ ...base, urls, confirmRun: true, maxRequests: 10, delayMs: 500 }),
@@ -282,7 +282,7 @@ export default function AgentPage() {
     setToolBusy(true);
     setToolStatus("Running " + toolRequest.label + " on your paired companion…");
     try {
-      const response = await fetch("http://127.0.0.1:8765/tools/run", {
+      const response = await fetch("/api/kali/tools/run", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({
