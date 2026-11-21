@@ -92,9 +92,9 @@ export default function ForensicsRecoveryPage(){
     setBridgeBusy(true);setBridgeMessage("");setPaired(false);
     try{
       const headers={Authorization:"Bearer "+bridgeToken.trim()};
-      const health=await fetch("/api/kali/health",{headers,cache:"no-store"});
+      const health=await fetch("http://127.0.0.1:8765/health",{headers,cache:"no-store"});
       const h=await health.json();if(!health.ok)throw new Error(h.error||"Could not connect to Kali.");
-      const inventory=await fetch("/api/kali/forensics/devices",{headers,cache:"no-store"});
+      const inventory=await fetch("http://127.0.0.1:8765/forensics/devices",{headers,cache:"no-store"});
       const d=await inventory.json();if(!inventory.ok)throw new Error(d.error||"Could not read block-device inventory.");
       setDevices(flattenBlockDevices((d.devices||[]) as BlockDevice[]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
       setPaired(true);setBridgeMessage("Kali connected. Device inventory is read-only; no drive has been mounted or modified.");
@@ -102,7 +102,7 @@ export default function ForensicsRecoveryPage(){
     finally{setBridgeBusy(false);}
   }
   async function refreshDevices(){
-    const response=await fetch("/api/kali/forensics/devices",{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
+    const response=await fetch("http://127.0.0.1:8765/forensics/devices",{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
     const data=await response.json();if(!response.ok)throw new Error(data.error||"Device inventory failed.");
     setDevices(flattenBlockDevices((data.devices||[]) as BlockDevice[]).filter((item:BlockDevice)=>item.path&&["disk","part"].includes(item.type)));
   }
@@ -110,7 +110,7 @@ export default function ForensicsRecoveryPage(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before inspection.");return;}
     setProbeBusy(true);setImageProbe(null);
     try{
-      const response=await fetch("/api/kali/forensics/inspect",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/inspect",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"Image inspection failed.");
       setImageProbe(data);setBridgeMessage(data.note||"Read-only image inspection completed.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Image inspection failed.");}
@@ -120,7 +120,7 @@ export default function ForensicsRecoveryPage(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before partition analysis.");return;}
     setPartitionsBusy(true);setImagePartitions(null);
     try{
-      const response=await fetch("/api/kali/forensics/partitions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/partitions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"Partition analysis failed.");
       setImagePartitions(data);setBridgeMessage(data.note||"Read-only partition analysis completed.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Partition analysis failed.");}
@@ -131,7 +131,7 @@ export default function ForensicsRecoveryPage(){
     if(!job||job.state!=="completed"||confirmImage!==job.image||!selectedPartition){setBridgeMessage("Select a discovered partition and confirm the exact image path.");return;}
     setFilesystemBusy(true);setFilesystemDetails(null);
     try{
-      const response=await fetch("/api/kali/forensics/fsstat",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,startSector})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/fsstat",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,startSector})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"Filesystem metadata inspection failed.");
       setFilesystemDetails(data);setBridgeMessage(data.note||"Read-only filesystem metadata inspection completed.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Filesystem metadata inspection failed.");}
@@ -141,12 +141,12 @@ export default function ForensicsRecoveryPage(){
     if(!job||job.state!=="completed"||confirmImage!==job.image){setBridgeMessage("Confirm the exact completed image path before starting recovery.");return;}
     setBridgeBusy(true);
     try{
-      const response=await fetch("/api/kali"+endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,outputDirectory:recoveryParent,confirmationImage:confirmImage,...extra})});
+      const response=await fetch("http://127.0.0.1:8765"+endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,outputDirectory:recoveryParent,confirmationImage:confirmImage,...extra})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||(label+" could not start."));
       setRecoveryJob(data.job);setBridgeMessage(data.note||(label+" started."));
       const id=data.job.id;
       const poll=async():Promise<void>=>{
-        const status=await fetch("/api/kali/forensics/jobs/"+id,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
+        const status=await fetch("http://127.0.0.1:8765/forensics/jobs/"+id,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
         const payload=await status.json();if(!status.ok)throw new Error(payload.error||"Could not read recovery status.");
         setRecoveryJob(payload.job);
         if(payload.job.state==="running"){await new Promise(resolve=>setTimeout(resolve,3000));return poll();}
@@ -163,7 +163,7 @@ export default function ForensicsRecoveryPage(){
     const offset=selectedPartition?Number(selectedPartition):0;
     setBulkBusy(true);setBulkResult(null);
     try{
-      const response=await fetch("/api/kali/forensics/recover-all-deleted",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,outputDirectory:recoveryParent,offset,maxFiles:200})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/recover-all-deleted",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,outputDirectory:recoveryParent,offset,maxFiles:200})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"Bulk undelete failed.");
       setBulkResult(data);setBridgeMessage("Recovered "+data.recovered_count+" of "+data.deleted_found+" deleted files to "+data.output+(data.failed_count?(" ("+data.failed_count+" failed)"):""));
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Bulk undelete failed.");}
@@ -174,7 +174,7 @@ export default function ForensicsRecoveryPage(){
     const offset=selectedPartition?Number(selectedPartition):0;
     setDeletedBusy(true);setRecoveredFiles([]);
     try{
-      const response=await fetch("/api/kali/forensics/deleted-list",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,offset,limit:1000})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/deleted-list",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,offset,limit:1000})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not list deleted files.");
       setDeletedFiles(data.deleted_files||[]);setBridgeMessage(data.note||"Deleted-file listing complete.");
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"Deleted-file listing failed.");}
@@ -186,7 +186,7 @@ export default function ForensicsRecoveryPage(){
     const name=file.path.split("/").pop()||file.inode;
     setRecoveringInode(file.inode);
     try{
-      const response=await fetch("/api/kali/forensics/recover-file",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,inode:file.inode,outputDirectory:recoveryParent,offset,filename:name})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/recover-file",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({imageJobId:job.id,confirmationImage:confirmImage,inode:file.inode,outputDirectory:recoveryParent,offset,filename:name})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"File recovery failed.");
       setRecoveredFiles(current=>[data,...current]);setBridgeMessage("Recovered "+name+" ("+data.size_bytes+" bytes) to "+data.destination);
     }catch(e){setBridgeMessage(e instanceof Error?e.message:"File recovery failed.");}
@@ -196,12 +196,12 @@ export default function ForensicsRecoveryPage(){
     if(!selectedDevice||confirmationSource!==selectedDevice){setBridgeMessage("Select a source and retype its exact device path to confirm.");return;}
     setBridgeBusy(true);setBridgeMessage("Submitting protected imaging job…");
     try{
-      const response=await fetch("/api/kali/forensics/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({source:selectedDevice,destinationDirectory,filename:imageFilename,confirmationSource})});
+      const response=await fetch("http://127.0.0.1:8765/forensics/image",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify({source:selectedDevice,destinationDirectory,filename:imageFilename,confirmationSource})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||"Disk imaging could not start.");
       setJob(data.job);setBridgeMessage(data.note||"Disk imaging started.");
       const jobId=data.job.id;
       const poll=async():Promise<void>=>{
-        const status=await fetch("/api/kali/forensics/jobs/"+jobId,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
+        const status=await fetch("http://127.0.0.1:8765/forensics/jobs/"+jobId,{headers:{Authorization:"Bearer "+bridgeToken.trim()},cache:"no-store"});
         const payload=await status.json();if(!status.ok)throw new Error(payload.error||"Could not read imaging status.");
         setJob(payload.job);
         if(payload.job.state==="running"){await new Promise(resolve=>setTimeout(resolve,3000));return poll();}
@@ -212,7 +212,7 @@ export default function ForensicsRecoveryPage(){
     finally{setBridgeBusy(false);}
   }
   async function postBridge(endpoint:string,body:Record<string,unknown>){
-    const response=await fetch("/api/kali"+endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify(body)});
+    const response=await fetch("http://127.0.0.1:8765"+endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+bridgeToken.trim()},body:JSON.stringify(body)});
     const data=await response.json();if(!response.ok)throw new Error(data.error||"Request failed.");return data;
   }
   async function parsePlist(){
