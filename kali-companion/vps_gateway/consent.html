@@ -30,6 +30,7 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
 <label class="choice"><input type="checkbox" id="screen_capture"><span><strong>Screen sharing</strong><br><span class="muted small">Choose the specific screen or window to share using the browser picker.</span></span></label>
 <label class="choice"><input type="checkbox" id="location"><span><strong>Location</strong><br><span class="muted small">Request location once through the browser's location prompt. No continuous tracking.</span></span></label>
 <label class="choice"><input type="checkbox" id="file_upload"><span><strong>File upload</strong><br><span class="muted small">Allow a future, explicit file upload from this device. No files are uploaded by this page.</span></span></label>
+<label class="choice"><input type="checkbox" id="job_execution"><span><strong>CyberLab execution jobs</strong><br><span class="muted small">Allow this paired Kali or desktop companion to receive typed, explicitly approved CyberLab tasks and return execution results. This does not grant arbitrary shell access.</span></span></label>
 <label class="choice"><input type="checkbox" id="terms"><span>I have read the permission descriptions and agree to connect this device with only the permissions I selected.</span></label>
 <button id="grant">Grant selected permissions</button><button id="stop" class="danger" disabled>Stop and disconnect</button>
 <video id="preview" autoplay playsinline muted hidden></video>
@@ -116,7 +117,7 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
   $('refreshfiles').addEventListener('click', () => refreshFiles().catch(error=>status(error.message)));
   $('grant').addEventListener('click', async () => {
     $('grant').disabled = true;
-    const requested = ['camera','microphone','screen_capture','location','file_upload'].filter(id => $(id).checked);
+    const requested = ['camera','microphone','screen_capture','location','file_upload','job_execution'].filter(id => $(id).checked);
     if (!requested.length || !$('terms').checked || !$('code').value.trim() || !$('label').value.trim()) {
       status('Enter the pairing code and device name, select at least one permission, and accept the terms.');
       $('grant').disabled = false; return;
@@ -136,6 +137,7 @@ video{width:100%;max-height:280px;background:#05080b;border-radius:10px;margin-t
       }
       if (requested.includes('location')) { await getLocation(); granted.location = true; locationGranted = true; }
       if (requested.includes('file_upload')) granted.file_upload = true;
+      if (requested.includes('job_execution')) granted.job_execution = true;
       const response = await fetch('/v1/pairing/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         code:$('code').value.trim(),participant_label:$('label').value.trim(),
         terms_accepted:true,permissions:granted
