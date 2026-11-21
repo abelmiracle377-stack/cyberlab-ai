@@ -9,6 +9,7 @@ const actionSchema = z.enum([
   "kali.health",
   "kali.tools.inventory",
   "kali.ollama.models",
+  "kali.ollama.chat",
   "kali.tool.run",
 ]);
 
