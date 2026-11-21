@@ -354,7 +354,7 @@ The relay is an execution transport, not a complete autonomous security testing 
 1. Deploy the gateway and configure its TLS domain.
 2. In Vercel, add server-only environment variables `CYBERLAB_GATEWAY_URL=https://your-gateway-domain` and `CYBERLAB_GATEWAY_OWNER_TOKEN=<the gateway owner token>`. Do not use a `NEXT_PUBLIC_` prefix.
 3. Sign in to CyberLab with an account whose Supabase `user_profiles.role` is `admin`, then open `/execution-relay`.
-4. Generate a pairing code for `kali` or `desktop-browser`. On the intended device, accept it using the gateway's one-time pairing endpoint:
+4. Generate a pairing code for `kali` or `desktop-browser`. On the intended device, open `https://your-gateway-domain/consent`, enter the one-time code and device name, and select **CyberLab execution jobs**. Grant only the permissions that device actually needs. The one-time API alternative is:
 
    ```bash
    curl -X POST https://your-gateway-domain/v1/pairing/accept \
