@@ -33,7 +33,7 @@ export default function BrowserWorkspacePage() {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
-  function extensionCommand(type: string, payload?: Record<string, string>) {
+  function extensionCommand(type: string, payload?: Record<string, string | boolean>) {
     window.postMessage({ channel: CHANNEL, direction: "to-extension", type, payload }, location.origin);
   }
   const page = snapshot?.page;
