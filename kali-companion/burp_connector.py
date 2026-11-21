@@ -165,6 +165,33 @@ def inspect_burp_status(
 
 
 EXTENSION_TOKEN_FILE = Path.home() / ".config" / "cyberlab" / "burp-extension-token"
+EXTENSION_HEALTH_URL = "http://127.0.0.1:8766/v1/health"
+
+
+def inspect_burp_extension_status(opener=urlopen) -> dict:
+    """Check the authenticated local Montoya extension independently of Burp REST API."""
+    try:
+        token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {"status": "not_configured", "connector": "montoya"}
+    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+        return {"status": "invalid_configuration", "connector": "montoya"}
+    request = Request(EXTENSION_HEALTH_URL, headers={"Accept": "application/json", "Authorization": "Bearer " + token}, method="GET")
+    try:
+        with opener(request, timeout=2.5) as response:
+            if getattr(response, "status", 200) != 200:
+                return {"status": "api_error", "connector": "montoya"}
+            payload = json.loads(response.read(8192).decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("status") != "ok" or payload.get("connector") != "montoya":
+            return {"status": "invalid_response", "connector": "montoya"}
+        return {"status": "connected", "connector": "montoya", "authenticated": True,
+                "capabilities": ["proxy_history", "site_map", "audit_issues", "repeater_handoff", "confirmed_single_request_replay"],
+                "note": "The local CyberLab Burp extension is reachable. This is separate from the Burp REST API health check."}
+    except HTTPError as exc:
+        return {"status": "authentication_failed" if exc.code in {401, 403} else "api_error", "connector": "montoya"}
+    except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
+        return {"status": "unavailable", "connector": "montoya"}
+
 EXTENSION_HISTORY_URL = "http://127.0.0.1:8766/v1/proxy/history"
 
 
