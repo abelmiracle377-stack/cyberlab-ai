@@ -52,6 +52,7 @@ const groups = [
   { title: "OPERATIONS", items: [
     { label: "Tool Registry", icon: Cable, href: "/tool-registry" },
     { label: "Tool Runner", icon: Terminal, href: "/tool-runner" },
+    { label: "Execution Relay", icon: Cable, href: "/execution-relay" },
     { label: "SOC Host Telemetry", icon: Activity, href: "/kali-connection" },
     { label: "Investigations", icon: FileSearch, href: "/investigations" },
     { label: "Kali Connection", icon: Terminal, href: "/kali-connection" },
@@ -84,6 +85,7 @@ const groups = [
 const modules = [
   { name:"CyberLab OS", desc:"Manage local Linux environments, detect runtimes and prepare isolated security workspaces.", icon:Laptop, state:"FOUNDATION", href:"/os" },
   { name:"AI Agent", desc:"Coordinate scoped security workflows with tool-assisted analysis.", icon:Bot, state:"CONFIG CHECK", href:"/agent" },
+  { name:"Cross-Machine Execution Relay", desc:"Pair a separate Kali host and Ego Lite desktop, approve typed jobs and review real execution receipts.", icon:Cable, state:"PAIR / EXECUTE", href:"/execution-relay" },
   { name:"IP Intelligence", desc:"Inspect public IP, ASN, DNS, hosting and ownership signals.", icon:Globe2, state:"AVAILABLE", href:"/ip-intelligence" },
   { name:"OSINT", desc:"Collect public-source findings with provenance and confidence.", icon:Fingerprint, state:"AVAILABLE", href:"/osint" },
   { name:"Domain & Privacy Verification", desc:"Review SPF, DMARC, DKIM, CAA, historical URLs and local browser attributes.", icon:ShieldCheck, state:"NEW", href:"/verification" },
