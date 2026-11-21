@@ -59,6 +59,11 @@ export async function POST(request: Request) {
     const access = await accessFor(user.id);
     if (!access.allowed) return NextResponse.json({ error: "An active subscription or trial is required.", billingRequired: true }, { status: 402 });
 
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) return NextResponse.json({
+      error: "AI usage accounting is unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured in this deployment.",
+      diagnosticCode: "SUPABASE_SERVICE_ROLE_KEY_MISSING",
+    }, { status: 503 });
+
     const gateway = getProviderConfig();
     if (!gateway.baseUrl) return NextResponse.json({
       error: "Solidity AI is not configured: set CYBERLAB_UNCENSORED_BASE_URL to your HTTPS OpenAI-compatible model endpoint.",
@@ -72,11 +77,6 @@ export async function POST(request: Request) {
       error: "Solidity AI provider authentication is missing. Set CYBERLAB_UNCENSORED_API_KEY (or UNCENSOREDLLM_API_KEY), or explicitly enable keyless access only for your own secured self-hosted endpoint.",
       diagnosticCode: "SOLIDITY_AI_PROVIDER_KEY_MISSING",
     }, { status: 503 });
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) return NextResponse.json({
-      error: "AI usage accounting is unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured in this deployment.",
-      diagnosticCode: "SUPABASE_SERVICE_ROLE_KEY_MISSING",
-    }, { status: 503 });
-
     db = adminDb();
     const reserved = await db.rpc("reserve_cyberlab_ai_usage", {
       p_user_id: user.id, p_estimated_tokens: 10000, p_monthly_limit: 200000,
