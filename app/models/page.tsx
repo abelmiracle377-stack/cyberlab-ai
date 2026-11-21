@@ -124,7 +124,6 @@ export default function ModelsPage() {
     try {
       if (activeModel?.local) {
         const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-        if (!token) throw new Error("Pair your Kali companion first to use local Ollama models.");
         const response = await fetch("/api/kali/ollama/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
