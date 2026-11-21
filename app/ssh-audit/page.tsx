@@ -11,7 +11,7 @@ type AuditResult = {
   limitations?: string[]; error?: string;
 };
 
-const API = "http://127.0.0.1:8765";
+const API = "/api/kali";
 
 export default function SshAuditPage() {
   const [host,setHost] = useState("");
