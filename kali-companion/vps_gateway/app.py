@@ -398,7 +398,7 @@ def view_shared_file(token: str):
 class RelayJobCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     device_id: str = Field(min_length=1, max_length=80)
-    action: Literal["desktop.browser.inspect", "kali.health", "kali.tools.inventory", "kali.ollama.models", "kali.tool.run"]
+    action: Literal["desktop.browser.inspect", "kali.health", "kali.tools.inventory", "kali.ollama.models", "kali.ollama.chat", "kali.tool.run"]
     payload: dict = Field(default_factory=dict)
     approval_reference: str = Field(min_length=3, max_length=160)
     operator_approved: bool
@@ -430,6 +430,16 @@ def validate_relay_payload(action, payload, approval_reference, approved):
         if not isinstance(origins, list) or not 1 <= len(origins) <= 10 or origin not in origins or any(not isinstance(x, str) or len(x) > 300 for x in origins):
             raise HTTPException(400, "Exact target origin must be in the approved-origin list.")
         return "desktop-browser"
+    if action == "kali.ollama.chat":
+        if set(payload) != {"model", "prompt"}:
+            raise HTTPException(400, "Local Ollama chat accepts only model and prompt.")
+        model = payload.get("model")
+        prompt = payload.get("prompt")
+        if not isinstance(model, str) or not 1 <= len(model) <= 160 or any(ch.isspace() for ch in model):
+            raise HTTPException(400, "Provide an installed local Ollama model tag.")
+        if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 12000:
+            raise HTTPException(400, "Local model prompt must contain 1–12,000 characters.")
+        return "kali"
     if action == "kali.tool.run":
         required = {"tool", "parameters", "confirmRun", "authorizationReference", "targetConfirmation", "timeoutSeconds"}
         if set(payload) != required or payload.get("confirmRun") is not True:
