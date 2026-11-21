@@ -21,6 +21,11 @@ The first-party Montoya extension provides authenticated, loopback-only endpoint
 - GET /v1/issues?limit=50 — existing in-scope issue name, severity, confidence and base URL.
 - POST /v1/repeater/from-history?id=<id>&confirm=true — place one captured in-scope request in Repeater; it is not sent.
 - POST /v1/send-request?id=<id>&confirm=true — replay one captured in-scope request through Burp and return status/MIME/length metadata only.
+- POST /v1/intruder/from-history?id=<id>&confirm=true&authorizationReference=<ref> — place one approved in-scope request in the native Intruder tab; does not start an attack.
+- POST /v1/scanner/crawl?url=<url>&confirm=true&authorizationReference=<ref> — start a real Burp Professional crawl-only task for an existing in-scope URL.
+- POST /v1/scanner/audit?url=<url>&confirm=true&authorizationReference=<ref> — start a real Burp Professional active-audit task for an existing in-scope URL.
+- GET /v1/scanner/tasks — report current-session task IDs and bounded progress counters.
+- POST /v1/scanner/cancel?id=<task-id>&confirm=true — request deletion/cancellation of a tracked task.
 
 The paired companion exposes corresponding authenticated routes:
 
@@ -31,23 +36,38 @@ The paired companion exposes corresponding authenticated routes:
 - GET /burp/issues
 - POST /burp/repeater/from-history
 - POST /burp/send-request
+- POST /burp/intruder/from-history
+- POST /burp/scanner/crawl
+- POST /burp/scanner/audit
+- GET /burp/scanner/tasks
+- POST /burp/scanner/cancel
 
 The dashboard refresh checks both health endpoints and retrieves the three metadata feeds. Repeater handoff and replay each have a separate explicit confirmation. Replay re-sends live traffic; the extension rechecks Burp's in-scope flag before acting. The dashboard receives response metadata only, not request or response bodies.
 
 Proxy history and site-map exports are in-scope-only, bounded to 100 entries at the connector, and redact common credential-like query parameters. The extension does not export raw request/response headers or bodies.
 
-## Not yet integrated into CyberLab
+## Current active capabilities
 
-These are native Burp features, not current CyberLab workspace capabilities:
+The first-party Montoya extension and paired companion now provide:
 
-- Intruder attack configuration and execution.
-- Burp Scanner active scan creation, scan control and result polling.
-- Burp crawling orchestration.
-- Full request/response editing inside CyberLab.
+- Intruder handoff: an explicitly approved, in-scope proxy-history request is placed in the native Intruder tab. The analyst configures payload positions, payload sources and attack settings, then starts the attack in Burp. Montoya exposes the handoff but not a complete programmatic Intruder attack-start API; CyberLab does not claim to execute the Intruder attack itself.
+- Professional crawl-only: a confirmed URL already included in Burp Suite scope is passed to Burp Scanner's real crawl task.
+- Professional active audit: a confirmed in-scope URL is passed to Burp Scanner's real active-audit task using Burp's built-in legacy active-audit checks.
+- Scanner task status: current-session task IDs, request counts, error counts and audit issue counts can be polled from CyberLab.
+- Scanner task cancellation: the operator can request task deletion/cancellation through the extension.
+
+Every Intruder handoff, crawl and active audit requires explicit confirmation and an authorisation/lab reference. The extension rechecks Burp's existing Suite scope and never adds a target to scope automatically. Scanner features require a compatible Burp Professional licence; Community edition does not gain Scanner by loading the extension. Task tracking is held in extension memory and resets when the extension unloads or Burp restarts.
+
+## Still native to Burp desktop
+
+These features are not reproduced as complete CyberLab interfaces:
+
+- Intruder payload-position editing, payload set management, attack-type configuration, live attack execution and full result-table analysis. The request handoff opens the real Intruder tool; the analyst configures and launches the attack in Burp.
+- Full request/response editor, complete Repeater editing and history, Sequencer, Decoder, Comparer, Burp browser and extension manager.
+- Advanced custom scan configurations, authenticated crawl/login sequence configuration and complete scan result detail/report workflows.
 - Full raw issue evidence export, issue mutation and automated remediation.
-- Recreating Burp's Sequencer, Decoder, Comparer, browser or extension-manager interfaces.
 
-Use the Burp desktop application for those functions. Availability depends on the installed Burp edition; a successful REST API check does not establish that a Professional-only feature is available. The CyberLab workspace is an integration surface, not a replacement for the Burp desktop application.
+The CyberLab workspace is an integration surface over the Burp desktop engine, not a replacement for every native Burp UI capability.
 
 ## Kali-side setup
 
@@ -105,7 +125,7 @@ Montoya extension states:
 
 ## Next implementation phases
 
-1. Add edition-aware Intruder task preparation with strict request-count and rate ceilings, followed by a separately approved execution path.
-2. Add Burp Professional scanner/crawl task creation and result polling, gated by verified edition and exact in-scope targets.
-3. Add reviewed request/response evidence capture with redaction and provenance-preserving case linkage.
-4. Add integration tests against a disposable local test application and a test Burp project before enabling additional active workflows.
+1. Add richer task lifecycle/status reporting when the Montoya API exposes reliable completion semantics across supported Burp versions.
+2. Add request/response evidence capture with aggressive redaction and provenance-preserving case linkage.
+3. Add configurable scan profiles and authenticated scan setup only after the edition/configuration APIs are verified and exposed with per-target approval.
+4. Add integration tests against a disposable local test application and a licensed test Burp Professional project before expanding active execution.

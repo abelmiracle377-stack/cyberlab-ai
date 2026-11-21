@@ -31,6 +31,40 @@ contract ExampleVault {
     }
 }`;
 
+type EvmProvider = { request: (args: { method: string }) => Promise<unknown>; providers?: EvmProvider[]; isMetaMask?: boolean };
+type Eip6963Announcement = { info?: { uuid?: string; name?: string; rdns?: string }; provider?: EvmProvider };
+
+const discoveredEvmProviders = new Map<string, { provider: EvmProvider; name: string; rdns: string }>();
+let eip6963ListenerInstalled = false;
+
+function ensureEip6963Listener() {
+  if (eip6963ListenerInstalled) return;
+  window.addEventListener("eip6963:announceProvider", (event: Event) => {
+    const detail = (event as CustomEvent<Eip6963Announcement>).detail;
+    if (!detail?.provider) return;
+    const name = detail.info?.name || "Injected EVM wallet";
+    const key = detail.info?.uuid || detail.info?.rdns || name;
+    discoveredEvmProviders.set(key, { provider: detail.provider, name, rdns: detail.info?.rdns || "" });
+  });
+  eip6963ListenerInstalled = true;
+}
+
+async function discoverEvmProvider(): Promise<{ provider: EvmProvider; name: string } | null> {
+  ensureEip6963Listener();
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise(resolve => window.setTimeout(resolve, 300));
+  if (discoveredEvmProviders.size > 0) {
+    const choices = Array.from(discoveredEvmProviders.values());
+    const preferred = choices.find(item => /metamask/i.test(item.rdns + " " + item.name)) || choices[0];
+    return { provider: preferred.provider, name: preferred.name };
+  }
+  const injected = (window as Window & { ethereum?: EvmProvider }).ethereum;
+  if (!injected) return null;
+  const providers = Array.isArray(injected.providers) ? injected.providers : [];
+  const provider = providers.find(item => item.isMetaMask) || providers[0] || injected;
+  return { provider, name: provider.isMetaMask ? "MetaMask" : "Injected EVM wallet" };
+}
+
 export default function SolidityLabPage() {
   const [source, setSource] = useState(sample);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -44,6 +78,7 @@ export default function SolidityLabPage() {
   const [walletNetwork, setWalletNetwork] = useState<{chainId:number;name:string;known:boolean}|null>(null);
   const [walletNetworkBusy, setWalletNetworkBusy] = useState(false);
   const [walletNetworkError, setWalletNetworkError] = useState("");
+  const [walletProviderName, setWalletProviderName] = useState("");
   const [standard, setStandard] = useState("OpenZeppelin; ERC-20");
   const [projectName, setProjectName] = useState("MyContract");
   const [requirements, setRequirements] = useState("");
@@ -92,10 +127,11 @@ export default function SolidityLabPage() {
     setWalletNetworkBusy(true);
     setWalletNetworkError("");
     try {
-      const provider = (window as Window & { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
-      if (!provider) throw new Error("No injected EVM wallet provider was detected in this browser.");
-      // eth_chainId is a read-only provider request; this does not request accounts or initiate signing.
-      const result = await provider.request({ method: "eth_chainId" });
+      const detected = await discoverEvmProvider();
+      if (!detected) throw new Error("No injected EVM wallet was detected. Open CyberLab inside your wallet's DApp browser (for example, MetaMask Browser) or use a browser with the wallet extension enabled. A normal mobile Chrome tab or an in-app browser may not expose wallet providers.");
+      // EIP-1193 eth_chainId is read-only: no account permission, connection prompt, signing or transaction.
+      const result = await detected.provider.request({ method: "eth_chainId" });
+      setWalletProviderName(detected.name);
       if (typeof result !== "string" || !/^0x[0-9a-fA-F]+$/.test(result)) {
         throw new Error("The wallet returned an invalid chain ID response.");
       }
@@ -105,6 +141,7 @@ export default function SolidityLabPage() {
       setWalletNetwork({ chainId, name: known?.name ?? "Unlisted EVM network", known: Boolean(known) });
     } catch (cause) {
       setWalletNetwork(null);
+      setWalletProviderName("");
       setWalletNetworkError(cause instanceof Error ? cause.message : "Unable to read wallet network.");
     } finally {
       setWalletNetworkBusy(false);
@@ -266,13 +303,28 @@ export default function SolidityLabPage() {
             <div><div className="agent-overline">READ-ONLY WALLET DISCOVERY</div><h2 id="wallet-network-title">Check wallet network</h2></div>
             <ShieldCheck size={18} />
           </div>
-          <p className="agent-disclaimer">Reads only the active injected wallet provider's chain ID. It does not request wallet accounts, connect a session, switch networks, sign messages or send transactions.</p>
+          <p className="agent-disclaimer">Discovers EVM wallets through EIP-6963 announcements and legacy window.ethereum injection, then reads only eth_chainId. It does not request accounts, connect a session, switch networks, sign messages or send transactions. Wallet injection depends on the browser: use a wallet's DApp browser or a desktop browser with its wallet extension enabled.</p>
           <div className="solidity-actions">
-            <small>{walletNetwork ? `Chain ID ${walletNetwork.chainId} · ${walletNetwork.name}` : "No wallet network has been read in this session."}</small>
+            <small>{walletNetwork ? `Chain ID ${walletNetwork.chainId} · ${walletNetwork.name} · ${walletProviderName}` : "No wallet network has been read in this session."}</small>
             <button type="button" onClick={readWalletNetwork} disabled={walletNetworkBusy}><Search size={13}/>{walletNetworkBusy ? "Reading…" : "Read wallet chain ID"}</button>
           </div>
           {walletNetwork && <div className="network-results"><strong>{walletNetwork.known ? "Known registry entry" : "Unlisted network"}</strong><p>Provider-reported chain ID: {walletNetwork.chainId}. {walletNetwork.known ? "Compare this value with the intended deployment network before proceeding." : "Do not assume this network is supported; verify its chain ID and documentation independently."}</p></div>}
           {walletNetworkError && <div className="agent-error"><AlertTriangle size={14}/>{walletNetworkError}</div>}
+        </section>
+
+        <section className="solidity-results" aria-labelledby="dex-capability-title">
+          <div className="solidity-result-head">
+            <div><div className="agent-overline">DEX / AMM CAPABILITY STATUS</div><h2 id="dex-capability-title">Engineering blueprint — not a live DEX</h2></div>
+            <AlertTriangle size={18}/>
+          </div>
+          <p className="agent-disclaimer">CyberLab currently provides a constant-product AMM project blueprint, a limited educational AMM fixture and a source-linked Uniswap deployment reference registry. These help with design and review; they do not connect to live pools or execute exchange operations.</p>
+          <div className="network-results">
+            <strong>Available now</strong>
+            <p>Solidity source analysis, project drafting when the AI gateway and usage accounting are configured, local solc compilation, constrained local Foundry tests, ERC-721/ERC-1155 teaching blueprints and AMM design/test scaffolding.</p>
+            <strong>Not yet available</strong>
+            <p>Live pool discovery, route/price quotes, token approvals, swaps, liquidity deposits/withdrawals, transaction simulation, wallet signing, contract deployment and live position tracking.</p>
+          </div>
+          <p className="agent-disclaimer">Do not deposit real funds into the educational AMM fixture. A future live DEX workflow needs verified deployment addresses and bytecode, reliable RPC reads, transaction simulation, slippage/deadline controls, independent contract audits and explicit wallet approval for every transaction.</p>
         </section>
 
         <section className="solidity-results" aria-labelledby="contract-generator-title">

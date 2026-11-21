@@ -10,7 +10,7 @@ import socket
 import shutil
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 import json
 
@@ -185,9 +185,12 @@ def inspect_burp_extension_status(opener=None) -> dict:
             payload = json.loads(response.read(8192).decode("utf-8"))
         if not isinstance(payload, dict) or payload.get("status") != "ok" or payload.get("connector") != "montoya":
             return {"status": "invalid_response", "connector": "montoya"}
+        capabilities = payload.get("capabilities")
+        if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
+            return {"status": "invalid_response", "connector": "montoya"}
         return {"status": "connected", "connector": "montoya", "authenticated": True,
-                "capabilities": ["proxy_history", "site_map", "audit_issues", "repeater_handoff", "confirmed_single_request_replay"],
-                "note": "The local CyberLab Burp extension is reachable. This is separate from the Burp REST API health check."}
+                "capabilities": capabilities,
+                "note": "Capabilities are read from the authenticated local extension health response. This is separate from the Burp REST API health check."}
     except HTTPError as exc:
         return {"status": "authentication_failed" if exc.code in {401, 403} else "api_error", "connector": "montoya"}
     except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
@@ -424,3 +427,94 @@ def open_burp_history_in_repeater(history_id: int, confirmed: bool = False) -> d
             "request_sent": False}
     except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
         return {"status": "unavailable", "request_sent": False}
+
+
+EXTENSION_INTRUDER_URL = "http://127.0.0.1:8766/v1/intruder/from-history"
+EXTENSION_SCANNER_BASE = "http://127.0.0.1:8766/v1/scanner"
+
+
+def _burp_extension_call(path: str, method: str = "GET", params: dict | None = None,
+                         timeout: float = 8.0, opener=None) -> dict:
+    """Call the authenticated loopback Montoya extension without exposing its token."""
+    opener = opener or urlopen
+    try:
+        token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {"status": "not_configured", "error": "CyberLab Burp extension token is missing."}
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
+        return {"status": "invalid_configuration", "error": "CyberLab Burp extension token is invalid."}
+    url = path
+    if params:
+        url += ("&" if "?" in url else "?") + urlencode(params)
+    request = Request(url, data=b"" if method == "POST" else None,
+                      headers={"Accept": "application/json", "Authorization": "Bearer " + token},
+                      method=method)
+    try:
+        with opener(request, timeout=timeout) as response:
+            raw = response.read(32768).decode("utf-8")
+            payload = json.loads(raw)
+        return payload if isinstance(payload, dict) else {"status": "invalid_response"}
+    except HTTPError as exc:
+        try:
+            payload = json.loads(exc.read(8192).decode("utf-8"))
+            if isinstance(payload, dict):
+                payload.setdefault("status", "api_error")
+                payload.setdefault("http_status", exc.code)
+                return payload
+        except (ValueError, UnicodeDecodeError, OSError):
+            pass
+        return {"status": "authentication_failed" if exc.code in {401, 403} else
+                ("edition_unavailable" if exc.code == 501 else "api_error"),
+                "http_status": exc.code}
+    except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
+        return {"status": "unavailable", "error": "Local CyberLab Burp extension is unreachable."}
+
+
+def open_burp_history_in_intruder(history_id: int, confirmed: bool = False,
+                                  authorization_reference: str = "", opener=None) -> dict:
+    """Place a captured in-scope request in native Intruder; does not start an attack."""
+    if isinstance(history_id, bool) or not isinstance(history_id, int) or history_id < 1:
+        return {"status": "invalid_request", "attack_started": False}
+    if confirmed is not True or not isinstance(authorization_reference, str) or not 3 <= len(authorization_reference.strip()) <= 160:
+        return {"status": "confirmation_required", "attack_started": False}
+    result = _burp_extension_call(EXTENSION_INTRUDER_URL, "POST", {
+        "id": history_id, "confirm": "true",
+        "authorizationReference": authorization_reference.strip(),
+    }, opener=opener)
+    if result.get("status") == "opened_in_intruder":
+        result["attack_started"] = False
+    return result
+
+
+def start_burp_scanner_task(kind: str, target_url: str, confirmed: bool = False,
+                            authorization_reference: str = "", opener=None) -> dict:
+    """Start a real Burp Professional crawl or active audit after scope/approval checks."""
+    if kind not in {"crawl", "audit"}:
+        return {"status": "invalid_request", "error": "Unsupported Burp scanner task."}
+    if confirmed is not True or not isinstance(authorization_reference, str) or not 3 <= len(authorization_reference.strip()) <= 160:
+        return {"status": "confirmation_required"}
+    if not isinstance(target_url, str) or len(target_url) > 2048:
+        return {"status": "invalid_request"}
+    try:
+        parsed = urlsplit(target_url.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+            raise ValueError
+    except ValueError:
+        return {"status": "invalid_request", "error": "Enter an absolute HTTP(S) URL without credentials or a fragment."}
+    return _burp_extension_call(EXTENSION_SCANNER_BASE + "/" + kind, "POST", {
+        "url": target_url.strip(), "confirm": "true",
+        "authorizationReference": authorization_reference.strip(),
+    }, timeout=15, opener=opener)
+
+
+def list_burp_scanner_tasks(opener=None) -> dict:
+    return _burp_extension_call(EXTENSION_SCANNER_BASE + "/tasks", opener=opener)
+
+
+def cancel_burp_scanner_task(task_id: str, confirmed: bool = False, opener=None) -> dict:
+    if not isinstance(task_id, str) or not task_id or len(task_id) > 64:
+        return {"status": "invalid_request"}
+    if confirmed is not True:
+        return {"status": "confirmation_required"}
+    return _burp_extension_call(EXTENSION_SCANNER_BASE + "/cancel", "POST",
+                                {"id": task_id, "confirm": "true"}, opener=opener)

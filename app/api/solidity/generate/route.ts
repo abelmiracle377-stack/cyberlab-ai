@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { adminDb } from "@/lib/billing/admin";
 import { accessFor } from "@/lib/billing/access";
-import { runUnfilteredCompletion } from "@/lib/ai-gateway";
+import { getProviderConfig, getUnfilteredModels, runUnfilteredCompletion } from "@/lib/ai-gateway";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -59,11 +59,37 @@ export async function POST(request: Request) {
     const access = await accessFor(user.id);
     if (!access.allowed) return NextResponse.json({ error: "An active subscription or trial is required.", billingRequired: true }, { status: 402 });
 
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) return NextResponse.json({
+      error: "AI usage accounting is unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured in this deployment.",
+      diagnosticCode: "SUPABASE_SERVICE_ROLE_KEY_MISSING",
+    }, { status: 503 });
+
+    const gateway = getProviderConfig();
+    if (!gateway.baseUrl) return NextResponse.json({
+      error: "Solidity AI is not configured: set CYBERLAB_UNCENSORED_BASE_URL to your HTTPS OpenAI-compatible model endpoint.",
+      diagnosticCode: "SOLIDITY_AI_GATEWAY_URL_MISSING",
+    }, { status: 503 });
+    if (!getUnfilteredModels().some((item) => item.id === `uncensored:${modelId}`)) return NextResponse.json({
+      error: "The selected model is not in the server-approved catalogue. Configure CYBERLAB_UNCENSORED_MODELS and refresh the model list.",
+      diagnosticCode: "SOLIDITY_MODEL_NOT_CONFIGURED",
+    }, { status: 503 });
+    if (!gateway.apiKey && !gateway.allowKeyless) return NextResponse.json({
+      error: "Solidity AI provider authentication is missing. Set CYBERLAB_UNCENSORED_API_KEY (or UNCENSOREDLLM_API_KEY), or explicitly enable keyless access only for your own secured self-hosted endpoint.",
+      diagnosticCode: "SOLIDITY_AI_PROVIDER_KEY_MISSING",
+    }, { status: 503 });
     db = adminDb();
     const reserved = await db.rpc("reserve_cyberlab_ai_usage", {
       p_user_id: user.id, p_estimated_tokens: 10000, p_monthly_limit: 200000,
     });
-    if (reserved.error) return NextResponse.json({ error: "AI usage accounting is unavailable. Try again later." }, { status: 503 });
+    if (reserved.error) {
+      console.error("Solidity AI usage reservation failed:", {
+        code: reserved.error.code, message: reserved.error.message, hint: reserved.error.hint,
+      });
+      return NextResponse.json({
+        error: "AI usage accounting could not reserve this request. Confirm that migrations 202611140001_ai_usage_gateway.sql and 202611140002_expand_ai_usage_reservations.sql have been applied to the Supabase project, and that the service-role key belongs to that same project.",
+        diagnosticCode: "AI_USAGE_ACCOUNTING_RPC_FAILED",
+      }, { status: 503 });
+    }
     const reservation = Array.isArray(reserved.data) ? reserved.data[0] : reserved.data;
     if (!reservation?.allowed || !reservation.reservation_id) return NextResponse.json({ error: "Your monthly AI usage allowance has been reached." }, { status: 429 });
     reservationId = reservation.reservation_id;

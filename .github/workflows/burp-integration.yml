@@ -5,6 +5,7 @@ on:
     branches:
       - feature/cyberlab-burp-integration
       - integration/cyberlab-unified-workstation
+      - feature/burp-scanner-intruder-solidity-wallet-audit
     paths:
       - "burp-extension/**"
       - "kali-companion/burp_connector.py"
@@ -41,6 +42,13 @@ on:
       - "docs/NATIVE_WEB_WORKBENCH.md"
       - "app/page.tsx"
       - "app/agent/**"
+      - "app/burp-suite/**"
+      - "app/solidity/**"
+      - "app/api/solidity/**"
+      - "docs/BURP_INTEGRATION.md"
+      - "docs/BLOCKCHAIN_ENGINEERING.md"
+      - "docs/WALLET_RECOVERY_SECURITY_MODEL.md"
+      - "docs/FILE_RECOVERY_CAPABILITIES.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/burp-integration.yml"
@@ -76,6 +84,13 @@ on:
       - "kali-companion/tests/test_burp_connector.py"
       - "app/network-intelligence/**"
       - "app/page.tsx"
+      - "app/burp-suite/**"
+      - "app/solidity/**"
+      - "app/api/solidity/**"
+      - "docs/BURP_INTEGRATION.md"
+      - "docs/BLOCKCHAIN_ENGINEERING.md"
+      - "docs/WALLET_RECOVERY_SECURITY_MODEL.md"
+      - "docs/FILE_RECOVERY_CAPABILITIES.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/burp-integration.yml"

@@ -227,7 +227,7 @@ class BurpExtensionHealthTests(unittest.TestCase):
         class HealthResponse(FakeResponse):
             def read(self, _limit):
                 import json
-                return json.dumps({"status": "ok", "connector": "montoya"}).encode("utf-8")
+                return json.dumps({"status": "ok", "connector": "montoya", "capabilities": ["repeater_handoff", "confirmed_single_request_replay", "intruder_handoff", "professional_scanner_crawl", "professional_scanner_active_audit"]}).encode("utf-8")
         with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
              patch.object(burp_connector, "urlopen", return_value=HealthResponse()) as open_url:
             token_file.read_text.return_value = "local-extension-token-12345678901234567890"
@@ -236,6 +236,9 @@ class BurpExtensionHealthTests(unittest.TestCase):
         self.assertTrue(result["authenticated"])
         self.assertIn("repeater_handoff", result["capabilities"])
         self.assertIn("confirmed_single_request_replay", result["capabilities"])
+        self.assertIn("intruder_handoff", result["capabilities"])
+        self.assertIn("professional_scanner_crawl", result["capabilities"])
+        self.assertIn("professional_scanner_active_audit", result["capabilities"])
         self.assertEqual(open_url.call_args.args[0].full_url, burp_connector.EXTENSION_HEALTH_URL)
 
     def test_extension_health_rejects_wrong_connector_payload(self):
@@ -248,5 +251,68 @@ class BurpExtensionHealthTests(unittest.TestCase):
             token_file.read_text.return_value = "local-extension-token-12345678901234567890"
             result = burp_connector.inspect_burp_extension_status()
         self.assertEqual(result["status"], "invalid_response")
+
+
+
+
+class BurpAdvancedIntegrationTests(unittest.TestCase):
+    class JsonResponse(FakeResponse):
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self, _limit):
+            import json
+            return json.dumps(self.payload).encode("utf-8")
+
+    def test_intruder_handoff_requires_explicit_authorization(self):
+        result = burp_connector.open_burp_history_in_intruder(
+            12, confirmed=False, authorization_reference="LAB-42")
+        self.assertEqual(result["status"], "confirmation_required")
+
+    def test_intruder_handoff_calls_local_extension_and_does_not_claim_attack_started(self):
+        response = self.JsonResponse({"status": "opened_in_intruder", "history_id": 12, "attack_started": False})
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=response) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.open_burp_history_in_intruder(
+                12, confirmed=True, authorization_reference="ENGAGEMENT-42")
+        self.assertEqual(result["status"], "opened_in_intruder")
+        self.assertFalse(result["attack_started"])
+        request = open_url.call_args.args[0]
+        self.assertIn("/v1/intruder/from-history?", request.full_url)
+        self.assertIn("authorizationReference=ENGAGEMENT-42", request.full_url)
+        self.assertEqual(request.get_method(), "POST")
+
+    def test_scanner_rejects_non_http_target_before_network(self):
+        with patch.object(burp_connector, "urlopen") as open_url:
+            result = burp_connector.start_burp_scanner_task(
+                "audit", "file:///etc/passwd", confirmed=True,
+                authorization_reference="LAB-42")
+        self.assertEqual(result["status"], "invalid_request")
+        open_url.assert_not_called()
+
+    def test_scanner_requires_explicit_approval_and_reference(self):
+        result = burp_connector.start_burp_scanner_task(
+            "audit", "https://lab.example/", confirmed=False,
+            authorization_reference="LAB-42")
+        self.assertEqual(result["status"], "confirmation_required")
+
+    def test_scanner_start_uses_local_extension_and_returns_real_task_id(self):
+        response = self.JsonResponse({"status": "started", "task_id": "task-123", "kind": "crawl"})
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=response) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.start_burp_scanner_task(
+                "crawl", "https://lab.example/start", confirmed=True,
+                authorization_reference="LAB-42")
+        self.assertEqual(result["task_id"], "task-123")
+        request = open_url.call_args.args[0]
+        self.assertIn("/v1/scanner/crawl?", request.full_url)
+        self.assertIn("authorizationReference=LAB-42", request.full_url)
+        self.assertEqual(request.get_method(), "POST")
+
+    def test_cancel_scanner_requires_confirmation(self):
+        result = burp_connector.cancel_burp_scanner_task("task-123", confirmed=False)
+        self.assertEqual(result["status"], "confirmation_required")
 
 

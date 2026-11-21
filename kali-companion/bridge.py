@@ -25,7 +25,7 @@ from urllib.parse import urlparse, parse_qs
 from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition, list_deleted_files, recover_deleted_file, recover_all_deleted_files, start_photorec_recovery
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
-from burp_connector import inspect_burp_status, inspect_burp_extension_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater, send_in_scope_request
+from burp_connector import inspect_burp_status, inspect_burp_extension_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater, send_in_scope_request, open_burp_history_in_intruder, start_burp_scanner_task, list_burp_scanner_tasks, cancel_burp_scanner_task
 from network_capture import list_capture_interfaces, capture_packets
 from web_testing import execute_request, request_history
 from web_crawler import run_crawl
@@ -1401,6 +1401,8 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 limit = 50
             return self.send_json(200, inspect_burp_issues(limit), origin)
+        if path == "/burp/scanner/tasks":
+            return self.send_json(200, list_burp_scanner_tasks(), origin)
         if path == "/evidence/case/ledger/verify":
             return self.send_json(200, verify_audit_ledger(), origin)
         if path == "/forensics/devices":
@@ -1423,7 +1425,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/crack-upload", "/wifi/wps", "/wifi/auto", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/crack-upload", "/wifi/wps", "/wifi/auto", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1653,6 +1655,28 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(400, {"status": "invalid_request", "request_sent": False}, origin)
                 result = send_in_scope_request(history_id, confirmed=True)
                 status_code = 200 if result.get("status") == "sent" else 400
+                return self.send_json(status_code, result, origin)
+            if path == "/burp/intruder/from-history":
+                history_id = data.get("historyId")
+                if data.get("confirmIntruderHandoff") is not True or isinstance(history_id, bool) or not isinstance(history_id, int):
+                    return self.send_json(400, {"status": "confirmation_required", "attack_started": False}, origin)
+                result = open_burp_history_in_intruder(history_id, confirmed=True,
+                    authorization_reference=str(data.get("authorizationReference", "")))
+                status_code = 200 if result.get("status") == "opened_in_intruder" else (403 if result.get("http_status") == 403 or result.get("status") == "out_of_scope" else 400)
+                return self.send_json(status_code, result, origin)
+            if path in {"/burp/scanner/crawl", "/burp/scanner/audit"}:
+                if data.get("confirmStart") is not True:
+                    return self.send_json(400, {"status": "confirmation_required"}, origin)
+                kind = "crawl" if path.endswith("/crawl") else "audit"
+                result = start_burp_scanner_task(kind, str(data.get("targetUrl", "")), confirmed=True,
+                    authorization_reference=str(data.get("authorizationReference", "")))
+                status_code = 202 if result.get("status") == "started" else (501 if result.get("status") == "edition_unavailable" or result.get("http_status") == 501 else (403 if result.get("http_status") == 403 else 400))
+                return self.send_json(status_code, result, origin)
+            if path == "/burp/scanner/cancel":
+                if data.get("confirmCancel") is not True:
+                    return self.send_json(400, {"status": "confirmation_required"}, origin)
+                result = cancel_burp_scanner_task(str(data.get("taskId", "")), confirmed=True)
+                status_code = 200 if result.get("status") == "cancel_requested" else 400
                 return self.send_json(status_code, result, origin)
             if path == "/plan":
                 return self.send_json(200, plan_task(data.get("prompt", "")), origin)
