@@ -4,8 +4,8 @@ function run(type, payload, label) {
   chrome.runtime.sendMessage({type,payload}, response => {
     if (chrome.runtime.lastError) { status.textContent = chrome.runtime.lastError.message; return; }
     if (!response?.ok) { status.textContent = response?.error || "Operation failed."; return; }
-    if (type === "inspect-active-tab") status.textContent = "Inspected " + response.title + "\\n" + response.events + " network events · " + response.cookies + " cookie metadata records.";
-    else if (type === "capture-session-cookies") status.textContent = "Captured " + response.count + " cookie records for " + response.origin + ".\\nNames: " + response.names.join(", ") + "\\nValues remain in volatile extension memory and were not sent to the app.";
+    if (type === "inspect-active-tab") status.textContent = "Inspected " + response.title + "\n" + response.events + " network events · " + response.cookies + " cookie metadata records.";
+    else if (type === "capture-session-cookies") status.textContent = "Captured " + response.count + " cookie records for " + response.origin + ".\nNames: " + response.names.join(", ") + "\nValues remain in volatile extension memory and were not sent to the app.";
     else status.textContent = "Cleared " + response.cleared + " locally held cookie records.";
   });
 }
