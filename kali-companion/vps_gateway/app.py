@@ -19,7 +19,7 @@ import threading
 import uuid
 from collections import deque
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
@@ -394,7 +394,7 @@ def view_shared_file(token: str):
 class RelayJobCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     device_id: str = Field(min_length=1, max_length=80)
-    action: str = Field(pattern="^(desktop.browser.inspect|kali.health|kali.tools.inventory|kali.ollama.models|kali.tool.run)$")
+    action: Literal["desktop.browser.inspect", "kali.health", "kali.tools.inventory", "kali.ollama.models", "kali.tool.run"]
     payload: dict = Field(default_factory=dict)
     approval_reference: str = Field(min_length=3, max_length=160)
     operator_approved: bool
