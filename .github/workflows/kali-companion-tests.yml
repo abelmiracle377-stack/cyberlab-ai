@@ -34,6 +34,8 @@ jobs:
       - name: Validate consent page assets
         run: test -s kali-companion/vps_gateway/consent.html && grep -q 'Grant selected permissions' kali-companion/vps_gateway/consent.html && grep -q 'Stop and disconnect' kali-companion/vps_gateway/consent.html
       - name: Run unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/kali-companion
         run: |
           python -m unittest discover -s kali-companion -p 'test_*.py' -v
           python -m unittest discover -s kali-companion/tests -p 'test_wallet_recovery_*.py' -v
