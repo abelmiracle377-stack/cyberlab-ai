@@ -14,7 +14,7 @@ type AssessResult = {
   checks: { type: string; url: string; status?: number; parameter?: string; error?: string }[];
   findings: Finding[]; limitations: string[];
 };
-const API = "http://127.0.0.1:8765";
+const API = "/api/kali";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
 const SEV_CLASS: Record<string, string> = {
   critical: "bg-rose-900/40 text-rose-200 border-rose-800",
