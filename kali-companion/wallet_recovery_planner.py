@@ -54,9 +54,8 @@ WALLET_PROFILES = {
 }
 
 SECRET_FIELDS = {
-    "mnemonic", "seed", "seedphrase", "seed_phrase", "privatekey", "private_key",
-    "password", "passphrase", "walletpassword", "keystorejson", "vaultjson",
-    "walletdatbase64", "hash", "encryptedkey",
+    "mnemonic", "seed", "seedphrase", "privatekey", "password", "passphrase",
+    "walletpassword", "keystorejson", "vaultjson", "walletdatbase64", "hash", "encryptedkey",
 }
 
 
@@ -143,10 +142,7 @@ def assess_recovery_case(data: dict[str, Any]) -> dict[str, Any]:
     if evidence.get("originalDeviceAvailable"):
         next_steps.append("Preserve the original device and make a forensic copy before attempting repairs or migrations.")
 
-    ready = owner_confirmed and bool(authorization_reference) and not any(
-        phrase in " ".join(blockers[:2]).lower()
-        for phrase in ("not been confirmed available", "no seed words", "not been confirmed available")
-    )
+    ready = owner_confirmed and bool(authorization_reference)
     if wallet_type == "unknown":
         ready = False
     if wallet_type in {"bitcoin-core", "ethereum-keystore", "metamask"}:
