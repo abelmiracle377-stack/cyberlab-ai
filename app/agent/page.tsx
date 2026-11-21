@@ -96,10 +96,6 @@ export default function AgentPage() {
     event.preventDefault();
     if (!scanRequest || scanBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) {
-      setScanStatus("Kali bridge is not paired in this browser session. Open Kali Connection and pair the local companion first.");
-      return;
-    }
     const ports: number[] = [];
     for (const part of scanRequest.ports.split(",")) {
       const value = part.trim();
@@ -117,7 +113,7 @@ export default function AgentPage() {
     }
     setScanBusy(true); setScanStatus("Submitting approved scan to the paired local Kali bridge…");
     try {
-      const response = await fetch("http://127.0.0.1:8765/scan", {
+      const response = await fetch("/api/kali/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
@@ -203,7 +199,6 @@ export default function AgentPage() {
     event.preventDefault();
     if (!webAssessmentRequest || webBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) { setWebStatus("Pair the local Kali companion first in Kali Connection."); return; }
     setWebBusy(true); setWebStatus("Running the approved native CyberLab web workflow…"); setWebResult(null);
     try {
       const parsed = new URL(webAssessmentRequest.url);
@@ -216,7 +211,7 @@ export default function AgentPage() {
         authorizationConfirmed: webAuthorised,
         localLabMode,
       };
-      const crawlResponse = await fetch("http://127.0.0.1:8765/web/crawl", {
+      const crawlResponse = await fetch("/api/kali/web/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ ...base, url: webAssessmentRequest.url, confirmRun: webApproveCrawl, maxPages: 10, maxDepth: 2, delayMs: 500 }),
@@ -230,7 +225,7 @@ export default function AgentPage() {
         const discovered = crawl.pages.filter(page => typeof page.status === "number").map(page => page.url).slice(0, 10);
         const urls = discovered.length ? discovered : [webAssessmentRequest.url];
         try {
-          const scanResponse = await fetch("http://127.0.0.1:8765/web/active-scan", {
+          const scanResponse = await fetch("/api/kali/web/active-scan", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
             body: JSON.stringify({ ...base, urls, confirmRun: true, maxRequests: 10, delayMs: 500 }),
@@ -265,7 +260,6 @@ export default function AgentPage() {
     event.preventDefault();
     if (!toolRequest || toolBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) { setToolStatus("Pair your local companion in Kali Connection first; the tool runs on your own machine."); return; }
     const parameters: Record<string, string | number> = { ...toolRequest.parameters };
     const missingParam = toolRequest.missing[0];
     if (missingParam) {
@@ -282,7 +276,7 @@ export default function AgentPage() {
     setToolBusy(true);
     setToolStatus("Running " + toolRequest.label + " on your paired companion…");
     try {
-      const response = await fetch("http://127.0.0.1:8765/tools/run", {
+      const response = await fetch("/api/kali/tools/run", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({

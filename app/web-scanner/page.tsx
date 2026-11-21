@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Bug, CircleAlert, ShieldCheck, Target } from "lu
 
 type Finding = { id: string; title: string; severity: string; url: string; detail: string; confidence: string };
 type ScanResult = { status: string; summary: Record<string, number>; checks: { type: string; url: string; status?: number; parameter?: string; error?: string }[]; findings: Finding[]; limitations: string[] };
-const API = "http://127.0.0.1:8765";
+const API = "/api/kali";
 
 export default function NativeWebScannerPage() {
   const [urls, setUrls] = useState("http://127.0.0.1:3000/");
@@ -25,7 +25,6 @@ export default function NativeWebScannerPage() {
     setBusy(true); setError(""); setResult(null);
     try {
       const savedToken = token || window.sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!savedToken) throw new Error("Pair the local Kali companion first.");
       const targets = urls.split("\n").map(x=>x.trim()).filter(Boolean);
       if (!targets.length || targets.length > 10) throw new Error("Enter between 1 and 10 target page URLs.");
       const response = await fetch(API + "/web/active-scan", {
@@ -45,6 +44,7 @@ export default function NativeWebScannerPage() {
   return <main className="min-h-screen bg-transparent text-[#d7e7e1]">
     <div className="mx-auto max-w-6xl px-5 py-8">
       <a href="/web-crawler" className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> WEB DISCOVERY</a>
+      <nav className="mb-5 flex flex-wrap gap-3 text-xs"><a href="/ssh-audit" className="rounded border border-slate-700 px-3 py-2 text-emerald-300 hover:border-emerald-600">SSH service audit →</a><a href="/browser-workspace" className="rounded border border-slate-700 px-3 py-2 text-emerald-300 hover:border-emerald-600">Browser inspection →</a></nav>
       <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div><div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><Bug size={14}/> CYBERLAB NATIVE ENGINE / ACTIVE CHECKS</div>
           <h1 className="text-3xl font-semibold tracking-tight">Safe Active Web Checks</h1>

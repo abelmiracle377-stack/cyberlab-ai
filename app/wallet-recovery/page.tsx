@@ -373,6 +373,7 @@ export default function WalletRecoveryPage() {
         <div className="wallet-recovery-kicker">CRYPTO ASSET SAFETY / 001</div>
         <h1>Wallet backup recovery</h1>
         <p className="wallet-recovery-intro">Identify wallet backup formats in your browser, then run real recovery on your own paired Kali companion: HD address derivation from a mnemonic, encrypted-hash extraction from Ethereum keystores and Bitcoin Core wallet.dat, and offline password recovery with your own wordlist. Nothing is sent to the CyberLab cloud.</p>
+        <Link href="/wallet-recovery-intelligence" className="mb-5 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm hover:bg-emerald-500/10"><span><strong className="block text-emerald-300">AI Wallet Recovery Intelligence</strong><span className="text-slate-400">Assess a case, identify supported recovery paths and review missing evidence before execution.</span></span><span className="text-emerald-300">Open planner →</span></Link>
 
         <div className="wallet-security-notice">
           <LockKeyhole size={19}/>

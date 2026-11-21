@@ -306,3 +306,68 @@ These scanner operations require a compatible Burp Suite Professional licence. C
 ### Safety and capability boundaries
 
 Out-of-scope requests are refused. CyberLab does not change Burp scope, execute arbitrary shell commands, or start Intruder attacks in the background. An active audit sends real test traffic; only run it against a system you own or have explicit permission to test. Use the crawl-only action when you want discovery without active vulnerability checks.
+
+ 
+## Cross-machine execution relay (Kali + ego(lite) desktop)
+
+The personal VPS gateway now includes a persistent, typed execution queue. It uses outbound HTTPS polling from each paired device; it does not open an inbound port on Kali or the desktop.
+
+### Pair the two execution devices
+
+1. Deploy the gateway behind a valid HTTPS reverse proxy. The gateway service itself remains bound to `127.0.0.1:8000`.
+2. Use the owner-authenticated `POST /v1/pairing` endpoint to create a one-time code. For the Kali machine, set `platform` to `kali`; for the ego(lite) desktop, set it to `desktop-browser`.
+3. On each device, accept the one-time code at `POST /v1/pairing/accept`, set `terms_accepted: true`, and explicitly grant `job_execution: true`. Store the returned device token in a private environment file; it is displayed only once.
+4. Keep the owner token, device tokens and local Kali bridge token out of Git and browser JavaScript.
+
+The queue supports these typed actions only: `kali.health`, `kali.tools.inventory`, `kali.ollama.models`, `kali.ollama.chat`, `kali.tool.run`, and `desktop.browser.inspect`. Arbitrary shell commands, executable paths, job-supplied JavaScript and arbitrary bridge URLs are not accepted. Every job requires an owner-authenticated enqueue request, an explicit approval flag and an approval reference. Browser inspection is HTTPS-only and checks the exact origin against the supplied scope.
+
+### Start the Kali worker
+
+Start the existing local bridge first. Then set these variables in the Kali user's private environment:
+
+- `CYBERLAB_RELAY_URL=https://your-gateway-domain`
+- `CYBERLAB_DEVICE_TOKEN=<paired Kali device token>`
+- `CYBERLAB_BRIDGE_TOKEN=<local bridge pairing token>`
+- `CYBERLAB_BRIDGE_URL=http://127.0.0.1:8765`
+
+Run `python3 kali-companion/relay_worker.py`. The worker polls the gateway over HTTPS and calls only the existing loopback bridge's fixed health, tool inventory, Ollama model inventory, bounded local Ollama chat and registered tool-run endpoints.
+
+### Start the ego(lite) desktop worker
+
+On the Windows/macOS desktop where ego(lite) and its `ego-browser` CLI are installed, set:
+
+- `CYBERLAB_RELAY_URL=https://your-gateway-domain`
+- `CYBERLAB_DEVICE_TOKEN=<paired desktop device token>`
+
+Run `node integrations/ego-lite/relay-worker.mjs`. It accepts only `desktop.browser.inspect`, validates the HTTPS target origin again locally, and invokes `ego-browser nodejs` with a fixed read-only snapshot script. It never executes JavaScript supplied by the queued job.
+
+### Queue API
+
+- Owner: `POST /v1/jobs` creates a typed job; `GET /v1/jobs` lists status/results; `POST /v1/jobs/{job_id}/cancel` cancels jobs that have not started.
+- Device: `GET /v1/jobs/next` claims one job with a short lease; `POST /v1/jobs/{job_id}/result` returns the result using the one-time lease token.
+- Results are capped at 64 KB. Device revocation immediately prevents future claims. Jobs expire after 15 minutes and claims expire after 3 minutes.
+
+The relay is an execution transport, not a complete autonomous security testing engine. It currently supports read-only browser snapshots and the existing registered Kali tool runner. Active web vulnerability tests still need their own explicit, scoped workflow and independent evidence validation. The CyberLab admin-only console is available at `/execution-relay`; its authenticated Next.js API routes create pairing codes, enqueue typed jobs, list execution receipts and cancel jobs that have not started. Configure `CYBERLAB_GATEWAY_URL` and `CYBERLAB_GATEWAY_OWNER_TOKEN` as server-only Vercel environment variables. The console is restricted through the existing Supabase administrator gate.
+
+### Admin console setup
+
+1. Deploy the gateway and configure its TLS domain.
+2. In Vercel, add server-only environment variables `CYBERLAB_GATEWAY_URL=https://your-gateway-domain` and `CYBERLAB_GATEWAY_OWNER_TOKEN=<the gateway owner token>`. Do not use a `NEXT_PUBLIC_` prefix.
+3. Sign in to CyberLab with an account whose Supabase `user_profiles.role` is `admin`, then open `/execution-relay`.
+4. Generate a pairing code for `kali` or `desktop-browser`. On the intended device, open `https://your-gateway-domain/consent`, enter the one-time code and device name, and select **CyberLab execution jobs**. Grant only the permissions that device actually needs. The one-time API alternative is:
+
+   ```bash
+   curl -X POST https://your-gateway-domain/v1/pairing/accept \
+     -H 'Content-Type: application/json' \
+     -d '{"code":"ONE_TIME_CODE","participant_label":"Kali workstation","terms_accepted":true,"permissions":{"job_execution":true}}'
+   ```
+
+   For the desktop, use `"participant_label":"Ego Lite desktop"`. Store the returned `device_token` privately. The pairing code expires after ten minutes and is single-use.
+5. Start the corresponding relay worker on each device. Keep the Kali bridge running locally before starting `relay_worker.py`.
+6. In the admin console, queue a read-only health/inventory job first, then query the installed Ollama model tags and submit a local model analysis using only non-secret evidence. Confirm the receipt appears before authorising any active registered tool.
+
+The website's Kali modules now send bridge requests through the authenticated relay proxy at `/api/kali/*`; they no longer assume the browser and Kali share the same localhost. The proxy selects exactly one online paired Kali device with `job_execution` permission and returns a conflict if zero or multiple devices are online. GET and JSON POST routes are allowlisted in both the gateway and worker. Private wallet seed/password operations, authenticated HTTP/Burp request replay, SOC connector credentials, file uploads, disk-image acquisition and Wi-Fi handshake cracking are deliberately excluded from the generic relay. Those require a separate end-to-end encrypted, ephemeral transfer design; do not send secrets through the current job queue. Multipart uploads and responses above 64 KB are not yet supported through this relay path.
+
+The queue and device tokens are separate from the local Kali bridge token. Revoking a device in the gateway immediately blocks future polls. The admin console does not expose the gateway owner token or device tokens to browser JavaScript.
+
+The `kali.ollama.chat` action forwards a bounded model tag and prompt to the existing loopback-only `/ollama/chat` endpoint. It runs inference on the Kali machine; it does not expose port 11434, upload the prompt to a hosted model, or automatically execute tools. The model tag must match an installed Ollama model. Keep secrets and session credentials out of prompts.

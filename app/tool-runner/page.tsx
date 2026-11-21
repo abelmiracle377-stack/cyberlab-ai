@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Play, Terminal, AlertTriangle, RefreshCw } from "lucide-react";
 
-const BRIDGE = "http://127.0.0.1:8765";
+const BRIDGE = "/api/kali";
 
 type ToolInfo = {
   name: string; binary: string; category: string; active: boolean; installed: boolean;
@@ -34,7 +34,6 @@ export default function ToolRunnerPage() {
     setError(""); setListBusy(true);
     try {
       const pairing = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!pairing) throw new Error("Pair your local companion in Kali Connection first.");
       setToken(pairing);
       const response = await fetch(BRIDGE + "/tools/runners", { headers: { Authorization: "Bearer " + pairing }, cache: "no-store" });
       const data = await response.json();

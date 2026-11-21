@@ -26,7 +26,7 @@ jobs:
       - name: Install gateway test dependencies
         run: python -m pip install -r kali-companion/vps_gateway/requirements.txt
       - name: Compile companion
-        run: python -m py_compile kali-companion/cyberlab.py
+        run: python -m py_compile kali-companion/cyberlab.py kali-companion/bridge.py kali-companion/relay_worker.py
       - name: Compile VPS gateway
         run: python -m py_compile kali-companion/vps_gateway/app.py
       - name: Validate VPS installer shell syntax
@@ -34,4 +34,19 @@ jobs:
       - name: Validate consent page assets
         run: test -s kali-companion/vps_gateway/consent.html && grep -q 'Grant selected permissions' kali-companion/vps_gateway/consent.html && grep -q 'Stop and disconnect' kali-companion/vps_gateway/consent.html
       - name: Run unit tests
-        run: python -m unittest discover -s kali-companion -p 'test_*.py' -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}/kali-companion
+        run: |
+          python -m unittest discover -s kali-companion -p 'test_*.py' -v
+          python -m unittest discover -s kali-companion/tests -p 'test_wallet_recovery_*.py' -v
+      - name: Validate sandbox runner and browser extension
+        run: |
+          python -m py_compile kali-companion/ssh_audit.py
+          python -m unittest discover -s kali-companion/tests -p 'test_ssh_audit.py' -v
+          python -m py_compile sandbox/runner.py
+          python -m json.tool browser-extension/manifest.json > /dev/null
+          node --check browser-extension/service-worker.js
+          node --check browser-extension/cyberlab-content.js
+          node --check browser-extension/popup.js
+          node --check integrations/ego-lite/inspect.mjs
+          node --check integrations/ego-lite/relay-worker.mjs

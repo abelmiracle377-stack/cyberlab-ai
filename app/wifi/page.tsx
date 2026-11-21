@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Wifi, CircleAlert, ShieldCheck, RefreshCw } from "lucide-react";
 
-const BRIDGE = "http://127.0.0.1:8765";
+const BRIDGE = "/api/kali";
 const SEV: Record<string, string> = {
   critical: "text-rose-300", high: "text-orange-300", low: "text-sky-300", info: "text-slate-400",
 };
@@ -41,8 +41,6 @@ export default function WifiPage() {
   async function post(path: string, body: Record<string, unknown>, label: string, title: string) {
     setBusy(label); setError("");
     try {
-      if (!token.trim()) throw new Error("Enter the companion bridge token.");
-      window.sessionStorage.setItem("cyberlab.kaliBridgeToken", token.trim());
       const res = await fetch(BRIDGE + path, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token.trim() }, body: JSON.stringify(body),
       });
@@ -56,7 +54,6 @@ export default function WifiPage() {
   async function loadInterfaces() {
     setBusy("iface"); setError("");
     try {
-      if (!token.trim()) throw new Error("Enter the companion bridge token.");
       const res = await fetch(BRIDGE + "/wifi/interfaces", { headers: { Authorization: "Bearer " + token.trim() } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed.");

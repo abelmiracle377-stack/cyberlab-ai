@@ -78,7 +78,6 @@ export default function WebWorkbenchPage() {
 
   async function loadHistory() {
     const pairing = token();
-    if (!pairing) return;
     const response = await fetch("http://127.0.0.1:8765/web/history", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load request history.");

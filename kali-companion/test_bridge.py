@@ -48,6 +48,22 @@ class BridgeHttpBoundaryTests(unittest.TestCase):
             urlopen(request, timeout=2)
         self.assertEqual(caught.exception.code, 403)
 
+    def test_root_status_route_is_not_blocked_by_get_allowlist(self):
+        import urllib.error
+        from urllib.request import Request, urlopen
+        request = Request(self.base + "/", headers={"Origin": "http://localhost:3000"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urlopen(request, timeout=2)
+        self.assertEqual(caught.exception.code, 401)
+
+    def test_burp_scanner_tasks_route_is_not_blocked_by_get_allowlist(self):
+        import urllib.error
+        from urllib.request import Request, urlopen
+        request = Request(self.base + "/burp/scanner/tasks", headers={"Origin": "http://localhost:3000"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urlopen(request, timeout=2)
+        self.assertEqual(caught.exception.code, 401)
+
     def test_health_returns_cors_for_allowed_origin_after_pairing(self):
         import json
         from urllib.request import Request, urlopen

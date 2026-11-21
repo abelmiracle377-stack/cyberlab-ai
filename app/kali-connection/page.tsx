@@ -61,11 +61,11 @@ export default function KaliConnectionPage() {
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
     try{
-      const response=await fetch("http://127.0.0.1:8765/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const response=await fetch("/api/kali/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
       setCompanion(data.companion||null);
-      const inventoryResponse=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const inventoryResponse=await fetch("/api/kali/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const inventory=await inventoryResponse.json();
       if(!inventoryResponse.ok)throw new Error(inventory.error||"Connected, but the Kali tool inventory could not be loaded. Update the local companion.");
       setToolInventory(inventory as ToolInventory);
@@ -77,21 +77,21 @@ export default function KaliConnectionPage() {
 
   async function createTaskPlan(event:React.FormEvent){
     event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);
-    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}
+    try{const response=await fetch("/api/kali/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}
     catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}
     finally{setPlanning(false);}
   }
 
   async function runPassiveResearch(event:React.FormEvent){
     event.preventDefault();setResearchBusy(true);setError("");setResearchResult(null);
-    try{const response=await fetch("http://127.0.0.1:8765/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}
+    try{const response=await fetch("/api/kali/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Passive research failed.");}
     finally{setResearchBusy(false);}
   }
 
   async function runServiceEnumeration(event:React.FormEvent){
     event.preventDefault();setServiceBusy(true);setError("");setServiceResult(null);
-    try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("http://127.0.0.1:8765/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
+    try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("/api/kali/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Service identification failed.");}
     finally{setServiceBusy(false);}
   }
@@ -102,7 +102,7 @@ export default function KaliConnectionPage() {
       const serviceReport=evidenceReport;
       const artifactEvidenceReport=artifactReport;
       if(!serviceReport&&!artifactEvidenceReport)throw new Error("Analyse network or artifact evidence before creating a case.");
-      const response=await fetch("http://127.0.0.1:8765/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport:artifactEvidenceReport})});
+      const response=await fetch("/api/kali/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport:artifactEvidenceReport})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not create the investigation case.");
       setCaseReport(data as Record<string,unknown>);
@@ -114,7 +114,7 @@ export default function KaliConnectionPage() {
     if(!caseReport)return;
     setCaseBusy(true);setError("");
     try{
-      const response=await fetch("http://127.0.0.1:8765/evidence/case/export",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseReport})});
+      const response=await fetch("/api/kali/evidence/case/export",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseReport})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not export the investigation case.");
       const caseId=String((caseReport.case as Record<string,unknown>)?.case_id||"cyberlab-case");
@@ -132,7 +132,7 @@ export default function KaliConnectionPage() {
     const caseId=String(caseData?.case_id||"");
     setCaseBusy(true);setError("");
     try{
-      const response=await fetch("http://127.0.0.1:8765/evidence/case/verify",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseId})});
+      const response=await fetch("/api/kali/evidence/case/verify",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseId})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not verify the local archive.");
       setCaseReport({...caseReport,archive_verification:data});
@@ -143,7 +143,7 @@ export default function KaliConnectionPage() {
 
   async function verifyAuditLedger(){
     setLedgerBusy(true);setError("");setLedgerVerification(null);
-    try{const response=await fetch("http://127.0.0.1:8765/evidence/case/ledger/verify",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not verify the audit ledger.");setLedgerVerification(data as Record<string,unknown>);}
+    try{const response=await fetch("/api/kali/evidence/case/ledger/verify",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not verify the audit ledger.");setLedgerVerification(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Could not verify the audit ledger.");}
     finally{setLedgerBusy(false);}
   }
@@ -153,7 +153,7 @@ export default function KaliConnectionPage() {
     try{
       const parsed=JSON.parse(artifactEvidence);
       if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw new Error("Paste a JSON object containing triageResult or recoveryManifest.");
-      const response=await fetch("http://127.0.0.1:8765/evidence/artifacts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify(parsed)});
+      const response=await fetch("/api/kali/evidence/artifacts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify(parsed)});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Artifact evidence analysis failed.");
       setArtifactReport(data as Record<string,unknown>);
@@ -165,7 +165,7 @@ export default function KaliConnectionPage() {
     if(!serviceResult)return;
     setEvidenceBusy(true);setError("");setEvidenceReport(null);
     try{
-      const response=await fetch("http://127.0.0.1:8765/evidence/report",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceResult})});
+      const response=await fetch("/api/kali/evidence/report",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceResult})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Evidence analysis failed.");
       setEvidenceReport(data as Record<string,unknown>);
@@ -175,7 +175,7 @@ export default function KaliConnectionPage() {
 
   async function refreshToolInventory(){
     setToolsBusy(true);setError("");
-    try{const response=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
+    try{const response=await fetch("/api/kali/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
     catch(e){setError(e instanceof Error?e.message:"Tool inventory request failed.");}
     finally{setToolsBusy(false);}
   }
@@ -183,7 +183,7 @@ export default function KaliConnectionPage() {
   async function refreshTelemetry(){
     setTelemetryBusy(true);setError("");
     try{
-      const response=await fetch("http://127.0.0.1:8765/system",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const response=await fetch("/api/kali/system",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not retrieve local host telemetry.");
       setSnapshot(data.metrics as Snapshot);
@@ -203,7 +203,7 @@ export default function KaliConnectionPage() {
         if(parsedPorts.size>100)throw new Error("Choose no more than 100 unique TCP ports.");
       }
       if(!parsedPorts.size)throw new Error("Enter at least one TCP port.");
-      const response=await fetch("http://127.0.0.1:8765/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:[...parsedPorts]})});
+      const response=await fetch("/api/kali/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:[...parsedPorts]})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Local assessment failed.");
       setResult(data);
@@ -226,30 +226,30 @@ export default function KaliConnectionPage() {
       <div className="agent-heading">
         <div className="agent-overline">LOCAL INTEGRATION / KALI LINUX</div>
         <h1>Connect your Kali machine</h1>
-        <p>Pair this website with the CyberLab companion running on your Kali computer. The connection stays on your machine at 127.0.0.1; no inbound internet port or public tunnel is needed.</p>
+        <p>Pair this website with the CyberLab companion running on your Kali computer. Kali runs on a separate computer and connects through the authenticated outbound HTTPS relay; no inbound Kali port is opened.</p>
       </div>
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
         <pre>{`git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-git checkout integration/cyberlab-unified-workstation
+git checkout feature/autonomous-wallet-recovery-intelligence
 sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g
 python3 kali-companion/cyberlab.py doctor`}</pre>
-        <p>For this unified integration build, check out <code>integration/cyberlab-unified-workstation</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>integration/cyberlab-unified-workstation</code> and pull the latest changes.</p>
+        <p>For the current integration build, check out <code>feature/autonomous-wallet-recovery-intelligence</code> before starting the bridge. After the pull request is merged, use the main branch for future updates.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
 
       <section className="kali-panel">
         <h2>2. Start the local bridge on Kali</h2>
-        <pre>sudo python3 kali-companion/bridge.py</pre>
+        <pre>python3 kali-companion/bridge.py</pre>
         <button className="report-download" type="button" onClick={copyCommand}><Copy size={13}/>{copied?"Copied":"Copy bridge command"}</button>
-        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Running with sudo enables explicitly approved disk imaging; it gives the local bridge elevated privileges, so keep the token private and stop the bridge when finished. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
+        <p>The terminal prints a local bridge token. Keep it private. The bridge listens only on 127.0.0.1:8765. Do not run with sudo unless a specific, approved disk-imaging task requires elevated access. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
       </section>
 
       {!connected&&<section className="kali-panel">
         <h2>Available after pairing</h2>
-        <p>These modules run on your own Kali machine through the local companion. They stay hidden until the companion is running and paired (steps 1 to 3 below).</p>
+        <p>These modules run on your separate Kali machine through the authenticated relay worker. They stay hidden until the companion is running and paired (steps 1 to 3 below).</p>
         <ul>
           <li><strong>4. Kali tool inventory</strong>: lists the security tools installed on your Kali machine.</li>
           <li><strong>5. Describe any authorised task</strong>: plans a task and runs only the local workflows you approve.</li>
@@ -259,14 +259,17 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
           <li><strong>10. Unified investigation case</strong>: collects evidence into one case.</li>
           <li><strong>11. Authorised Nmap assessment</strong>: TCP scan of a target you own or are authorised to test, after you confirm the target and reference.</li>
           <li><strong>12. Camera Intelligence</strong>: discovery on a private LAN you select, with explicit consent.</li>
-          <li><strong>13. Optional personal VPS gateway</strong>: separately deployed; not hosted by this site.</li>
+          <li><strong>13. Secure relay gateway</strong>: required for separate-machine execution; deploy it on a VPS you control and configure the server-only gateway URL and owner token.</li>
         </ul>
       </section>}
       <section className="kali-panel">
-        <h2>3. Pair this browser with Kali</h2>
-        <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Paste the local pairing token"/></label>
-        <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Connect to Kali</>}</button>
-        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local companion. The pairing token is held only in this page's memory.</p>}
+        <h2>3. Pair and start the outbound relay worker</h2>
+        <p>Open <a href="/execution-relay" className="text-emerald-300 underline">Execution Relay</a>, create a pairing code for the Kali platform, and accept it on Kali. Grant the <strong>CyberLab execution jobs</strong> permission. The gateway issues a device token; the local bridge prints its own token when it starts.</p><pre>{`export CYBERLAB_RELAY_URL="https://YOUR-GATEWAY-DOMAIN"
+export CYBERLAB_DEVICE_TOKEN="PASTE-DEVICE-TOKEN"
+export CYBERLAB_BRIDGE_TOKEN="PASTE-LOCAL-BRIDGE-TOKEN"
+python3 kali-companion/relay_worker.py`}</pre><p>Keep both terminals running. The worker polls the gateway over outbound HTTPS and forwards fixed, allowlisted bridge operations to Kali loopback. For safety, private wallet seed/password recovery, authenticated proxy or Burp replay, SOC connector credentials, file uploads, disk images and Wi-Fi handshake cracking are not forwarded through this relay yet. Do not enter those secrets into remote workflows; end-to-end encrypted transfer is still being built.</p>
+        <button className="report-download" type="button" disabled={checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Check paired Kali connection</>}</button>
+        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to the separate Kali machine through the secure relay.</p>}
         {connected&&companion&&<section className="kali-panel" style={{marginTop:12}}>
           <h2>Paired companion</h2>
           <div className="malware-kv"><span>Companion</span><strong>{companion.label}</strong></div>
@@ -410,8 +413,8 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <div className="kali-module-grid">{modules.map(({icon:Icon,title,detail})=><div className="kali-module" key={title}><Icon size={17}/><div><strong>{title}</strong><p>{detail}</p></div></div>)}</div>
       </section>
 
-      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. The pairing token is not saved by the website. Scan results are returned to this browser session.</div>
-      <div className="agent-disclaimer"><Unplug size={12}/> To disconnect, close this page or clear the token and press Ctrl+C in the Kali terminal. The main dashboard remains available via the top-left link.</div>
+      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. Device authentication is handled by the paired outbound relay. Scan results are returned to this browser session.</div>
+      <div className="agent-disclaimer"><Unplug size={12}/> To disconnect, stop the relay worker and local bridge on Kali, or revoke the paired device in Execution Relay. The main dashboard remains available via the top-left link.</div>
     </section>
   </main>;
 }

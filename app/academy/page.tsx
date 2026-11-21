@@ -103,7 +103,7 @@ export default function AcademyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const BRIDGE = "http://127.0.0.1:8765";
+  const BRIDGE = "/api/kali";
   async function labAction(action: "start" | "stop") {
     setError(""); setLabBusy(true);
     try {

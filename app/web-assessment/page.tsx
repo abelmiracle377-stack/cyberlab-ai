@@ -14,7 +14,7 @@ type AssessResult = {
   checks: { type: string; url: string; status?: number; parameter?: string; error?: string }[];
   findings: Finding[]; limitations: string[];
 };
-const API = "http://127.0.0.1:8765";
+const API = "/api/kali";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
 const SEV_CLASS: Record<string, string> = {
   critical: "bg-rose-900/40 text-rose-200 border-rose-800",
@@ -47,7 +47,6 @@ export default function WebAssessmentPage() {
     setBusy(true); setError(""); setResult(null);
     try {
       const savedToken = token || window.sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!savedToken) throw new Error("Pair the local Kali companion first.");
       const targets = urls.split("\n").map((x) => x.trim()).filter(Boolean);
       if (!targets.length || targets.length > 10) throw new Error("Enter between 1 and 10 target page URLs.");
       const response = await fetch(API + "/web/assessment", {
