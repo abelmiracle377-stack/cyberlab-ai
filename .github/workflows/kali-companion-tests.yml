@@ -48,3 +48,4 @@ jobs:
           node --check browser-extension/service-worker.js
           node --check browser-extension/cyberlab-content.js
           node --check browser-extension/popup.js
+          node --check integrations/ego-lite/inspect.mjs
