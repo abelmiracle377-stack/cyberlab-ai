@@ -366,6 +366,8 @@ The relay is an execution transport, not a complete autonomous security testing 
 5. Start the corresponding relay worker on each device. Keep the Kali bridge running locally before starting `relay_worker.py`.
 6. In the admin console, queue a read-only health/inventory job first, then query the installed Ollama model tags and submit a local model analysis using only non-secret evidence. Confirm the receipt appears before authorising any active registered tool.
 
+The website's Kali modules now send bridge requests through the authenticated relay proxy at `/api/kali/*`; they no longer assume the browser and Kali share the same localhost. The proxy selects exactly one online paired Kali device with `job_execution` permission and returns a conflict if zero or multiple devices are online. GET and JSON POST routes are allowlisted in both the gateway and worker. Multipart uploads and responses above 64 KB are not yet supported through this relay path.
+
 The queue and device tokens are separate from the local Kali bridge token. Revoking a device in the gateway immediately blocks future polls. The admin console does not expose the gateway owner token or device tokens to browser JavaScript.
 
 The `kali.ollama.chat` action forwards a bounded model tag and prompt to the existing loopback-only `/ollama/chat` endpoint. It runs inference on the Kali machine; it does not expose port 11434, upload the prompt to a hosted model, or automatically execute tools. The model tag must match an installed Ollama model. Keep secrets and session credentials out of prompts.
