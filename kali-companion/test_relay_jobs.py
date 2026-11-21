@@ -81,6 +81,14 @@ class RelayJobTests(unittest.TestCase):
         self.assertFalse(result["verified"])
         self.assertEqual(result["status"], "failed")
 
+    def test_local_ollama_job_is_bounded_and_typed(self):
+        self.assertEqual(
+            gateway.validate_relay_payload("kali.ollama.chat", {"model": "qwen3:8b", "prompt": "Analyse these safe test observations."}, "ENG-2026-003", True),
+            "kali",
+        )
+        with self.assertRaises(HTTPException):
+            gateway.validate_relay_payload("kali.ollama.chat", {"model": "qwen3:8b", "prompt": "x" * 12001}, "ENG-2026-003", True)
+
     def test_execution_requires_explicit_operator_approval(self):
         body = gateway.RelayJobCreate(
             device_id="kali-1", action="kali.health", payload={},
