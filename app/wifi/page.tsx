@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Wifi, CircleAlert, ShieldCheck, RefreshCw } from "lucide-react";
 
-const BRIDGE = "http://127.0.0.1:8765";
+const BRIDGE = "/api/kali";
 const SEV: Record<string, string> = {
   critical: "text-rose-300", high: "text-orange-300", low: "text-sky-300", info: "text-slate-400",
 };
