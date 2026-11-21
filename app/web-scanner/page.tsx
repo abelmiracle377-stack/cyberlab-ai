@@ -45,6 +45,7 @@ export default function NativeWebScannerPage() {
   return <main className="min-h-screen bg-transparent text-[#d7e7e1]">
     <div className="mx-auto max-w-6xl px-5 py-8">
       <a href="/web-crawler" className="mb-6 inline-flex items-center gap-2 text-xs text-emerald-300/70 hover:text-emerald-200"><ArrowLeft size={14}/> WEB DISCOVERY</a>
+      <nav className="mb-5 flex flex-wrap gap-3 text-xs"><a href="/ssh-audit" className="rounded border border-slate-700 px-3 py-2 text-emerald-300 hover:border-emerald-600">SSH service audit →</a><a href="/browser-workspace" className="rounded border border-slate-700 px-3 py-2 text-emerald-300 hover:border-emerald-600">Browser inspection →</a></nav>
       <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div><div className="mb-2 flex items-center gap-2 text-[10px] tracking-[.24em] text-amber-300"><Bug size={14}/> CYBERLAB NATIVE ENGINE / ACTIVE CHECKS</div>
           <h1 className="text-3xl font-semibold tracking-tight">Safe Active Web Checks</h1>
