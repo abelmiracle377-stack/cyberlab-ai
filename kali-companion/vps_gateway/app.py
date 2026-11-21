@@ -132,6 +132,14 @@ class AcceptPairing(BaseModel):
     permissions: dict[str, bool]
 
 
+@app.get("/consent", response_class=HTMLResponse)
+def consent_page():
+    consent_file = Path(__file__).with_name("consent.html")
+    if not consent_file.is_file():
+        raise HTTPException(404, "Device consent page is unavailable.")
+    return HTMLResponse(consent_file.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"})
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "cyberlab-personal-vps-gateway"}
