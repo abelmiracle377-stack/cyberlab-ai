@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
 
 :root {
   /* Tactile dark-slate workspace — tuned for readability, not neon clutter. */
@@ -823,3 +823,234 @@ h1, h2, h3 { color: #58A6FF; }
 @keyframes tw-blink{50%{opacity:0}}
 .tw-mint{color:var(--green)} .tw-cyan{color:var(--cyan)} .tw-amber{color:var(--amber)}
 .tw-crimson{color:var(--crimson)} .tw-dim{color:var(--muted)} .tw-flag{color:var(--green-strong);font-weight:600}
+
+
+/* =========================================================
+   CYBERLAB AI — unified visual system
+   Site-wide hood artwork, legible operational surfaces,
+   and consistent section styling across every route.
+   ========================================================= */
+:root {
+  --bg: #070b09;
+  --panel: rgba(10, 16, 13, .84);
+  --panel-2: rgba(16, 24, 19, .90);
+  --line: rgba(119, 151, 130, .24);
+  --line-soft: rgba(119, 151, 130, .14);
+  --text: #f4f7f5;
+  --muted: #b3c0b8;
+  --dim: #89988f;
+  --green: #38a852;
+  --green-strong: #52c46a;
+  --blue: #69aaff;
+  --crimson: #ff625d;
+  color-scheme: dark;
+}
+
+/* The actual green-hood photograph is the fixed canvas for every page.
+   Keep the image above the document canvas, but below all page content. */
+html, body {
+  min-height: 100%;
+  background: transparent !important;
+}
+html { background-color: #070b09 !important; }
+body {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  color: var(--text);
+  background: transparent !important;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(3, 8, 5, .36) 0%, rgba(3, 8, 5, .56) 48%, rgba(3, 8, 5, .78) 100%),
+    radial-gradient(ellipse at 50% 34%, rgba(15, 45, 24, .12), rgba(2, 6, 4, .42) 76%),
+    url("/cyberlab-hood.jpg") center 18% / cover no-repeat;
+  transform: translateZ(0);
+}
+.cyber-figure { display: none !important; }
+.cyber-bg {
+  z-index: -2 !important;
+  opacity: .17 !important;
+  mix-blend-mode: screen;
+}
+
+/* Shared application frame */
+.shell, .main, .content, .agent-shell {
+  background: transparent !important;
+}
+.shell { min-height: 100vh; }
+.sidebar {
+  background: rgba(5, 11, 8, .88) !important;
+  border-right-color: rgba(116, 153, 126, .22) !important;
+  backdrop-filter: blur(18px);
+}
+.topbar, .agent-topbar {
+  background: rgba(5, 11, 8, .76) !important;
+  border-bottom-color: rgba(116, 153, 126, .22) !important;
+  backdrop-filter: blur(18px);
+}
+.content { position: relative; }
+
+/* Navigation — clear hierarchy and restrained active states */
+.brand-mark {
+  border-color: rgba(82, 196, 106, .58) !important;
+  background: rgba(16, 34, 21, .82) !important;
+  color: #70d584 !important;
+}
+.brand-name { color: #f5f8f6; letter-spacing: -.35px; }
+.brand-sub, .workspace-label { color: #a2b0a7 !important; }
+.nav-item { color: #c0cbc3 !important; }
+.nav-item:hover {
+  color: #fff !important;
+  background: rgba(44, 72, 52, .46) !important;
+  border-color: rgba(105, 170, 255, .22) !important;
+}
+.nav-item.active {
+  color: #fff !important;
+  background: rgba(35, 61, 43, .72) !important;
+  border-color: rgba(82, 196, 106, .38) !important;
+}
+.nav-item.active svg, .nav-icon { color: #70c982 !important; }
+.nav-divider { background: rgba(119, 151, 130, .2) !important; }
+.connection-card, .profile {
+  background: rgba(10, 18, 13, .72) !important;
+  border-color: rgba(119, 151, 130, .24) !important;
+}
+.connection-copy, .profile-role { color: #b0bdb4 !important; }
+.connection-link { color: #80b7ff !important; }
+
+/* Typography — blue titles, red section markers, white readable copy */
+h1, h2, h3, .page-heading h1, .agent-heading h1 {
+  color: #79b4ff !important;
+  text-shadow: 0 1px 18px rgba(15, 52, 91, .16);
+}
+.eyebrow, [class*="kicker"], .panel-kicker {
+  color: #ff7771 !important;
+}
+.subtitle, p, label { text-wrap: pretty; }
+body, p, li, label, td, th, .module-desc, .agent-message-content {
+  color: #edf2ee;
+}
+.subtitle, .section-meta, .date-stamp, .panel-kicker,
+.metric-note, .activity-detail, .footer-note {
+  color: #b1beb5 !important;
+}
+a:not(.nav-item):not([class*="button"]) { color: #83baff; }
+a:not(.nav-item):not([class*="button"]):hover { color: #b7d7ff; }
+
+/* Panels and cards — translucent enough to retain the hood in the scene */
+.panel, .metric, .module-card, .network-upload, .network-results,
+.module-page-panel, .kali-panel, .agent-config, .agent-chat,
+.agent-composer, .soc-panel, .connection-card {
+  background: rgba(8, 14, 10, .82) !important;
+  border-color: rgba(124, 159, 134, .28) !important;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(12px);
+}
+.panel-header, .agent-config, .agent-composer {
+  border-color: rgba(124, 159, 134, .22) !important;
+}
+.metric-value, .module-name, .panel-title, .activity-name {
+  color: #f5f8f6 !important;
+}
+.module-card:hover {
+  background: rgba(19, 37, 24, .91) !important;
+  border-color: rgba(105, 170, 255, .48) !important;
+  transform: translateY(-2px);
+}
+.module-icon, .agent-orb, .agent-message-avatar {
+  background: rgba(21, 48, 29, .88) !important;
+  border-color: rgba(82, 196, 106, .36) !important;
+  color: #7cdb91 !important;
+}
+.notice {
+  background: rgba(16, 34, 21, .82) !important;
+  border-color: rgba(82, 196, 106, .35) !important;
+}
+.notice-title { color: #f3f8f4 !important; }
+.notice-text { color: #c0cec4 !important; }
+
+/* Forms and data surfaces */
+input, textarea, select {
+  color: #f5f8f6;
+  background-color: rgba(4, 9, 6, .86);
+  border-color: rgba(132, 159, 139, .34);
+}
+input::placeholder, textarea::placeholder { color: #8e9c92; opacity: 1; }
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #69aaff !important;
+  box-shadow: 0 0 0 2px rgba(105, 170, 255, .13);
+}
+button {
+  transition: background-color .16s ease, border-color .16s ease,
+    color .16s ease, transform .16s ease;
+}
+button:focus-visible, a:focus-visible {
+  outline: 2px solid #69aaff;
+  outline-offset: 3px;
+}
+table { border-color: rgba(132, 159, 139, .24); }
+th { color: #ff7771; }
+td { color: #e8efea; }
+code, pre, .terminal-output {
+  border-color: rgba(132, 159, 139, .22);
+}
+pre {
+  background: rgba(3, 8, 5, .9) !important;
+  color: #e9f2ec;
+}
+
+/* Dedicated agent workspace */
+.agent-shell { color: #f4f7f5 !important; }
+.agent-main { position: relative; }
+.agent-heading p, .agent-model-label, .agent-message-role,
+.agent-composer-bottom > span, .agent-disclaimer {
+  color: #b4c1b8 !important;
+}
+.agent-chat { background: rgba(5, 11, 8, .78) !important; }
+.agent-welcome h2 { color: #79b4ff !important; }
+.agent-welcome p { color: #c1cdc5 !important; }
+.agent-prompts button {
+  color: #eaf1ec !important;
+  background: rgba(15, 28, 18, .88) !important;
+  border-color: rgba(124, 159, 134, .3) !important;
+}
+.agent-prompts button:hover {
+  border-color: #69aaff !important;
+  background: rgba(26, 48, 31, .94) !important;
+}
+.agent-composer-bottom button {
+  background: rgba(25, 62, 35, .94) !important;
+  border-color: rgba(82, 196, 106, .62) !important;
+  color: #f5fff7 !important;
+}
+
+/* Keep layouts composed and readable on tablets and phones */
+@media (max-width: 1050px) {
+  .content { padding-left: 22px; padding-right: 22px; }
+}
+@media (max-width: 760px) {
+  .sidebar {
+    background: rgba(5, 11, 8, .94) !important;
+    backdrop-filter: blur(16px);
+  }
+  .nav-list { scrollbar-width: thin; }
+  .nav-item { min-height: 38px; }
+  .content { padding: 22px 15px 36px; }
+  .topbar { background: rgba(5, 11, 8, .9) !important; }
+  body::before { background-position: center 16%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
