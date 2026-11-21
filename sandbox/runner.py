@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CyberLab isolated code runner. Executes one bounded job in a disposable container."""
 from __future__ import annotations
-import json, os, secrets, selectors, subprocess, tempfile, time
+import json, os, secrets, selectors, subprocess, tempfile, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -9,6 +9,8 @@ HOST = os.environ.get("CYBERLAB_SANDBOX_BIND", "127.0.0.1")
 PORT = int(os.environ.get("CYBERLAB_SANDBOX_PORT", "8787"))
 TOKEN = os.environ.get("CYBERLAB_SANDBOX_TOKEN", "")
 IMAGE = os.environ.get("CYBERLAB_SANDBOX_IMAGE", "cyberlab-sandbox:latest")
+RUNTIME = os.environ.get("CYBERLAB_SANDBOX_RUNTIME", "runsc")
+JOB_SLOTS = threading.BoundedSemaphore(2)
 MAX_BODY = 64 * 1024
 MAX_OUTPUT = 64 * 1024
 MAX_RUNTIME = 20
@@ -31,7 +33,7 @@ def run_job(data: dict) -> dict:
         path.write_text(source, encoding="utf-8")
         path.chmod(0o444)
         docker_command = [
-            "docker", "run", "--rm", "--pull=never",
+            "docker", "run", "--rm", "--pull=never", "--runtime=" + RUNTIME,
             "--network=none", "--memory=384m", "--memory-swap=384m",
             "--cpus=1", "--pids-limit=64", "--read-only",
             "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=64m",
