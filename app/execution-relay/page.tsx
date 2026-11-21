@@ -19,11 +19,14 @@ type Job = {
   error: string;
   created_at: number;
   finished_at: number | null;
+  result_sha256?: string | null;
+  evidence_record_hash?: string | null;
 };
 
 export default function ExecutionRelayPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [evidenceChain, setEvidenceChain] = useState<{ status: string; verified: boolean; record_count: number; final_record_hash: string | null; errors: string[] } | null>(null);
   const [deviceName, setDeviceName] = useState("Kali workstation");
   const [platform, setPlatform] = useState<"kali" | "desktop-browser">("kali");
   const [pairingCode, setPairingCode] = useState("");
@@ -53,7 +56,7 @@ export default function ExecutionRelayPage() {
       setDevices(nextDevices);
       if (!selectedDevice && nextDevices.length) setSelectedDevice(nextDevices[0].device_id);
     } else setMessage(deviceData.error || "Could not load paired devices.");
-    if (jobResponse.ok) setJobs(jobData.jobs || []);
+    if (jobResponse.ok) { setJobs(jobData.jobs || []); setEvidenceChain(jobData.evidence_chain || null); }
     else setMessage(jobData.error || "Could not load execution jobs.");
   }, [selectedDevice]);
 
@@ -184,8 +187,9 @@ export default function ExecutionRelayPage() {
 
       <section className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-3">
         <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Execution receipts</h2><button onClick={() => void refresh()} className="text-sm text-emerald-400">Refresh results</button></div>
+        {evidenceChain && <div className="rounded-lg border border-slate-800 bg-slate-900 p-3 text-xs"><div className="flex items-center justify-between"><span>Evidence hash chain</span><span className={evidenceChain.verified ? "text-emerald-300" : "text-amber-300"}>{evidenceChain.status} · {evidenceChain.record_count} records</span></div>{evidenceChain.final_record_hash && <p className="mt-1 break-all font-mono text-slate-500">Head: {evidenceChain.final_record_hash}</p>}{evidenceChain.errors?.map((error, index) => <p key={index} className="mt-1 text-rose-300">{error}</p>)}</div>}
         {jobs.length === 0 && <p className="text-sm text-slate-500">No execution jobs have been queued.</p>}
-        {jobs.map(job => <article key={job.job_id} className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{job.action}</p><p className="text-xs text-slate-500">{job.job_id} · {job.approval_reference}</p></div><span className="rounded-full border border-slate-700 px-3 py-1 text-xs">{job.status}</span></div>{job.error && <p className="mt-2 text-sm text-rose-300">{job.error}</p>}{job.result && <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/40 p-3 text-xs text-slate-300">{JSON.stringify(job.result, null, 2)}</pre>}{job.status === "queued" && <button onClick={() => void cancelJob(job.job_id)} disabled={busy} className="mt-2 text-xs text-rose-300">Cancel job</button>}</article>)}
+        {jobs.map(job => <article key={job.job_id} className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{job.action}</p><p className="text-xs text-slate-500">{job.job_id} · {job.approval_reference}</p></div><span className="rounded-full border border-slate-700 px-3 py-1 text-xs">{job.status}</span></div>{job.error && <p className="mt-2 text-sm text-rose-300">{job.error}</p>}{job.result_sha256 && <p className="mt-2 break-all text-[10px] text-slate-500">Result SHA-256: {job.result_sha256}</p>}{job.evidence_record_hash && <p className="break-all text-[10px] text-slate-500">Evidence record: {job.evidence_record_hash}</p>}{job.result && <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/40 p-3 text-xs text-slate-300">{JSON.stringify(job.result, null, 2)}</pre>}{job.status === "queued" && <button onClick={() => void cancelJob(job.job_id)} disabled={busy} className="mt-2 text-xs text-rose-300">Cancel job</button>}</article>)}
       </section>
     </main>
   );
