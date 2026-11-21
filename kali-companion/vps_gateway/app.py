@@ -473,8 +473,8 @@ def validate_relay_payload(action, payload, approval_reference, approved):
             
              
                
-            "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search",
-            "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/monitor/start", "/wifi/monitor/stop",
+            "/academy/lab/start", "/academy/lab/stop",   
+             "/wifi/scan", "/wifi/audit", "/wifi/monitor/start", "/wifi/monitor/stop",
             "/wifi/deauth", "/wifi/wps",
             "/wifi/auto", "/tools/run", "/ssh/audit",
         }
