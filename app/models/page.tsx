@@ -54,7 +54,7 @@ export default function ModelsPage() {
       setLocalStatus("Not paired · open Kali Connection to pair this browser.");
       return;
     }
-    fetch("http://127.0.0.1:8765/ollama/models", {
+    fetch("/api/kali/ollama/models", {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
@@ -76,7 +76,7 @@ export default function ModelsPage() {
     }).catch((cause) => {
       if (alive) setLocalStatus(cause instanceof Error ? cause.message : "Could not reach the paired local Ollama service.");
     });
-    fetch("http://127.0.0.1:8765/system", {
+    fetch("/api/kali/system", {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
@@ -125,7 +125,7 @@ export default function ModelsPage() {
       if (activeModel?.local) {
         const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
         if (!token) throw new Error("Pair your Kali companion first to use local Ollama models.");
-        const response = await fetch("http://127.0.0.1:8765/ollama/chat", {
+        const response = await fetch("/api/kali/ollama/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ model: activeModel.name, prompt: submittedPrompt, history: activeHistory }),
