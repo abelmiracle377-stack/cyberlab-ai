@@ -305,6 +305,21 @@ export default function SolidityLabPage() {
           {walletNetworkError && <div className="agent-error"><AlertTriangle size={14}/>{walletNetworkError}</div>}
         </section>
 
+        <section className="solidity-results" aria-labelledby="dex-capability-title">
+          <div className="solidity-result-head">
+            <div><div className="agent-overline">DEX / AMM CAPABILITY STATUS</div><h2 id="dex-capability-title">Engineering blueprint — not a live DEX</h2></div>
+            <AlertTriangle size={18}/>
+          </div>
+          <p className="agent-disclaimer">CyberLab currently provides a constant-product AMM project blueprint, a limited educational AMM fixture and a source-linked Uniswap deployment reference registry. These help with design and review; they do not connect to live pools or execute exchange operations.</p>
+          <div className="network-results">
+            <strong>Available now</strong>
+            <p>Solidity source analysis, project drafting when the AI gateway and usage accounting are configured, local solc compilation, constrained local Foundry tests, ERC-721/ERC-1155 teaching blueprints and AMM design/test scaffolding.</p>
+            <strong>Not yet available</strong>
+            <p>Live pool discovery, route/price quotes, token approvals, swaps, liquidity deposits/withdrawals, transaction simulation, wallet signing, contract deployment and live position tracking.</p>
+          </div>
+          <p className="agent-disclaimer">Do not deposit real funds into the educational AMM fixture. A future live DEX workflow needs verified deployment addresses and bytecode, reliable RPC reads, transaction simulation, slippage/deadline controls, independent contract audits and explicit wallet approval for every transaction.</p>
+        </section>
+
         <section className="solidity-results" aria-labelledby="contract-generator-title">
           <div className="solidity-result-head">
             <div><div className="agent-overline">AI-ASSISTED PROJECT AUTHORING</div><h2 id="contract-generator-title">Create a smart-contract project</h2></div>
