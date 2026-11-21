@@ -63,8 +63,8 @@ export default function CyberLabOsPage() {
     try {
       const headers = { Authorization: "Bearer " + pairedToken };
       const [capResponse, systemResponse] = await Promise.all([
-        fetch("http://127.0.0.1:8765/capabilities", { headers, cache: "no-store" }),
-        fetch("http://127.0.0.1:8765/system", { headers, cache: "no-store" }),
+        fetch("/api/kali/capabilities", { headers, cache: "no-store" }),
+        fetch("/api/kali/system", { headers, cache: "no-store" }),
       ]);
       const capData = await capResponse.json();
       const systemData = await systemResponse.json();
