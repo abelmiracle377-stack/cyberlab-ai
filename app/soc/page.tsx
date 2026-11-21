@@ -29,7 +29,7 @@ type CaseDetail = {
   timeline: { kind: string; at: string; text: string }[];
 };
 
-const BRIDGE = "/api/kali";
+const BRIDGE = "http://127.0.0.1:8765";
 const TOKEN_KEY = "cyberlab.kaliBridgeToken";
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low", "informational"];
 
