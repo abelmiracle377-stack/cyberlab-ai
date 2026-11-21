@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BrainCircuit, ShieldCheck, ClipboardCheck, AlertTriangle, Loader2 } from "lucide-react";
 
-const BRIDGE = "http://127.0.0.1:8765";
+const BRIDGE = "/api/kali";
 const walletTypes = [
   ["bitcoin-core", "Bitcoin Core"],
   ["ethereum-keystore", "Ethereum V3 keystore"],
