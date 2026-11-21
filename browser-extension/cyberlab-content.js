@@ -9,7 +9,7 @@
     if (event.source !== window || event.origin !== location.origin) return;
     const message = event.data;
     if (!message || message.channel !== CHANNEL || message.direction !== "to-extension") return;
-    if (message.type === "edit-attribute" || message.type === "undo-last-edit" || message.type === "stop-sharing") {
+    if (message.type === "edit-attribute" || message.type === "fill-page-field" || message.type === "undo-last-edit" || message.type === "stop-sharing") {
       chrome.runtime.sendMessage({ type: message.type, payload: message.payload }, (response) => {
         window.postMessage({ channel: CHANNEL, direction: "from-extension", type: "edit-result", payload: response || { ok: false, error: "No extension response." } }, location.origin);
       });
