@@ -38,9 +38,9 @@ The repository now includes self-contained capped-NFT and constant-product AMM t
 
 ## Read-only wallet network discovery
 
-The Solidity Lab can query `eth_chainId` from an injected EVM provider. This is a read-only network-discovery operation: it does not request `eth_accounts`, prompt for account access, switch chains, sign messages or submit transactions. The returned hexadecimal chain ID is validated and matched against the local curated registry; unknown IDs are shown as unlisted rather than silently mapped to a known network.
+The Solidity Lab discovers injected EVM wallets through EIP-6963 provider announcements and the legacy window.ethereum interface, including providers exposed through a multi-wallet provider array. It then queries eth_chainId only. This is read-only: it does not request eth_accounts, trigger account permissions, switch chains, sign messages or submit transactions.
 
-The current implementation reads the network only when the user presses the button. It does not yet subscribe to `chainChanged`, retain a wallet session, read account balances, or prepare/sign transactions. Re-read the network immediately before any future transaction flow and compare it with the explicit target chain. The active provider's chain ID is a claim from that provider, not an independent proof of RPC correctness.
+Wallet injection depends on the browser. A desktop browser with an enabled wallet extension or a wallet's own DApp browser can expose a provider; a normal mobile browser tab or an embedded in-app browser may not. If no provider is injected, the UI explains how to open CyberLab in a compatible wallet browser. The chain is read only when the user presses the button. There is no persistent wallet session, chainChanged subscription, balance view, transaction construction, signing or broadcasting. The provider's chain ID is a claim from that provider, not independent proof of RPC correctness.
 
 ## Curated EVM chain registry
 
@@ -54,6 +54,20 @@ Primary references:
 - Arbitrum chain information: https://developer.arbitrum.io/chain-info
 - Ethereum network-switching EIP example for OP Mainnet chain ID: https://eips.ethereum.org/EIPS/eip-5094
 - Polygon network setup documentation: https://docs.polygon.technology/tools/dApp-development/common-tools/remix/
+
+## DEX registry and current capability
+
+A small, source-linked Uniswap deployment registry is exposed at GET /api/network/dex-registry. It is reference metadata, not a live DEX integration. It does not independently verify deployed bytecode, proxy implementation, liquidity, router behaviour or operational status.
+
+The Solidity Lab currently offers an educational constant-product AMM blueprint and a deliberately incomplete teaching fixture with limited Foundry tests. It is not a complete decentralised exchange and cannot currently create or initialise pools, quote routes, swap tokens, add/remove liquidity, approve tokens, connect an account session, prepare/sign transactions, deploy contracts or monitor live pools. The registry does not enable any of those operations.
+
+Before describing the module as a functioning DEX, it would need a verified chain/protocol deployment registry, RPC reads and bytecode verification, token metadata/decimals handling, quote/routing, pool discovery, transaction simulation, slippage/deadline controls, wallet transaction previews, user-signed approvals/swaps/liquidity actions, receipt tracking and invariant/economic testing. The user must sign in their own wallet; CyberLab must never ask for seed phrases or raw private keys.
+
+## Hosted project generation configuration
+
+The Solidity project generator is an authenticated, usage-accounted AI feature. Its model gateway uses CYBERLAB_UNCENSORED_BASE_URL, CYBERLAB_UNCENSORED_MODELS and either CYBERLAB_UNCENSORED_API_KEY or UNCENSOREDLLM_API_KEY. Keyless mode is allowed only when the operator deliberately sets CYBERLAB_UNCENSORED_ALLOW_KEYLESS=true for a secured self-hosted endpoint.
+
+It also requires SUPABASE_SERVICE_ROLE_KEY and the AI usage-accounting migrations 202611140001_ai_usage_gateway.sql and 202611140002_expand_ai_usage_reservations.sql applied to the same Supabase project used by the application. Missing gateway configuration, model catalogue, service-role credentials or database functions prevents project generation; the feature must fail with a diagnostic instead of bypassing usage accounting.
 
 ## ERC-1155 multi-token fixture
 
