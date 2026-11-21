@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Globe, ShieldCheck, RefreshCw, Code2 } from "lucide-react";
+import { ArrowLeft, Globe, ShieldCheck, Code2 } from "lucide-react";
 
 type Snapshot = {
   capturedAt: string; page: { title?: string; url?: string; readyState?: string; nodes?: any[]; forms?: any[] };
@@ -16,7 +16,7 @@ export default function BrowserWorkspacePage() {
   const [selector, setSelector] = useState("");
   const [attribute, setAttribute] = useState("class");
   const [value, setValue] = useState("");
-  const [editStatus, setEditStatus] = useState("Live DOM editing is not enabled in this initial inspection release.");
+  const [editStatus, setEditStatus] = useState("Temporary DOM edits are available for a small safe attribute allowlist.");
   useEffect(() => {
     function receive(event: MessageEvent) {
       if (event.source !== window || event.origin !== location.origin) return;
@@ -31,7 +31,10 @@ export default function BrowserWorkspacePage() {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
-  function extensionCommand(type: string, payload?: Record<string, string>) {\n    window.postMessage({ channel: CHANNEL, direction: "to-extension", type, payload }, location.origin);\n  }\n  const page = snapshot?.page;
+  function extensionCommand(type: string, payload?: Record<string, string>) {
+    window.postMessage({ channel: CHANNEL, direction: "to-extension", type, payload }, location.origin);
+  }
+  const page = snapshot?.page;
   return <main className="min-h-screen bg-[#0d1117] px-4 py-8 text-[#e6edf3] sm:px-8">
     <div className="mx-auto max-w-7xl space-y-6">
       <Link href="/" className="inline-flex items-center gap-2 text-sm text-[#8b949e] hover:text-white"><ArrowLeft size={16}/> CyberLab</Link>
