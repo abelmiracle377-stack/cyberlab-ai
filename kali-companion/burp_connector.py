@@ -169,8 +169,8 @@ EXTENSION_HEALTH_URL = "http://127.0.0.1:8766/v1/health"
 
 
 def inspect_burp_extension_status(opener=None) -> dict:
-    opener = opener or urlopen
     """Check the authenticated local Montoya extension independently of Burp REST API."""
+    opener = opener or urlopen
     try:
         token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
     except OSError:
