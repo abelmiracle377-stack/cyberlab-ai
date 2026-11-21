@@ -1662,7 +1662,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(400, {"status": "confirmation_required", "attack_started": False}, origin)
                 result = open_burp_history_in_intruder(history_id, confirmed=True,
                     authorization_reference=str(data.get("authorizationReference", "")))
-                status_code = 200 if result.get("status") == "opened_in_intruder" else (403 if result.get("status") == "out_of_scope" else 400)
+                status_code = 200 if result.get("status") == "opened_in_intruder" else (403 if result.get("http_status") == 403 or result.get("status") == "out_of_scope" else 400)
                 return self.send_json(status_code, result, origin)
             if path in {"/burp/scanner/crawl", "/burp/scanner/audit"}:
                 if data.get("confirmStart") is not True:
@@ -1670,7 +1670,7 @@ class Handler(BaseHTTPRequestHandler):
                 kind = "crawl" if path.endswith("/crawl") else "audit"
                 result = start_burp_scanner_task(kind, str(data.get("targetUrl", "")), confirmed=True,
                     authorization_reference=str(data.get("authorizationReference", "")))
-                status_code = 202 if result.get("status") == "started" else (501 if result.get("status") == "edition_unavailable" else (403 if result.get("http_status") == 403 else 400))
+                status_code = 202 if result.get("status") == "started" else (501 if result.get("status") == "edition_unavailable" or result.get("http_status") == 501 else (403 if result.get("http_status") == 403 else 400))
                 return self.send_json(status_code, result, origin)
             if path == "/burp/scanner/cancel":
                 if data.get("confirmCancel") is not True:
