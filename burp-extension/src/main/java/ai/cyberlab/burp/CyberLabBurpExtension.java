@@ -3,11 +3,20 @@ package ai.cyberlab.burp;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.proxy.ProxyHttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.scanner.Audit;
+import burp.api.montoya.scanner.AuditConfiguration;
+import burp.api.montoya.scanner.BuiltInAuditConfiguration;
+import burp.api.montoya.scanner.Crawl;
+import burp.api.montoya.scanner.CrawlConfiguration;
+import burp.api.montoya.scanner.ScanTask;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermission;
@@ -15,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
@@ -23,6 +33,9 @@ public final class CyberLabBurpExtension implements BurpExtension {
     private HttpServer server;
     private ExecutorService executor;
     private static final int PORT = 8766;
+    private static final Map<String, ScanTask> SCAN_TASKS = new ConcurrentHashMap<>();
+    private static final Map<String, String> SCAN_KINDS = new ConcurrentHashMap<>();
+    private static final Map<String, String> SCAN_TARGETS = new ConcurrentHashMap<>();
     private static final Pattern SECRET_QUERY = Pattern.compile(
         "(?i)([?&](?:access_token|api_key|apikey|auth|authorization|code|key|password|passwd|secret|session|signature|sig|token)=)[^&#]*"
     );
@@ -41,6 +54,11 @@ public final class CyberLabBurpExtension implements BurpExtension {
             server.createContext("/v1/issues", e -> issues(e, token, api));
             server.createContext("/v1/repeater/from-history", e -> repeaterFromHistory(e, token, api));
             server.createContext("/v1/send-request", e -> sendInScopeRequest(e, token, api));
+            server.createContext("/v1/intruder/from-history", e -> intruderFromHistory(e, token, api));
+            server.createContext("/v1/scanner/crawl", e -> startScannerTask(e, token, api, "crawl"));
+            server.createContext("/v1/scanner/audit", e -> startScannerTask(e, token, api, "audit"));
+            server.createContext("/v1/scanner/tasks", e -> scannerTasks(e, token));
+            server.createContext("/v1/scanner/cancel", e -> cancelScannerTask(e, token));
             executor = Executors.newFixedThreadPool(2, r -> {
                 Thread t = new Thread(r, "cyberlab-burp-api");
                 t.setDaemon(true);
@@ -230,6 +248,156 @@ public final class CyberLabBurpExtension implements BurpExtension {
         send(e, 200, "{\"status\":\"ok\",\"source\":\"burp_site_map_issues\","
             + "\"read_only\":true,\"count\":" + items.size() + ",\"items\":["
             + String.join(",", items) + "]}");
+    }
+
+
+    // Intruder handoff opens the native Burp Intruder tab with a captured,
+    // in-scope request. Payload positions and attack configuration remain
+    // analyst-controlled in Burp; Montoya does not expose an attack-start API.
+    private static void intruderFromHistory(HttpExchange e, String token, MontoyaApi api) throws IOException {
+        if (!"/v1/intruder/from-history".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"POST".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        Map<String,String> q = query(e.getRequestURI().getRawQuery());
+        int historyId = parsePositiveInt(q.get("id"));
+        if (historyId < 1 || !"true".equals(q.get("confirm")) || !validApproval(q.get("authorizationReference"))) {
+            send(e, 400, "{\"error\":\"history_id_confirmation_and_authorization_reference_required\"}"); return;
+        }
+        for (ProxyHttpRequestResponse entry : api.proxy().history()) {
+            if (entry.id() != historyId) continue;
+            var request = entry.finalRequest();
+            if (!request.isInScope() || !api.scope().isInScope(request.url())) {
+                send(e, 403, "{\"error\":\"out_of_scope_request_blocked\"}"); return;
+            }
+            api.intruder().sendToIntruder(request, "CyberLab · approved history #" + historyId);
+            api.logging().logToOutput("CyberLab: approved Intruder handoff for in-scope request #" + historyId
+                + " (authorization reference " + safeLog(q.get("authorizationReference")) + ").");
+            send(e, 200, "{\"status\":\"opened_in_intruder\",\"history_id\":" + historyId
+                + ",\"attack_started\":false,\"note\":\"Request placed in Burp Intruder. Configure payload positions and attack settings, then start the attack in Burp. No payloads were sent by this handoff.\"}");
+            return;
+        }
+        send(e, 404, "{\"error\":\"proxy_history_item_not_found\"}");
+    }
+
+    // Start a real Burp Professional crawl or active audit. The target must
+    // already be inside Burp's Suite scope; this endpoint never changes scope.
+    private static void startScannerTask(HttpExchange e, String token, MontoyaApi api, String kind) throws IOException {
+        String expected = "/v1/scanner/" + kind;
+        if (!expected.equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"POST".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        Map<String,String> q = query(e.getRequestURI().getRawQuery());
+        String target = q.getOrDefault("url", "").trim();
+        if (!"true".equals(q.get("confirm")) || !validApproval(q.get("authorizationReference")) || target.length() > 2048) {
+            send(e, 400, "{\"error\":\"explicit_confirmation_authorization_reference_and_target_required\"}"); return;
+        }
+        final URI uri;
+        try {
+            uri = URI.create(target);
+            if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                || uri.getHost() == null || uri.getUserInfo() != null || uri.getFragment() != null) {
+                throw new IllegalArgumentException();
+            }
+        } catch (RuntimeException ex) {
+            send(e, 400, "{\"error\":\"target_must_be_an_absolute_http_or_https_url_without_credentials_or_fragment\"}"); return;
+        }
+        if (!api.scope().isInScope(target)) {
+            send(e, 403, "{\"error\":\"target_not_in_burp_suite_scope; add_it_in_burp_and_refresh\"}"); return;
+        }
+        try {
+            ScanTask task;
+            if ("crawl".equals(kind)) {
+                Crawl crawl = api.scanner().startCrawl(CrawlConfiguration.crawlConfiguration(target));
+                task = crawl;
+            } else {
+                Audit audit = api.scanner().startAudit(
+                    AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_ACTIVE_AUDIT_CHECKS));
+                audit.addRequest(HttpRequest.httpRequestFromUrl(target));
+                task = audit;
+            }
+            String id = UUID.randomUUID().toString();
+            SCAN_TASKS.put(id, task);
+            SCAN_KINDS.put(id, kind);
+            SCAN_TARGETS.put(id, target);
+            api.logging().logToOutput("CyberLab: started Burp Professional " + kind + " for in-scope target "
+                + uri.getScheme() + "://" + uri.getAuthority() + " (authorization reference "
+                + safeLog(q.get("authorizationReference")) + ").");
+            send(e, 202, "{\"status\":\"started\",\"task_id\":" + json(id)
+                + ",\"kind\":" + json(kind) + ",\"target\":" + json(uri.getScheme() + "://" + uri.getAuthority())
+                + ",\"note\":\"A real Burp Scanner task was started. Poll task status in CyberLab; Burp remains the execution engine.\"}");
+        } catch (UnsupportedOperationException ex) {
+            send(e, 501, "{\"status\":\"edition_unavailable\",\"error\":\"Burp Scanner requires a compatible Professional edition.\"}");
+        } catch (RuntimeException ex) {
+            send(e, 502, "{\"status\":\"start_failed\",\"error\":" + json(ex.getClass().getSimpleName()) + "}");
+        }
+    }
+
+    private static void scannerTasks(HttpExchange e, String token) throws IOException {
+        if (!"/v1/scanner/tasks".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        List<String> items = new ArrayList<>();
+        for (String id : SCAN_TASKS.keySet()) {
+            ScanTask task = SCAN_TASKS.get(id);
+            if (task == null) continue;
+            String message;
+            try { message = task.statusMessage(); } catch (RuntimeException ex) { message = "Status message unavailable from this Burp API version."; }
+            int issueCount = 0;
+            if (task instanceof Audit audit) {
+                try { issueCount = audit.issues().size(); } catch (RuntimeException ignored) { }
+            }
+            items.add("{\"task_id\":" + json(id) + ",\"kind\":" + json(SCAN_KINDS.getOrDefault(id, "unknown"))
+                + ",\"target\":" + json(SCAN_TARGETS.getOrDefault(id, ""))
+                + ",\"request_count\":" + task.requestCount() + ",\"error_count\":" + task.errorCount()
+                + ",\"issue_count\":" + issueCount + ",\"status_message\":" + json(message == null ? "" : message) + "}");
+        }
+        send(e, 200, "{\"status\":\"ok\",\"tasks\":[" + String.join(",", items) + "]}");
+    }
+
+    private static void cancelScannerTask(HttpExchange e, String token) throws IOException {
+        if (!"/v1/scanner/cancel".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
+        if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
+        if (!"POST".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        Map<String,String> q = query(e.getRequestURI().getRawQuery());
+        String id = q.getOrDefault("id", "");
+        if (!"true".equals(q.get("confirm"))) { send(e, 400, "{\"error\":\"cancellation_confirmation_required\"}"); return; }
+        ScanTask task = SCAN_TASKS.remove(id);
+        if (task == null) { send(e, 404, "{\"error\":\"unknown_or_expired_task\"}"); return; }
+        try { task.delete(); } catch (RuntimeException ex) {
+            SCAN_TASKS.put(id, task);
+            send(e, 502, "{\"error\":\"cancel_failed\"}"); return;
+        }
+        SCAN_KINDS.remove(id); SCAN_TARGETS.remove(id);
+        send(e, 200, "{\"status\":\"cancel_requested\",\"task_id\":" + json(id) + "}");
+    }
+
+    private static Map<String,String> query(String raw) {
+        Map<String,String> result = new HashMap<>();
+        if (raw == null || raw.isEmpty()) return result;
+        for (String pair : raw.split("&")) {
+            String[] parts = pair.split("=", 2);
+            if (parts.length == 2) {
+                try { result.put(URLDecoder.decode(parts[0], StandardCharsets.UTF_8),
+                    URLDecoder.decode(parts[1], StandardCharsets.UTF_8)); } catch (IllegalArgumentException ignored) { }
+            }
+        }
+        return result;
+    }
+
+    private static int parsePositiveInt(String value) {
+        try { int parsed = Integer.parseInt(value); return parsed > 0 ? parsed : -1; }
+        catch (RuntimeException ex) { return -1; }
+    }
+
+    private static boolean validApproval(String reference) {
+        return reference != null && reference.trim().length() >= 3 && reference.trim().length() <= 160
+            && reference.indexOf('\r') < 0 && reference.indexOf('\n') < 0;
+    }
+
+    private static String safeLog(String value) {
+        if (value == null) return "none";
+        String clean = value.replaceAll("[^A-Za-z0-9._:/-]", "_");
+        return clean.substring(0, Math.min(80, clean.length()));
     }
 
     private static int limit(String query) {
