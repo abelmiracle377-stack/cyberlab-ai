@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, KeyRound, Upload, ShieldCheck, CircleAlert, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
-const BRIDGE = "http://127.0.0.1:8765";
+const BRIDGE = "/api/kali";
 
 type CrackResult = { status: string; keyFound?: boolean; key?: string | null; tool?: string; captureName?: string; uploadedBytes?: number; note?: string; error?: string };
 
