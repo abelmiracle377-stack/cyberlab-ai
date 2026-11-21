@@ -124,7 +124,7 @@ export default function WebRepeaterPage() {
   async function plannerCall(path: string, payload: Record<string, unknown>) {
     const pairing = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
     if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-    const response = await fetch("http://127.0.0.1:8765" + path, {
+    const response = await fetch("/api/kali" + path, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
       body: JSON.stringify(payload),
@@ -270,7 +270,7 @@ export default function WebRepeaterPage() {
       try { parsedHeaders = JSON.parse(active.headersText); } catch { throw new Error("Headers must be valid JSON in name/value format."); }
       if (!parsedHeaders || Array.isArray(parsedHeaders) || typeof parsedHeaders !== "object") throw new Error("Headers must be a JSON object.");
       const stateChanging = ["POST", "PUT", "PATCH", "DELETE"].includes(active.method);
-      const response = await fetch("http://127.0.0.1:8765/web/request", {
+      const response = await fetch("/api/kali/web/request", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({
