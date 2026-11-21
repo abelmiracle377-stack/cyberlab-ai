@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { adminGate } from "@/lib/billing/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,19 +27,17 @@ function gatewayConfig() {
   return { url, token };
 }
 
-async function requireUser(request: Request) {
-  const expectedOrigin = new URL(request.url).origin;
+function originAllowed(request: Request) {
   const origin = request.headers.get("origin");
-  if (origin && origin !== expectedOrigin) throw new Error("Cross-origin relay requests are blocked.");
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new Error("Authentication required.");
-  return data.user;
+  return !origin || origin === new URL(request.url).origin;
 }
+
 
 export async function POST(request: Request) {
   try {
-    await requireUser(request);
+    if (!originAllowed(request)) return Response.json({ error: "Cross-origin relay requests are blocked." }, { status: 403 });
+    const gate = await adminGate();
+    if (gate.error) return gate.error;
     const raw = await request.text();
     if (raw.length > 16_384) return Response.json({ error: "Request body is too large." }, { status: 413 });
     let parsedJson: unknown;
