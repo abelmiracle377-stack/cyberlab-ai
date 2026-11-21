@@ -81,3 +81,16 @@ The initial runner is a code-execution foundation. It does not yet provide persi
 4. Browser automation connected to disposable training targets (OWASP Juice Shop, WebGoat and custom CyberLab Academy labs).
 5. Isolated network profiles with per-target allowlists for authorised assessment labs.
 6. Unified agent tool orchestration so specialist agents can delegate to the browser workspace or sandbox, observe execution and validate evidence.
+
+
+## ego(lite) desktop browser integration
+
+The `integrations/ego-lite/` directory contains a local operator skill and an executable read-only smoke test for the official `ego-browser` runtime. ego(lite) runs on the supported desktop host (Windows/macOS), uses its own task Space, and does not attach to an existing Chrome tab. Run the smoke test on the same desktop where ego(lite) is installed:
+
+```bash
+ego-browser nodejs < /absolute/path/to/inspect.mjs
+```
+
+Edit the example URL in `inspect.mjs` only after confirming the operator's authorised target. The script navigates and captures a supported page snapshot; it does not extract credentials or execute vulnerability payloads. See `integrations/ego-lite/README.md` for setup and current boundaries.
+
+**Cross-machine limitation:** the existing Kali bridge binds to loopback. A separate desktop cannot reach the Kali machine's `127.0.0.1` service. The current VPS gateway pairs devices for its existing permissions/files workflow but does not yet relay CyberLab tool jobs. A secure outbound typed-job relay and unified browser/Kali queue remain required before CyberLab can orchestrate both machines automatically. Do not expose the Kali bridge or Ollama directly to the public internet.
