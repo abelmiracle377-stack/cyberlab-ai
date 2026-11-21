@@ -59,26 +59,26 @@ def bridge_request(method: str, path: str, body: dict | None = None) -> dict:
         "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners",
         "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status",
         "/burp/extension/status", "/burp/scanner/tasks", "/burp/site-map",
-        "/network/interfaces", "/academy/lab/status", "/wifi/interfaces", "/web/history",
-        "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/intercepts",
-        "/proxy/websocket-intercepts",
+        "/network/interfaces", "/academy/lab/status", "/wifi/interfaces", 
+        "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", 
+        
         "/evidence/case/ledger/verify",
     }
     post_paths = {
-        "/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case",
-        "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/foremost", "/forensics/photorec",
-        "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat",
-        "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect",
-        "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/send-request",
-        "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel",
-        "/network/capture", "/web/crawl", "/web/active-scan", "/web/assessment",
-        "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create",
-        "/proxy/response-intercepts/decision",
+        "/plan", "/research", "/services",   
+          "/scan",  
+         "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat",
+           
+          
+          
+         "/web/crawl",  
+        "/web/parameters/inspect", "/web/parameters/generate",  "/proxy/ca/create",
+        
         "/ollama/chat", "/solidity/compile", "/solidity/project/compile",
-        "/solidity/tests/run", "/wallet/recovery-assess", "/wallet/extract-hash",
-        "/wallet/check-balances",
-        "/soc/analyze", "/soc/run-cycle",
-        "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts",
+        "/solidity/tests/run", "/wallet/recovery-assess", 
+        
+         
+           
         "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search",
         "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/monitor/start", "/wifi/monitor/stop",
         "/wifi/deauth", "/wifi/wps",
@@ -102,7 +102,7 @@ def bridge_request(method: str, path: str, body: dict | None = None) -> dict:
     if encoded is not None:
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(BRIDGE_URL + path, data=encoded, headers=headers, method=method)
-    timeout = 150 if parsed.path in {"/scan", "/wifi/scan", "/wifi/audit", "/web/active-scan", "/web/assessment", "/network/capture", "/forensics/recover-all-deleted", "/soc/run-cycle"} else 25
+    timeout = 150 if parsed.path in {"/scan", "/wifi/scan", "/wifi/audit",     "/soc/run-cycle"} else 25
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             status, raw = response.status, response.read(MAX_RESPONSE + 1)
