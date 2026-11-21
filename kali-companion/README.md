@@ -319,7 +319,7 @@ The personal VPS gateway now includes a persistent, typed execution queue. It us
 3. On each device, accept the one-time code at `POST /v1/pairing/accept`, set `terms_accepted: true`, and explicitly grant `job_execution: true`. Store the returned device token in a private environment file; it is displayed only once.
 4. Keep the owner token, device tokens and local Kali bridge token out of Git and browser JavaScript.
 
-The queue supports these typed actions only: `kali.health`, `kali.tools.inventory`, `kali.ollama.models`, `kali.tool.run`, and `desktop.browser.inspect`. Arbitrary shell commands, executable paths, job-supplied JavaScript and arbitrary bridge URLs are not accepted. Every job requires an owner-authenticated enqueue request, an explicit approval flag and an approval reference. Browser inspection is HTTPS-only and checks the exact origin against the supplied scope.
+The queue supports these typed actions only: `kali.health`, `kali.tools.inventory`, `kali.ollama.models`, `kali.ollama.chat`, `kali.tool.run`, and `desktop.browser.inspect`. Arbitrary shell commands, executable paths, job-supplied JavaScript and arbitrary bridge URLs are not accepted. Every job requires an owner-authenticated enqueue request, an explicit approval flag and an approval reference. Browser inspection is HTTPS-only and checks the exact origin against the supplied scope.
 
 ### Start the Kali worker
 
@@ -330,7 +330,7 @@ Start the existing local bridge first. Then set these variables in the Kali user
 - `CYBERLAB_BRIDGE_TOKEN=<local bridge pairing token>`
 - `CYBERLAB_BRIDGE_URL=http://127.0.0.1:8765`
 
-Run `python3 kali-companion/relay_worker.py`. The worker polls the gateway over HTTPS and calls only the existing loopback bridge's fixed health, tool inventory, Ollama model inventory and registered tool-run endpoints.
+Run `python3 kali-companion/relay_worker.py`. The worker polls the gateway over HTTPS and calls only the existing loopback bridge's fixed health, tool inventory, Ollama model inventory, bounded local Ollama chat and registered tool-run endpoints.
 
 ### Start the ego(lite) desktop worker
 
@@ -364,6 +364,8 @@ The relay is an execution transport, not a complete autonomous security testing 
 
    For the desktop, use `"participant_label":"Ego Lite desktop"`. Store the returned `device_token` privately. The pairing code expires after ten minutes and is single-use.
 5. Start the corresponding relay worker on each device. Keep the Kali bridge running locally before starting `relay_worker.py`.
-6. In the admin console, queue a read-only health/inventory job first. Confirm the receipt appears before authorising any active registered tool.
+6. In the admin console, queue a read-only health/inventory job first, then query the installed Ollama model tags and submit a local model analysis using only non-secret evidence. Confirm the receipt appears before authorising any active registered tool.
 
 The queue and device tokens are separate from the local Kali bridge token. Revoking a device in the gateway immediately blocks future polls. The admin console does not expose the gateway owner token or device tokens to browser JavaScript.
+
+The `kali.ollama.chat` action forwards a bounded model tag and prompt to the existing loopback-only `/ollama/chat` endpoint. It runs inference on the Kali machine; it does not expose port 11434, upload the prompt to a hosted model, or automatically execute tools. The model tag must match an installed Ollama model. Keep secrets and session credentials out of prompts.
