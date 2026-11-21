@@ -41,6 +41,7 @@ export default function BurpSuitePage() {
       return;
     }
     setRepeaterBusyId(historyId);
+    setRepeaterConfirmed(false);
     setRepeaterMessage("");
     try {
       const response = await fetch(BRIDGE + "/burp/repeater/from-history", {
@@ -61,6 +62,7 @@ export default function BurpSuitePage() {
   async function sendThroughBurp(historyId: number) {
     if (!sendConfirmed) { setRepeaterMessage("Confirm the in-scope replay first."); return; }
     setSendBusyId(historyId);
+    setSendConfirmed(false);
     try {
       const response = await fetch(BRIDGE + "/burp/send-request", {
         method: "POST",
@@ -163,7 +165,7 @@ export default function BurpSuitePage() {
       {history && <section className="network-results">
         <h2>Proxy HTTP history ({history.count})</h2>
         {history.status !== "connected" && <p>Montoya extension: {history.status}. Load the CyberLab Burp extension in Burp and ensure the paired Kali companion runs under the same OS user.</p>}
-        {history.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>ID</th><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Action</th></tr></thead><tbody>{history.items.map((item,i)=><tr key={item.id ?? i}><td>{item.id ?? "—"}</td><td>{item.timestamp || "—"}</td><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td><td><button className="report-download" disabled={item.id === null || !repeaterConfirmed || repeaterBusyId !== null} onClick={()=>item.id !== null && void openInRepeater(item.id)}>{repeaterBusyId === item.id ? "Opening…" : "Open in Repeater"}</button><button className="report-download" style={{marginLeft:6}} disabled={item.id === null || !sendConfirmed || sendBusyId !== null} onClick={()=>item.id !== null && void sendThroughBurp(item.id)}>{sendBusyId === item.id ? "Sending…" : "Replay"}</button>{item.id !== null && sendResults[item.id] && <div className="network-note" style={{marginTop:4}}>{sendResults[item.id]}</div>}</td></tr>)}</tbody></table></div> : <p>No in-scope proxy history entries were returned.</p>}
+        {history.items.length > 0 ? <div className="network-table-wrap"><table className="network-table"><thead><tr><th>ID</th><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Action</th></tr></thead><tbody>{history.items.map((item,i)=><tr key={item.id ?? i}><td>{item.id ?? "—"}</td><td>{item.timestamp || "—"}</td><td>{item.method}</td><td className="burp-url-cell">{item.url}</td><td>{item.status_code ?? "Pending"}</td><td><button className="report-download" disabled={item.id === null || !repeaterConfirmed || repeaterBusyId !== null || extension?.status !== "connected"} onClick={()=>item.id !== null && void openInRepeater(item.id)}>{repeaterBusyId === item.id ? "Opening…" : "Open in Repeater"}</button><button className="report-download" style={{marginLeft:6}} disabled={item.id === null || !sendConfirmed || sendBusyId !== null || extension?.status !== "connected"} onClick={()=>item.id !== null && void sendThroughBurp(item.id)}>{sendBusyId === item.id ? "Sending…" : "Replay"}</button>{item.id !== null && sendResults[item.id] && <div className="network-note" style={{marginTop:4}}>{sendResults[item.id]}</div>}</td></tr>)}</tbody></table></div> : <p>No in-scope proxy history entries were returned.</p>}
       </section>}
       {siteMap && <section className="network-results">
         <h2><Network size={15}/> Site map ({siteMap.count})</h2>
