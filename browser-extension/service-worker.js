@@ -83,7 +83,7 @@ async function inspectTab(tab) {
     await new Promise(resolve => setTimeout(resolve, 5000));
     const cookies = await chrome.debugger.sendCommand({ tabId }, "Network.getAllCookies");
     const targetHost = new URL(tab.url).hostname.toLowerCase();
-    const cookieMetadata = (cookies.cookies || []).filter(c => { const domain = String(c.domain || "").replace(/^\\./, "").toLowerCase(); return targetHost === domain || targetHost.endsWith("." + domain); }).slice(0, 200).map(c => ({
+    const cookieMetadata = (cookies.cookies || []).filter(c => { const domain = String(c.domain || "").replace(/^\./, "").toLowerCase(); return targetHost === domain || targetHost.endsWith("." + domain); }).slice(0, 200).map(c => ({
       name: c.name, domain: c.domain, path: c.path, secure: !!c.secure,
       httpOnly: !!c.httpOnly, sameSite: c.sameSite || "unspecified",
       session: !!c.session, expires: c.session ? null : c.expires
@@ -111,7 +111,7 @@ async function captureSessionCookies(payload) {
   if (!["http:", "https:"].includes(target.protocol)) throw new Error("Only HTTP and HTTPS tabs are supported.");
   const result = await chrome.debugger.sendCommand({ tabId: sharedTabId }, "Network.getAllCookies");
   const matching = (result.cookies || []).filter(cookie => {
-    const domain = String(cookie.domain || "").replace(/^\\./, "").toLowerCase();
+    const domain = String(cookie.domain || "").replace(/^\./, "").toLowerCase();
     return target.hostname.toLowerCase() === domain || target.hostname.toLowerCase().endsWith("." + domain);
   }).slice(0, 200);
   // Keep raw values only in this extension service-worker's volatile memory. Never message them to the app.
