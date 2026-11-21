@@ -58,6 +58,11 @@ def dispatch(action: str, payload: dict, approval_reference: str) -> dict:
     if action in routes:
         method, path = routes[action]
         return request_json(BRIDGE_URL + path, BRIDGE_TOKEN, method, timeout=15, origin=BRIDGE_ORIGIN)
+    if action == "kali.ollama.chat":
+        if set(payload) != {"model", "prompt"}:
+            raise ValueError("Malformed local Ollama chat job.")
+        return request_json(BRIDGE_URL + "/ollama/chat", BRIDGE_TOKEN, "POST", payload,
+                            timeout=90, origin=BRIDGE_ORIGIN)
     if action == "kali.tool.run":
         required = {"tool", "parameters", "confirmRun", "authorizationReference", "targetConfirmation", "timeoutSeconds"}
         if set(payload) != required or payload.get("confirmRun") is not True:
