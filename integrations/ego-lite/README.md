@@ -26,12 +26,12 @@ This is a genuine browser-runtime smoke test, not a mock screenshot. It only nav
 
 ## Current integration boundary
 
-- Implemented here: local ego-browser invocation pattern, task Space creation, navigation, snapshot capture, operator workflow and safety instructions.
-- Existing in CyberLab: Chrome extension workspace and loopback Kali companion.
-- Not yet implemented: a persistent CyberLab desktop companion service, secure cross-machine job relay between the desktop and separate Kali host, a unified browser/Kali execution queue, or automatic findings ingestion into the CyberLab case ledger.
+- Implemented here: local ego-browser invocation pattern, task Space creation, navigation, snapshot capture, an outbound desktop relay worker, typed browser-inspection jobs, and a shared gateway queue also used by the separate Kali relay worker.
+- Existing in CyberLab: Chrome extension workspace as a fallback, plus the outbound Kali companion relay.
+- Not yet implemented: an auto-starting Windows/macOS background service, full DevTools parity, automatic findings ingestion into the CyberLab case ledger, authenticated request replay, or active XSS/SQLi verification.
 - Not claimed: full DevTools parity, raw cookie export, authenticated request replay, automated XSS/SQLi verification, or a deployed Ego Lite connection.
 
-The Kali bridge currently binds to `127.0.0.1`. Do not expose it directly to the internet or change it to bind to all interfaces. A separate desktop cannot call that loopback endpoint on the Kali machine. The next integration stage must use an authenticated outbound device channel with typed, allow-listed jobs and result receipts; it must not tunnel arbitrary shell commands.
+The Kali bridge continues to bind to `127.0.0.1`. Do not expose it directly to the internet or change it to bind to all interfaces. The desktop and Kali workers each make outbound HTTPS connections to the paired gateway; the desktop does not call the Kali loopback endpoint. Jobs are typed, allow-listed and recorded with result receipts; the relay does not tunnel arbitrary shell commands.
 
 ## Local model privacy
 
