@@ -508,7 +508,7 @@ def claim_relay_job(device=Depends(device_auth)):
 def verify_relay_evidence_chain(con=None):
     own_connection = con is None
     connection = con or db()
-    rows = connection.execute("SELECT * FROM relay_evidence ORDER BY id ASC").fetchall()
+    rows = connection.execute("SELECT relay_evidence.*, jobs.result AS job_result FROM relay_evidence JOIN jobs ON jobs.id=relay_evidence.job_id ORDER BY relay_evidence.id ASC").fetchall()
     previous = "GENESIS"
     errors = []
     for row in rows:
@@ -523,6 +523,9 @@ def verify_relay_evidence_chain(con=None):
             "created_at": row["created_at"],
         }
         expected = hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        actual_result_hash = hashlib.sha256((row["job_result"] or "").encode("utf-8")).hexdigest()
+        if actual_result_hash != row["result_sha256"]:
+            errors.append("Evidence record " + str(row["id"]) + " result digest does not match the stored job result.")
         if row["previous_hash"] != previous:
             errors.append("Evidence record " + str(row["id"]) + " has a broken previous-hash link.")
         if row["record_hash"] != expected:
