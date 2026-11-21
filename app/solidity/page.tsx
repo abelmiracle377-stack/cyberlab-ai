@@ -9,21 +9,27 @@ type Model = { id: string; name: string; provider: string; openWeight: boolean }
 type EvmProvider = { request: (args: { method: string }) => Promise<unknown>; providers?: EvmProvider[]; isMetaMask?: boolean };
 type Eip6963Announcement = { info?: { uuid?: string; name?: string; rdns?: string }; provider?: EvmProvider };
 
-async function discoverEvmProvider(): Promise<{ provider: EvmProvider; name: string } | null> {
-  const announced = new Map<string, { provider: EvmProvider; name: string; rdns: string }>();
-  const listener = (event: Event) => {
+const discoveredEvmProviders = new Map<string, { provider: EvmProvider; name: string; rdns: string }>();
+let eip6963ListenerInstalled = false;
+
+function ensureEip6963Listener() {
+  if (eip6963ListenerInstalled) return;
+  window.addEventListener("eip6963:announceProvider", (event: Event) => {
     const detail = (event as CustomEvent<Eip6963Announcement>).detail;
     if (!detail?.provider) return;
     const name = detail.info?.name || "Injected EVM wallet";
     const key = detail.info?.uuid || detail.info?.rdns || name;
-    announced.set(key, { provider: detail.provider, name, rdns: detail.info?.rdns || "" });
-  };
-  window.addEventListener("eip6963:announceProvider", listener);
+    discoveredEvmProviders.set(key, { provider: detail.provider, name, rdns: detail.info?.rdns || "" });
+  });
+  eip6963ListenerInstalled = true;
+}
+
+async function discoverEvmProvider(): Promise<{ provider: EvmProvider; name: string } | null> {
+  ensureEip6963Listener();
   window.dispatchEvent(new Event("eip6963:requestProvider"));
-  await new Promise(resolve => window.setTimeout(resolve, 250));
-  window.removeEventListener("eip6963:announceProvider", listener);
-  if (announced.size > 0) {
-    const choices = Array.from(announced.values());
+  await new Promise(resolve => window.setTimeout(resolve, 300));
+  if (discoveredEvmProviders.size > 0) {
+    const choices = Array.from(discoveredEvmProviders.values());
     const preferred = choices.find(item => /metamask/i.test(item.rdns + " " + item.name)) || choices[0];
     return { provider: preferred.provider, name: preferred.name };
   }
@@ -33,30 +39,6 @@ async function discoverEvmProvider(): Promise<{ provider: EvmProvider; name: str
   const provider = providers.find(item => item.isMetaMask) || providers[0] || injected;
   return { provider, name: provider.isMetaMask ? "MetaMask" : "Injected EVM wallet" };
 }
-type Finding = { id: string; severity: "critical" | "high" | "medium" | "low" | "info"; title: string; description: string; recommendation: string; line: number; evidence: string };
-type Analysis = { compilerPragmas: string[]; contracts: string[]; interfaces: string[]; libraries: string[]; imports: string[]; functions: number; findings: Finding[]; summary: Record<string, number>; limitations: string[] };
-
-const sample = `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
-
-contract ExampleVault {
-    mapping(address => uint256) public balances;
-
-    function deposit() external payable {
-        balances[msg.sender] += msg.value;
-    }
-
-    function withdraw(uint256 amount) external {
-        require(balances[msg.sender] >= amount, "insufficient");
-        (bool ok, ) = msg.sender.call{value: amount}("");
-        require(ok, "transfer failed");
-        balances[msg.sender] -= amount;
-    }
-
-    function ownerCheck() external view returns (bool) {
-        return tx.origin == msg.sender;
-    }
-}`;
 
 export default function SolidityLabPage() {
   const [source, setSource] = useState(sample);
