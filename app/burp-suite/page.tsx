@@ -272,7 +272,7 @@ export default function BurpSuitePage() {
           <label><input type="checkbox" checked={intruderConfirmed} onChange={e=>setIntruderConfirmed(e.target.checked)}/> I approve placing a selected in-scope request into Burp Intruder.</label>
           {intruderMessage && <p>{intruderMessage}</p>}
         </div>
-        <div style={{marginTop:18}}>
+        <p className="agent-disclaimer">Before starting a crawl, narrow Burp Suite scope to this engagement only: Burp may follow links to every URL that its current scope includes. CyberLab checks the seed URL but cannot narrow or rewrite your Burp scope. An active audit sends real test requests and can affect the target application; run it only within written permission.</p>        <div style={{marginTop:18}}>
           <label htmlFor="burp-scanner-target">Scanner / crawl start URL</label>
           <input id="burp-scanner-target" value={scannerTarget} onChange={e=>setScannerTarget(e.target.value)} maxLength={2048} placeholder="https://your-authorised-target.example/"/>
           <div className="network-note" style={{marginTop:10}}>
