@@ -43,6 +43,7 @@ import base64
 import wallet_recovery
 import wallet_cracking
 import wallet_recovery_planner
+import wallet_recovery_executor
 import seed_solver
 import balance_check
 import kali_tools
@@ -90,6 +91,7 @@ evidence_lock = threading.Lock()
 artifact_lock = threading.Lock()
 case_lock = threading.Lock()
 case_export_lock = threading.Lock()
+recovery_execution_lock = threading.Lock()
 network_capture_lock = threading.Lock()
 web_request_lock = threading.Lock()
 web_crawl_lock = threading.Lock()
@@ -1426,7 +1428,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/recovery-assess", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/crack-upload", "/wifi/wps", "/wifi/auto", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/recovery-assess", "/wallet/recovery-run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/crack-upload", "/wifi/wps", "/wifi/auto", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1442,7 +1444,7 @@ class Handler(BaseHTTPRequestHandler):
                 131072 if path == "/evidence/case" else
                 65536 if path in {"/evidence/report", "/evidence/artifacts"} else
                 4_200_000 if path == "/wallet/extract-hash" else
-                65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover"} else
+                65536 if path in {"/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/recovery-run"} else
                 16_000_000 if path == "/wifi/crack-upload" else
                 1048576 if path in {"/soc/analyze", "/soc/run-cycle"} else
                 4096 if path in {"/wallet/derive", "/wallet/electrum-derive", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/solve-seed", "/wallet/crack", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze"} else
@@ -1468,6 +1470,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result, origin)
             if path == "/wallet/recovery-assess":
                 return self.send_json(200, wallet_recovery_planner.assess_recovery_case(data), origin)
+            if path == "/wallet/recovery-run":
+                if not recovery_execution_lock.acquire(blocking=False):
+                    return self.send_json(409, {"error": "A wallet recovery operation is already running."}, origin)
+                try:
+                    result = wallet_recovery_executor.execute_recovery_job(data, auto_recover=wallet_auto_recover)
+                    return self.send_json(200, result, origin)
+                finally:
+                    recovery_execution_lock.release()
             if path == "/wallet/extract-hash":
                 return self.send_json(200, wallet_extract_hash(data), origin)
             if path == "/wallet/derive":
