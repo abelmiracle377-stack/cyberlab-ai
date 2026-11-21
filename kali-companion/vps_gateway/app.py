@@ -516,7 +516,7 @@ def claim_relay_job(device=Depends(device_auth)):
 def verify_relay_evidence_chain(con=None):
     own_connection = con is None
     connection = con or db()
-    rows = connection.execute("SELECT relay_evidence.*, jobs.result AS job_result FROM relay_evidence JOIN jobs ON jobs.id=relay_evidence.job_id ORDER BY relay_evidence.id ASC").fetchall()
+    rows = connection.execute("SELECT relay_evidence.*, jobs.result AS job_result FROM relay_evidence LEFT JOIN jobs ON jobs.id=relay_evidence.job_id ORDER BY relay_evidence.id ASC").fetchall()
     previous = "GENESIS"
     errors = []
     for row in rows:
