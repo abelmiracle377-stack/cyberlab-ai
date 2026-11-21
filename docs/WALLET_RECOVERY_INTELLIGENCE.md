@@ -37,3 +37,25 @@ supported local methods, missing evidence, known limitations and next steps.
 
 Supported profiles: `bitcoin-core`, `ethereum-keystore`, `metamask`,
 `bip39`, `electrum`, `bip38` and `unknown`.
+
+
+## Local execution (implemented)
+
+The companion now exposes `POST /wallet/recovery-run` for the first end-to-end
+execution path: **derive-and-check**. It requires all of the following:
+- The owner/authorised-operator confirmation.
+- A non-empty case/authorisation reference.
+- A separate explicit confirmation for the run.
+- The mnemonic and optional passphrase supplied directly to the paired
+  loopback companion, never to the hosted application API.
+
+The executor invokes the existing `wallet_auto_recover` engine locally. It
+detects supported BIP39/Electrum schemes, derives public addresses across the
+configured account templates and change paths, and can optionally perform
+read-only public balance lookups after a second network-consent flag. The
+executor serialises only the public result fields returned by that engine.
+
+This execution path does **not** crack encrypted backup passwords, parse every
+vendor backup, restore Bitcoin Core databases, sign transactions, or transfer
+assets. Those require separate format-specific execution adapters and tests.
+A completed derivation is not proof that the wallet has been fully recovered.
