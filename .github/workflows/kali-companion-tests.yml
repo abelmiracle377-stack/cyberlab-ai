@@ -34,4 +34,13 @@ jobs:
       - name: Validate consent page assets
         run: test -s kali-companion/vps_gateway/consent.html && grep -q 'Grant selected permissions' kali-companion/vps_gateway/consent.html && grep -q 'Stop and disconnect' kali-companion/vps_gateway/consent.html
       - name: Run unit tests
-        run: python -m unittest discover -s kali-companion -p 'test_*.py' -v
+        run: |
+          python -m unittest discover -s kali-companion -p 'test_*.py' -v
+          python -m unittest discover -s kali-companion/tests -p 'test_wallet_recovery_*.py' -v
+      - name: Validate sandbox runner and browser extension
+        run: |
+          python -m py_compile sandbox/runner.py
+          python -m json.tool browser-extension/manifest.json > /dev/null
+          node --check browser-extension/service-worker.js
+          node --check browser-extension/cyberlab-content.js
+          node --check browser-extension/popup.js
