@@ -242,14 +242,14 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
 
       <section className="kali-panel">
         <h2>2. Start the local bridge on Kali</h2>
-        <pre>sudo python3 kali-companion/bridge.py</pre>
+        <pre>python3 kali-companion/bridge.py</pre>
         <button className="report-download" type="button" onClick={copyCommand}><Copy size={13}/>{copied?"Copied":"Copy bridge command"}</button>
         <p>The terminal prints a local bridge token. Keep it private. The bridge listens only on 127.0.0.1:8765. Do not run with sudo unless a specific, approved disk-imaging task requires elevated access. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
       </section>
 
       {!connected&&<section className="kali-panel">
         <h2>Available after pairing</h2>
-        <p>These modules run on your own Kali machine through the local companion. They stay hidden until the companion is running and paired (steps 1 to 3 below).</p>
+        <p>These modules run on your separate Kali machine through the authenticated relay worker. They stay hidden until the companion is running and paired (steps 1 to 3 below).</p>
         <ul>
           <li><strong>4. Kali tool inventory</strong>: lists the security tools installed on your Kali machine.</li>
           <li><strong>5. Describe any authorised task</strong>: plans a task and runs only the local workflows you approve.</li>
@@ -259,7 +259,7 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
           <li><strong>10. Unified investigation case</strong>: collects evidence into one case.</li>
           <li><strong>11. Authorised Nmap assessment</strong>: TCP scan of a target you own or are authorised to test, after you confirm the target and reference.</li>
           <li><strong>12. Camera Intelligence</strong>: discovery on a private LAN you select, with explicit consent.</li>
-          <li><strong>13. Optional personal VPS gateway</strong>: separately deployed; not hosted by this site.</li>
+          <li><strong>13. Secure relay gateway</strong>: required for separate-machine execution; deploy it on a VPS you control and configure the server-only gateway URL and owner token.</li>
         </ul>
       </section>}
       <section className="kali-panel">
