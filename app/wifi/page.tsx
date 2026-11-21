@@ -41,7 +41,6 @@ export default function WifiPage() {
   async function post(path: string, body: Record<string, unknown>, label: string, title: string) {
     setBusy(label); setError("");
     try {
-      if (!token.trim()) throw new Error("Enter the companion bridge token.");
       window.sessionStorage.setItem("cyberlab.kaliBridgeToken", token.trim());
       const res = await fetch(BRIDGE + path, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token.trim() }, body: JSON.stringify(body),
