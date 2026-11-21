@@ -42,6 +42,7 @@ from intercept_proxy import PROXY, decide_intercept, pending_intercepts, pending
 import base64
 import wallet_recovery
 import wallet_cracking
+import wallet_recovery_planner
 import seed_solver
 import balance_check
 import kali_tools
@@ -1425,7 +1426,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/crack-upload", "/wifi/wps", "/wifi/auto", "/tools/run"}:
+        if path not in {"/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case", "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/image", "/forensics/foremost", "/forensics/photorec", "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat", "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect", "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request", "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel", "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment", "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create", "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision", "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile", "/solidity/tests/run", "/wallet/recovery-assess", "/wallet/extract-hash", "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances", "/wallet/sweep", "/wallet/auto-recover", "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle", "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts", "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search", "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop", "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/crack-upload", "/wifi/wps", "/wifi/auto", "/tools/run"}:
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Invalid pairing token."}, origin)
@@ -1465,6 +1466,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/solidity/tests/run":
                 result = run_solidity_tests(data.get("files"), data.get("dependencyLock", []))
                 return self.send_json(200, result, origin)
+            if path == "/wallet/recovery-assess":
+                return self.send_json(200, wallet_recovery_planner.assess_recovery_case(data), origin)
             if path == "/wallet/extract-hash":
                 return self.send_json(200, wallet_extract_hash(data), origin)
             if path == "/wallet/derive":
