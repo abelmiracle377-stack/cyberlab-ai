@@ -3,7 +3,7 @@
   // The app uses Node.js-runtime routes (e.g. node:crypto for the Paystack
   // webhook), so nodejs_compat is required. See docs/CLOUDFLARE_DEPLOY.md.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cyberlab-ai",
+  "name": "cyberlab",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
