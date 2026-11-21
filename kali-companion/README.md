@@ -306,3 +306,45 @@ These scanner operations require a compatible Burp Suite Professional licence. C
 ### Safety and capability boundaries
 
 Out-of-scope requests are refused. CyberLab does not change Burp scope, execute arbitrary shell commands, or start Intruder attacks in the background. An active audit sends real test traffic; only run it against a system you own or have explicit permission to test. Use the crawl-only action when you want discovery without active vulnerability checks.
+
+ 
+## Cross-machine execution relay (Kali + ego(lite) desktop)
+
+The personal VPS gateway now includes a persistent, typed execution queue. It uses outbound HTTPS polling from each paired device; it does not open an inbound port on Kali or the desktop.
+
+### Pair the two execution devices
+
+1. Deploy the gateway behind a valid HTTPS reverse proxy. The gateway service itself remains bound to `127.0.0.1:8000`.
+2. Use the owner-authenticated `POST /v1/pairing` endpoint to create a one-time code. For the Kali machine, set `platform` to `kali`; for the ego(lite) desktop, set it to `desktop-browser`.
+3. On each device, accept the one-time code at `POST /v1/pairing/accept`, set `terms_accepted: true`, and explicitly grant `job_execution: true`. Store the returned device token in a private environment file; it is displayed only once.
+4. Keep the owner token, device tokens and local Kali bridge token out of Git and browser JavaScript.
+
+The queue supports these typed actions only: `kali.health`, `kali.tools.inventory`, `kali.ollama.models`, `kali.tool.run`, and `desktop.browser.inspect`. Arbitrary shell commands, executable paths, job-supplied JavaScript and arbitrary bridge URLs are not accepted. Every job requires an owner-authenticated enqueue request, an explicit approval flag and an approval reference. Browser inspection is HTTPS-only and checks the exact origin against the supplied scope.
+
+### Start the Kali worker
+
+Start the existing local bridge first. Then set these variables in the Kali user's private environment:
+
+- `CYBERLAB_RELAY_URL=https://your-gateway-domain`
+- `CYBERLAB_DEVICE_TOKEN=<paired Kali device token>`
+- `CYBERLAB_BRIDGE_TOKEN=<local bridge pairing token>`
+- `CYBERLAB_BRIDGE_URL=http://127.0.0.1:8765`
+
+Run `python3 kali-companion/relay_worker.py`. The worker polls the gateway over HTTPS and calls only the existing loopback bridge's fixed health, tool inventory, Ollama model inventory and registered tool-run endpoints.
+
+### Start the ego(lite) desktop worker
+
+On the Windows/macOS desktop where ego(lite) and its `ego-browser` CLI are installed, set:
+
+- `CYBERLAB_RELAY_URL=https://your-gateway-domain`
+- `CYBERLAB_DEVICE_TOKEN=<paired desktop device token>`
+
+Run `node integrations/ego-lite/relay-worker.mjs`. It accepts only `desktop.browser.inspect`, validates the HTTPS target origin again locally, and invokes `ego-browser nodejs` with a fixed read-only snapshot script. It never executes JavaScript supplied by the queued job.
+
+### Queue API
+
+- Owner: `POST /v1/jobs` creates a typed job; `GET /v1/jobs` lists status/results; `POST /v1/jobs/{job_id}/cancel` cancels queued/running work.
+- Device: `GET /v1/jobs/next` claims one job with a short lease; `POST /v1/jobs/{job_id}/result` returns the result using the one-time lease token.
+- Results are capped at 64 KB. Device revocation immediately prevents future claims. Jobs expire after 15 minutes and claims expire after 3 minutes.
+
+The relay is an execution transport, not a complete autonomous security testing engine. It currently supports read-only browser snapshots and the existing registered Kali tool runner. Active web vulnerability tests still need their own explicit, scoped workflow and independent evidence validation. The queue endpoints are available on the gateway; a CyberLab authenticated dashboard/API surface for creating and reviewing these jobs is a separate integration step.
