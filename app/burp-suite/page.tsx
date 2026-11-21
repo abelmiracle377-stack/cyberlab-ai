@@ -209,7 +209,7 @@ export default function BurpSuitePage() {
     <header className="agent-topbar">
       <Link href="/" className="agent-back"><ArrowLeft size={14}/> Dashboard</Link>
       <div className="agent-brand"><ShieldCheck size={16}/> CYBERLAB AI <span className="agent-top-sep">/</span> BURP SUITE</div>
-      <span className="agent-secure-label"><span/> LOCAL / READ ONLY</span>
+      <span className="agent-secure-label"><span/> LOCAL / APPROVAL-GATED</span>
     </header>
     <section className="agent-main">
       <div className="agent-heading">
