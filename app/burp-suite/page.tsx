@@ -280,7 +280,7 @@ export default function BurpSuitePage() {
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
             <button className="report-download" disabled={!scannerConfirmed || !scannerTarget.trim() || scannerBusy!=="" || extension?.status!=="connected" || !extension.capabilities?.includes("professional_scanner_crawl")} onClick={()=>void startScanner("crawl")}>{scannerBusy==="crawl"?"Starting…":"Start Professional crawl"}</button>
-            <button className="report-download" disabled={!scannerConfirmed || !scannerTarget.trim() || scannerBusy!=="" || extension?.status!=="connected"} onClick={()=>void startScanner("audit")}>{scannerBusy==="audit"?"Starting…":"Start active audit"}</button>
+            <button className="report-download" disabled={!scannerConfirmed || !scannerTarget.trim() || scannerBusy!=="" || extension?.status!=="connected" || !extension.capabilities?.includes("professional_scanner_active_audit")} onClick={()=>void startScanner("audit")}>{scannerBusy==="audit"?"Starting…":"Start active audit"}</button>
           </div>
           {scannerMessage && <p className="network-note" style={{marginTop:10}}>{scannerMessage}</p>}
         </div>
