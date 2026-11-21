@@ -174,7 +174,7 @@ def inspect_burp_extension_status(opener=urlopen) -> dict:
         token = EXTENSION_TOKEN_FILE.read_text(encoding="utf-8").strip()
     except OSError:
         return {"status": "not_configured", "connector": "montoya"}
-    if not token or len(token) > 256 or any(ch in token for ch in "\\r\\n"):
+    if not token or len(token) > 256 or any(ch in token for ch in "\r\n"):
         return {"status": "invalid_configuration", "connector": "montoya"}
     request = Request(EXTENSION_HEALTH_URL, headers={"Accept": "application/json", "Authorization": "Bearer " + token}, method="GET")
     try:
