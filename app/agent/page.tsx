@@ -203,7 +203,6 @@ export default function AgentPage() {
     event.preventDefault();
     if (!webAssessmentRequest || webBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) { setWebStatus("Pair the local Kali companion first in Kali Connection."); return; }
     setWebBusy(true); setWebStatus("Running the approved native CyberLab web workflow…"); setWebResult(null);
     try {
       const parsed = new URL(webAssessmentRequest.url);
@@ -265,7 +264,6 @@ export default function AgentPage() {
     event.preventDefault();
     if (!toolRequest || toolBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) { setToolStatus("Pair your local companion in Kali Connection first; the tool runs on your own machine."); return; }
     const parameters: Record<string, string | number> = { ...toolRequest.parameters };
     const missingParam = toolRequest.missing[0];
     if (missingParam) {
