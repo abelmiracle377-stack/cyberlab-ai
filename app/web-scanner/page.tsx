@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Bug, CircleAlert, ShieldCheck, Target } from "lu
 
 type Finding = { id: string; title: string; severity: string; url: string; detail: string; confidence: string };
 type ScanResult = { status: string; summary: Record<string, number>; checks: { type: string; url: string; status?: number; parameter?: string; error?: string }[]; findings: Finding[]; limitations: string[] };
-const API = "http://127.0.0.1:8765";
+const API = "/api/kali";
 
 export default function NativeWebScannerPage() {
   const [urls, setUrls] = useState("http://127.0.0.1:3000/");
