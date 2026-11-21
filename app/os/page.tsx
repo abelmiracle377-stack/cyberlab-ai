@@ -54,10 +54,6 @@ export default function CyberLabOsPage() {
 
   async function discover() {
     const pairedToken = token.trim();
-    if (!pairedToken) {
-      setError("Pair your local Kali companion first. The existing pairing token is shared with the Models workspace.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
