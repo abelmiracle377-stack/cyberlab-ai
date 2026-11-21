@@ -20,9 +20,9 @@ The extension sends a sanitised snapshot to the CyberLab browser workspace. The 
 - Cookie names and security metadata for the selected tab's host only (Secure, HttpOnly, SameSite, path and expiry).
 - Network request/response metadata observed during the short inspection window.
 
-It intentionally excludes cookie values, passwords, input values, request bodies, response bodies and URL query values. It does not submit forms, replay requests, execute JavaScript, or change the target page. Chrome displays a prominent debugger permission warning because the extension uses DevTools Protocol access.
+It intentionally excludes cookie values, passwords, input values, request bodies, response bodies and URL query values. It does not submit forms, replay requests or execute arbitrary JavaScript. The DOM editor can temporarily change only class, title, aria-label or placeholder attributes; these changes exist only in the live page DOM and can be undone or discarded by stopping the session/reloading the page. Chrome displays a prominent debugger permission warning because the extension uses DevTools Protocol access.
 
-**Current limitation:** this is a one-shot read-only inspection, not a persistent live DevTools session. Live console execution, DOM editing, response editing, persistent network monitoring and reversible change history are not enabled yet. Those need a long-lived, explicit share session and per-action approvals. Do not describe this first release as full DevTools parity.
+**Current limitation:** the extension keeps an explicit shared-tab session open while the CyberLab workspace remains open. The operator can make temporary DOM attribute edits limited to class, title, aria-label and placeholder, then undo the last edit or stop sharing. The initial release does not execute arbitrary console JavaScript, edit request/response bodies, submit forms or provide full DevTools parity. Network metadata is captured only during a short initial window, not as a continuous full HAR stream.
 
 Only share applications you own or have explicit permission to assess. The browser workspace is an analysis surface, not a bypass for authentication or bug-bounty scope.
 
