@@ -16,8 +16,8 @@ def _target(value: str) -> str:
         raise ValueError("Provide a single authorised SSH host, not a URL or network range.")
     try:
         ip = ipaddress.ip_address(raw)
-        if not ip.is_global:
-            raise ValueError("SSH audit blocks loopback, private, link-local, multicast and reserved targets.")
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            raise ValueError("SSH audit blocks loopback, link-local, multicast, unspecified and reserved targets.")
         return str(ip)
     except ValueError as exc:
         if "blocks" in str(exc):
