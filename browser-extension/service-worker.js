@@ -3,6 +3,8 @@ const attachedTabs = new Set();
 let sharedTabId = null;
 const editHistory = [];
 const tabEvidence = new Map();
+// Sensitive session material is volatile, scoped to the explicitly shared tab, and never sent to CyberLab's web app.
+let sessionCookieVault = null;
 const MAX_EVENTS = 150;
 
 function cleanUrl(raw) {
@@ -101,6 +103,57 @@ async function inspectTab(tab) {
     throw error;
   }
 }
+async function captureSessionCookies(payload) {
+  if (payload?.confirmCapture !== true) throw new Error("Explicitly confirm local session-cookie capture first.");
+  if (!sharedTabId || !attachedTabs.has(sharedTabId)) throw new Error("Share a tab before capturing its session cookies.");
+  const tab = await chrome.tabs.get(sharedTabId);
+  const target = new URL(tab.url);
+  if (!["http:", "https:"].includes(target.protocol)) throw new Error("Only HTTP and HTTPS tabs are supported.");
+  const result = await chrome.debugger.sendCommand({ tabId: sharedTabId }, "Network.getAllCookies");
+  const matching = (result.cookies || []).filter(cookie => {
+    const domain = String(cookie.domain || "").replace(/^\\./, "").toLowerCase();
+    return target.hostname.toLowerCase() === domain || target.hostname.toLowerCase().endsWith("." + domain);
+  }).slice(0, 200);
+  // Keep raw values only in this extension service-worker's volatile memory. Never message them to the app.
+  sessionCookieVault = {
+    tabId: sharedTabId, origin: target.origin, capturedAt: new Date().toISOString(),
+    cookies: matching.map(cookie => ({
+      name: String(cookie.name || "").slice(0, 200), value: String(cookie.value || ""),
+      domain: String(cookie.domain || ""), path: String(cookie.path || "/"),
+      secure: !!cookie.secure, httpOnly: !!cookie.httpOnly, sameSite: cookie.sameSite || "unspecified",
+      expires: cookie.session ? null : cookie.expires
+    }))
+  };
+  return { ok: true, origin: target.origin, count: sessionCookieVault.cookies.length,
+    names: sessionCookieVault.cookies.map(cookie => cookie.name),
+    valuesSentToApp: false, storage: "volatile extension memory only" };
+}
+function clearSessionCookies() {
+  const count = sessionCookieVault?.cookies?.length || 0;
+  if (sessionCookieVault) sessionCookieVault.cookies = [];
+  sessionCookieVault = null;
+  return { ok: true, cleared: count };
+}
+async function fillPageField(payload) {
+  if (!sharedTabId || !attachedTabs.has(sharedTabId)) throw new Error("Share a tab before interacting with it.");
+  if (payload?.confirmInteraction !== true) throw new Error("Explicitly approve this page interaction.");
+  const selector = String(payload.selector || "").trim();
+  const value = String(payload.value ?? "");
+  if (!selector || selector.length > 300 || value.length > 2000) throw new Error("Provide a selector (max 300 chars) and value (max 2,000 chars).");
+  const expression = `(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return {ok:false,error:"Selector did not match an element."};
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)) return {ok:false,error:"Only input, textarea and select fields can be filled."};
+    if (el instanceof HTMLInputElement && ["password","hidden","file","submit","button"].includes(el.type)) return {ok:false,error:"Sensitive or action input types cannot be filled by this operation."};
+    const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value");
+    if (descriptor?.set) descriptor.set.call(el, ${JSON.stringify(value)}); else el.value = ${JSON.stringify(value)};
+    el.dispatchEvent(new Event("input", {bubbles:true}));
+    el.dispatchEvent(new Event("change", {bubbles:true}));
+    return {ok:true,tag:el.tagName.toLowerCase(),name:el.name || "",valueWritten:true};
+  })()`;
+  const result = await chrome.debugger.sendCommand({tabId:sharedTabId},"Runtime.evaluate",{expression,returnByValue:true});
+  return result.result?.value || {ok:false,error:"Browser did not return an interaction result."};
+}
 async function editAttribute(payload) {
   if (!sharedTabId || !attachedTabs.has(sharedTabId)) throw new Error("No active shared tab. Share a tab first.");
   if (!payload || typeof payload.selector !== "string" || !payload.selector.trim() || payload.selector.length > 500) throw new Error("Provide a CSS selector under 500 characters.");
@@ -143,6 +196,18 @@ async function stopSharing() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "inspect-active-tab") {
     chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => inspectTab(tabs[0])).then(sendResponse).catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+  if (message?.type === "capture-session-cookies") {
+    captureSessionCookies(message.payload).then(sendResponse).catch(error => sendResponse({ok:false,error:error.message}));
+    return true;
+  }
+  if (message?.type === "clear-session-cookies") {
+    sendResponse(clearSessionCookies());
+    return false;
+  }
+  if (message?.type === "fill-page-field") {
+    fillPageField(message.payload).then(sendResponse).catch(error => sendResponse({ok:false,error:error.message}));
     return true;
   }
   if (message?.type === "edit-attribute") {
