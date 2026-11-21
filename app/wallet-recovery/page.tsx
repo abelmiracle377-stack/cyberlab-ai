@@ -42,7 +42,7 @@ const ACCOUNT_TEMPLATES: { value: string; label: string }[] = [
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
-const BRIDGE = "/api/kali";
+const BRIDGE = "http://127.0.0.1:8765";
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return bytes + " B";
