@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfigurationDecision, isPublicPath } from "@/lib/auth-config.mjs";
+import { accessFor } from "@/lib/billing/access";
 
 export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -67,8 +68,8 @@ export async function proxy(request: NextRequest) {
   }
   if (user && path === "/login") return NextResponse.redirect(new URL("/", request.url));
   if (user && !isPublic && !isBilling) {
-    const { data: subscription } = await supabase.from("subscriptions").select("status").eq("user_id", user.id).in("status", ["active", "comped"]).limit(1).maybeSingle();
-    if (!subscription) {
+    const access = await accessFor(user.id);
+    if (!access.allowed) {
       if (path.startsWith("/api/")) return NextResponse.json({ error: "An active $10/month subscription is required.", billingRequired: true }, { status: 402 });
       return NextResponse.redirect(new URL("/billing", request.url));
     }
