@@ -94,3 +94,15 @@ ego-browser nodejs < /absolute/path/to/inspect.mjs
 Edit the example URL in `inspect.mjs` only after confirming the operator's authorised target. The script navigates and captures a supported page snapshot; it does not extract credentials or execute vulnerability payloads. See `integrations/ego-lite/README.md` for setup and current boundaries.
 
 **Cross-machine limitation:** the existing Kali bridge binds to loopback. A separate desktop cannot reach the Kali machine's `127.0.0.1` service. The current VPS gateway pairs devices for its existing permissions/files workflow but does not yet relay CyberLab tool jobs. A secure outbound typed-job relay and unified browser/Kali queue remain required before CyberLab can orchestrate both machines automatically. Do not expose the Kali bridge or Ollama directly to the public internet.
+
+
+
+## Separate Kali + ego(lite) cross-machine execution relay
+
+The personal gateway now provides an authenticated typed job queue at `/v1/jobs`. Kali and the ego(lite) desktop each run an outbound polling worker; neither device opens an inbound public port. The queue supports read-only Kali health/tool/Ollama inventory, the existing registered Kali tool runner, and read-only ego(lite) page snapshots. Each queued job requires an owner-authenticated request, an explicit operator approval flag, a reference, a device-specific token, and a short-lived lease. Results are capped and stored as execution receipts.
+
+CyberLab exposes an administrator-only console at `/execution-relay` and server API routes under `/api/relay`. Set server-only `CYBERLAB_GATEWAY_URL` and `CYBERLAB_GATEWAY_OWNER_TOKEN` in Vercel. The existing Supabase admin gate protects pairing, queueing, result review and cancellation. The gateway itself must run behind TLS; its application service remains bound to loopback.
+
+The desktop worker is `integrations/ego-lite/relay-worker.mjs`; the Kali worker is `kali-companion/relay_worker.py`. Read `kali-companion/README.md` for pairing and start-up instructions. A running Kali job cannot be forcibly interrupted by the relay; cancellation is offered only before a job is claimed. Expired leases can be reclaimed by the device worker.
+
+This stage connects the two execution machines but is not a complete autonomous vulnerability-testing engine. Ego Lite currently returns a read-only snapshot; Kali executes only the existing registered tool runner with its own validation. Full browser XSS/SQLi testing, authenticated request replay, unified case-ledger ingestion and local model orchestration across machines remain future implementation stages. Never expose the Kali bridge or Ollama port directly to the internet.
