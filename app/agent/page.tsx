@@ -96,10 +96,6 @@ export default function AgentPage() {
     event.preventDefault();
     if (!scanRequest || scanBusy) return;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) {
-      setScanStatus("Kali bridge is not paired in this browser session. Open Kali Connection and pair the local companion first.");
-      return;
-    }
     const ports: number[] = [];
     for (const part of scanRequest.ports.split(",")) {
       const value = part.trim();
