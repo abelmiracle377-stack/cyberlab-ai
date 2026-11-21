@@ -134,6 +134,7 @@ export default function SolidityLabPage() {
       setWalletNetwork({ chainId, name: known?.name ?? "Unlisted EVM network", known: Boolean(known) });
     } catch (cause) {
       setWalletNetwork(null);
+      setWalletProviderName("");
       setWalletNetworkError(cause instanceof Error ? cause.message : "Unable to read wallet network.");
     } finally {
       setWalletNetworkBusy(false);
