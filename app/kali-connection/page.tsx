@@ -61,11 +61,11 @@ export default function KaliConnectionPage() {
   async function connectBridge(){
     setChecking(true);setError("");setConnected(false);
     try{
-      const response=await fetch("http://127.0.0.1:8765/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const response=await fetch("/api/kali/health",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not pair with the local bridge.");
       setCompanion(data.companion||null);
-      const inventoryResponse=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const inventoryResponse=await fetch("/api/kali/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const inventory=await inventoryResponse.json();
       if(!inventoryResponse.ok)throw new Error(inventory.error||"Connected, but the Kali tool inventory could not be loaded. Update the local companion.");
       setToolInventory(inventory as ToolInventory);
@@ -77,21 +77,21 @@ export default function KaliConnectionPage() {
 
   async function createTaskPlan(event:React.FormEvent){
     event.preventDefault();setPlanning(true);setError("");setTaskPlan(null);
-    try{const response=await fetch("http://127.0.0.1:8765/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}
+    try{const response=await fetch("/api/kali/plan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({prompt:taskPrompt})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not plan this task.");setTaskPlan(data as TaskPlan);}
     catch(e){setError(e instanceof Error?e.message:"Task planning failed.");}
     finally{setPlanning(false);}
   }
 
   async function runPassiveResearch(event:React.FormEvent){
     event.preventDefault();setResearchBusy(true);setError("");setResearchResult(null);
-    try{const response=await fetch("http://127.0.0.1:8765/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}
+    try{const response=await fetch("/api/kali/research",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({action:researchAction,value:researchValue,limit:10})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Passive research failed.");setResearchResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Passive research failed.");}
     finally{setResearchBusy(false);}
   }
 
   async function runServiceEnumeration(event:React.FormEvent){
     event.preventDefault();setServiceBusy(true);setError("");setServiceResult(null);
-    try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("http://127.0.0.1:8765/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
+    try{const ports=servicePorts.split(",").map(value=>Number(value.trim()));if(!ports.length||ports.some(port=>!Number.isInteger(port)))throw new Error("Enter comma-separated supported service ports.");const response=await fetch("/api/kali/services",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Service identification failed.");setServiceResult(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Service identification failed.");}
     finally{setServiceBusy(false);}
   }
@@ -102,7 +102,7 @@ export default function KaliConnectionPage() {
       const serviceReport=evidenceReport;
       const artifactEvidenceReport=artifactReport;
       if(!serviceReport&&!artifactEvidenceReport)throw new Error("Analyse network or artifact evidence before creating a case.");
-      const response=await fetch("http://127.0.0.1:8765/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport:artifactEvidenceReport})});
+      const response=await fetch("/api/kali/evidence/case",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceReport,artifactReport:artifactEvidenceReport})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not create the investigation case.");
       setCaseReport(data as Record<string,unknown>);
@@ -114,7 +114,7 @@ export default function KaliConnectionPage() {
     if(!caseReport)return;
     setCaseBusy(true);setError("");
     try{
-      const response=await fetch("http://127.0.0.1:8765/evidence/case/export",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseReport})});
+      const response=await fetch("/api/kali/evidence/case/export",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseReport})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not export the investigation case.");
       const caseId=String((caseReport.case as Record<string,unknown>)?.case_id||"cyberlab-case");
@@ -132,7 +132,7 @@ export default function KaliConnectionPage() {
     const caseId=String(caseData?.case_id||"");
     setCaseBusy(true);setError("");
     try{
-      const response=await fetch("http://127.0.0.1:8765/evidence/case/verify",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseId})});
+      const response=await fetch("/api/kali/evidence/case/verify",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({caseId})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not verify the local archive.");
       setCaseReport({...caseReport,archive_verification:data});
@@ -143,7 +143,7 @@ export default function KaliConnectionPage() {
 
   async function verifyAuditLedger(){
     setLedgerBusy(true);setError("");setLedgerVerification(null);
-    try{const response=await fetch("http://127.0.0.1:8765/evidence/case/ledger/verify",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not verify the audit ledger.");setLedgerVerification(data as Record<string,unknown>);}
+    try{const response=await fetch("/api/kali/evidence/case/ledger/verify",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not verify the audit ledger.");setLedgerVerification(data as Record<string,unknown>);}
     catch(e){setError(e instanceof Error?e.message:"Could not verify the audit ledger.");}
     finally{setLedgerBusy(false);}
   }
@@ -153,7 +153,7 @@ export default function KaliConnectionPage() {
     try{
       const parsed=JSON.parse(artifactEvidence);
       if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw new Error("Paste a JSON object containing triageResult or recoveryManifest.");
-      const response=await fetch("http://127.0.0.1:8765/evidence/artifacts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify(parsed)});
+      const response=await fetch("/api/kali/evidence/artifacts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify(parsed)});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Artifact evidence analysis failed.");
       setArtifactReport(data as Record<string,unknown>);
@@ -165,7 +165,7 @@ export default function KaliConnectionPage() {
     if(!serviceResult)return;
     setEvidenceBusy(true);setError("");setEvidenceReport(null);
     try{
-      const response=await fetch("http://127.0.0.1:8765/evidence/report",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceResult})});
+      const response=await fetch("/api/kali/evidence/report",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({serviceResult})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Evidence analysis failed.");
       setEvidenceReport(data as Record<string,unknown>);
@@ -175,7 +175,7 @@ export default function KaliConnectionPage() {
 
   async function refreshToolInventory(){
     setToolsBusy(true);setError("");
-    try{const response=await fetch("http://127.0.0.1:8765/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
+    try{const response=await fetch("/api/kali/tools",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not refresh the Kali tool inventory.");setToolInventory(data as ToolInventory);}
     catch(e){setError(e instanceof Error?e.message:"Tool inventory request failed.");}
     finally{setToolsBusy(false);}
   }
@@ -183,7 +183,7 @@ export default function KaliConnectionPage() {
   async function refreshTelemetry(){
     setTelemetryBusy(true);setError("");
     try{
-      const response=await fetch("http://127.0.0.1:8765/system",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
+      const response=await fetch("/api/kali/system",{headers:{Authorization:"Bearer "+token.trim()},cache:"no-store"});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Could not retrieve local host telemetry.");
       setSnapshot(data.metrics as Snapshot);
@@ -203,7 +203,7 @@ export default function KaliConnectionPage() {
         if(parsedPorts.size>100)throw new Error("Choose no more than 100 unique TCP ports.");
       }
       if(!parsedPorts.size)throw new Error("Enter at least one TCP port.");
-      const response=await fetch("http://127.0.0.1:8765/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:[...parsedPorts]})});
+      const response=await fetch("/api/kali/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token.trim()},body:JSON.stringify({target,confirmationTarget,authorizationReference:reference,authorizationConfirmed:confirmed,ports:[...parsedPorts]})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Local assessment failed.");
       setResult(data);
