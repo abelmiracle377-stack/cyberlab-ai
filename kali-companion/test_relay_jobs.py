@@ -87,6 +87,26 @@ class RelayJobTests(unittest.TestCase):
         self.assertIn("job_execution", html)
         self.assertIn("explicitly approved CyberLab tasks", html)
 
+    def test_generic_bridge_job_only_allows_fixed_local_routes(self):
+        accepted = gateway.validate_relay_payload(
+            "kali.bridge.request",
+            {"method": "GET", "path": "/burp/scanner/tasks"},
+            "UI-TEST-0001", True,
+        )
+        self.assertEqual(accepted, "kali")
+        with self.assertRaises(HTTPException):
+            gateway.validate_relay_payload(
+                "kali.bridge.request",
+                {"method": "GET", "path": "https://attacker.example/"},
+                "UI-TEST-0001", True,
+            )
+        with self.assertRaises(HTTPException):
+            gateway.validate_relay_payload(
+                "kali.bridge.request",
+                {"method": "POST", "path": "/wallet/sweep", "body": {"to": "attacker"}},
+                "UI-TEST-0001", True,
+            )
+
     def test_local_ollama_job_is_bounded_and_typed(self):
         self.assertEqual(
             gateway.validate_relay_payload("kali.ollama.chat", {"model": "qwen3:8b", "prompt": "Analyse these safe test observations."}, "ENG-2026-003", True),
