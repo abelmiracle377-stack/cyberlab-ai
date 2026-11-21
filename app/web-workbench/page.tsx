@@ -78,7 +78,7 @@ export default function WebWorkbenchPage() {
 
   async function loadHistory() {
     const pairing = token();
-    const response = await fetch("/api/kali/web/history", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/web/history", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load request history.");
     setHistory(data.items || []);
@@ -87,13 +87,13 @@ export default function WebWorkbenchPage() {
   async function loadCaStatus() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/ca/status", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/ca/status", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not inspect local CA status.");
     setCaReady(Boolean(data.ready));
     setCaCertificatePath(data.caCertificate || "");
     if (data.ready) {
-      const certificate = await fetch("/api/kali/proxy/ca/certificate", { headers: { Authorization: "Bearer " + pairing } });
+      const certificate = await fetch("http://127.0.0.1:8765/proxy/ca/certificate", { headers: { Authorization: "Bearer " + pairing } });
       const certificateData = await certificate.json();
       if (!certificate.ok) throw new Error(certificateData.error || "Could not retrieve public CA certificate.");
       setCaPem(certificateData.pem || "");
@@ -103,7 +103,7 @@ export default function WebWorkbenchPage() {
   async function loadProxyStatus() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/status", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/status", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not inspect proxy status.");
     setProxyActive(Boolean(data.active));
@@ -118,7 +118,7 @@ export default function WebWorkbenchPage() {
   async function loadProxyHistory() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/history", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/history", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load proxy history.");
     setProxyHistory(data.items || []);
@@ -127,7 +127,7 @@ export default function WebWorkbenchPage() {
   async function loadWebSocketFrames() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/websocket-frames?limit=100", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/websocket-frames?limit=100", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load WebSocket frame metadata.");
     setWebSocketFrames(data.items || []);
@@ -136,7 +136,7 @@ export default function WebWorkbenchPage() {
   async function loadPendingWebSocketIntercepts() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/websocket-intercepts", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/websocket-intercepts", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load pending WebSocket frames.");
     const items: PendingWebSocketFrame[] = data.items || [];
@@ -154,7 +154,7 @@ export default function WebWorkbenchPage() {
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-      const response = await fetch("/api/kali/proxy/websocket-intercepts/decision", {
+      const response = await fetch("http://127.0.0.1:8765/proxy/websocket-intercepts/decision", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({ id, action, ...(action === "forward_edited" ? { payload: webSocketDrafts[id] ?? "" } : {}) }),
@@ -169,7 +169,7 @@ export default function WebWorkbenchPage() {
   async function loadPendingIntercepts() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/intercepts", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/intercepts", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load pending intercepted requests.");
     const items: PendingIntercept[] = data.items || [];
@@ -188,7 +188,7 @@ export default function WebWorkbenchPage() {
   async function loadPendingResponseIntercepts() {
     const pairing = token();
     if (!pairing) return;
-    const response = await fetch("/api/kali/proxy/response-intercepts", { headers: { Authorization: "Bearer " + pairing } });
+    const response = await fetch("http://127.0.0.1:8765/proxy/response-intercepts", { headers: { Authorization: "Bearer " + pairing } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load pending intercepted responses.");
     const items: PendingResponseIntercept[] = data.items || [];
@@ -209,7 +209,7 @@ export default function WebWorkbenchPage() {
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-      const response = await fetch("/api/kali/proxy/response-intercepts/decision", {
+      const response = await fetch("http://127.0.0.1:8765/proxy/response-intercepts/decision", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({ id, action, edits: action === "forward_edited" ? {
@@ -241,7 +241,7 @@ export default function WebWorkbenchPage() {
         const pending = pendingIntercepts.find(item => item.id === id);
         edits = { method: draft.method, path: draft.path, headers: parsed, ...(pending?.bodyEditable ? { body: draft.body } : {}) };
       }
-      const response = await fetch("/api/kali/proxy/intercepts/decision", {
+      const response = await fetch("http://127.0.0.1:8765/proxy/intercepts/decision", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({ id, action, edits }),
@@ -258,7 +258,7 @@ export default function WebWorkbenchPage() {
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-      const response = await fetch("/api/kali/proxy/start", {
+      const response = await fetch("http://127.0.0.1:8765/proxy/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({ origin: proxyOrigin, confirmationOrigin: proxyConfirmation, authorizationConfirmed: proxyAuthorised, confirmStart: proxyStartConsent, authorizationReference: reference, localLabMode, listenPort: 8081, allowStateChangingMethods: proxyMutatingConsent, confirmStateChangingMethods: proxyMutatingConsent, interceptRequests: proxyInterceptConsent, confirmInterceptRequests: proxyInterceptConsent, interceptResponses: proxyResponseInterceptConsent, confirmInterceptResponses: proxyResponseInterceptConsent, interceptWebSocketFrames: proxyWebSocketInterceptConsent, confirmInterceptWebSocketFrames: proxyWebSocketInterceptConsent }),
@@ -290,7 +290,7 @@ export default function WebWorkbenchPage() {
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-      const response = await fetch("/api/kali/proxy/stop", {
+      const response = await fetch("http://127.0.0.1:8765/proxy/stop", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: "{}",
@@ -318,7 +318,7 @@ export default function WebWorkbenchPage() {
     try {
       const pairing = token();
       if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
-      const response = await fetch("/api/kali/proxy/ca/create", {
+      const response = await fetch("http://127.0.0.1:8765/proxy/ca/create", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({ confirmCreateLocalCA: caConsent }),
@@ -358,7 +358,7 @@ export default function WebWorkbenchPage() {
       let parsedHeaders: unknown;
       try { parsedHeaders = JSON.parse(headersText); } catch { throw new Error("Headers must be valid JSON in name/value format."); }
       if (!parsedHeaders || Array.isArray(parsedHeaders) || typeof parsedHeaders !== "object") throw new Error("Headers must be a JSON object.");
-      const response = await fetch("/api/kali/web/request", {
+      const response = await fetch("http://127.0.0.1:8765/web/request", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
         body: JSON.stringify({ url, confirmationUrl, method, headers: parsedHeaders, body, authorizationReference: reference, authorizationConfirmed: authorised, confirmSend, confirmStateChange, localLabMode }),
