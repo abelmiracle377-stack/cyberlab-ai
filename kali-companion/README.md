@@ -285,4 +285,24 @@ The dashboard's **Wallet Recovery** module can use the companion for owned or ex
 
 ## Burp Suite connector
 
-The local Montoya extension exposes read-only in-scope proxy history, site map and audit issues, plus two write actions gated by explicit confirmation: placing a request in Repeater (`/burp/repeater/from-history`, which does not send) and replaying a single in-scope request through Burp (`/burp/send-request`, which returns status/MIME/length only). Out-of-scope requests are refused. Intruder, crawling and scan-start remain out of scope.
+The local Montoya extension exposes authenticated, loopback-only APIs. Existing read operations include in-scope proxy history, site map and audit issue metadata. Confirmed request actions include Repeater handoff (places a captured request in Repeater without sending) and single-request replay (re-sends one in-scope captured request and returns response metadata only).
+
+### Intruder
+
+- POST /burp/intruder/from-history places a selected in-scope proxy-history request in the native Burp Intruder tab after explicit confirmation and a non-empty authorisation/lab reference.
+- The analyst still chooses payload positions, payload sources, attack type, resource limits and presses Start in Burp. The Montoya API exposes a real handoff to Intruder but does not expose a complete programmatic attack-start/configuration API. CyberLab must not describe this as autonomous Intruder execution.
+
+### Burp Professional Scanner
+
+- POST /burp/scanner/crawl starts a real Burp Professional crawl-only task against a URL already inside Burp's Suite scope.
+- POST /burp/scanner/audit starts a real Burp Professional active audit against an in-scope URL using Burp's built-in legacy active-audit checks.
+- Both actions require a per-action confirmation and an authorisation/lab reference. The extension rechecks Burp's existing scope and never adds a target to scope automatically.
+- GET /burp/scanner/tasks returns task IDs, request/error counts and audit issue counts for the current extension session.
+- POST /burp/scanner/cancel requests task deletion/cancellation after confirmation.
+- Scanner task state is held in extension memory and is lost when Burp unloads/restarts the extension. The task status text is supplied by Burp and may be unavailable on some API versions.
+
+These scanner operations require a compatible Burp Suite Professional licence. Community edition does not gain Professional Scanner capabilities merely by loading the extension. The REST API and extension must both be configured on the paired workstation; both listeners remain bound to loopback and require separate secrets.
+
+### Safety and capability boundaries
+
+Out-of-scope requests are refused. CyberLab does not change Burp scope, execute arbitrary shell commands, or start Intruder attacks in the background. An active audit sends real test traffic; only run it against a system you own or have explicit permission to test. Use the crawl-only action when you want discovery without active vulnerability checks.
