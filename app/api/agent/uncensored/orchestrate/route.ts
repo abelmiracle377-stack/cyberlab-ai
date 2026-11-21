@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { adminDb } from "@/lib/billing/admin";
+import { accessFor } from "@/lib/billing/access";
 import { runUnfilteredCompletion } from "@/lib/ai-gateway";
 import { planSpecialists } from "@/lib/agent-orchestrator";
 
@@ -63,9 +64,8 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-    const { data: subscription } = await supabase.from("subscriptions")
-      .select("status").eq("user_id", user.id).in("status", ["active", "comped"]).maybeSingle();
-    if (!subscription) return NextResponse.json({ error: "An active subscription is required." }, { status: 402 });
+    const access = await accessFor(user.id);
+    if (!access.allowed) return NextResponse.json({ error: "An active subscription or trial is required.", billingRequired: true }, { status: 402 });
 
     db = adminDb();
     const reserved = await db.rpc("reserve_cyberlab_ai_usage", {
