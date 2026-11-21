@@ -21,6 +21,11 @@ The first-party Montoya extension provides authenticated, loopback-only endpoint
 - GET /v1/issues?limit=50 — existing in-scope issue name, severity, confidence and base URL.
 - POST /v1/repeater/from-history?id=<id>&confirm=true — place one captured in-scope request in Repeater; it is not sent.
 - POST /v1/send-request?id=<id>&confirm=true — replay one captured in-scope request through Burp and return status/MIME/length metadata only.
+- POST /v1/intruder/from-history?id=<id>&confirm=true&authorizationReference=<ref> — place one approved in-scope request in the native Intruder tab; does not start an attack.
+- POST /v1/scanner/crawl?url=<url>&confirm=true&authorizationReference=<ref> — start a real Burp Professional crawl-only task for an existing in-scope URL.
+- POST /v1/scanner/audit?url=<url>&confirm=true&authorizationReference=<ref> — start a real Burp Professional active-audit task for an existing in-scope URL.
+- GET /v1/scanner/tasks — report current-session task IDs and bounded progress counters.
+- POST /v1/scanner/cancel?id=<task-id>&confirm=true — request deletion/cancellation of a tracked task.
 
 The paired companion exposes corresponding authenticated routes:
 
@@ -31,6 +36,11 @@ The paired companion exposes corresponding authenticated routes:
 - GET /burp/issues
 - POST /burp/repeater/from-history
 - POST /burp/send-request
+- POST /burp/intruder/from-history
+- POST /burp/scanner/crawl
+- POST /burp/scanner/audit
+- GET /burp/scanner/tasks
+- POST /burp/scanner/cancel
 
 The dashboard refresh checks both health endpoints and retrieves the three metadata feeds. Repeater handoff and replay each have a separate explicit confirmation. Replay re-sends live traffic; the extension rechecks Burp's in-scope flag before acting. The dashboard receives response metadata only, not request or response bodies.
 
