@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, CircleAlert, Globe, LockKeyhole, Radar, ShieldCh
 type Finding = { id: string; title: string; severity: string; url: string; detail: string; confidence: string; source: string };
 type PageResult = { url: string; depth: number; status: number | null; contentType?: string; bodyBytes?: number; responseSha256?: string; error?: string; linksDiscovered?: number; forms?: { action: string; method: string; fields: { name: string; type: string }[]; submitted: boolean }[] };
 type CrawlResult = { status: string; summary: Record<string, number>; pages: PageResult[]; findings: Finding[]; limitations: string[]; scope: { origin: string; authorizationReference: string } };
-const API = "http://127.0.0.1:8765";
+const API = "/api/kali";
 
 export default function NativeWebCrawlerPage() {
   const [url, setUrl] = useState("http://127.0.0.1:3000/");
