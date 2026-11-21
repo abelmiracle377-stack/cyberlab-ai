@@ -594,8 +594,8 @@ def list_relay_jobs(device_id: Optional[str] = None, limit: int = 100):
         rows = con.execute("SELECT * FROM jobs WHERE device_id=? ORDER BY created_at DESC LIMIT ?", (device_id, limit)).fetchall()
     else:
         rows = con.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    con.close()
     chain = verify_relay_evidence_chain(con)
+    con.close()
     return {"evidence_chain": chain, "jobs": [{"job_id": r["id"], "device_id": r["device_id"], "action": r["action"], "status": r["status"], "approval_reference": r["approval_reference"], "result": json.loads(r["result"]) if r["result"] else None, "error": r["error"], "result_sha256": r["result_sha256"], "evidence_record_hash": r["evidence_record_hash"], "previous_evidence_hash": r["previous_evidence_hash"], "created_at": r["created_at"], "started_at": r["started_at"], "finished_at": r["finished_at"]} for r in rows]}
 
 
