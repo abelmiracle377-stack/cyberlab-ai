@@ -474,6 +474,8 @@ def claim_relay_job(device=Depends(device_auth)):
     now = int(time.time())
     con = db()
     con.execute("BEGIN IMMEDIATE")
+    con.execute("UPDATE devices SET last_seen=? WHERE id=?", (now, device["id"]))
+    con.execute("UPDATE jobs SET status='queued',lease_token_hash=NULL,lease_expires_at=NULL,started_at=NULL WHERE device_id=? AND status='running' AND lease_expires_at<? AND expires_at>=?", (device["id"], now, now))
     con.execute("UPDATE jobs SET status='expired',finished_at=? WHERE device_id=? AND status='queued' AND expires_at<?", (now, device["id"], now))
     row = con.execute("SELECT * FROM jobs WHERE device_id=? AND status='queued' AND expires_at>=? ORDER BY created_at,id LIMIT 1", (device["id"], now)).fetchone()
     if not row:
@@ -534,9 +536,9 @@ def cancel_relay_job(job_id: str):
     if not row:
         con.close()
         raise HTTPException(404, "Job not found.")
-    if row["status"] not in {"queued", "running"}:
+    if row["status"] != "queued":
         con.close()
-        raise HTTPException(409, "Only queued or running jobs can be cancelled.")
+        raise HTTPException(409, "Only queued jobs can be cancelled. An already-running local action cannot be interrupted by the relay.")
     now = int(time.time())
     con.execute("UPDATE jobs SET status='cancelled',finished_at=? WHERE id=?", (now, job_id))
     log_event(con, row["device_id"], "job_cancelled", row["action"])
