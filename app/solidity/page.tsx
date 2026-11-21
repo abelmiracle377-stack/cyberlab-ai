@@ -173,7 +173,7 @@ export default function SolidityLabPage() {
     try {
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
       if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
-      const response = await fetch("http://127.0.0.1:8765/solidity/compiler", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+      const response = await fetch("/api/kali/solidity/compiler", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not check the local compiler.");
       setCompilerStatus(data);
@@ -187,7 +187,7 @@ export default function SolidityLabPage() {
     try {
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
       if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
-      const response = await fetch("http://127.0.0.1:8765/solidity/compile", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ source, expectedCompilerVersion: compilerVersion.trim() }) });
+      const response = await fetch("/api/kali/solidity/compile", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ source, expectedCompilerVersion: compilerVersion.trim() }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Local compilation failed.");
       setCompileResult(data);
@@ -205,7 +205,7 @@ export default function SolidityLabPage() {
       if (!Array.isArray(files) || !Array.isArray(dependencyLock)) throw new Error("Project files and dependency lock must both be JSON arrays.");
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
       if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
-      const response = await fetch("http://127.0.0.1:8765/solidity/project/compile", {
+      const response = await fetch("/api/kali/solidity/project/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ files, dependencyLock, expectedCompilerVersion: compilerVersion.trim() })
@@ -223,7 +223,7 @@ export default function SolidityLabPage() {
     try {
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
       if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
-      const response = await fetch("http://127.0.0.1:8765/solidity/tests/status", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+      const response = await fetch("/api/kali/solidity/tests/status", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not check the local test runner.");
       setTestRunnerStatus(data);
@@ -238,7 +238,7 @@ export default function SolidityLabPage() {
       const files = JSON.parse(testFilesJson);
       const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
       if (!token) throw new Error("Pair this browser with the Kali companion first in Kali Connection.");
-      const response = await fetch("http://127.0.0.1:8765/solidity/tests/run", {
+      const response = await fetch("/api/kali/solidity/tests/run", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ files, dependencyLock: JSON.parse(testDependencyLockJson) }),
