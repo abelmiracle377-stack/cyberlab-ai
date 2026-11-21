@@ -106,6 +106,14 @@ class RelayJobTests(unittest.TestCase):
                 {"method": "POST", "path": "/wallet/sweep", "body": {"to": "attacker"}},
                 "UI-TEST-0001", True,
             )
+        for private_path in ("/wallet/recovery-run", "/wallet/derive", "/web/request", "/burp/send-request"):
+            with self.subTest(path=private_path):
+                with self.assertRaises(HTTPException):
+                    gateway.validate_relay_payload(
+                        "kali.bridge.request",
+                        {"method": "POST", "path": private_path, "body": {"private": "must-not-be-stored"}},
+                        "UI-TEST-0001", True,
+                    )
 
     def test_local_ollama_job_is_bounded_and_typed(self):
         self.assertEqual(
