@@ -226,17 +226,17 @@ export default function KaliConnectionPage() {
       <div className="agent-heading">
         <div className="agent-overline">LOCAL INTEGRATION / KALI LINUX</div>
         <h1>Connect your Kali machine</h1>
-        <p>Pair this website with the CyberLab companion running on your Kali computer. The connection stays on your machine at 127.0.0.1; no inbound internet port or public tunnel is needed.</p>
+        <p>Pair this website with the CyberLab companion running on your Kali computer. Kali runs on a separate computer and connects through the authenticated outbound HTTPS relay; no inbound Kali port is opened.</p>
       </div>
 
       <section className="kali-panel">
         <h2>1. Install or update the companion</h2>
         <pre>{`git clone https://github.com/abelmiracle377-stack/cyberlab-ai.git
 cd cyberlab-ai
-git checkout integration/cyberlab-unified-workstation
+git checkout feature/autonomous-wallet-recovery-intelligence
 sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g
 python3 kali-companion/cyberlab.py doctor`}</pre>
-        <p>For this unified integration build, check out <code>integration/cyberlab-unified-workstation</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>integration/cyberlab-unified-workstation</code> and pull the latest changes.</p>
+        <p>For this unified integration build, check out <code>feature/autonomous-wallet-recovery-intelligence</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>feature/autonomous-wallet-recovery-intelligence</code> and pull the latest changes.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
 
@@ -244,7 +244,7 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <h2>2. Start the local bridge on Kali</h2>
         <pre>sudo python3 kali-companion/bridge.py</pre>
         <button className="report-download" type="button" onClick={copyCommand}><Copy size={13}/>{copied?"Copied":"Copy bridge command"}</button>
-        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Running with sudo enables explicitly approved disk imaging; it gives the local bridge elevated privileges, so keep the token private and stop the bridge when finished. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
+        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Do not run with sudo unless a specific, approved disk-imaging task requires elevated access. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
       </section>
 
       {!connected&&<section className="kali-panel">
@@ -263,10 +263,10 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         </ul>
       </section>}
       <section className="kali-panel">
-        <h2>3. Pair this browser with Kali</h2>
-        <label className="bridge-label">Pairing token from the Kali terminal<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Paste the local pairing token"/></label>
-        <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Connect to Kali</>}</button>
-        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to your local companion. The pairing token is held only in this page's memory.</p>}
+        <h2>3. Pair and start the outbound relay worker</h2>
+        <label className="bridge-label">Legacy local pairing token (not used by remote relay)<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Pair the device in Execution Relay instead"/></label>
+        <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Check paired Kali connection</>}</button>
+        {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to the separate Kali machine through the secure relay.</p>}
         {connected&&companion&&<section className="kali-panel" style={{marginTop:12}}>
           <h2>Paired companion</h2>
           <div className="malware-kv"><span>Companion</span><strong>{companion.label}</strong></div>
@@ -410,8 +410,8 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <div className="kali-module-grid">{modules.map(({icon:Icon,title,detail})=><div className="kali-module" key={title}><Icon size={17}/><div><strong>{title}</strong><p>{detail}</p></div></div>)}</div>
       </section>
 
-      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. The pairing token is not saved by the website. Scan results are returned to this browser session.</div>
-      <div className="agent-disclaimer"><Unplug size={12}/> To disconnect, close this page or clear the token and press Ctrl+C in the Kali terminal. The main dashboard remains available via the top-left link.</div>
+      <div className="kali-warning"><ShieldCheck size={14}/> Privacy: the bridge binds exclusively to 127.0.0.1 and accepts requests only from the official CyberLab site with the local pairing token. No public inbound port is opened. Device authentication is handled by the paired outbound relay. Scan results are returned to this browser session.</div>
+      <div className="agent-disclaimer"><Unplug size={12}/> To disconnect, stop the relay worker and local bridge on Kali, or revoke the paired device in Execution Relay. The main dashboard remains available via the top-left link.</div>
     </section>
   </main>;
 }
