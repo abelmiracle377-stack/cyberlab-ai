@@ -45,6 +45,13 @@ export default function WalletRecoveryIntelligencePage() {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [mnemonic, setMnemonic] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [confirmRun, setConfirmRun] = useState(false);
+  const [checkBalances, setCheckBalances] = useState(false);
+  const [confirmNetwork, setConfirmNetwork] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runResult, setRunResult] = useState<any>(null);
 
   async function assess() {
     setBusy(true); setError(""); setAssessment(null);
@@ -66,6 +73,24 @@ export default function WalletRecoveryIntelligencePage() {
     }
   }
 
+
+  async function runRecovery() {
+    setRunBusy(true); setError(""); setRunResult(null);
+    try {
+      const token = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
+      if (!token) throw new Error("Pair your local Kali companion first in Kali Connection.");
+      const response = await fetch(BRIDGE + "/wallet/recovery-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ operation: "derive-and-check", ownerConfirmed, authorizationReference, confirmRun, mnemonic, passphrase, count: 5, includeChange: true, checkBalances, confirmNetwork }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "The local recovery operation failed.");
+      setRunResult(data);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Recovery execution failed.");
+    } finally { setRunBusy(false); }
+  }
   return (
     <main className="min-h-screen bg-[#0b1118] px-4 py-8 text-slate-100 sm:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -83,6 +108,16 @@ export default function WalletRecoveryIntelligencePage() {
           <button onClick={assess} disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500 disabled:opacity-50 md:col-span-2">{busy ? <Loader2 className="animate-spin" size={17}/> : <ClipboardCheck size={17}/>} {busy ? "Assessing case…" : "Assess recovery case"}</button>
         </section>
 
+        <section className="space-y-4 rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-5">
+          <div><p className="text-xs uppercase tracking-wider text-emerald-400">Local execution</p><h2 className="text-xl font-semibold">Run real wallet recovery</h2><p className="mt-2 text-sm text-slate-400">This sends the recovery phrase directly to your paired 127.0.0.1 companion, which runs the existing local derivation engine. It is not sent to the hosted CyberLab server.</p></div>
+          <label className="block space-y-2 text-sm"><span className="text-slate-300">Recovery phrase (local companion only)</span><textarea value={mnemonic} onChange={e => setMnemonic(e.target.value)} rows={3} autoComplete="off" spellCheck={false} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" placeholder="Enter the phrase for a wallet you own"/></label>
+          <label className="block space-y-2 text-sm"><span className="text-slate-300">Optional BIP39 / Electrum passphrase</span><input type="password" value={passphrase} onChange={e => setPassphrase(e.target.value)} autoComplete="off" className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" placeholder="Processed locally only"/></label>
+          <label className="flex items-start gap-3 text-sm text-slate-300"><input type="checkbox" checked={checkBalances} onChange={e => {setCheckBalances(e.target.checked); if (!e.target.checked) setConfirmNetwork(false);}} className="mt-1 accent-emerald-500"/>After derivation, perform optional read-only public address balance checks.</label>
+          {checkBalances && <label className="flex items-start gap-3 text-sm text-amber-200"><input type="checkbox" checked={confirmNetwork} onChange={e => setConfirmNetwork(e.target.checked)} className="mt-1 accent-amber-500"/>I separately authorise sending derived public addresses to public blockchain explorers. No private keys or seed words are sent.</label>}
+          <label className="flex items-start gap-3 text-sm text-amber-200"><input type="checkbox" checked={confirmRun} onChange={e => setConfirmRun(e.target.checked)} className="mt-1 accent-amber-500"/>I have verified ownership / explicit authorisation and approve this local recovery run now.</label>
+          <button onClick={runRecovery} disabled={runBusy || !ownerConfirmed || !authorizationReference.trim() || !mnemonic.trim() || !confirmRun || (checkBalances && !confirmNetwork)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-500 disabled:opacity-40">{runBusy ? <Loader2 className="animate-spin" size={17}/> : <ShieldCheck size={17}/>} {runBusy ? "Running local recovery…" : "Execute recovery locally"}</button>
+          {runResult && <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"><p className="font-medium text-emerald-300">Local operation: {runResult.execution}</p><p className="text-sm text-slate-300">Detected: {runResult.result?.detected || "Not identified"} · {runResult.result?.derived_count ?? 0} public addresses derived</p>{runResult.result?.accounts?.length > 0 && <div className="max-h-64 overflow-auto text-xs text-slate-300">{runResult.result.accounts.map((a:any,i:number)=><p key={i} className="break-all py-1"><code>{a.scheme} · {a.path} · {a.address}</code></p>)}</div>}{runResult.result?.balances && <p className="text-sm text-slate-300">Balance check: {runResult.result.balances.funded_addresses} funded · {runResult.result.balances.active_addresses} active · {runResult.result.balances.checked} checked</p>}<p className="text-xs text-slate-500">No signing, transaction or transfer was performed.</p></div>}
+        </section>
         {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
         {assessment && <section className="space-y-5 rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wider text-slate-500">Assessment result</p><h2 className="text-xl font-semibold">{assessment.wallet_label}</h2></div><span className={"rounded-full px-3 py-1 text-xs "+(assessment.status === "ready_for_operator_review" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300")}>{assessment.status.replaceAll("_"," ")}</span></div>
