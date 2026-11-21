@@ -390,3 +390,156 @@ def view_shared_file(token: str):
         content_disposition_type=disposition,
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
     )
+
+class RelayJobCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    device_id: str = Field(min_length=1, max_length=80)
+    action: str = Field(pattern="^(desktop.browser.inspect|kali.health|kali.tools.inventory|kali.ollama.models|kali.tool.run)$")
+    payload: dict = Field(default_factory=dict)
+    approval_reference: str = Field(min_length=3, max_length=160)
+    operator_approved: bool
+
+
+class RelayJobResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lease_token: str = Field(min_length=32, max_length=256)
+    status: str = Field(pattern="^(completed|failed)$")
+    result: dict = Field(default_factory=dict)
+    error: str = Field(default="", max_length=1000)
+
+
+def validate_relay_payload(action, payload, approval_reference, approved):
+    if not approved:
+        raise HTTPException(403, "Explicit operator approval is required.")
+    if action == "desktop.browser.inspect":
+        if set(payload) != {"url", "allowed_origins"}:
+            raise HTTPException(400, "Browser inspection accepts only url and allowed_origins.")
+        from urllib.parse import urlsplit
+        url = payload.get("url")
+        origins = payload.get("allowed_origins")
+        if not isinstance(url, str) or len(url) > 2048:
+            raise HTTPException(400, "A target URL is required.")
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise HTTPException(400, "Only HTTPS targets without embedded credentials are accepted.")
+        origin = "https://" + parsed.netloc.lower()
+        if not isinstance(origins, list) or not 1 <= len(origins) <= 10 or origin not in origins or any(not isinstance(x, str) or len(x) > 300 for x in origins):
+            raise HTTPException(400, "Exact target origin must be in the approved-origin list.")
+        return "desktop-browser"
+    if action == "kali.tool.run":
+        required = {"tool", "parameters", "confirmRun", "authorizationReference", "targetConfirmation", "timeoutSeconds"}
+        if set(payload) != required or payload.get("confirmRun") is not True:
+            raise HTTPException(400, "Kali tool job requires complete explicit confirmation.")
+        if payload.get("authorizationReference") != approval_reference:
+            raise HTTPException(400, "Tool approval reference mismatch.")
+        if not isinstance(payload.get("tool"), str) or not isinstance(payload.get("parameters"), dict):
+            raise HTTPException(400, "Tool name and parameters must be typed.")
+        if not isinstance(payload.get("targetConfirmation"), str) or not payload["targetConfirmation"] or len(payload["targetConfirmation"]) > 253:
+            raise HTTPException(400, "Exact target confirmation is required.")
+        if type(payload.get("timeoutSeconds")) is not int or not 1 <= payload["timeoutSeconds"] <= 120:
+            raise HTTPException(400, "Timeout must be between 1 and 120 seconds.")
+    elif payload:
+        raise HTTPException(400, "Read-only action does not accept a payload.")
+    return "kali"
+
+
+@app.post("/v1/jobs", dependencies=[Depends(owner_auth)], status_code=202)
+def create_relay_job(body: RelayJobCreate):
+    expected_platform = validate_relay_payload(body.action, body.payload, body.approval_reference, body.operator_approved)
+    con = db()
+    device = con.execute("SELECT id,platform,revoked,permissions FROM devices WHERE id=?", (body.device_id,)).fetchone()
+    if not device or device["revoked"]:
+        con.close()
+        raise HTTPException(404, "Paired execution device not found or revoked.")
+    if device["platform"].lower() != expected_platform:
+        con.close()
+        raise HTTPException(409, "Selected paired device has the wrong execution role. Pair its platform as kali or desktop-browser.")
+    if not json.loads(device["permissions"]).get("job_execution"):
+        con.close()
+        raise HTTPException(403, "Device has not granted job_execution permission.")
+    now = int(time.time())
+    job_id = str(uuid.uuid4())
+    con.execute("INSERT INTO jobs(id,device_id,device_role,action,payload,approval_reference,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (job_id, body.device_id, expected_platform, body.action, json.dumps(body.payload), body.approval_reference, "queued", now, now + 900))
+    log_event(con, body.device_id, "job_queued", body.action + " · " + body.approval_reference)
+    con.commit()
+    con.close()
+    return {"job_id": job_id, "status": "queued", "device_id": body.device_id, "action": body.action, "expires_in_seconds": 900}
+
+
+@app.get("/v1/jobs/next")
+def claim_relay_job(device=Depends(device_auth)):
+    if not json.loads(device["permissions"]).get("job_execution"):
+        raise HTTPException(403, "Device has not granted job_execution permission.")
+    now = int(time.time())
+    con = db()
+    con.execute("BEGIN IMMEDIATE")
+    con.execute("UPDATE jobs SET status='expired',finished_at=? WHERE device_id=? AND status='queued' AND expires_at<?", (now, device["id"], now))
+    row = con.execute("SELECT * FROM jobs WHERE device_id=? AND status='queued' AND expires_at>=? ORDER BY created_at,id LIMIT 1", (device["id"], now)).fetchone()
+    if not row:
+        con.commit()
+        con.close()
+        return {"job": None, "status": "idle", "server_time": now}
+    lease = secrets.token_urlsafe(48)
+    con.execute("UPDATE jobs SET status='running',lease_token_hash=?,lease_expires_at=?,started_at=? WHERE id=? AND status='queued'", (digest(lease), now + 180, now, row["id"]))
+    log_event(con, device["id"], "job_claimed", row["action"])
+    con.commit()
+    con.close()
+    return {"job": {"job_id": row["id"], "action": row["action"], "payload": json.loads(row["payload"]), "approval_reference": row["approval_reference"], "lease_token": lease, "lease_expires_at": now + 180}}
+
+
+@app.post("/v1/jobs/{job_id}/result")
+def submit_relay_result(job_id: str, body: RelayJobResult, device=Depends(device_auth)):
+    if not json.loads(device["permissions"]).get("job_execution"):
+        raise HTTPException(403, "Device has not granted job_execution permission.")
+    encoded = json.dumps(body.result, ensure_ascii=False)
+    if len(encoded.encode("utf-8")) > 65536:
+        raise HTTPException(413, "Job result exceeds 64 KB.")
+    now = int(time.time())
+    con = db()
+    row = con.execute("SELECT * FROM jobs WHERE id=? AND device_id=?", (job_id, device["id"])).fetchone()
+    if not row or row["status"] != "running":
+        con.close()
+        raise HTTPException(404, "Active job not found for this device.")
+    if not row["lease_expires_at"] or row["lease_expires_at"] < now:
+        con.close()
+        raise HTTPException(409, "Job lease expired.")
+    if not row["lease_token_hash"] or not hmac.compare_digest(row["lease_token_hash"], digest(body.lease_token)):
+        con.close()
+        raise HTTPException(401, "Job lease token is invalid.")
+    con.execute("UPDATE jobs SET status=?,result=?,error=?,finished_at=? WHERE id=?", (body.status, encoded, body.error, now, job_id))
+    log_event(con, device["id"], "job_" + body.status, row["action"])
+    con.commit()
+    con.close()
+    return {"job_id": job_id, "status": body.status, "accepted": True}
+
+
+@app.get("/v1/jobs", dependencies=[Depends(owner_auth)])
+def list_relay_jobs(device_id: Optional[str] = None, limit: int = 100):
+    if not 1 <= limit <= 250:
+        raise HTTPException(400, "limit must be between 1 and 250.")
+    con = db()
+    if device_id:
+        rows = con.execute("SELECT * FROM jobs WHERE device_id=? ORDER BY created_at DESC LIMIT ?", (device_id, limit)).fetchall()
+    else:
+        rows = con.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+    con.close()
+    return {"jobs": [{"job_id": r["id"], "device_id": r["device_id"], "action": r["action"], "status": r["status"], "approval_reference": r["approval_reference"], "result": json.loads(r["result"]) if r["result"] else None, "error": r["error"], "created_at": r["created_at"], "started_at": r["started_at"], "finished_at": r["finished_at"]} for r in rows]}
+
+
+@app.post("/v1/jobs/{job_id}/cancel", dependencies=[Depends(owner_auth)])
+def cancel_relay_job(job_id: str):
+    con = db()
+    row = con.execute("SELECT device_id,status,action FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "Job not found.")
+    if row["status"] not in {"queued", "running"}:
+        con.close()
+        raise HTTPException(409, "Only queued or running jobs can be cancelled.")
+    now = int(time.time())
+    con.execute("UPDATE jobs SET status='cancelled',finished_at=? WHERE id=?", (now, job_id))
+    log_event(con, row["device_id"], "job_cancelled", row["action"])
+    con.commit()
+    con.close()
+    return {"job_id": job_id, "status": "cancelled"}
