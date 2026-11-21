@@ -23,7 +23,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 DB_PATH = Path(os.environ.get("CYBERLAB_GATEWAY_DB", "/var/lib/cyberlab-gateway/registry.sqlite3"))
 DATA_DIR = Path(os.environ.get("CYBERLAB_GATEWAY_FILES", "/var/lib/cyberlab-gateway/files"))
@@ -77,6 +77,7 @@ def db():
       detail TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
     );
     """)
+    con.executescript("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, device_id TEXT NOT NULL, device_role TEXT NOT NULL, action TEXT NOT NULL, payload TEXT NOT NULL, approval_reference TEXT NOT NULL, status TEXT NOT NULL, lease_token_hash TEXT, lease_expires_at INTEGER, result TEXT, error TEXT, created_at INTEGER NOT NULL, started_at INTEGER, finished_at INTEGER, expires_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS jobs_device_status_idx ON jobs(device_id,status,created_at);")
     return con
 
 
@@ -199,7 +200,7 @@ def accept_pairing(body: AcceptPairing):
         raise HTTPException(403, "The participant must accept the disclosed terms.")
     if not body.permissions or not any(body.permissions.values()):
         raise HTTPException(400, "At least one explicitly granted permission is required.")
-    allowed = {"microphone", "camera", "screen_capture", "location", "file_upload"}
+    allowed = {"microphone", "camera", "screen_capture", "location", "file_upload", "job_execution"}
     if set(body.permissions) - allowed:
         raise HTTPException(400, "Unknown permission requested.")
     now = int(time.time())
