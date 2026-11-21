@@ -43,7 +43,7 @@ function validateInspectPayload(payload) {
 
 function runEgoBrowser(script) {
   return new Promise((resolve, reject) => {
-    const child = spawn("ego-browser", ["nodejs"], { shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn("ego-browser", ["nodejs"], { shell: process.platform === "win32", windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let settled = false;
