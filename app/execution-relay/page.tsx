@@ -39,6 +39,8 @@ export default function ExecutionRelayPage() {
   const [toolParameters, setToolParameters] = useState('{"target":"example.com","ports":[80,443]}');
   const [targetConfirmation, setTargetConfirmation] = useState("");
   const [timeoutSeconds, setTimeoutSeconds] = useState(45);
+  const [ollamaModel, setOllamaModel] = useState("");
+  const [ollamaPrompt, setOllamaPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -93,6 +95,9 @@ export default function ExecutionRelayPage() {
         const target = new URL(targetUrl);
         if (target.protocol !== "https:") throw new Error("Browser inspection requires an HTTPS URL.");
         payload = { url: target.href, allowed_origins: [target.origin] };
+      } else if (action === "kali.ollama.chat") {
+        if (!ollamaModel.trim() || !ollamaPrompt.trim()) throw new Error("Enter an installed local Ollama model tag and a prompt.");
+        payload = { model: ollamaModel.trim(), prompt: ollamaPrompt.trim() };
       } else if (action === "kali.tool.run") {
         const parameters = JSON.parse(toolParameters);
         if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) throw new Error("Tool parameters must be a JSON object.");
@@ -138,6 +143,7 @@ export default function ExecutionRelayPage() {
         { value: "kali.health", label: "Kali — connection health" },
         { value: "kali.tools.inventory", label: "Kali — installed tool inventory" },
         { value: "kali.ollama.models", label: "Kali — local Ollama models" },
+        { value: "kali.ollama.chat", label: "Kali — run local Ollama/Qwen analysis" },
         { value: "kali.tool.run", label: "Kali — run registered tool" },
       ];
 
@@ -174,6 +180,11 @@ export default function ExecutionRelayPage() {
           <label className="block text-sm">Task<select value={action} onChange={e => setAction(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2">{actions.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
           <label className="block text-sm md:col-span-2">Authorisation / engagement reference<input value={approvalReference} onChange={e => setApprovalReference(e.target.value)} placeholder="Your approved engagement or lab reference" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2" /></label>
           {action === "desktop.browser.inspect" && <label className="block text-sm md:col-span-2">Authorised HTTPS website URL<input value={targetUrl} onChange={e => setTargetUrl(e.target.value)} placeholder="https://your-authorised-test-domain.example" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2" /></label>}
+          {action === "kali.ollama.chat" && <>
+            <label className="block text-sm">Installed Ollama model tag<input value={ollamaModel} onChange={e => setOllamaModel(e.target.value)} placeholder="Copy exact tag from Kali Ollama models" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2" /></label>
+            <label className="block text-sm md:col-span-2">Local model prompt<textarea value={ollamaPrompt} onChange={e => setOllamaPrompt(e.target.value)} rows={5} placeholder="Ask the local model to analyse selected non-secret evidence..." className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2" /></label>
+            <p className="text-xs text-slate-500 md:col-span-2">The prompt is sent to Ollama on your Kali machine. Do not include passwords, session cookies, private keys or wallet seed phrases.</p>
+          </>}
           {action === "kali.tool.run" && <>
             <label className="block text-sm">Registered Kali tool<input value={toolName} onChange={e => setToolName(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2" /></label>
             <label className="block text-sm">Exact target confirmation<input value={targetConfirmation} onChange={e => setTargetConfirmation(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2" /></label>
