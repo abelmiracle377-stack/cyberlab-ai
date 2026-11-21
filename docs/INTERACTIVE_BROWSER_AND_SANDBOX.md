@@ -37,7 +37,7 @@ The sandbox has its own execution service and disposable container image. It doe
 - app/api/sandbox/run/route.ts: authenticated Next.js proxy; requires a signed-in Supabase user and keeps the runner token server-side.
 - app/sandbox/page.tsx: browser-based code runner interface.
 
-Each job runs with networking disabled, read-only container root, no Linux capabilities, no-new-privileges, a non-root UID, 384 MiB memory, one CPU, 64 process limit, a 20-second runtime limit and bounded output. The submitted source is mounted read-only into the container. No host home directory, Docker socket, credentials or companion files are mounted into the job.
+Each job runs under the gVisor (runsc) runtime with networking disabled, read-only container root, no Linux capabilities, no-new-privileges, a non-root UID, 384 MiB memory, one CPU, 64 process limit, a 20-second runtime limit, bounded output and a maximum of two concurrent jobs. The submitted source is mounted read-only into the container. No host home directory, Docker socket, credentials or companion files are mounted into the job.
 
 ### Deploy the runner on a dedicated Linux VM
 
@@ -55,7 +55,7 @@ Configure these server-side Vercel environment variables for the CyberLab projec
 - CYBERLAB_SANDBOX_URL: the HTTPS base URL of the dedicated runner service.
 - CYBERLAB_SANDBOX_TOKEN: the same high-entropy token used by the runner.
 
-Redeploy the web application after configuring the variables. The runner service must be able to access the local Docker daemon and the cyberlab-sandbox:latest image. Keep Docker Engine patched and isolate this host from production secrets.
+Redeploy the web application after configuring the variables. Install and configure Docker Engine plus the gVisor runsc runtime on the dedicated host before starting the runner. The runner service must be able to access the local Docker daemon and the cyberlab-sandbox:latest image. Keep both runtimes patched and isolate this host from production secrets. The API binds to loopback by default; terminate TLS at a reverse proxy and forward only to 127.0.0.1:8787.
 
 ### Current sandbox limits
 
