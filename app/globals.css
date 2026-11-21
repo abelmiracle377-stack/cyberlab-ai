@@ -24,7 +24,7 @@
   --sans: 'Inter', 'Manrope', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+html, body { margin: 0; min-height: 100%; color: var(--text); background: linear-gradient(rgba(13,17,23,.80), rgba(13,17,23,.93)), url('/cyberlab-hood.jpg') center 18% / min(760px, 70vw) no-repeat fixed var(--bg); }
 body { font-family: var(--sans); font-size: 13px; }
 button, input { font: inherit; }
 button { cursor: pointer; }
@@ -66,6 +66,9 @@ a { color: inherit; text-decoration: none; }
 .eyebrow { color: var(--green); font: 10px var(--mono); letter-spacing: 1.7px; text-transform: uppercase; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 9px 0 24px; }
 h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-weight: 700; }
+/* Colour system: headings blue, section kickers red, body text white. */
+h1, h2, h3 { color: #58A6FF; }
+[class*="kicker"] { color: #F85149; }
 .subtitle { color: var(--muted); font-size: 12px; margin-top: 8px; }
 .date-stamp { color: var(--dim); font: 10px var(--mono); white-space: nowrap; padding-bottom: 5px; }
 .notice { border: 1px solid #344b3a; background: #111d15; border-radius: 8px; padding: 12px 15px; display: flex; gap: 11px; align-items: flex-start; margin-bottom: 22px; }
