@@ -47,7 +47,6 @@ export default function WebAssessmentPage() {
     setBusy(true); setError(""); setResult(null);
     try {
       const savedToken = token || window.sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!savedToken) throw new Error("Pair the local Kali companion first.");
       const targets = urls.split("\n").map((x) => x.trim()).filter(Boolean);
       if (!targets.length || targets.length > 10) throw new Error("Enter between 1 and 10 target page URLs.");
       const response = await fetch(API + "/web/assessment", {
