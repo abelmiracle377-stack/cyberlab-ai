@@ -60,6 +60,9 @@ on:
       - "kali-companion/parameter_analysis.py"
       - "kali-companion/test_parameter_analysis.py"
       - "kali-companion/bridge.py"
+      - "kali-companion/wallet_recovery_planner.py"
+      - "kali-companion/tests/test_wallet_recovery_planner.py"
+      - "docs/WALLET_RECOVERY_INTELLIGENCE.md"
       - "app/web-repeater/**"
       - "docs/NATIVE_WEB_WORKBENCH.md"
       - "kali-companion/burp_connector.py"
@@ -125,6 +128,7 @@ jobs:
           python -m unittest discover -s kali-companion/tests -p "test_web_crawler.py" -v
           python -m unittest discover -s kali-companion/tests -p "test_web_active_scan.py" -v
           python -m unittest discover -s kali-companion -p "test_task_planner.py" -v
+          python -m unittest discover -s kali-companion/tests -p "test_wallet_recovery_planner.py" -v
 
   web-build:
     runs-on: ubuntu-latest
