@@ -43,7 +43,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireUser(request);
+    if (!originAllowed(request)) return Response.json({ error: "Cross-origin relay requests are blocked." }, { status: 403 });
+    const gate = await adminGate();
+    if (gate.error) return gate.error;
     const raw = await request.text();
     if (raw.length > 4096) return Response.json({ error: "Request body is too large." }, { status: 413 });
     let value: unknown;
