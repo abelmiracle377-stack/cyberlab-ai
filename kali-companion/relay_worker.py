@@ -12,7 +12,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Any
+from urllib.parse import urlsplit
 
 RELAY_URL = os.environ.get("CYBERLAB_RELAY_URL", "").rstrip("/")
 DEVICE_TOKEN = os.environ.get("CYBERLAB_DEVICE_TOKEN", "")
@@ -71,8 +71,13 @@ def dispatch(action: str, payload: dict, approval_reference: str) -> dict:
 
 
 def main() -> int:
-    if not RELAY_URL.startswith("https://"):
-        print("CYBERLAB_RELAY_URL must use HTTPS.", file=sys.stderr)
+    relay = urlsplit(RELAY_URL)
+    bridge = urlsplit(BRIDGE_URL)
+    if relay.scheme != "https" or not relay.hostname or relay.username or relay.password:
+        print("CYBERLAB_RELAY_URL must be an HTTPS URL without embedded credentials.", file=sys.stderr)
+        return 2
+    if bridge.scheme != "http" or bridge.hostname not in {"127.0.0.1", "localhost", "::1"} or bridge.username or bridge.password:
+        print("CYBERLAB_BRIDGE_URL must point to the local loopback bridge only.", file=sys.stderr)
         return 2
     if len(DEVICE_TOKEN) < 32 or len(BRIDGE_TOKEN) < 40:
         print("Set CYBERLAB_DEVICE_TOKEN and CYBERLAB_BRIDGE_TOKEN securely.", file=sys.stderr)
