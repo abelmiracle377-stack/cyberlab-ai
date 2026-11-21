@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "CyberLab Shared Browser Workspace",
+  "version": "0.1.0",
+  "description": "Explicitly share a browser tab with CyberLab for read-only security inspection.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "debugger",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://cyberlab-ai.vercel.app/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://cyberlab-ai.vercel.app/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*"
+      ],
+      "js": [
+        "cyberlab-content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}
