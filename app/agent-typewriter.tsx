@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 // Terminal-style token coloring for the agent's plain-text output.
 const TOKEN = new RegExp([
@@ -32,61 +32,7 @@ function colorize(text: string): ReactNode[] {
   return out;
 }
 
-export default function AgentTypewriter({ text, animate, generating, sound }: { text: string; animate: boolean; generating: boolean; sound: boolean }) {
-  const [n, setN] = useState(animate ? 0 : text.length);
-  const ctxRef = useRef<AudioContext | null>(null);
-  const lastClick = useRef(0);
-
-  function click() {
-    if (!sound) return;
-    const now = performance.now();
-    if (now - lastClick.current < 42) return; // throttle keystrokes
-    lastClick.current = now;
-    try {
-      type WA = typeof AudioContext;
-      const Ctor = (window.AudioContext || (window as unknown as { webkitAudioContext?: WA }).webkitAudioContext);
-      if (!Ctor) return;
-      const ctx = ctxRef.current ?? (ctxRef.current = new Ctor());
-      if (ctx.state === "suspended") void ctx.resume();
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = "square";
-      o.frequency.value = 1300 + Math.random() * 700;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime + 0.002);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.03);
-      o.connect(g).connect(ctx.destination);
-      o.start();
-      o.stop(ctx.currentTime + 0.035);
-    } catch { /* audio unavailable */ }
-  }
-
-  useEffect(() => {
-    if (!animate) { setN(text.length); return; }
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) { setN(text.length); return; }
-    let raf = 0, last = performance.now(), acc = 0;
-    const loop = (t: number) => {
-      acc += t - last; last = t;
-      let typed = 0;
-      setN((prev) => {
-        let cur = prev;
-        while (acc >= 16 && cur < text.length) {
-          const behind = text.length - cur;
-          const step = behind > 240 ? 7 : behind > 60 ? 2 : 1; // catch up to streamed text
-          cur = Math.min(text.length, cur + step);
-          acc -= 16; typed += step;
-        }
-        return cur;
-      });
-      if (typed > 0) click();
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [animate, text]);
-
-  const shown = n >= text.length ? text : text.slice(0, n);
-  const caret = animate && (n < text.length || generating);
-  return <span className="agent-tw">{colorize(shown)}{caret && <span className="agent-tw-caret">▋</span>}</span>;
+// Renders the agent's real reply text immediately. No typing animation or sound.
+export default function AgentTypewriter({ text }: { text: string }) {
+  return <span className="agent-tw">{colorize(text)}</span>;
 }

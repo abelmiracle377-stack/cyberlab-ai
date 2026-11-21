@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles, Paperclip, Mic, Square, FileText, X, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Bot, ChevronDown, CircleAlert, LoaderCircle, Send, ShieldCheck, Sparkles, Paperclip, Mic, Square, FileText, X } from "lucide-react";
 import Link from "next/link";
 import { planCompanionToolRequest, type CompanionToolRequest } from "../../lib/companion-tools";
 import AgentTypewriter from "../agent-typewriter";
@@ -24,9 +24,6 @@ export default function AgentPage() {
   const [ollamaConfigured, setOllamaConfigured] = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
   const [agentMode, setAgentMode] = useState<"standard" | "open-weight">("open-weight");
-  const [sound, setSound] = useState(true);
-  useEffect(() => { try { const v = localStorage.getItem("cyberlab.agent.sound"); if (v !== null) setSound(v === "1"); } catch { /* ignore */ } }, []);
-  const toggleSound = () => setSound((s) => { const next = !s; try { localStorage.setItem("cyberlab.agent.sound", next ? "1" : "0"); } catch { /* ignore */ } return next; });
   const [executionMode, setExecutionMode] = useState<"single" | "specialists">("single");
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
@@ -485,9 +482,6 @@ export default function AgentPage() {
         <Link href="/" className="agent-back"><ArrowLeft size={14} /> Dashboard</Link>
         <div className="agent-brand"><span className="agent-brand-icon"><ShieldCheck size={16} /></span> CYBERLAB AI <span className="agent-top-sep">/</span> AGENT CONSOLE</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button type="button" onClick={toggleSound} aria-label={sound ? "Mute typing sound" : "Enable typing sound"} title={sound ? "Typing sound on" : "Typing sound off"} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid var(--line)", color: sound ? "var(--green)" : "var(--muted)", borderRadius: 6, padding: "5px 9px", cursor: "pointer", font: "9px var(--mono)", letterSpacing: ".5px" }}>
-            {sound ? <Volume2 size={13} /> : <VolumeX size={13} />} SFX
-          </button>
           <Link href="/learning" className="agent-secure-label">LEARNING CENTRE ↗</Link>
         </div>
       </header>
@@ -556,7 +550,7 @@ export default function AgentPage() {
                 <div className="agent-message-avatar">{message.role === "assistant" ? <Bot size={15} /> : "YOU"}</div>
                 <div className="agent-message-body"><div className="agent-message-role">{message.role === "assistant" ? "CYBERLAB AGENT" : "YOU"}</div><div className="agent-message-content">{message.content
   ? (message.role === "assistant"
-      ? <AgentTypewriter text={message.content} animate={index === messages.length - 1} generating={busy && index === messages.length - 1} sound={sound} />
+      ? <AgentTypewriter text={message.content} />
       : message.content)
   : (busy ? <span className="agent-thinking"><LoaderCircle size={13} /> Thinking and checking available tools…</span> : "")}</div></div>
               </div>)}

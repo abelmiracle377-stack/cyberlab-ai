@@ -769,20 +769,6 @@ h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -1.3px; margin: 0; font-
 .spin{animation:soc-spin 1s linear infinite}@keyframes soc-spin{to{transform:rotate(360deg)}}
 @media(max-width:820px){.soc-body{grid-template-columns:1fr;grid-template-rows:42vh 1fr}.soc-kpis{gap:12px}}
 
-/* ===== Animated binary-field background (balanced, behind content) ===== */
-.cyber-bg {
-  position: fixed; inset: 0; width: 100vw; height: 100vh;
-  z-index: -1; pointer-events: none; opacity: .42;
-}
-@media (prefers-reduced-motion: reduce) { .cyber-bg { opacity: .14; } }
-/* Original low-poly hooded-figure backdrop, balanced behind the binary field. */
-.cyber-figure {
-  position: fixed; inset: 0; z-index: -2; pointer-events: none;
-  background: url('/cyberlab-figure.svg') center 18% no-repeat;
-  background-size: min(560px, 54vw) auto;
-  opacity: .7;
-}
-
 /* ===== Purposeful micro-animations ===== */
 /* Marching-ants connection path (active data between nodes). */
 @keyframes cyber-march { to { background-position: 16px 0, -16px 0, 0 -16px, 0 16px; } }
