@@ -50,10 +50,6 @@ export default function ModelsPage() {
   useEffect(() => {
     let alive = true;
     const token = sessionStorage.getItem("cyberlab.kaliBridgeToken");
-    if (!token) {
-      setLocalStatus("Not paired · open Kali Connection to pair this browser.");
-      return;
-    }
     fetch("/api/kali/ollama/models", {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
