@@ -27,7 +27,6 @@ export default function NativeWebCrawlerPage() {
     setBusy(true); setError(""); setResult(null);
     try {
       const savedToken = token || window.sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!savedToken) throw new Error("Pair the local Kali companion first. Its pairing token is not available in this browser session.");
       const response = await fetch(API + "/web/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + savedToken },
