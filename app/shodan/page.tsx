@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Globe, Search, Server, Loader2, CircleAlert } from "lucide-react";
 
-const BRIDGE = "/api/kali";
+const BRIDGE = "http://127.0.0.1:8765";
 
 type HostResult = {
   ip?: string; org?: string; isp?: string; os?: string; country?: string;
