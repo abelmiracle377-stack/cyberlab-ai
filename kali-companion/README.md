@@ -347,4 +347,23 @@ Run `node integrations/ego-lite/relay-worker.mjs`. It accepts only `desktop.brow
 - Device: `GET /v1/jobs/next` claims one job with a short lease; `POST /v1/jobs/{job_id}/result` returns the result using the one-time lease token.
 - Results are capped at 64 KB. Device revocation immediately prevents future claims. Jobs expire after 15 minutes and claims expire after 3 minutes.
 
-The relay is an execution transport, not a complete autonomous security testing engine. It currently supports read-only browser snapshots and the existing registered Kali tool runner. Active web vulnerability tests still need their own explicit, scoped workflow and independent evidence validation. The queue endpoints are available on the gateway; a CyberLab authenticated dashboard/API surface for creating and reviewing these jobs is a separate integration step.
+The relay is an execution transport, not a complete autonomous security testing engine. It currently supports read-only browser snapshots and the existing registered Kali tool runner. Active web vulnerability tests still need their own explicit, scoped workflow and independent evidence validation. The CyberLab admin-only console is available at `/execution-relay`; its authenticated Next.js API routes create pairing codes, enqueue typed jobs, list execution receipts and cancel jobs that have not started. Configure `CYBERLAB_GATEWAY_URL` and `CYBERLAB_GATEWAY_OWNER_TOKEN` as server-only Vercel environment variables. The console is restricted through the existing Supabase administrator gate.
+
+### Admin console setup
+
+1. Deploy the gateway and configure its TLS domain.
+2. In Vercel, add server-only environment variables `CYBERLAB_GATEWAY_URL=https://your-gateway-domain` and `CYBERLAB_GATEWAY_OWNER_TOKEN=<the gateway owner token>`. Do not use a `NEXT_PUBLIC_` prefix.
+3. Sign in to CyberLab with an account whose Supabase `user_profiles.role` is `admin`, then open `/execution-relay`.
+4. Generate a pairing code for `kali` or `desktop-browser`. On the intended device, accept it using the gateway's one-time pairing endpoint:
+
+   ```bash
+   curl -X POST https://your-gateway-domain/v1/pairing/accept \
+     -H 'Content-Type: application/json' \
+     -d '{"code":"ONE_TIME_CODE","participant_label":"Kali workstation","terms_accepted":true,"permissions":{"job_execution":true}}'
+   ```
+
+   For the desktop, use `"participant_label":"Ego Lite desktop"`. Store the returned `device_token` privately. The pairing code expires after ten minutes and is single-use.
+5. Start the corresponding relay worker on each device. Keep the Kali bridge running locally before starting `relay_worker.py`.
+6. In the admin console, queue a read-only health/inventory job first. Confirm the receipt appears before authorising any active registered tool.
+
+The queue and device tokens are separate from the local Kali bridge token. Revoking a device in the gateway immediately blocks future polls. The admin console does not expose the gateway owner token or device tokens to browser JavaScript.
