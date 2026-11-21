@@ -23,7 +23,7 @@ def _target(value: str) -> str:
         if "blocks" in str(exc):
             raise
     host = raw.rstrip(".").lower()
-    if not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}", host):
+    if not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", host):
         raise ValueError("Provide a valid fully-qualified hostname or public IP.")
     return host
 
@@ -69,7 +69,7 @@ def audit_ssh(data: dict) -> dict:
     if "SSH-1." in banner:
         findings.append({"severity": "high", "title": "Obsolete SSH protocol version advertised",
                          "evidence": banner, "confidence": "high"})
-    if re.search(r"OpenSSH_[1-6]\\.", banner):
+    if re.search(r"OpenSSH_[1-6]\.", banner):
         findings.append({"severity": "review", "title": "Potentially old OpenSSH version advertised",
                          "evidence": banner, "confidence": "low",
                          "note": "Banner versions may be backported; verify against vendor package advisories."})
