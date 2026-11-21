@@ -23,7 +23,7 @@ Use this skill only for websites and environments the operator owns or is explic
 5. Do not read, export, print, or transmit passwords, session cookies, authentication tokens, local storage secrets, or private user data.
 6. Do not submit forms, change account settings, upload files, purchase items, delete data, or trigger state-changing actions unless the operator separately approves that exact action.
 7. Do not claim that XSS, SQL injection, CSRF, authentication flaws, or other vulnerabilities are confirmed from page appearance alone. Require reproducible evidence and a safe verification procedure.
-8. For network-level checks, use CyberLab's paired Kali companion only after the operator has approved the target and test profile. The current companion binds to loopback; it is not reachable from a separate desktop across the network without a separately configured secure relay.
+8. For network-level checks, use CyberLab's paired Kali companion only after the operator has approved the target and test profile. The desktop and Kali workers communicate with the paired gateway over separate outbound HTTPS connections. Never attempt to connect to the Kali loopback bridge directly from the desktop.
 9. Distinguish observed facts, hypotheses, blocked checks and confirmed findings in the report. Include the exact URL, time, test steps and evidence limitations.
 
 ## Supported read-only smoke test
