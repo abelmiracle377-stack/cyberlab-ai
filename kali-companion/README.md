@@ -343,7 +343,7 @@ Run `node integrations/ego-lite/relay-worker.mjs`. It accepts only `desktop.brow
 
 ### Queue API
 
-- Owner: `POST /v1/jobs` creates a typed job; `GET /v1/jobs` lists status/results; `POST /v1/jobs/{job_id}/cancel` cancels queued/running work.
+- Owner: `POST /v1/jobs` creates a typed job; `GET /v1/jobs` lists status/results; `POST /v1/jobs/{job_id}/cancel` cancels jobs that have not started.
 - Device: `GET /v1/jobs/next` claims one job with a short lease; `POST /v1/jobs/{job_id}/result` returns the result using the one-time lease token.
 - Results are capped at 64 KB. Device revocation immediately prevents future claims. Jobs expire after 15 minutes and claims expire after 3 minutes.
 
