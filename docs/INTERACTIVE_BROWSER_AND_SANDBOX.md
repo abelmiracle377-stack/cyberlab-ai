@@ -26,6 +26,18 @@ It intentionally excludes cookie values, passwords, input values, request bodies
 
 Only share applications you own or have explicit permission to assess. The browser workspace is an analysis surface, not a bypass for authentication or bug-bounty scope.
 
+### Local session-cookie capture and page interaction
+
+The extension now offers a separate **Capture session cookies locally** action. It requires an explicit confirmation after a tab has been shared. Cookie values are retained only in volatile memory inside the extension service worker, scoped to the shared tab's host, and are not included in the browser snapshot or sent to the CyberLab web application. The popup includes a clear action. Closing/restarting the browser extension worker also discards this volatile capture. The current UI reports cookie names/count only; it does not export raw values.
+
+The browser workspace also supports writing a supplied value into a selected non-sensitive input, textarea or select field. Password, hidden, file and submit inputs are blocked. The operation dispatches input/change events but does not submit the form. This is a live-page interaction, not a server-side website edit. Existing reversible DOM attribute editing remains available.
+
+This is not yet a full authenticated request replay engine. Cookie capture is local-only; do not interpret it as permission to export session secrets or use them outside the approved origin. The browser extension should be treated as a trusted local component and cleared after each engagement.
+
+## Authorised SSH service audit
+
+The Kali companion exposes `POST /ssh/audit`. It requires `authorized: true`, a non-empty authorisation reference, a single host and a port. It collects the SSH identification banner and invokes the locally installed `ssh-audit` executable when available to report cryptographic protocol posture. It never logs in, guesses passwords, enumerates users, collects private keys or validates credentials. Single private-network IPs are permitted for explicitly authorised internal assessments; loopback, link-local, multicast, unspecified and reserved addresses are blocked. Install the distribution's `ssh-audit` package on the paired Kali host to obtain algorithm-level results. Banner-only output is explicitly marked as limited evidence.
+
 ## Independent CyberLab sandbox
 
 The sandbox has its own execution service and disposable container image. It does not invoke the Kali companion or require CyberLab AI OS.
