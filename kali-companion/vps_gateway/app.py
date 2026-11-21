@@ -77,7 +77,11 @@ def db():
       detail TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
     );
     """)
-    con.executescript("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, device_id TEXT NOT NULL, device_role TEXT NOT NULL, action TEXT NOT NULL, payload TEXT NOT NULL, approval_reference TEXT NOT NULL, status TEXT NOT NULL, lease_token_hash TEXT, lease_expires_at INTEGER, result TEXT, error TEXT, created_at INTEGER NOT NULL, started_at INTEGER, finished_at INTEGER, expires_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS jobs_device_status_idx ON jobs(device_id,status,created_at);")
+    con.executescript("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, device_id TEXT NOT NULL, device_role TEXT NOT NULL, action TEXT NOT NULL, payload TEXT NOT NULL, approval_reference TEXT NOT NULL, status TEXT NOT NULL, lease_token_hash TEXT, lease_expires_at INTEGER, result TEXT, error TEXT, result_sha256 TEXT, evidence_record_hash TEXT, previous_evidence_hash TEXT, created_at INTEGER NOT NULL, started_at INTEGER, finished_at INTEGER, expires_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS jobs_device_status_idx ON jobs(device_id,status,created_at); CREATE TABLE IF NOT EXISTS relay_evidence (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT UNIQUE NOT NULL, device_id TEXT NOT NULL, action TEXT NOT NULL, approval_reference TEXT NOT NULL, status TEXT NOT NULL, result_sha256 TEXT NOT NULL, previous_hash TEXT NOT NULL, record_hash TEXT NOT NULL, created_at INTEGER NOT NULL);")
+    job_columns = {row[1] for row in con.execute("PRAGMA table_info(jobs)")}
+    for column in ("result_sha256", "evidence_record_hash", "previous_evidence_hash"):
+        if column not in job_columns:
+            con.execute("ALTER TABLE jobs ADD COLUMN " + column + " TEXT")
     return con
 
 
