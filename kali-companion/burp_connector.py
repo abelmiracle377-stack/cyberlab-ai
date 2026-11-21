@@ -456,6 +456,7 @@ def _burp_extension_call(path: str, method: str = "GET", params: dict | None = N
             payload = json.loads(exc.read(8192).decode("utf-8"))
             if isinstance(payload, dict):
                 payload.setdefault("status", "api_error")
+                payload.setdefault("http_status", exc.code)
                 return payload
         except (ValueError, UnicodeDecodeError, OSError):
             pass
