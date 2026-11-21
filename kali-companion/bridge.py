@@ -25,7 +25,7 @@ from urllib.parse import urlparse, parse_qs
 from forensics import get_image_job, inspect_image_filesystem, inspect_image_partitions, list_block_devices, start_foremost_recovery, start_image_acquisition, list_deleted_files, recover_deleted_file, recover_all_deleted_files, start_photorec_recovery
 from filesystem_analysis import inspect_partition_filesystem
 from tool_catalog import inspect_tool_catalog
-from burp_connector import inspect_burp_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater, send_in_scope_request
+from burp_connector import inspect_burp_status, inspect_burp_extension_status, inspect_burp_proxy_history, inspect_burp_site_map, inspect_burp_issues, open_burp_history_in_repeater, send_in_scope_request
 from network_capture import list_capture_interfaces, capture_packets
 from web_testing import execute_request, request_history
 from web_crawler import run_crawl
@@ -1303,7 +1303,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "Origin not allowed."})
         path = urlparse(self.path).path
-        if not (path in {"/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/academy/lab/status", "/wifi/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
+        if not (path in {"/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models", "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners", "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status", "/burp/extension/status", "/burp/proxy/history", "/burp/site-map", "/burp/issues", "/network/interfaces", "/academy/lab/status", "/wifi/interfaces", "/web/history", "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts", "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts", "/evidence/case/ledger/verify"} or re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", path)):
             return self.send_json(404, {"error": "Not found."}, origin)
         if not self.authorised():
             return self.send_json(401, {"error": "Pairing token required."}, origin)
@@ -1378,6 +1378,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, request_history(limit), origin)
         if path == "/burp/status":
             return self.send_json(200, inspect_burp_status(), origin)
+        if path == "/burp/extension/status":
+            return self.send_json(200, inspect_burp_extension_status(), origin)
         if path == "/burp/proxy/history":
             query = parse_qs(urlparse(self.path).query)
             try:

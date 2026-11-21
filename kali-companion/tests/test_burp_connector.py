@@ -212,3 +212,41 @@ class SendInScopeRequestTests(unittest.TestCase):
             result = burp_connector.send_in_scope_request(7, confirmed=True, opener=opener)
         self.assertEqual(result["status"], "out_of_scope")
         self.assertFalse(result["request_sent"])
+
+
+class BurpExtensionHealthTests(unittest.TestCase):
+    def test_extension_health_requires_local_token(self):
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen") as open_url:
+            token_file.read_text.side_effect = OSError("missing")
+            result = burp_connector.inspect_burp_extension_status()
+        self.assertEqual(result["status"], "not_configured")
+        open_url.assert_not_called()
+
+    def test_extension_health_reports_only_verified_local_capabilities(self):
+        class HealthResponse(FakeResponse):
+            def read(self, _limit):
+                import json
+                return json.dumps({"status": "ok", "connector": "montoya"}).encode("utf-8")
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=HealthResponse()) as open_url:
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.inspect_burp_extension_status()
+        self.assertEqual(result["status"], "connected")
+        self.assertTrue(result["authenticated"])
+        self.assertIn("repeater_handoff", result["capabilities"])
+        self.assertIn("confirmed_single_request_replay", result["capabilities"])
+        self.assertEqual(open_url.call_args.args[0].full_url, burp_connector.EXTENSION_HEALTH_URL)
+
+    def test_extension_health_rejects_wrong_connector_payload(self):
+        class WrongResponse(FakeResponse):
+            def read(self, _limit):
+                import json
+                return json.dumps({"status": "ok", "connector": "other"}).encode("utf-8")
+        with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
+             patch.object(burp_connector, "urlopen", return_value=WrongResponse()):
+            token_file.read_text.return_value = "local-extension-token-12345678901234567890"
+            result = burp_connector.inspect_burp_extension_status()
+        self.assertEqual(result["status"], "invalid_response")
+
+

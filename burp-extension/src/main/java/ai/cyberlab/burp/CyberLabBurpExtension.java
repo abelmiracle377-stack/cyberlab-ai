@@ -64,7 +64,7 @@ public final class CyberLabBurpExtension implements BurpExtension {
         if (!"/v1/health".equals(e.getRequestURI().getPath())) { send(e, 404, "{\"error\":\"not_found\"}"); return; }
         if (!authorized(e, token)) { send(e, 401, "{\"error\":\"unauthorized\"}"); return; }
         if (!"GET".equals(e.getRequestMethod())) { send(e, 405, "{\"error\":\"method_not_allowed\"}"); return; }
-        send(e, 200, "{\"status\":\"ok\",\"connector\":\"montoya\",\"read_only\":true}");
+        send(e, 200, "{\"status\":\"ok\",\"connector\":\"montoya\",\"read_only\":false,\"capabilities\":[\"proxy_history\",\"site_map\",\"audit_issues\",\"repeater_handoff\",\"confirmed_single_request_replay\"]}");
     }
 
     private static void history(HttpExchange e, String token, MontoyaApi api) throws IOException {
