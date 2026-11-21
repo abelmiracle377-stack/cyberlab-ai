@@ -236,7 +236,7 @@ cd cyberlab-ai
 git checkout feature/autonomous-wallet-recovery-intelligence
 sudo apt update && sudo apt install -y nmap python3 gddrescue testdisk foremost ntfs-3g
 python3 kali-companion/cyberlab.py doctor`}</pre>
-        <p>For this unified integration build, check out <code>feature/autonomous-wallet-recovery-intelligence</code> before starting the bridge. After the pull request is merged and the production app is updated, switch back to <code>feature/autonomous-wallet-recovery-intelligence</code> and pull the latest changes.</p>
+        <p>For the current integration build, check out <code>feature/autonomous-wallet-recovery-intelligence</code> before starting the bridge. After the pull request is merged, use the main branch for future updates.</p>
         <a href="https://github.com/abelmiracle377-stack/cyberlab-ai/tree/main/kali-companion" target="_blank" rel="noreferrer"><Github size={13}/> View companion source</a>
       </section>
 
@@ -244,7 +244,7 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <h2>2. Start the local bridge on Kali</h2>
         <pre>sudo python3 kali-companion/bridge.py</pre>
         <button className="report-download" type="button" onClick={copyCommand}><Copy size={13}/>{copied?"Copied":"Copy bridge command"}</button>
-        <p>The terminal prints a one-time pairing token. Keep it private. The bridge listens only on 127.0.0.1:8765. Do not run with sudo unless a specific, approved disk-imaging task requires elevated access. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
+        <p>The terminal prints a local bridge token. Keep it private. The bridge listens only on 127.0.0.1:8765. Do not run with sudo unless a specific, approved disk-imaging task requires elevated access. Keep this terminal open while using the website; press Ctrl+C here to stop it.</p>
       </section>
 
       {!connected&&<section className="kali-panel">
@@ -264,8 +264,11 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
       </section>}
       <section className="kali-panel">
         <h2>3. Pair and start the outbound relay worker</h2>
-        <label className="bridge-label">Legacy local pairing token (not used by remote relay)<input type="password" autoComplete="off" value={token} onChange={e=>{setToken(e.target.value);setConnected(false);sessionStorage.removeItem("cyberlab.kaliBridgeToken");}} placeholder="Pair the device in Execution Relay instead"/></label>
-        <button className="report-download" type="button" disabled={!token.trim()||checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Check paired Kali connection</>}</button>
+        <p>Open <a href="/execution-relay" className="text-emerald-300 underline">Execution Relay</a>, create a pairing code for the Kali platform, and accept it on Kali. Grant the <strong>CyberLab execution jobs</strong> permission. The gateway issues a device token; the local bridge prints its own token when it starts.</p><pre>{`export CYBERLAB_RELAY_URL="https://YOUR-GATEWAY-DOMAIN"
+export CYBERLAB_DEVICE_TOKEN="PASTE-DEVICE-TOKEN"
+export CYBERLAB_BRIDGE_TOKEN="PASTE-LOCAL-BRIDGE-TOKEN"
+python3 kali-companion/relay_worker.py`}</pre><p>Keep both terminals running. The worker polls the gateway over outbound HTTPS and forwards fixed, allowlisted bridge operations to Kali loopback.</p>
+        <button className="report-download" type="button" disabled={checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Check paired Kali connection</>}</button>
         {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to the separate Kali machine through the secure relay.</p>}
         {connected&&companion&&<section className="kali-panel" style={{marginTop:12}}>
           <h2>Paired companion</h2>
