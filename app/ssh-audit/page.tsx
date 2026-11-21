@@ -27,7 +27,6 @@ export default function SshAuditPage() {
     setBusy(true); setError(""); setResult(null);
     try {
       const pairing = token || window.sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!pairing) throw new Error("Pair the local Kali companion first.");
       if (!authorised) throw new Error("Confirm written authorisation before running the SSH audit.");
       const response = await fetch(API + "/ssh/audit", {
         method:"POST",
