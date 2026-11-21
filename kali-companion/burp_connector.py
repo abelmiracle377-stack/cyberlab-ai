@@ -185,9 +185,12 @@ def inspect_burp_extension_status(opener=None) -> dict:
             payload = json.loads(response.read(8192).decode("utf-8"))
         if not isinstance(payload, dict) or payload.get("status") != "ok" or payload.get("connector") != "montoya":
             return {"status": "invalid_response", "connector": "montoya"}
+        capabilities = payload.get("capabilities")
+        if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
+            return {"status": "invalid_response", "connector": "montoya"}
         return {"status": "connected", "connector": "montoya", "authenticated": True,
-                "capabilities": ["proxy_history", "site_map", "audit_issues", "repeater_handoff", "confirmed_single_request_replay"],
-                "note": "The local CyberLab Burp extension is reachable. This is separate from the Burp REST API health check."}
+                "capabilities": capabilities,
+                "note": "Capabilities are read from the authenticated local extension health response. This is separate from the Burp REST API health check."}
     except HTTPError as exc:
         return {"status": "authentication_failed" if exc.code in {401, 403} else "api_error", "connector": "montoya"}
     except (URLError, TimeoutError, socket.timeout, OSError, ValueError, UnicodeDecodeError):
