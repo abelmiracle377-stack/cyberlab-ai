@@ -49,7 +49,7 @@ def request_json(url: str, token: str, method: str = "GET", payload: dict | None
     return value
 
 
-def dispatch(action: str, payload: dict) -> dict:
+def dispatch(action: str, payload: dict, approval_reference: str) -> dict:
     routes = {
         "kali.health": ("GET", "/health"),
         "kali.tools.inventory": ("GET", "/tools"),
@@ -62,7 +62,7 @@ def dispatch(action: str, payload: dict) -> dict:
         required = {"tool", "parameters", "confirmRun", "authorizationReference", "targetConfirmation", "timeoutSeconds"}
         if set(payload) != required or payload.get("confirmRun") is not True:
             raise ValueError("Malformed or unapproved tool-run job.")
-        if not payload.get("authorizationReference") or payload["authorizationReference"] != payload.get("authorizationReference"):
+        if not approval_reference or payload.get("authorizationReference") != approval_reference:
             raise ValueError("Missing authorisation reference.")
         timeout = min(130, max(5, int(payload["timeoutSeconds"]) + 5))
         return request_json(BRIDGE_URL + "/tools/run", BRIDGE_TOKEN, "POST", payload,
@@ -89,7 +89,7 @@ def main() -> int:
             lease = job.get("lease_token")
             action = job.get("action")
             try:
-                result = dispatch(action, job.get("payload") or {})
+                result = dispatch(action, job.get("payload") or {}, job.get("approval_reference", ""))
                 submission = {"lease_token": lease, "status": "completed", "result": result, "error": ""}
             except Exception as exc:
                 submission = {"lease_token": lease, "status": "failed", "result": {}, "error": str(exc)[:1000]}
