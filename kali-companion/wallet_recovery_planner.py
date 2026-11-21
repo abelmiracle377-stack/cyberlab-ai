@@ -68,6 +68,10 @@ def assess_recovery_case(data: dict[str, Any]) -> dict[str, Any]:
     """Return a transparent plan from metadata only; never inspect secret material."""
     if not isinstance(data, dict):
         raise ValueError("Recovery case must be a JSON object.")
+    allowed_fields = {"walletType", "ownerConfirmed", "authorizationReference", "evidence"}
+    unknown_fields = sorted(set(data) - allowed_fields)
+    if unknown_fields:
+        raise ValueError("Unsupported planner field(s). This endpoint accepts case metadata only.")
     if _has_secret_input(data):
         raise ValueError(
             "The planner accepts case metadata only. Do not send seed phrases, "
