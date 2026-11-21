@@ -108,7 +108,7 @@ async function editAttribute(payload) {
   if (!allowed.has(payload.attribute)) throw new Error("Only class, title, aria-label and placeholder can be edited.");
   if (typeof payload.value !== "string" || payload.value.length > 500) throw new Error("Attribute value must be text under 500 characters.");
   const tabId = sharedTabId;
-  const doc = await chrome.debugger.sendCommand({ tabId }, "DOM.getDocument", { depth: -1, pierce: true });
+  const doc = await chrome.debugger.sendCommand({ tabId }, "DOM.getDocument", { depth: 1, pierce: true });
   const found = await chrome.debugger.sendCommand({ tabId }, "DOM.querySelector", { nodeId: doc.root.nodeId, selector: payload.selector });
   if (!found.nodeId) throw new Error("The selector did not match an element.");
   const attrs = await chrome.debugger.sendCommand({ tabId }, "DOM.getAttributes", { nodeId: found.nodeId });
@@ -123,7 +123,7 @@ async function undoLastEdit() {
   const edit = editHistory.pop();
   if (!edit) throw new Error("There is no DOM edit to undo.");
   const tabId = sharedTabId;
-  const doc = await chrome.debugger.sendCommand({ tabId }, "DOM.getDocument", { depth: -1, pierce: true });
+  const doc = await chrome.debugger.sendCommand({ tabId }, "DOM.getDocument", { depth: 1, pierce: true });
   const found = await chrome.debugger.sendCommand({ tabId }, "DOM.querySelector", { nodeId: doc.root.nodeId, selector: edit.selector });
   if (!found.nodeId) throw new Error("The edited element no longer exists; reload the page to restore its original DOM.");
   if (edit.previous === null) await chrome.debugger.sendCommand({ tabId }, "DOM.removeAttribute", { nodeId: found.nodeId, name: edit.attribute });
