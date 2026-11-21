@@ -34,7 +34,6 @@ export default function ToolRunnerPage() {
     setError(""); setListBusy(true);
     try {
       const pairing = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-      if (!pairing) throw new Error("Pair your local companion in Kali Connection first.");
       setToken(pairing);
       const response = await fetch(BRIDGE + "/tools/runners", { headers: { Authorization: "Bearer " + pairing }, cache: "no-store" });
       const data = await response.json();
