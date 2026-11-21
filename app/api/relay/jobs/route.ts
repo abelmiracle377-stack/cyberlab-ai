@@ -71,7 +71,9 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    await requireUser(request);
+    if (!originAllowed(request)) return Response.json({ error: "Cross-origin relay requests are blocked." }, { status: 403 });
+    const gate = await adminGate();
+    if (gate.error) return gate.error;
     const config = gatewayConfig();
     const query = new URL(request.url).searchParams;
     const deviceId = query.get("deviceId");
