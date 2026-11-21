@@ -11,7 +11,7 @@ type MapItem = { method:string; url:string; status_code:number|null; in_scope:bo
 type IssueItem = { name:string; base_url:string; severity:string; confidence:string; in_scope:boolean };
 type Result = { status:string; count:number; items:HistoryItem[] };
 
-const BRIDGE = "http://127.0.0.1:8765";
+const BRIDGE = "/api/kali";
 
 export default function BurpSuitePage() {
   const [token,setToken] = useState("");
