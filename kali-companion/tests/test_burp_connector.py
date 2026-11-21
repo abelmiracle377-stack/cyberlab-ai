@@ -227,7 +227,7 @@ class BurpExtensionHealthTests(unittest.TestCase):
         class HealthResponse(FakeResponse):
             def read(self, _limit):
                 import json
-                return json.dumps({"status": "ok", "connector": "montoya"}).encode("utf-8")
+                return json.dumps({"status": "ok", "connector": "montoya", "capabilities": ["repeater_handoff", "confirmed_single_request_replay", "intruder_handoff", "professional_scanner_crawl", "professional_scanner_active_audit"]}).encode("utf-8")
         with patch.object(burp_connector, "EXTENSION_TOKEN_FILE") as token_file, \
              patch.object(burp_connector, "urlopen", return_value=HealthResponse()) as open_url:
             token_file.read_text.return_value = "local-extension-token-12345678901234567890"
@@ -236,6 +236,9 @@ class BurpExtensionHealthTests(unittest.TestCase):
         self.assertTrue(result["authenticated"])
         self.assertIn("repeater_handoff", result["capabilities"])
         self.assertIn("confirmed_single_request_replay", result["capabilities"])
+        self.assertIn("intruder_handoff", result["capabilities"])
+        self.assertIn("professional_scanner_crawl", result["capabilities"])
+        self.assertIn("professional_scanner_active_audit", result["capabilities"])
         self.assertEqual(open_url.call_args.args[0].full_url, burp_connector.EXTENSION_HEALTH_URL)
 
     def test_extension_health_rejects_wrong_connector_payload(self):
