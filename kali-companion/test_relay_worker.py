@@ -18,6 +18,10 @@ class RemoteBridgeDispatchTests(unittest.TestCase):
                 worker.bridge_request("GET", "https://example.com/")
             with self.assertRaisesRegex(ValueError, "not in the worker allowlist"):
                 worker.bridge_request("POST", "/admin/execute", {})
+            with self.assertRaisesRegex(ValueError, "not in the worker allowlist"):
+                worker.bridge_request("POST", "/wallet/recovery-run", {"seed": "not forwarded"})
+            with self.assertRaisesRegex(ValueError, "not in the worker allowlist"):
+                worker.bridge_request("POST", "/web/request", {"headers": {"Cookie": "secret"}})
             urlopen.assert_not_called()
 
     def test_allows_known_route_and_preserves_bridge_status(self):
