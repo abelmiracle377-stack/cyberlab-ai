@@ -123,7 +123,6 @@ export default function WebRepeaterPage() {
 
   async function plannerCall(path: string, payload: Record<string, unknown>) {
     const pairing = sessionStorage.getItem("cyberlab.kaliBridgeToken") || "";
-    if (!pairing) throw new Error("Connect the local Kali companion first in Kali Connection.");
     const response = await fetch("/api/kali" + path, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + pairing },
