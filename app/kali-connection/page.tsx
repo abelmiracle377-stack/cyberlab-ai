@@ -267,7 +267,7 @@ python3 kali-companion/cyberlab.py doctor`}</pre>
         <p>Open <a href="/execution-relay" className="text-emerald-300 underline">Execution Relay</a>, create a pairing code for the Kali platform, and accept it on Kali. Grant the <strong>CyberLab execution jobs</strong> permission. The gateway issues a device token; the local bridge prints its own token when it starts.</p><pre>{`export CYBERLAB_RELAY_URL="https://YOUR-GATEWAY-DOMAIN"
 export CYBERLAB_DEVICE_TOKEN="PASTE-DEVICE-TOKEN"
 export CYBERLAB_BRIDGE_TOKEN="PASTE-LOCAL-BRIDGE-TOKEN"
-python3 kali-companion/relay_worker.py`}</pre><p>Keep both terminals running. The worker polls the gateway over outbound HTTPS and forwards fixed, allowlisted bridge operations to Kali loopback.</p>
+python3 kali-companion/relay_worker.py`}</pre><p>Keep both terminals running. The worker polls the gateway over outbound HTTPS and forwards fixed, allowlisted bridge operations to Kali loopback. For safety, private wallet seed/password recovery, authenticated proxy or Burp replay, SOC connector credentials, file uploads, disk images and Wi-Fi handshake cracking are not forwarded through this relay yet. Do not enter those secrets into remote workflows; end-to-end encrypted transfer is still being built.</p>
         <button className="report-download" type="button" disabled={checking} onClick={connectBridge}>{checking?<><LoaderCircle size={14}/> Connecting…</>:<><Link2 size={14}/> Check paired Kali connection</>}</button>
         {connected&&<p className="bridge-connected"><CheckCircle2 size={14}/> Connected to the separate Kali machine through the secure relay.</p>}
         {connected&&companion&&<section className="kali-panel" style={{marginTop:12}}>
