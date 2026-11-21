@@ -112,7 +112,7 @@ Open http://localhost:3000.
 Never commit secrets or put service-role/Paystack keys in browser code.
 
 ### Deploy
-- **Cloudflare** (Workers, via the OpenNext adapter) — recommended; config (`wrangler.jsonc`, `open-next.config.ts`) is in the repo. See [docs/CLOUDFLARE_DEPLOY.md](./docs/CLOUDFLARE_DEPLOY.md).
+- **Vercel** — the production host. Connect the repository, set the environment variables listed in this README, and deploy from `main`.
 - **Vercel** — `vercel.json` is included; set the same environment variables.
 
 ### Supabase migrations
