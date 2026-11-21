@@ -494,15 +494,54 @@ def claim_relay_job(device=Depends(device_auth)):
     return {"job": {"job_id": row["id"], "action": row["action"], "payload": json.loads(row["payload"]), "approval_reference": row["approval_reference"], "lease_token": lease, "lease_expires_at": now + 180}}
 
 
+
+def verify_relay_evidence_chain(con=None):
+    own_connection = con is None
+    connection = con or db()
+    rows = connection.execute("SELECT * FROM relay_evidence ORDER BY id ASC").fetchall()
+    previous = "GENESIS"
+    errors = []
+    for row in rows:
+        record = {
+            "job_id": row["job_id"],
+            "device_id": row["device_id"],
+            "action": row["action"],
+            "approval_reference": row["approval_reference"],
+            "status": row["status"],
+            "result_sha256": row["result_sha256"],
+            "previous_hash": row["previous_hash"],
+            "created_at": row["created_at"],
+        }
+        expected = hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if row["previous_hash"] != previous:
+            errors.append("Evidence record " + str(row["id"]) + " has a broken previous-hash link.")
+        if row["record_hash"] != expected:
+            errors.append("Evidence record " + str(row["id"]) + " hash does not match its contents.")
+        previous = row["record_hash"]
+    if own_connection:
+        connection.close()
+    return {
+        "status": "verified" if rows and not errors else ("empty" if not rows else "failed"),
+        "verified": bool(rows) and not errors,
+        "record_count": len(rows),
+        "final_record_hash": previous if rows else None,
+        "errors": errors,
+        "note": "Hash chaining detects changes to stored records but is not a digital signature or protection against a privileged gateway/database administrator.",
+    }
+
+
 @app.post("/v1/jobs/{job_id}/result")
 def submit_relay_result(job_id: str, body: RelayJobResult, device=Depends(device_auth)):
     if not json.loads(device["permissions"]).get("job_execution"):
         raise HTTPException(403, "Device has not granted job_execution permission.")
     encoded = json.dumps(body.result, ensure_ascii=False)
-    if len(encoded.encode("utf-8")) > 65536:
+    encoded_bytes = encoded.encode("utf-8")
+    if len(encoded_bytes) > 65536:
         raise HTTPException(413, "Job result exceeds 64 KB.")
+    result_hash = hashlib.sha256(encoded_bytes).hexdigest()
     now = int(time.time())
     con = db()
+    con.execute("BEGIN IMMEDIATE")
     row = con.execute("SELECT * FROM jobs WHERE id=? AND device_id=?", (job_id, device["id"])).fetchone()
     if not row or row["status"] != "running":
         con.close()
@@ -513,11 +552,37 @@ def submit_relay_result(job_id: str, body: RelayJobResult, device=Depends(device
     if not row["lease_token_hash"] or not hmac.compare_digest(row["lease_token_hash"], digest(body.lease_token)):
         con.close()
         raise HTTPException(401, "Job lease token is invalid.")
-    con.execute("UPDATE jobs SET status=?,result=?,error=?,finished_at=? WHERE id=?", (body.status, encoded, body.error, now, job_id))
-    log_event(con, device["id"], "job_" + body.status, row["action"])
+    previous_row = con.execute("SELECT record_hash FROM relay_evidence ORDER BY id DESC LIMIT 1").fetchone()
+    previous_hash = previous_row["record_hash"] if previous_row else "GENESIS"
+    record = {
+        "job_id": job_id,
+        "device_id": device["id"],
+        "action": row["action"],
+        "approval_reference": row["approval_reference"],
+        "status": body.status,
+        "result_sha256": result_hash,
+        "previous_hash": previous_hash,
+        "created_at": now,
+    }
+    record_hash = hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    con.execute("INSERT INTO relay_evidence(job_id,device_id,action,approval_reference,status,result_sha256,previous_hash,record_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (job_id, device["id"], row["action"], row["approval_reference"], body.status, result_hash, previous_hash, record_hash, now))
+    con.execute("UPDATE jobs SET status=?,result=?,error=?,result_sha256=?,previous_evidence_hash=?,evidence_record_hash=?,finished_at=? WHERE id=?",
+                (body.status, encoded, body.error, result_hash, previous_hash, record_hash, now, job_id))
+    log_event(con, device["id"], "job_" + body.status, row["action"] + " · evidence " + record_hash[:16])
     con.commit()
     con.close()
-    return {"job_id": job_id, "status": body.status, "accepted": True}
+    return {"job_id": job_id, "status": body.status, "accepted": True,
+            "result_sha256": result_hash, "evidence_record_hash": record_hash,
+            "previous_evidence_hash": previous_hash}
+
+
+@app.get("/v1/evidence/verify", dependencies=[Depends(owner_auth)])
+def verify_relay_evidence():
+    con = db()
+    result = verify_relay_evidence_chain(con)
+    con.close()
+    return result
 
 
 @app.get("/v1/jobs", dependencies=[Depends(owner_auth)])
@@ -530,7 +595,8 @@ def list_relay_jobs(device_id: Optional[str] = None, limit: int = 100):
     else:
         rows = con.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
     con.close()
-    return {"jobs": [{"job_id": r["id"], "device_id": r["device_id"], "action": r["action"], "status": r["status"], "approval_reference": r["approval_reference"], "result": json.loads(r["result"]) if r["result"] else None, "error": r["error"], "created_at": r["created_at"], "started_at": r["started_at"], "finished_at": r["finished_at"]} for r in rows]}
+    chain = verify_relay_evidence_chain(con)
+    return {"evidence_chain": chain, "jobs": [{"job_id": r["id"], "device_id": r["device_id"], "action": r["action"], "status": r["status"], "approval_reference": r["approval_reference"], "result": json.loads(r["result"]) if r["result"] else None, "error": r["error"], "result_sha256": r["result_sha256"], "evidence_record_hash": r["evidence_record_hash"], "previous_evidence_hash": r["previous_evidence_hash"], "created_at": r["created_at"], "started_at": r["started_at"], "finished_at": r["finished_at"]} for r in rows]}
 
 
 @app.post("/v1/jobs/{job_id}/cancel", dependencies=[Depends(owner_auth)])
