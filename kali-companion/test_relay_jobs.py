@@ -73,8 +73,8 @@ class RelayJobTests(unittest.TestCase):
             self.device,
         )
         con = gateway.db()
-        con.execute("UPDATE relay_evidence SET result_sha256=? WHERE job_id=?",
-                    ("0" * 64, queued["job_id"]))
+        con.execute("UPDATE jobs SET result=? WHERE id=?",
+                    (json.dumps({"status": "tampered"}), queued["job_id"]))
         con.commit()
         result = gateway.verify_relay_evidence_chain(con)
         con.close()
