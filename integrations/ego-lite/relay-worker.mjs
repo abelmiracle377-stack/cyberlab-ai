@@ -54,8 +54,8 @@ function runEgoBrowser(script) {
     };
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", chunk => { stdout = (stdout + chunk).slice(-60000); });
-    child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-8000); });
+    child.stdout.on("data", chunk => { stdout = (stdout + chunk).slice(-12000); });
+    child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-2000); });
     child.on("error", error => finish(error));
     child.on("close", code => code === 0
       ? finish(null, { output: stdout, stderr, exitCode: code })
