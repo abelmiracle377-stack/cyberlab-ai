@@ -39,7 +39,7 @@ async function sendToApp(payload) {
   let tab = await appTab();
   if (!tab) tab = await chrome.tabs.create({ url: APP_URLS[0] });
   if (!tab.id) throw new Error("Could not open CyberLab browser workspace.");
-  await chrome.tabs.sendMessage(tab.id, { type: "browser-snapshot", payload });
+  for (let attempt = 0; attempt < 10; attempt++) {\n    try { await chrome.tabs.sendMessage(tab.id, { type: "browser-snapshot", payload }); return; }\n    catch { await new Promise(resolve => setTimeout(resolve, 300)); }\n  }\n  throw new Error("CyberLab workspace is open but its browser bridge did not become ready. Reload /browser-workspace and share again.");
 }
 async function inspectTab(tab) {
   if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) throw new Error("Select a normal HTTP or HTTPS browser tab.");
@@ -68,7 +68,7 @@ async function inspectTab(tab) {
         return { title: document.title, url: location.origin + location.pathname, readyState: document.readyState, nodes, forms: Array.from(document.forms).slice(0,80).map(f => ({ method: (f.method || "get").toUpperCase(), action: redactUrl(f.action), fields: Array.from(f.elements).slice(0,80).map(x => ({ tag: x.tagName.toLowerCase(), type: x.type || "", name: x.name || "", autocomplete: x.autocomplete || "" })) })) };
       })()`
     });
-    const cookies = await chrome.debugger.sendCommand({ tabId }, "Network.getAllCookies");
+    // Keep the debugger attached briefly so the operator can navigate/interact and generate a small live network sample.\n    await new Promise(resolve => setTimeout(resolve, 5000));\n    const cookies = await chrome.debugger.sendCommand({ tabId }, "Network.getAllCookies");
     const targetHost = new URL(tab.url).hostname.toLowerCase();
     const cookieMetadata = (cookies.cookies || []).filter(c => { const domain = String(c.domain || "").replace(/^\\./, "").toLowerCase(); return targetHost === domain || targetHost.endsWith("." + domain); }).slice(0, 200).map(c => ({
       name: c.name, domain: c.domain, path: c.path, secure: !!c.secure,
