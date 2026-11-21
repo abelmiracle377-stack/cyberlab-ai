@@ -55,6 +55,10 @@ Primary references:
 - Ethereum network-switching EIP example for OP Mainnet chain ID: https://eips.ethereum.org/EIPS/eip-5094
 - Polygon network setup documentation: https://docs.polygon.technology/tools/dApp-development/common-tools/remix/
 
+## Toolchain and source-analysis boundaries
+
+The source analyzer is a heuristic/static review aid: pattern rules and per-function checks produce review leads, not a formal proof, symbolic execution result or independent security audit. The paired local compiler and Foundry test runner currently support Solidity only. Vyper, Move and Rust/Anchor can be selected for AI project drafting, but they do not gain a complete local compile/test/deploy pipeline from that selection. The generator returns source drafts; it does not deploy contracts, verify them on explorers or sign transactions.
+
 ## DEX registry and current capability
 
 A small, source-linked Uniswap deployment registry is exposed at GET /api/network/dex-registry. It is reference metadata, not a live DEX integration. It does not independently verify deployed bytecode, proxy implementation, liquidity, router behaviour or operational status.
