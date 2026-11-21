@@ -51,9 +51,35 @@ class RelayJobTests(unittest.TestCase):
             self.device,
         )
         self.assertTrue(accepted["accepted"])
+        self.assertEqual(len(accepted["result_sha256"]), 64)
+        self.assertEqual(len(accepted["evidence_record_hash"]), 64)
         listed = gateway.list_relay_jobs(device_id="kali-1")
+        self.assertTrue(listed["evidence_chain"]["verified"])
+        self.assertEqual(listed["evidence_chain"]["record_count"], 1)
         self.assertEqual(listed["jobs"][0]["status"], "completed")
         self.assertEqual(listed["jobs"][0]["result"], {"status": "ok"})
+
+    def test_evidence_hash_chain_detects_tampering(self):
+        body = gateway.RelayJobCreate(
+            device_id="kali-1", action="kali.health", payload={},
+            approval_reference="ENG-2026-002", operator_approved=True,
+        )
+        queued = gateway.create_relay_job(body)
+        job = gateway.claim_relay_job(self.device)["job"]
+        gateway.submit_relay_result(
+            job["job_id"],
+            gateway.RelayJobResult(lease_token=job["lease_token"], status="completed",
+                                   result={"status": "ok"}, error=""),
+            self.device,
+        )
+        con = gateway.db()
+        con.execute("UPDATE relay_evidence SET result_sha256=? WHERE job_id=?",
+                    ("0" * 64, queued["job_id"]))
+        con.commit()
+        result = gateway.verify_relay_evidence_chain(con)
+        con.close()
+        self.assertFalse(result["verified"])
+        self.assertEqual(result["status"], "failed")
 
     def test_execution_requires_explicit_operator_approval(self):
         body = gateway.RelayJobCreate(
