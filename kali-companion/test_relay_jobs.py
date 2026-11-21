@@ -81,6 +81,12 @@ class RelayJobTests(unittest.TestCase):
         self.assertFalse(result["verified"])
         self.assertEqual(result["status"], "failed")
 
+    def test_device_consent_page_exposes_execution_permission(self):
+        response = gateway.consent_page()
+        html = response.body.decode("utf-8")
+        self.assertIn("job_execution", html)
+        self.assertIn("explicitly approved CyberLab tasks", html)
+
     def test_local_ollama_job_is_bounded_and_typed(self):
         self.assertEqual(
             gateway.validate_relay_payload("kali.ollama.chat", {"model": "qwen3:8b", "prompt": "Analyse these safe test observations."}, "ENG-2026-003", True),
