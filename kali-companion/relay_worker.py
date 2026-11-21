@@ -12,7 +12,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from urllib.parse import urlsplit
+import urllib.error
+from urllib.parse import urlsplit, urlsplit as parse_url
 
 RELAY_URL = os.environ.get("CYBERLAB_RELAY_URL", "").rstrip("/")
 DEVICE_TOKEN = os.environ.get("CYBERLAB_DEVICE_TOKEN", "")
@@ -49,6 +50,75 @@ def request_json(url: str, token: str, method: str = "GET", payload: dict | None
     return value
 
 
+def bridge_request(method: str, path: str, body: dict | None = None) -> dict:
+    parsed = parse_url(path)
+    if parsed.scheme or parsed.netloc or parsed.fragment or not parsed.path.startswith("/") or ".." in parsed.path.split("/"):
+        raise ValueError("Invalid local bridge path.")
+    get_paths = {
+        "/", "/health", "/system", "/identity", "/capabilities", "/ollama/health", "/ollama/models",
+        "/solidity/compiler", "/solidity/tests/status", "/wallet/status", "/tools/runners",
+        "/telemetry/security", "/telemetry/system", "/forensics/devices", "/tools", "/burp/status",
+        "/burp/extension/status", "/burp/proxy/history", "/burp/scanner/tasks", "/burp/site-map",
+        "/burp/issues", "/network/interfaces", "/academy/lab/status", "/wifi/interfaces", "/web/history",
+        "/proxy/ca/status", "/proxy/ca/certificate", "/proxy/status", "/proxy/history", "/proxy/intercepts",
+        "/proxy/response-intercepts", "/proxy/websocket-frames", "/proxy/websocket-intercepts",
+        "/evidence/case/ledger/verify",
+    }
+    post_paths = {
+        "/plan", "/research", "/services", "/evidence/report", "/evidence/artifacts", "/evidence/case",
+        "/evidence/case/export", "/evidence/case/verify", "/scan", "/forensics/foremost", "/forensics/photorec",
+        "/forensics/recover-all-deleted", "/forensics/inspect", "/forensics/partitions", "/forensics/fsstat",
+        "/forensics/deleted-list", "/forensics/recover-file", "/forensics/plist-parse", "/forensics/sqlite-inspect",
+        "/forensics/sqlite-sample", "/network/pcap-analyze", "/burp/repeater/from-history", "/burp/send-request",
+        "/burp/intruder/from-history", "/burp/scanner/crawl", "/burp/scanner/audit", "/burp/scanner/cancel",
+        "/network/capture", "/web/request", "/web/crawl", "/web/active-scan", "/web/assessment",
+        "/web/parameters/inspect", "/web/parameters/generate", "/web/parameters/analyze", "/proxy/ca/create",
+        "/proxy/start", "/proxy/stop", "/proxy/intercepts/decision", "/proxy/response-intercepts/decision",
+        "/proxy/websocket-intercepts/decision", "/ollama/chat", "/solidity/compile", "/solidity/project/compile",
+        "/solidity/tests/run", "/wallet/recovery-assess", "/wallet/recovery-run", "/wallet/extract-hash",
+        "/wallet/derive", "/wallet/electrum-derive", "/wallet/solve-seed", "/wallet/check-balances",
+        "/wallet/bip38-decrypt", "/wallet/bip38-crack", "/wallet/crack", "/soc/analyze", "/soc/run-cycle",
+        "/soc/splunk/send", "/soc/splunk/search", "/soc/wazuh/agents", "/soc/wazuh/alerts",
+        "/academy/lab/start", "/academy/lab/stop", "/shodan/info", "/shodan/host", "/shodan/search",
+        "/shodan/dns", "/wifi/scan", "/wifi/audit", "/wifi/crack", "/wifi/monitor/start", "/wifi/monitor/stop",
+        "/wifi/deauth", "/wifi/capture/handshake", "/wifi/capture/pmkid", "/wifi/crack-wpa", "/wifi/wps",
+        "/wifi/auto", "/tools/run", "/ssh/audit",
+    }
+    allowed = parsed.path in (get_paths if method == "GET" else post_paths)
+    if parsed.path.startswith("/forensics/jobs/") and method == "GET":
+        import re
+        allowed = bool(re.fullmatch(r"/forensics/jobs/[a-f0-9]{32}", parsed.path))
+    if not allowed:
+        raise ValueError("Kali bridge route is not in the worker allowlist.")
+    if parsed.query:
+        from urllib.parse import parse_qs
+        query = parse_qs(parsed.query)
+        if set(query) != {"limit"} or len(query["limit"]) != 1 or not query["limit"][0].isdigit():
+            raise ValueError("Unsupported bridge query parameters.")
+    encoded = json.dumps(body).encode("utf-8") if body is not None else None
+    if encoded is not None and len(encoded) > 32768:
+        raise ValueError("Bridge request body exceeds 32 KB.")
+    headers = {"Authorization": "Bearer " + BRIDGE_TOKEN, "Accept": "application/json", "Origin": BRIDGE_ORIGIN}
+    if encoded is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(BRIDGE_URL + path, data=encoded, headers=headers, method=method)
+    timeout = 150 if parsed.path in {"/scan", "/wifi/scan", "/wifi/audit", "/web/active-scan", "/web/assessment", "/network/capture", "/forensics/recover-all-deleted", "/wallet/recovery-run", "/soc/run-cycle"} else 25
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status, raw = response.status, response.read(MAX_RESPONSE + 1)
+    except urllib.error.HTTPError as exc:
+        status, raw = exc.code, exc.read(MAX_RESPONSE + 1)
+    if len(raw) > MAX_RESPONSE:
+        raise RuntimeError("Kali bridge response exceeded 64 KB.")
+    try:
+        result = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Kali bridge returned a non-JSON response.") from exc
+    if not isinstance(result, dict):
+        raise RuntimeError("Kali bridge returned an unexpected response.")
+    return {"bridge_status": status, "bridge_body": result}
+
+
 def dispatch(action: str, payload: dict, approval_reference: str) -> dict:
     routes = {
         "kali.health": ("GET", "/health"),
@@ -58,6 +128,10 @@ def dispatch(action: str, payload: dict, approval_reference: str) -> dict:
     if action in routes:
         method, path = routes[action]
         return request_json(BRIDGE_URL + path, BRIDGE_TOKEN, method, timeout=15, origin=BRIDGE_ORIGIN)
+    if action == "kali.bridge.request":
+        if set(payload) - {"method", "path", "body"} or not {"method", "path"} <= set(payload):
+            raise ValueError("Malformed remote bridge request.")
+        return bridge_request(payload["method"], payload["path"], payload.get("body"))
     if action == "kali.ollama.chat":
         if set(payload) != {"model", "prompt"}:
             raise ValueError("Malformed local Ollama chat job.")
